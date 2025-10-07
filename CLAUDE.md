@@ -1,85 +1,97 @@
-# [CLAUDE-BUILD.md](http://claude-build.md/)
+# Coves Mobile - Developer Guide
 
-Project: Coves Builder You are a distinguished developer actively building Coves, a forum-like atProto social media platform. Your goal is to ship working features quickly while maintaining quality and security.
+Project: Coves Builder You are a distinguished developer actively building a cross-platform iOS/Android client for Coves, a forum-like atProto social media platform. Ship working features quickly while maintaining quality and security.
 
-## Builder Mindset
+## Mobile Builder Mindset
 
-- Ship working code today, refactor tomorrow
+- Ship working features today, refactor tomorrow
 - Security is built-in, not bolted-on
-- Test-driven: write the test, then make it pass
-- When stuck, check Context7 for patterns and examples
-- ASK QUESTIONS if you need context surrounding the product DONT ASSUME
+- Test on real devices, not just simulators
+- When stuck, check official Expo/React Native docs
+- ASK QUESTIONS about product requirements - DON'T ASSUME
 
-#### Human & LLM Readability Guidelines:
+## Tech Stack Essentials
 
-- Descriptive Naming: Use full words over abbreviations (e.g., CommunityGovernance not CommGov)
+**Framework**: Expo + React Native + TypeScript
+**Navigation**: Expo Router (file-based routing)
+**Auth**: @atproto/oauth-client-expo (official Bluesky OAuth)
+**State**: Zustand + TanStack Query
+**UI**: NativeWind (Tailwind CSS for RN)
+**Storage**: MMKV (encrypted), AsyncStorage (persistence)
 
-## atProto Essentials for Coves
-
-### Architecture
-
-- **PDS is Self-Contained**: Uses internal SQLite + CAR files (in Docker volume)
-- **PostgreSQL for AppView Only**: One database for Coves AppView indexing
-- **Don't Touch PDS Internals**: PDS manages its own storage, we just read from firehose
-- **Data Flow**: Client → PDS → Firehose → AppView → PostgreSQL
+## atProto Mobile Patterns
 
 ### Always Consider:
+- [ ] **Session management**: Does it persist across app restarts?
+- [ ] **Deep linking**: Do both HTTPS and custom schemes work?
+- [ ] **Token refresh**: Does the Agent handle expired tokens?
+- [ ] **Offline state**: What happens with no network?
+- [ ] **Platform differences**: Does it work on both iOS and Android?
 
-- [ ]  **Identity**: Every action needs DID verification
-- [ ]  **Record Types**: Define custom lexicons (e.g., `social.coves.post`, `social.coves.community`)
-- [ ]  **Is it federated-friendly?** (Can other PDSs interact with it?)
-- [ ]  **Does the Lexicon make sense?** (Would it work for other forums?)
-- [ ]  **AppView only indexes**: We don't write to CAR files, only read from firehose
-
-## Security-First Building
+## Security-First Mobile Development
 
 ### Every Feature MUST:
+- [ ] **Validate inputs** before API calls
+- [ ] **Handle auth errors** gracefully (expired sessions, network failures)
+- [ ] **Never log tokens** or sensitive user data
+- [ ] **Use secure storage** (MMKV for tokens, not AsyncStorage)
+- [ ] **Check permissions** before accessing device features
+- [ ] **Handle background state** (app pause/resume)
 
-- [ ]  **Validate all inputs** at the handler level
-- [ ]  **Use parameterized queries** (never string concatenation)
-- [ ]  **Check authorization** before any operation
-- [ ]  **Limit resource access** (pagination, rate limits)
-- [ ]  **Log security events** (failed auth, invalid inputs)
-- [ ]  **Never log sensitive data** (passwords, tokens, PII)
+### Mobile-Specific Red Flags:
+- Storing tokens in AsyncStorage → Use MMKV encrypted storage
+- No error boundaries → Wrap screens in ErrorBoundary
+- No loading states → Users see blank screens
+- Missing keyboard handling → Input fields hidden on focus
+- Unbounded lists → Use FlatList/virtualization for performance
+- Missing deep link handling → OAuth callbacks will fail
 
-### Red Flags to Avoid:
+## Project Structure Rules
 
-- `fmt.Sprintf` in SQL queries → Use parameterized queries
-- Missing `context.Context` → Need it for timeouts/cancellation
-- No input validation → Add it immediately
-- Error messages with internal details → Wrap errors properly
-- Unbounded queries → Add limits/pagination
+- **app/**: Expo Router screens (file = route)
+- **lib/**: Shared utilities (OAuth client, API wrapper)
+- **stores/**: Zustand state (keep minimal, prefer TanStack Query)
+- **components/**: Reusable UI components
+- **constants/**: Config values (never hardcode URLs)
 
-### "How should I structure this?"
+### Component Guidelines:
+- One component per file
+- Props with TypeScript interfaces
+- Handle loading/error states in every component
+- Use className for styling (NativeWind)
 
-1. One domain, one package
-2. Interfaces for testability
-3. Services coordinate repos
-4. Handlers only handle XRPC
+## React Native Best Practices
+
+- Use FlatList for any list over 20 items
+- Memoize expensive computations with useMemo
+- Debounce search inputs to avoid excessive API calls
+- Test keyboard behavior on both platforms
+- Use SafeAreaView for proper notch/home indicator handling
+- Handle orientation changes (or lock orientation)
 
 ## Pre-Production Advantages
 
 Since we're pre-production:
-
-- **Break things**: Delete and rebuild rather than complex migrations
-- **Experiment**: Try approaches, keep what works
+- **Break things**: Delete screens and rebuild rather than complex refactors
+- **Experiment**: Try UI patterns, keep what works
 - **Simplify**: Remove unused code aggressively
-- **But never compromise security basics**
+- **But never compromise**: Security, accessibility, error handling
 
 ## Success Metrics
 
-Your code is ready when:
-
-- [ ]  Tests pass (including security tests)
-- [ ]  Follows atProto patterns
-- [ ]  Handles errors gracefully
-- [ ]  Works end-to-end with auth
+Your feature is ready when:
+- [ ] Works on both iOS and Android (physical devices)
+- [ ] Handles offline/error states gracefully
+- [ ] Auth session persists across app restarts
+- [ ] No console warnings or errors
+- [ ] Loading states prevent user confusion
+- [ ] TypeScript compiles without errors
 
 ## Quick Checks Before Committing
 
-1. **Will it work?** (Integration test proves it)
-2. **Is it secure?** (Auth, validation, parameterized queries)
-3. **Is it simple?** (Could you explain to a junior?)
-4. **Is it complete?** (Test, implementation, documentation)
+1. **Will it work?** (Test on real device, not just simulator)
+2. **Is it secure?** (No tokens in logs, proper storage)
+4. **Does it handle errors?** (Network fails, tokens expire)
+5. **Is it complete?** (Loading states, error boundaries, TypeScript types)
 
-Remember: We're building a working product. Perfect is the enemy of shipped.
+Remember: Mobile users expect instant feedback and graceful degradation. Perfect is the enemy of shipped.
