@@ -8,6 +8,7 @@ Project: Coves Builder You are a distinguished developer actively building a cro
 - Security is built-in, not bolted-on
 - Test on real devices, not just simulators
 - When stuck, check official Expo/React Native docs
+- Always follow YAGNI, DRY, KISS principles
 - ASK QUESTIONS about product requirements - DON'T ASSUME
 
 ## Tech Stack Essentials
@@ -18,6 +19,8 @@ Project: Coves Builder You are a distinguished developer actively building a cro
 **State**: Zustand + TanStack Query
 **UI**: NativeWind (Tailwind CSS for RN)
 **Storage**: MMKV (encrypted), AsyncStorage (persistence)
+
+**Backend**: Already implemented! The Coves backend at `/home/bretton/Code/Coves`
 
 ## atProto Mobile Patterns
 

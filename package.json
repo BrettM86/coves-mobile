@@ -9,10 +9,13 @@
     "web": "expo start --web",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "validate-config": "node scripts/validate-config.js",
+    "test-oauth": "bash scripts/test-oauth.sh",
+    "prestart": "npm run validate-config"
   },
   "dependencies": {
-    "@atproto/api": "^0.17.1",
+    "@atproto/api": "^0.17.3",
     "@atproto/oauth-client": "^0.5.7",
     "@atproto/oauth-client-expo": "^0.0.1",
     "@craftzdog/react-native-buffer": "^6.1.1",

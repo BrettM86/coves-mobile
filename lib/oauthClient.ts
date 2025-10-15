@@ -1,5 +1,40 @@
 import { ExpoOAuthClient } from '@atproto/oauth-client-expo';
-import { config } from '@/constants/config';
+import Constants from 'expo-constants';
+
+/**
+ * Get configuration value from Expo Constants
+ * Works in both Expo Go (expoConfig) and native builds (manifestExtra)
+ */
+function getConfig(key: string): string {
+  // Try multiple sources in order:
+  // 1. expoConfig.extra (Expo Go, dev builds)
+  // 2. manifestExtra (native builds via EAS)
+  // 3. process.env (fallback)
+  const value =
+    Constants.expoConfig?.extra?.[key] ??
+    Constants.manifest2?.extra?.expoClient?.extra?.[key] ??
+    Constants.manifest?.extra?.[key] ??
+    process.env[key];
+
+  if (!value) {
+    throw new Error(
+      `Missing required configuration: ${key}\n` +
+        `Please ensure it's set in app.config.js extra field.\n` +
+        `See .env.example for required variables.`
+    );
+  }
+
+  return value;
+}
+
+// Get OAuth configuration - will throw if not properly configured
+const CLIENT_ID = getConfig('EXPO_PUBLIC_OAUTH_CLIENT_ID');
+const CLIENT_URI = getConfig('EXPO_PUBLIC_OAUTH_CLIENT_URI');
+const REDIRECT_URI = getConfig('EXPO_PUBLIC_OAUTH_REDIRECT_URI');
+const CUSTOM_SCHEME = getConfig('EXPO_PUBLIC_CUSTOM_SCHEME');
+
+// Build the custom scheme callback URI
+const CUSTOM_SCHEME_CALLBACK = `${CUSTOM_SCHEME}:/oauth/callback`;
 
 /**
  * Initialize the OAuth client
@@ -8,16 +43,19 @@ import { config } from '@/constants/config';
 export const oauthClient = new ExpoOAuthClient({
   // Client metadata - must match hosted client-metadata.json
   clientMetadata: {
-    client_id: config.clientMetadata.client_id,
-    client_name: config.clientMetadata.client_name,
-    client_uri: config.clientMetadata.client_uri,
-    redirect_uris: config.clientMetadata.redirect_uris,
-    scope: config.clientMetadata.scope,
-    grant_types: config.clientMetadata.grant_types,
-    response_types: config.clientMetadata.response_types,
-    application_type: config.clientMetadata.application_type,
-    token_endpoint_auth_method: config.clientMetadata.token_endpoint_auth_method,
-    dpop_bound_access_tokens: config.clientMetadata.dpop_bound_access_tokens,
+    client_id: CLIENT_ID,
+    client_name: 'Coves',
+    client_uri: CLIENT_URI,
+    redirect_uris: [
+      REDIRECT_URI, // HTTPS redirect (works better on Android)
+      CUSTOM_SCHEME_CALLBACK, // Fallback custom scheme
+    ],
+    scope: 'atproto transition:generic',
+    grant_types: ['authorization_code', 'refresh_token'],
+    response_types: ['code'],
+    application_type: 'native',
+    token_endpoint_auth_method: 'none', // Public client
+    dpop_bound_access_tokens: true,
   },
 
   // Handle resolver - resolves atProto handles to DID documents
@@ -35,23 +73,35 @@ export const oauthClient = new ExpoOAuthClient({
  */
 export async function initializeOAuth(storedDid?: string | null) {
   try {
-    console.log('Initializing OAuth client...');
+    if (__DEV__) {
+      console.log('Initializing OAuth client...');
+      console.log('Client ID:', CLIENT_ID);
+      console.log('Redirect URI:', REDIRECT_URI);
+    }
 
     // Only try to restore if we have a stored DID
     if (!storedDid) {
-      console.log('No stored DID found, skipping session restore');
+      if (__DEV__) {
+        console.log('No stored DID found, skipping session restore');
+      }
       return null;
     }
 
-    console.log('Attempting to restore session for:', storedDid);
+    if (__DEV__) {
+      console.log('Attempting to restore session for:', storedDid);
+    }
     const session = await oauthClient.restore(storedDid);
 
     if (session) {
-      console.log('Successfully restored session for:', session.sub);
+      if (__DEV__) {
+        console.log('Successfully restored session for:', session.sub);
+      }
       return session;
     }
 
-    console.log('No valid session found');
+    if (__DEV__) {
+      console.log('No valid session found');
+    }
     return null;
   } catch (error) {
     console.error('Failed to restore session:', error);
@@ -72,7 +122,7 @@ export async function signIn(handle: string) {
   const result = await oauthClient.signIn(handle, {
     signal: new AbortController().signal,
     // Force HTTPS redirect URI (works better on Android than custom schemes)
-    redirect_uri: process.env.EXPO_PUBLIC_OAUTH_REDIRECT_URI!,
+    redirect_uri: REDIRECT_URI,
   });
 
   // Check the result status
@@ -93,7 +143,9 @@ export async function signIn(handle: string) {
 export async function signOut(sub: string) {
   try {
     await oauthClient.revoke(sub);
-    console.log('Signed out successfully');
+    if (__DEV__) {
+      console.log('Signed out successfully');
+    }
   } catch (error) {
     console.error('Sign out failed:', error);
     throw error;
