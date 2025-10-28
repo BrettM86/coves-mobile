@@ -28,6 +28,8 @@ class PrimaryButton extends StatelessWidget {
           foregroundColor: _getTextColor(),
           disabledBackgroundColor: _getBackgroundColor().withOpacity(0.5),
           disabledForegroundColor: _getTextColor().withOpacity(0.5),
+          overlayColor: _getOverlayColor(),
+          splashFactory: NoSplash.splashFactory,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(9999),
             side: _getBorderSide(),
@@ -81,5 +83,16 @@ class PrimaryButton extends StatelessWidget {
       );
     }
     return BorderSide.none;
+  }
+
+  Color _getOverlayColor() {
+    switch (variant) {
+      case ButtonVariant.solid:
+        return const Color(0xFFD84315).withOpacity(0.2);
+      case ButtonVariant.outline:
+        return const Color(0xFF5A6B7F).withOpacity(0.15);
+      case ButtonVariant.tertiary:
+        return const Color(0xFF2A3441).withOpacity(0.3);
+    }
   }
 }

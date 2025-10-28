@@ -55,13 +55,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          context.go('/');
+        }
+      },
+      child: Scaffold(
       backgroundColor: const Color(0xFF0B0F14),
       appBar: AppBar(
         backgroundColor: const Color(0xFF0B0F14),
         foregroundColor: Colors.white,
         title: const Text('Sign In'),
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/'),
+        ),
       ),
       body: SafeArea(
         child: Padding(
@@ -201,6 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
