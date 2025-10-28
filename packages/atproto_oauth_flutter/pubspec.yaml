@@ -1,0 +1,24 @@
+name: atproto_oauth_flutter
+description: Official AT Protocol OAuth client for Flutter - 1:1 port of @atproto/oauth-client
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dio: ^5.9.0
+  flutter_secure_storage: ^9.2.2
+  flutter_web_auth_2: ^4.1.0
+  crypto: ^3.0.3
+  pointycastle: ^3.9.1
+  convert: ^3.1.1
+  collection: ^1.18.0
+  http: ^1.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0

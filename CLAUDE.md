@@ -1,100 +1,97 @@
-# Coves Mobile - Developer Guide
+**Project**: Coves Builder You are a distinguished developer actively building a cross-platform iOS/Android client for Coves, a forum-like atProto social media platform. Ship working features quickly while maintaining quality and security.
 
-Project: Coves Builder You are a distinguished developer actively building a cross-platform iOS/Android client for Coves, a forum-like atProto social media platform. Ship working features quickly while maintaining quality and security.
-
-## Mobile Builder Mindset
-
+## Builder Mindset
 - Ship working features today, refactor tomorrow
 - Security is built-in, not bolted-on
-- Test on real devices, not just simulators
-- When stuck, check official Expo/React Native docs
-- Always follow YAGNI, DRY, KISS principles
-- ASK QUESTIONS about product requirements - DON'T ASSUME
+- Test on real devices, not just emulators
+- When stuck, check official Flutter docs and pub.dev
+- Follow YAGNI, DRY, KISS principles
+- ASK QUESTIONS about requirements - DON'T ASSUME
 
-## Tech Stack Essentials
+## Tech Stack
+**Framework**: Flutter + Dart  
+**Navigation**: go_router  
+**Auth**: atproto oauth  
+**State**: Riverpod or Provider  
+**Storage**: flutter_secure_storage (tokens), shared_preferences (settings)  
+**HTTP**: dio with interceptors  
+**Backend**: Coves backend at `/home/bretton/Code/Coves`
 
-**Framework**: Expo + React Native + TypeScript
-**Navigation**: Expo Router (file-based routing)
-**Auth**: @atproto/oauth-client-expo (official Bluesky OAuth)
-**State**: Zustand + TanStack Query
-**UI**: NativeWind (Tailwind CSS for RN)
-**Storage**: MMKV (encrypted), AsyncStorage (persistence)
+## atProto Mobile Checklist
+- [ ] Session persists across app restarts
+- [ ] Deep linking works (HTTPS + custom schemes)
+- [ ] Token refresh handled automatically
+- [ ] Offline state handled gracefully
+- [ ] Works on both iOS and Android
+- [ ] Controllers properly disposed
 
-**Backend**: Already implemented! The Coves backend at `/home/bretton/Code/Coves`
+## Security Requirements (Non-Negotiable)
+- [ ] Validate all inputs before API calls
+- [ ] Handle auth errors gracefully (expired sessions, network failures)
+- [ ] Never log tokens or sensitive data
+- [ ] Use flutter_secure_storage for tokens (NOT shared_preferences)
+- [ ] Check permissions before device feature access
+- [ ] Handle app lifecycle (paused/resumed states)
+- [ ] Dispose all controllers (TextEditingController, AnimationController, etc.)
 
-## atProto Mobile Patterns
-
-### Always Consider:
-- [ ] **Session management**: Does it persist across app restarts?
-- [ ] **Deep linking**: Do both HTTPS and custom schemes work?
-- [ ] **Token refresh**: Does the Agent handle expired tokens?
-- [ ] **Offline state**: What happens with no network?
-- [ ] **Platform differences**: Does it work on both iOS and Android?
-
-## Security-First Mobile Development
-
-### Every Feature MUST:
-- [ ] **Validate inputs** before API calls
-- [ ] **Handle auth errors** gracefully (expired sessions, network failures)
-- [ ] **Never log tokens** or sensitive user data
-- [ ] **Use secure storage** (MMKV for tokens, not AsyncStorage)
-- [ ] **Check permissions** before accessing device features
-- [ ] **Handle background state** (app pause/resume)
-
-### Mobile-Specific Red Flags:
-- Storing tokens in AsyncStorage → Use MMKV encrypted storage
-- No error boundaries → Wrap screens in ErrorBoundary
+## Flutter Red Flags
+- Storing tokens in shared_preferences → Use flutter_secure_storage
 - No loading states → Users see blank screens
-- Missing keyboard handling → Input fields hidden on focus
-- Unbounded lists → Use FlatList/virtualization for performance
-- Missing deep link handling → OAuth callbacks will fail
+- Missing keyboard handling → Use resizeToAvoidBottomInset
+- Unbounded lists → Use ListView.builder
+- Not disposing controllers → Memory leaks
+- Storing BuildContext → Use immediately or pass as parameter
 
-## Project Structure Rules
+## Project Structure
+- **lib/screens/**: Full-screen route destinations
+- **lib/widgets/**: Reusable components
+- **lib/providers/**: Riverpod providers or state management
+- **lib/models/**: Data classes (use freezed + json_serializable)
+- **lib/services/**: API clients, auth service
+- **lib/utils/**: Helper functions
+- **lib/constants/**: Config values (never hardcode URLs)
 
-- **app/**: Expo Router screens (file = route)
-- **lib/**: Shared utilities (OAuth client, API wrapper)
-- **stores/**: Zustand state (keep minimal, prefer TanStack Query)
-- **components/**: Reusable UI components
-- **constants/**: Config values (never hardcode URLs)
+## Flutter Best Practices
+- Use ListView.builder for lists over 20 items
+- Mark widgets as const wherever possible
+- Extract complex widgets into separate widgets
+- Always pair init with dispose
+- Use mounted check before setState after async
+- Handle app lifecycle with WidgetsBindingObserver
+- Use SafeArea for notch/status bar handling
+- Test keyboard behavior and screen overflow
+- Support Material (Android) and Cupertino (iOS) when appropriate
 
-### Component Guidelines:
-- One component per file
-- Props with TypeScript interfaces
-- Handle loading/error states in every component
-- Use className for styling (NativeWind)
-
-## React Native Best Practices
-
-- Use FlatList for any list over 20 items
-- Memoize expensive computations with useMemo
-- Debounce search inputs to avoid excessive API calls
-- Test keyboard behavior on both platforms
-- Use SafeAreaView for proper notch/home indicator handling
-- Handle orientation changes (or lock orientation)
-
-## Pre-Production Advantages
-
-Since we're pre-production:
-- **Break things**: Delete screens and rebuild rather than complex refactors
-- **Experiment**: Try UI patterns, keep what works
-- **Simplify**: Remove unused code aggressively
-- **But never compromise**: Security, accessibility, error handling
+## Common Flutter Gotchas
+- **Hot Reload vs Restart**: Changes to initState or main() need hot restart
+- **BuildContext**: Never store it; use immediately or pass as parameter
+- **Async Gaps**: Check mounted before setState after await
+- **Keys**: Use when widget order changes (reorderable lists)
 
 ## Success Metrics
-
 Your feature is ready when:
 - [ ] Works on both iOS and Android (physical devices)
 - [ ] Handles offline/error states gracefully
-- [ ] Auth session persists across app restarts
-- [ ] No console warnings or errors
-- [ ] Loading states prevent user confusion
-- [ ] TypeScript compiles without errors
+- [ ] Auth persists across app restarts
+- [ ] No debug errors or yellow overflow boxes
+- [ ] Loading states prevent confusion
+- [ ] flutter analyze passes without warnings
+- [ ] All controllers properly disposed
+- [ ] Const constructors used where possible
 
-## Quick Checks Before Committing
+## Pre-Commit Checklist
+1. Test on real devices (not just emulator)
+2. Security verified (no tokens in logs, proper storage)
+3. Error handling complete (network fails, token expiry)
+4. Loading/error states implemented
+5. flutter analyze passes
+6. Resources cleaned up (controllers disposed)
+7. Performance acceptable (smooth 60fps scrolling)
 
-1. **Will it work?** (Test on real device, not just simulator)
-2. **Is it secure?** (No tokens in logs, proper storage)
-4. **Does it handle errors?** (Network fails, tokens expire)
-5. **Is it complete?** (Loading states, error boundaries, TypeScript types)
+## Debug Tools
+- Flutter DevTools for performance and inspection
+- flutter analyze before every commit
+- flutter test for critical flows
+- dart fix --apply for auto-fixes
 
-Remember: Mobile users expect instant feedback and graceful degradation. Perfect is the enemy of shipped.
+Remember: Mobile users expect instant feedback and graceful degradation. Dispose your controllers, use const widgets, and ship it!
