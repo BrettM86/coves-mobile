@@ -1,15 +1,24 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'screens/landing_screen.dart';
 import 'screens/auth/login_screen.dart';
-import 'screens/home/feed_screen.dart';
+import 'screens/home/main_shell_screen.dart';
 import 'providers/auth_provider.dart';
 import 'config/oauth_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Set system UI overlay style (Android navigation bar)
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      systemNavigationBarColor: Color(0xFF0B0F14),
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
 
   // Initialize auth provider
   final authProvider = AuthProvider();
@@ -59,7 +68,7 @@ GoRouter _createRouter(AuthProvider authProvider) {
       ),
       GoRoute(
         path: '/feed',
-        builder: (context, state) => const FeedScreen(),
+        builder: (context, state) => const MainShellScreen(),
       ),
     ],
     refreshListenable: authProvider,

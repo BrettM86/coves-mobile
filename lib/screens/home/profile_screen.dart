@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/primary_button.dart';
 
-class FeedScreen extends StatelessWidget {
-  const FeedScreen({super.key});
+class ProfileScreen extends StatelessWidget {
+  const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +17,7 @@ class FeedScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: const Color(0xFF0B0F14),
         foregroundColor: Colors.white,
-        title: Text(isAuthenticated ? 'Feed' : 'Explore'),
+        title: const Text('Profile'),
         automaticallyImplyLeading: false,
       ),
       body: Center(
@@ -25,13 +27,13 @@ class FeedScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Icon(
-                Icons.forum,
+                Icons.person,
                 size: 64,
                 color: Color(0xFFFF6B35),
               ),
               const SizedBox(height: 24),
               Text(
-                isAuthenticated ? 'Welcome to Coves!' : 'Explore Coves',
+                isAuthenticated ? 'Your Profile' : 'Profile',
                 style: const TextStyle(
                   fontSize: 28,
                   color: Colors.white,
@@ -57,18 +59,33 @@ class FeedScreen extends StatelessWidget {
                   ),
                   textAlign: TextAlign.center,
                 ),
-              ],
-              const SizedBox(height: 32),
-              Text(
-                isAuthenticated
-                    ? 'Your personalized feed will appear here'
-                    : 'Browse communities and discover conversations',
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Color(0xFFB6C2D2),
+                const SizedBox(height: 48),
+                PrimaryButton(
+                  title: 'Sign Out',
+                  onPressed: () async {
+                    await authProvider.signOut();
+                    if (context.mounted) {
+                      context.go('/');
+                    }
+                  },
+                  variant: ButtonVariant.outline,
                 ),
-                textAlign: TextAlign.center,
-              ),
+              ] else ...[
+                const Text(
+                  'Sign in to view your profile',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFFB6C2D2),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 48),
+                PrimaryButton(
+                  title: 'Sign in',
+                  onPressed: () => context.go('/login'),
+                  variant: ButtonVariant.solid,
+                ),
+              ],
             ],
           ),
         ),
