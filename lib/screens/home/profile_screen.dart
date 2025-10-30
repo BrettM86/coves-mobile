@@ -26,11 +26,7 @@ class ProfileScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.person,
-                size: 64,
-                color: Color(0xFFFF6B35),
-              ),
+              const Icon(Icons.person, size: 64, color: Color(0xFFFF6B35)),
               const SizedBox(height: 24),
               Text(
                 isAuthenticated ? 'Your Profile' : 'Profile',
@@ -73,10 +69,7 @@ class ProfileScreen extends StatelessWidget {
               ] else ...[
                 const Text(
                   'Sign in to view your profile',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFFB6C2D2),
-                  ),
+                  style: TextStyle(fontSize: 16, color: Color(0xFFB6C2D2)),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 48),

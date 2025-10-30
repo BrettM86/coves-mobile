@@ -21,14 +21,9 @@ class OAuthCallbackError implements Exception {
   ///
   /// The [params] should contain the parsed query parameters from the callback URL.
   /// The [message] defaults to the error_description from params, or a generic message.
-  OAuthCallbackError(
-    this.params, {
-    String? message,
-    this.state,
-    this.cause,
-  }) : message = message ??
-            params['error_description'] ??
-            'OAuth callback error';
+  OAuthCallbackError(this.params, {String? message, this.state, this.cause})
+    : message =
+          message ?? params['error_description'] ?? 'OAuth callback error';
 
   /// Creates an OAuthCallbackError from another error.
   ///

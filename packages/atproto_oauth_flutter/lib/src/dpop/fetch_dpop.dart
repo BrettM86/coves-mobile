@@ -128,7 +128,8 @@ Interceptor createDpopInterceptor(DpopFetchWrapperOptions options) {
         }
 
         final uri = requestOptions.uri;
-        final origin = '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+        final origin =
+            '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
 
         final htm = requestOptions.method;
         final htu = _buildHtu(uri.toString());
@@ -178,7 +179,8 @@ Interceptor createDpopInterceptor(DpopFetchWrapperOptions options) {
 
         if (nextNonce != null) {
           // Extract origin from request
-          final origin = '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+          final origin =
+              '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
 
           // Store the fresh nonce for future requests
           try {
@@ -218,7 +220,9 @@ Interceptor createDpopInterceptor(DpopFetchWrapperOptions options) {
         print('🔴 DPoP interceptor onError triggered');
         print('   URL: ${uri.path}');
         print('   Status: ${response.statusCode}');
-        print('   Has validateStatus: ${response.requestOptions.validateStatus != null}');
+        print(
+          '   Has validateStatus: ${response.requestOptions.validateStatus != null}',
+        );
       }
 
       // Check for DPoP-Nonce in error response
@@ -226,7 +230,8 @@ Interceptor createDpopInterceptor(DpopFetchWrapperOptions options) {
 
       if (nextNonce != null) {
         // Extract origin
-        final origin = '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+        final origin =
+            '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
 
         // Store the fresh nonce for future requests
         try {
@@ -259,8 +264,8 @@ Interceptor createDpopInterceptor(DpopFetchWrapperOptions options) {
           //
           // We still cache the nonce for future requests, but we don't retry
           // this particular request.
-          final isTokenEndpoint = uri.path.contains('/token') ||
-                                   uri.path.endsWith('/token');
+          final isTokenEndpoint =
+              uri.path.contains('/token') || uri.path.endsWith('/token');
 
           if (kDebugMode && isTokenEndpoint) {
             print('⚠️ DPoP nonce error on token endpoint - NOT retrying');
@@ -303,10 +308,7 @@ Interceptor createDpopInterceptor(DpopFetchWrapperOptions options) {
             // Clone request options and update DPoP header
             final retryOptions = Options(
               method: response.requestOptions.method,
-              headers: {
-                ...response.requestOptions.headers,
-                'DPoP': nextProof,
-              },
+              headers: {...response.requestOptions.headers, 'DPoP': nextProof},
             );
 
             // Retry the request
@@ -391,11 +393,7 @@ Future<String> _buildProof(
   final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
   // Create header
-  final header = {
-    'alg': alg,
-    'typ': 'dpop+jwt',
-    'jwk': jwk,
-  };
+  final header = {'alg': alg, 'typ': 'dpop+jwt', 'jwk': jwk};
 
   // Create payload
   final payload = {
@@ -440,10 +438,7 @@ Future<String> _buildProof(
 /// See:
 /// - https://datatracker.ietf.org/doc/html/rfc9449#name-resource-server-provided-no
 /// - https://datatracker.ietf.org/doc/html/rfc9449#name-authorization-server-provid
-Future<bool> _isUseDpopNonceError(
-  Response response,
-  bool? isAuthServer,
-) async {
+Future<bool> _isUseDpopNonceError(Response response, bool? isAuthServer) async {
   // Check resource server error format (401 + WWW-Authenticate)
   if (isAuthServer == null || isAuthServer == false) {
     if (response.statusCode == 401) {

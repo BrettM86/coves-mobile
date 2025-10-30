@@ -113,24 +113,26 @@ class OAuthServerAgent {
     required this.runtime,
     this.keyset,
     Dio? dio,
-  })  : // CRITICAL: Always create a NEW Dio instance to avoid duplicate interceptors
-        // If we reuse a shared Dio instance, each OAuthServerAgent will add its
-        // interceptors to the same instance, causing duplicate requests!
-        _dio = Dio(dio?.options ?? BaseOptions()),
-        _clientCredentialsFactory = createClientCredentialsFactory(
-          authMethod,
-          serverMetadata,
-          clientMetadata,
-          runtime,
-          keyset,
-        ) {
+  }) : // CRITICAL: Always create a NEW Dio instance to avoid duplicate interceptors
+       // If we reuse a shared Dio instance, each OAuthServerAgent will add its
+       // interceptors to the same instance, causing duplicate requests!
+       _dio = Dio(dio?.options ?? BaseOptions()),
+       _clientCredentialsFactory = createClientCredentialsFactory(
+         authMethod,
+         serverMetadata,
+         clientMetadata,
+         runtime,
+         keyset,
+       ) {
     // Add debug logging interceptor (runs before DPoP interceptor)
     if (kDebugMode) {
       _dio.interceptors.add(
         InterceptorsWrapper(
           onRequest: (options, handler) {
             if (options.uri.path.contains('/token')) {
-              print('📤 [BEFORE DPoP] Request headers: ${options.headers.keys.toList()}');
+              print(
+                '📤 [BEFORE DPoP] Request headers: ${options.headers.keys.toList()}',
+              );
             }
             handler.next(options);
           },
@@ -156,11 +158,17 @@ class OAuthServerAgent {
         InterceptorsWrapper(
           onRequest: (options, handler) {
             if (options.uri.path.contains('/token')) {
-              print('📤 [AFTER DPoP] Request headers: ${options.headers.keys.toList()}');
+              print(
+                '📤 [AFTER DPoP] Request headers: ${options.headers.keys.toList()}',
+              );
               if (options.headers.containsKey('dpop')) {
-                print('   DPoP header present: ${options.headers['dpop']?.toString().substring(0, 50)}...');
+                print(
+                  '   DPoP header present: ${options.headers['dpop']?.toString().substring(0, 50)}...',
+                );
               } else if (options.headers.containsKey('DPoP')) {
-                print('   DPoP header present: ${options.headers['DPoP']?.toString().substring(0, 50)}...');
+                print(
+                  '   DPoP header present: ${options.headers['DPoP']?.toString().substring(0, 50)}...',
+                );
               } else {
                 print('   ⚠️ DPoP header MISSING!');
               }
@@ -208,7 +216,8 @@ class OAuthServerAgent {
     if (tokenEndpoint == null) return;
 
     final origin = Uri.parse(tokenEndpoint);
-    final originKey = '${origin.scheme}://${origin.host}${origin.hasPort ? ':${origin.port}' : ''}';
+    final originKey =
+        '${origin.scheme}://${origin.host}${origin.hasPort ? ':${origin.port}' : ''}';
 
     // Clear any stale nonce from previous sessions
     try {
@@ -244,7 +253,9 @@ class OAuthServerAgent {
       print('⏱️  Pre-fetch completed at: ${DateTime.now().toIso8601String()}');
       final cachedNonce = await dpopNonces.get(originKey);
       print('🎫 DPoP nonce pre-fetch result:');
-      print('   Cached nonce: ${cachedNonce != null ? "✅ ${cachedNonce.substring(0, 20)}..." : "❌ not found"}');
+      print(
+        '   Cached nonce: ${cachedNonce != null ? "✅ ${cachedNonce.substring(0, 20)}..." : "❌ not found"}',
+      );
     }
   }
 
@@ -295,11 +306,12 @@ class OAuthServerAgent {
         refreshToken: tokenResponse['refresh_token'] as String?,
         accessToken: tokenResponse['access_token'] as String,
         tokenType: tokenResponse['token_type'] as String,
-        expiresAt: tokenResponse['expires_in'] != null
-            ? now
-                .add(Duration(seconds: tokenResponse['expires_in'] as int))
-                .toIso8601String()
-            : null,
+        expiresAt:
+            tokenResponse['expires_in'] != null
+                ? now
+                    .add(Duration(seconds: tokenResponse['expires_in'] as int))
+                    .toIso8601String()
+                : null,
       );
     } catch (err) {
       // If verification fails, revoke the access token
@@ -341,11 +353,12 @@ class OAuthServerAgent {
       refreshToken: tokenResponse['refresh_token'] as String?,
       accessToken: tokenResponse['access_token'] as String,
       tokenType: tokenResponse['token_type'] as String,
-      expiresAt: tokenResponse['expires_in'] != null
-          ? now
-              .add(Duration(seconds: tokenResponse['expires_in'] as int))
-              .toIso8601String()
-          : null,
+      expiresAt:
+          tokenResponse['expires_in'] != null
+              ? now
+                  .add(Duration(seconds: tokenResponse['expires_in'] as int))
+                  .toIso8601String()
+              : null,
     );
   }
 
@@ -361,20 +374,22 @@ class OAuthServerAgent {
   /// - Issuer mismatch (user may have switched PDS or attack detected)
   Future<String> _verifyIssuer(String sub) async {
     final cancelToken = CancelToken();
-    final resolved = await oauthResolver.resolveFromIdentity(
-      sub,
-      GetCachedOptions(
-        noCache: true,
-        allowStale: false,
-        cancelToken: cancelToken,
-      ),
-    ).timeout(
-      const Duration(seconds: 10),
-      onTimeout: () {
-        cancelToken.cancel();
-        throw TimeoutException('Issuer verification timed out');
-      },
-    );
+    final resolved = await oauthResolver
+        .resolveFromIdentity(
+          sub,
+          GetCachedOptions(
+            noCache: true,
+            allowStale: false,
+            cancelToken: cancelToken,
+          ),
+        )
+        .timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            cancelToken.cancel();
+            throw TimeoutException('Issuer verification timed out');
+          },
+        );
 
     if (issuer != resolved.metadata['issuer']) {
       // Best case: user switched PDS
@@ -433,7 +448,9 @@ class OAuthServerAgent {
       print('   client_id: ${fullPayload['client_id']}');
       print('   redirect_uri: ${fullPayload['redirect_uri']}');
       print('   code: ${fullPayload['code']?.toString().substring(0, 20)}...');
-      print('   code_verifier: ${fullPayload['code_verifier']?.toString().substring(0, 20)}...');
+      print(
+        '   code_verifier: ${fullPayload['code_verifier']?.toString().substring(0, 20)}...',
+      );
       print('   Headers: ${auth.headers?.keys.toList() ?? []}');
     }
 
@@ -451,10 +468,7 @@ class OAuthServerAgent {
 
       final data = response.data;
       if (data == null) {
-        throw OAuthResponseError(
-          response,
-          {'error': 'empty_response'},
-        );
+        throw OAuthResponseError(response, {'error': 'empty_response'});
       }
 
       if (kDebugMode && endpoint == 'token') {

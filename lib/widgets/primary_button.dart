@@ -35,18 +35,20 @@ class PrimaryButton extends StatelessWidget {
             side: _getBorderSide(),
           ),
           elevation: variant == ButtonVariant.solid ? 8 : 0,
-          shadowColor: variant == ButtonVariant.solid
-              ? const Color(0xFFD84315).withOpacity(0.4)
-              : Colors.transparent,
+          shadowColor:
+              variant == ButtonVariant.solid
+                  ? const Color(0xFFD84315).withOpacity(0.4)
+                  : Colors.transparent,
           padding: const EdgeInsets.symmetric(vertical: 12),
         ),
         child: Text(
           title,
           style: TextStyle(
             fontSize: variant == ButtonVariant.tertiary ? 14 : 16,
-            fontWeight: variant == ButtonVariant.tertiary
-                ? FontWeight.w500
-                : FontWeight.w600,
+            fontWeight:
+                variant == ButtonVariant.tertiary
+                    ? FontWeight.w500
+                    : FontWeight.w600,
           ),
         ),
       ),
@@ -77,10 +79,7 @@ class PrimaryButton extends StatelessWidget {
 
   BorderSide _getBorderSide() {
     if (variant == ButtonVariant.outline) {
-      return const BorderSide(
-        color: Color(0xFF5A6B7F),
-        width: 2,
-      );
+      return const BorderSide(color: Color(0xFF5A6B7F), width: 2);
     }
     return BorderSide.none;
   }

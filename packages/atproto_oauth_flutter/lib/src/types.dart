@@ -285,11 +285,12 @@ class ClientMetadata {
   factory ClientMetadata.fromJson(Map<String, dynamic> json) {
     return ClientMetadata(
       clientId: json['client_id'] as String?,
-      redirectUris: json['redirect_uris'] != null
-          ? (json['redirect_uris'] as List<dynamic>)
-              .map((e) => e as String)
-              .toList()
-          : [],
+      redirectUris:
+          json['redirect_uris'] != null
+              ? (json['redirect_uris'] as List<dynamic>)
+                  .map((e) => e as String)
+                  .toList()
+              : [],
       responseTypes:
           json['response_types'] != null
               ? (json['response_types'] as List<dynamic>)

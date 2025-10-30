@@ -45,7 +45,9 @@ Future<void> main() async {
   print('--------------------------------------------------');
   try {
     // You can also start from a DID
-    final info = await resolver.resolveFromDid('did:plc:ragtjsm2j2vknwkz3zp4oxrd');
+    final info = await resolver.resolveFromDid(
+      'did:plc:ragtjsm2j2vknwkz3zp4oxrd',
+    );
     print('DID: ${info.did}');
     print('Handle: ${info.handle}');
     print('PDS URL: ${info.pdsUrl}');

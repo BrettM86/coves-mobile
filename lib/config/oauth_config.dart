@@ -13,7 +13,8 @@ class OAuthConfig {
   // Custom URL scheme for deep linking
   // Must match AndroidManifest.xml intent filters
   // Using the same format as working Expo implementation
-  static const String customScheme = 'dev.workers.brettmay0212.lingering-darkness-50a6';
+  static const String customScheme =
+      'dev.workers.brettmay0212.lingering-darkness-50a6';
 
   // API Configuration
   static const String apiUrl = 'http://localhost:8081';

@@ -41,7 +41,10 @@ void main() {
     test('isDid validates general DIDs', () {
       expect(isDid('did:plc:abc123xyz789abc123xyz789'), isTrue);
       expect(isDid('did:web:example.com'), isTrue);
-      expect(isDid('did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK'), isTrue);
+      expect(
+        isDid('did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK'),
+        isTrue,
+      );
 
       // Invalid
       expect(isDid('not-a-did'), isFalse);
@@ -102,7 +105,10 @@ void main() {
     });
 
     test('asNormalizedHandle validates and normalizes', () {
-      expect(asNormalizedHandle('Alice.Example.Com'), equals('alice.example.com'));
+      expect(
+        asNormalizedHandle('Alice.Example.Com'),
+        equals('alice.example.com'),
+      );
       expect(asNormalizedHandle('invalid'), isNull);
       expect(asNormalizedHandle(''), isNull);
     });
@@ -118,7 +124,7 @@ void main() {
             'id': '#atproto_pds',
             'type': 'AtprotoPersonalDataServer',
             'serviceEndpoint': 'https://pds.example.com',
-          }
+          },
         ],
       };
 

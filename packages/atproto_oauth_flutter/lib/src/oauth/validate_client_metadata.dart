@@ -159,9 +159,7 @@ void _assertOAuthDiscoverableClientId(String clientId) {
   }
 
   if (uri.scheme != 'https') {
-    throw FormatException(
-      'Discoverable client_id must use HTTPS: $clientId',
-    );
+    throw FormatException('Discoverable client_id must use HTTPS: $clientId');
   }
 
   if (uri.hasFragment) {
@@ -172,9 +170,7 @@ void _assertOAuthDiscoverableClientId(String clientId) {
 
   // Validate it's a valid URL
   if (!uri.hasAuthority) {
-    throw FormatException(
-      'Invalid discoverable client_id URL: $clientId',
-    );
+    throw FormatException('Invalid discoverable client_id URL: $clientId');
   }
 }
 

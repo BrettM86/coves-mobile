@@ -25,10 +25,7 @@ void main() async {
   await authProvider.initialize();
 
   runApp(
-    ChangeNotifierProvider.value(
-      value: authProvider,
-      child: const CovesApp(),
-    ),
+    ChangeNotifierProvider.value(value: authProvider, child: const CovesApp()),
   );
 }
 
@@ -58,14 +55,8 @@ class CovesApp extends StatelessWidget {
 GoRouter _createRouter(AuthProvider authProvider) {
   return GoRouter(
     routes: [
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const LandingScreen(),
-      ),
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
+      GoRoute(path: '/', builder: (context, state) => const LandingScreen()),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/feed',
         builder: (context, state) => const MainShellScreen(),
@@ -98,7 +89,9 @@ GoRouter _createRouter(AuthProvider authProvider) {
       // Check if this is an OAuth callback
       if (state.uri.scheme == OAuthConfig.customScheme) {
         if (kDebugMode) {
-          print('⚠️ OAuth callback in errorBuilder - flutter_web_auth_2 should handle it');
+          print(
+            '⚠️ OAuth callback in errorBuilder - flutter_web_auth_2 should handle it',
+          );
           print('   URI: ${state.uri}');
         }
         // Return nothing - just stay on current screen

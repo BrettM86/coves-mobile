@@ -51,10 +51,7 @@ class InternalStateData {
 
   /// Converts this instance to a JSON map.
   Map<String, dynamic> toJson() {
-    final json = <String, dynamic>{
-      'iss': iss,
-      'dpopKey': dpopKey,
-    };
+    final json = <String, dynamic>{'iss': iss, 'dpopKey': dpopKey};
 
     if (authMethod != null) json['authMethod'] = authMethod;
     if (verifier != null) json['verifier'] = verifier;

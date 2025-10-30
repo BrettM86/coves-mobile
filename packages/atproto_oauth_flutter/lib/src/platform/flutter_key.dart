@@ -160,10 +160,7 @@ class FlutterKey implements Key {
 
     // Reconstruct public key
     final publicKey = pointycastle.ECPublicKey(
-      curve.curve.createPoint(
-        _bytesToBigInt(x),
-        _bytesToBigInt(y),
-      ),
+      curve.curve.createPoint(_bytesToBigInt(x), _bytesToBigInt(y)),
       curve,
     );
 
@@ -295,7 +292,9 @@ class FlutterKey implements Key {
     );
 
     // Sign the data (signer will hash it internally)
-    final signature = signer.generateSignature(Uint8List.fromList(data)) as pointycastle.ECSignature;
+    final signature =
+        signer.generateSignature(Uint8List.fromList(data))
+            as pointycastle.ECSignature;
 
     // Encode as IEEE P1363 format (r || s)
     final r = _bigIntToBytes(signature.r, _getSignatureLength(algorithm));

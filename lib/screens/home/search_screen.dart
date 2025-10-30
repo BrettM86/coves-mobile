@@ -19,11 +19,7 @@ class SearchScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.search,
-                size: 64,
-                color: Color(0xFFFF6B35),
-              ),
+              Icon(Icons.search, size: 64, color: Color(0xFFFF6B35)),
               SizedBox(height: 24),
               Text(
                 'Search',
@@ -36,10 +32,7 @@ class SearchScreen extends StatelessWidget {
               SizedBox(height: 16),
               Text(
                 'Search communities and conversations',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Color(0xFFB6C2D2),
-                ),
+                style: TextStyle(fontSize: 16, color: Color(0xFFB6C2D2)),
                 textAlign: TextAlign.center,
               ),
             ],

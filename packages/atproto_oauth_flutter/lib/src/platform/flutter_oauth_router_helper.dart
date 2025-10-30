@@ -56,10 +56,7 @@ class FlutterOAuthRouterHelper {
   ///   return null;
   /// }
   /// ```
-  static bool isOAuthCallback(
-    Uri uri, {
-    required List<String> customSchemes,
-  }) {
+  static bool isOAuthCallback(Uri uri, {required List<String> customSchemes}) {
     return customSchemes.contains(uri.scheme);
   }
 
@@ -97,7 +94,8 @@ class FlutterOAuthRouterHelper {
   ///   ),
   /// );
   /// ```
-  static FutureOr<String?> Function(BuildContext, dynamic) createGoRouterRedirect({
+  static FutureOr<String?> Function(BuildContext, dynamic)
+  createGoRouterRedirect({
     required List<String> customSchemes,
     FutureOr<String?> Function(BuildContext, dynamic)? fallbackRedirect,
   }) {

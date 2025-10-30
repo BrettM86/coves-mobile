@@ -5,11 +5,7 @@ class CovesLogo extends StatelessWidget {
   final double size;
   final bool useColorVersion;
 
-  const CovesLogo({
-    super.key,
-    this.size = 150,
-    this.useColorVersion = false,
-  });
+  const CovesLogo({super.key, this.size = 150, this.useColorVersion = false});
 
   @override
   Widget build(BuildContext context) {

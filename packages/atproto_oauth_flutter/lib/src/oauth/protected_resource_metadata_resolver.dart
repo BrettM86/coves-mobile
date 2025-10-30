@@ -7,8 +7,8 @@ import 'authorization_server_metadata_resolver.dart';
 /// Cache interface for protected resource metadata.
 ///
 /// Implementations should store metadata keyed by origin (scheme://host:port).
-typedef ProtectedResourceMetadataCache
-    = SimpleStore<String, Map<String, dynamic>>;
+typedef ProtectedResourceMetadataCache =
+    SimpleStore<String, Map<String, dynamic>>;
 
 /// Configuration for the protected resource metadata resolver.
 class OAuthProtectedResourceMetadataResolverConfig {
@@ -50,8 +50,8 @@ class OAuthProtectedResourceMetadataResolver {
     this._cache, {
     Dio? dio,
     OAuthProtectedResourceMetadataResolverConfig? config,
-  })  : _dio = dio ?? Dio(),
-        _allowHttpResource = config?.allowHttpResource ?? false;
+  }) : _dio = dio ?? Dio(),
+       _allowHttpResource = config?.allowHttpResource ?? false;
 
   /// Resolves protected resource metadata for the given resource URL.
   ///
@@ -79,7 +79,8 @@ class OAuthProtectedResourceMetadataResolver {
     // Parse URL and extract origin
     final uri = resource is Uri ? resource : Uri.parse(resource.toString());
     final protocol = uri.scheme;
-    final origin = '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
+    final origin =
+        '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
 
     // Validate protocol
     if (protocol != 'https' && protocol != 'http') {
@@ -117,9 +118,10 @@ class OAuthProtectedResourceMetadataResolver {
     String origin,
     GetCachedOptions? options,
   ) async {
-    final url = Uri.parse(origin)
-        .replace(path: '/.well-known/oauth-protected-resource')
-        .toString();
+    final url =
+        Uri.parse(
+          origin,
+        ).replace(path: '/.well-known/oauth-protected-resource').toString();
 
     try {
       final response = await _dio.get<Map<String, dynamic>>(
@@ -134,9 +136,7 @@ class OAuthProtectedResourceMetadataResolver {
 
       // Verify content type
       final contentType = contentMime(
-        response.headers.map.map(
-          (key, value) => MapEntry(key, value.first),
-        ),
+        response.headers.map.map((key, value) => MapEntry(key, value.first)),
       );
 
       if (contentType != 'application/json') {
@@ -171,7 +171,8 @@ class OAuthProtectedResourceMetadataResolver {
         requestOptions: e.requestOptions,
         response: e.response,
         type: e.type,
-        message: 'Unexpected status code ${e.response?.statusCode ?? 'unknown'} for "$url"',
+        message:
+            'Unexpected status code ${e.response?.statusCode ?? 'unknown'} for "$url"',
         error: e.error,
       );
     }

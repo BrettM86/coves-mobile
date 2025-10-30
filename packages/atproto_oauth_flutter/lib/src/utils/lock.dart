@@ -81,10 +81,7 @@ Future<void Function()> _acquireLocalLock(Object name) {
 /// - Multiple app instances
 ///
 /// For cross-process locking, implement a platform-specific RuntimeLock.
-Future<T> requestLocalLock<T>(
-  String name,
-  FutureOr<T> Function() fn,
-) async {
+Future<T> requestLocalLock<T>(String name, FutureOr<T> Function() fn) async {
   // Acquire the lock and get the release function
   final release = await _acquireLocalLock(name);
 

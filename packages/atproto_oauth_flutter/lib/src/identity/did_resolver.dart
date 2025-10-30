@@ -13,10 +13,7 @@ class ResolveDidOptions {
   /// Cancellation token for the request
   final CancelToken? cancelToken;
 
-  const ResolveDidOptions({
-    this.noCache = false,
-    this.cancelToken,
-  });
+  const ResolveDidOptions({this.noCache = false, this.cancelToken});
 }
 
 /// Interface for resolving DIDs to DID documents.
@@ -32,11 +29,9 @@ class AtprotoDidResolver implements DidResolver {
   final DidPlcMethod _plcMethod;
   final DidWebMethod _webMethod;
 
-  AtprotoDidResolver({
-    String? plcDirectoryUrl,
-    Dio? dio,
-  })  : _plcMethod = DidPlcMethod(plcDirectoryUrl: plcDirectoryUrl, dio: dio),
-        _webMethod = DidWebMethod(dio: dio);
+  AtprotoDidResolver({String? plcDirectoryUrl, Dio? dio})
+    : _plcMethod = DidPlcMethod(plcDirectoryUrl: plcDirectoryUrl, dio: dio),
+      _webMethod = DidWebMethod(dio: dio);
 
   @override
   Future<DidDocument> resolve(String did, [ResolveDidOptions? options]) async {
@@ -57,11 +52,9 @@ class DidPlcMethod {
   final Uri plcDirectoryUrl;
   final Dio dio;
 
-  DidPlcMethod({
-    String? plcDirectoryUrl,
-    Dio? dio,
-  })  : plcDirectoryUrl = Uri.parse(plcDirectoryUrl ?? defaultPlcDirectoryUrl),
-        dio = dio ?? Dio();
+  DidPlcMethod({String? plcDirectoryUrl, Dio? dio})
+    : plcDirectoryUrl = Uri.parse(plcDirectoryUrl ?? defaultPlcDirectoryUrl),
+      dio = dio ?? Dio();
 
   Future<DidDocument> resolve(String did, [ResolveDidOptions? options]) async {
     assertDidPlc(did);
@@ -105,10 +98,7 @@ class DidPlcMethod {
     } catch (e) {
       if (e is DidResolverError) rethrow;
 
-      throw DidResolverError(
-        'Unexpected error resolving DID: $e',
-        e,
-      );
+      throw DidResolverError('Unexpected error resolving DID: $e', e);
     }
   }
 }
@@ -175,25 +165,16 @@ class DidWebMethod {
         }
 
         // Any other error, throw immediately
-        throw DidResolverError(
-          'Failed to resolve did:web: ${e.message}',
-          e,
-        );
+        throw DidResolverError('Failed to resolve did:web: ${e.message}', e);
       } catch (e) {
         if (e is DidResolverError) rethrow;
 
-        throw DidResolverError(
-          'Unexpected error resolving did:web: $e',
-          e,
-        );
+        throw DidResolverError('Unexpected error resolving did:web: $e', e);
       }
     }
 
     // If we get here, all URLs failed
-    throw DidResolverError(
-      'DID document not found for $did',
-      lastError,
-    );
+    throw DidResolverError('DID document not found for $did', lastError);
   }
 }
 
@@ -203,7 +184,7 @@ class CachedDidResolver implements DidResolver {
   final DidCache _cache;
 
   CachedDidResolver(this._resolver, [DidCache? cache])
-      : _cache = cache ?? InMemoryDidCache();
+    : _cache = cache ?? InMemoryDidCache();
 
   @override
   Future<DidDocument> resolve(String did, [ResolveDidOptions? options]) async {
@@ -238,8 +219,7 @@ class InMemoryDidCache implements DidCache {
   final Map<String, _CacheEntry> _cache = {};
   final Duration _ttl;
 
-  InMemoryDidCache({Duration? ttl})
-      : _ttl = ttl ?? const Duration(hours: 24);
+  InMemoryDidCache({Duration? ttl}) : _ttl = ttl ?? const Duration(hours: 24);
 
   @override
   Future<DidDocument?> get(String did) async {

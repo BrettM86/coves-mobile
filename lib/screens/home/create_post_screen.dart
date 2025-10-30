@@ -36,10 +36,7 @@ class CreatePostScreen extends StatelessWidget {
               SizedBox(height: 16),
               Text(
                 'Share your thoughts with the community',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Color(0xFFB6C2D2),
-                ),
+                style: TextStyle(fontSize: 16, color: Color(0xFFB6C2D2)),
                 textAlign: TextAlign.center,
               ),
             ],

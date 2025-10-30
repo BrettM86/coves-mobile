@@ -44,10 +44,7 @@ class ResolveIdentityOptions {
   /// Cancellation token for the request
   final CancelToken? cancelToken;
 
-  const ResolveIdentityOptions({
-    this.noCache = false,
-    this.cancelToken,
-  });
+  const ResolveIdentityOptions({this.noCache = false, this.cancelToken});
 }
 
 /// Interface for resolving atProto identities (handles or DIDs) to complete identity info.
@@ -59,7 +56,10 @@ abstract class IdentityResolver {
   /// - A DID (e.g., "did:plc:...")
   ///
   /// Returns [IdentityInfo] with DID, DID document, and validated handle.
-  Future<IdentityInfo> resolve(String identifier, [ResolveIdentityOptions? options]);
+  Future<IdentityInfo> resolve(
+    String identifier, [
+    ResolveIdentityOptions? options,
+  ]);
 }
 
 /// Implementation of the official atProto identity resolution strategy.
@@ -220,9 +220,7 @@ class AtprotoIdentityResolver implements IdentityResolver {
     );
 
     if (did == null) {
-      throw IdentityResolverError(
-        'Handle "$handle" does not resolve to a DID',
-      );
+      throw IdentityResolverError('Handle "$handle" does not resolve to a DID');
     }
 
     // Fetch the DID document
@@ -325,11 +323,9 @@ IdentityResolver createIdentityResolver(IdentityResolverOptions options) {
 }
 
 DidResolver _createDidResolver(IdentityResolverOptions options, Dio dio) {
-  final didResolver = options.didResolver ??
-      AtprotoDidResolver(
-        plcDirectoryUrl: options.plcDirectoryUrl,
-        dio: dio,
-      );
+  final didResolver =
+      options.didResolver ??
+      AtprotoDidResolver(plcDirectoryUrl: options.plcDirectoryUrl, dio: dio);
 
   // Wrap with cache if not already cached
   if (didResolver is CachedDidResolver && options.didCache == null) {
@@ -354,10 +350,7 @@ HandleResolver _createHandleResolver(IdentityResolverOptions options, Dio dio) {
   if (handleResolverInput is HandleResolver) {
     baseResolver = handleResolverInput;
   } else if (handleResolverInput is String || handleResolverInput is Uri) {
-    baseResolver = XrpcHandleResolver(
-      handleResolverInput.toString(),
-      dio: dio,
-    );
+    baseResolver = XrpcHandleResolver(handleResolverInput.toString(), dio: dio);
   } else {
     throw ArgumentError(
       'handleResolver must be a HandleResolver, String, or Uri',

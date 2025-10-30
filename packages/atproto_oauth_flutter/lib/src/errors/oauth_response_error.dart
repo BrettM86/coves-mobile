@@ -28,8 +28,8 @@ class OAuthResponseError implements Exception {
   /// Automatically extracts the error and error_description fields
   /// from the response payload if it's a JSON object.
   OAuthResponseError(this.response, this.payload)
-      : error = _extractError(payload),
-        errorDescription = _extractErrorDescription(payload);
+    : error = _extractError(payload),
+      errorDescription = _extractErrorDescription(payload);
 
   /// HTTP status code from the response
   int get status => response.statusCode ?? 0;

@@ -24,8 +24,8 @@ class GetCachedOptions {
 /// Cache interface for authorization server metadata.
 ///
 /// Implementations should store metadata keyed by issuer URL.
-typedef AuthorizationServerMetadataCache
-    = SimpleStore<String, Map<String, dynamic>>;
+typedef AuthorizationServerMetadataCache =
+    SimpleStore<String, Map<String, dynamic>>;
 
 /// Configuration for the authorization server metadata resolver.
 class OAuthAuthorizationServerMetadataResolverConfig {
@@ -68,8 +68,8 @@ class OAuthAuthorizationServerMetadataResolver {
     this._cache, {
     Dio? dio,
     OAuthAuthorizationServerMetadataResolverConfig? config,
-  })  : _dio = dio ?? Dio(),
-        _allowHttpIssuer = config?.allowHttpIssuer ?? false;
+  }) : _dio = dio ?? Dio(),
+       _allowHttpIssuer = config?.allowHttpIssuer ?? false;
 
   /// Resolves authorization server metadata for the given issuer.
   ///
@@ -126,9 +126,10 @@ class OAuthAuthorizationServerMetadataResolver {
     String issuer,
     GetCachedOptions? options,
   ) async {
-    final url = Uri.parse(issuer)
-        .replace(path: '/.well-known/oauth-authorization-server')
-        .toString();
+    final url =
+        Uri.parse(
+          issuer,
+        ).replace(path: '/.well-known/oauth-authorization-server').toString();
 
     try {
       final response = await _dio.get<Map<String, dynamic>>(
@@ -143,9 +144,7 @@ class OAuthAuthorizationServerMetadataResolver {
 
       // Verify content type
       final contentType = contentMime(
-        response.headers.map.map(
-          (key, value) => MapEntry(key, value.first),
-        ),
+        response.headers.map.map((key, value) => MapEntry(key, value.first)),
       );
 
       if (contentType != 'application/json') {
@@ -180,7 +179,8 @@ class OAuthAuthorizationServerMetadataResolver {
         requestOptions: e.requestOptions,
         response: e.response,
         type: e.type,
-        message: 'Unexpected status code ${e.response?.statusCode ?? 'unknown'} for "$url"',
+        message:
+            'Unexpected status code ${e.response?.statusCode ?? 'unknown'} for "$url"',
         error: e.error,
       );
     }
@@ -204,7 +204,8 @@ class OAuthAuthorizationServerMetadataResolver {
     }
 
     // Normalize: remove trailing slash
-    final normalized = input.endsWith('/') ? input.substring(0, input.length - 1) : input;
+    final normalized =
+        input.endsWith('/') ? input.substring(0, input.length - 1) : input;
 
     return normalized;
   }
@@ -238,14 +239,10 @@ class OAuthAuthorizationServerMetadataResolver {
 
     // Validate required endpoints exist
     if (metadata['authorization_endpoint'] == null) {
-      throw FormatException(
-        'Missing required field: authorization_endpoint',
-      );
+      throw FormatException('Missing required field: authorization_endpoint');
     }
     if (metadata['token_endpoint'] == null) {
-      throw FormatException(
-        'Missing required field: token_endpoint',
-      );
+      throw FormatException('Missing required field: token_endpoint');
     }
   }
 }

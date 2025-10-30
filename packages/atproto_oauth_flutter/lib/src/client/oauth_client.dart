@@ -38,14 +38,12 @@ export '../oauth/authorization_server_metadata_resolver.dart'
 export '../oauth/oauth_server_agent.dart' show DpopNonceCache;
 export '../oauth/protected_resource_metadata_resolver.dart'
     show ProtectedResourceMetadataCache;
-export '../runtime/runtime_implementation.dart'
-    show RuntimeImplementation, Key;
+export '../runtime/runtime_implementation.dart' show RuntimeImplementation, Key;
 export '../oauth/client_auth.dart' show Keyset;
 export '../session/session_getter.dart'
     show SessionStore, SessionUpdatedEvent, SessionDeletedEvent;
 export '../session/state_store.dart' show StateStore, InternalStateData;
-export '../types.dart'
-    show ClientMetadata, AuthorizeOptions, CallbackOptions;
+export '../types.dart' show ClientMetadata, AuthorizeOptions, CallbackOptions;
 
 /// OAuth response mode.
 enum OAuthResponseMode {
@@ -94,7 +92,8 @@ class OAuthClientOptions {
   final SessionStore sessionStore;
 
   /// Optional cache for authorization server metadata
-  final auth_resolver.AuthorizationServerMetadataCache? authorizationServerMetadataCache;
+  final auth_resolver.AuthorizationServerMetadataCache?
+  authorizationServerMetadataCache;
 
   /// Optional cache for protected resource metadata
   final ProtectedResourceMetadataCache? protectedResourceMetadataCache;
@@ -152,10 +151,7 @@ class CallbackResult {
   /// The application state from the original authorize call
   final String? state;
 
-  const CallbackResult({
-    required this.session,
-    this.state,
-  });
+  const CallbackResult({required this.session, this.state});
 }
 
 /// Options for fetching client metadata from a discoverable client ID.
@@ -259,18 +255,18 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
   /// Throws [FormatException] if client metadata is invalid.
   /// Throws [TypeError] if keyset configuration is incorrect.
   OAuthClient(OAuthClientOptions options)
-      : keyset = options.keyset,
-        responseMode = options.responseMode,
-        runtime = runtime_lib.Runtime(options.runtimeImplementation),
-        dio = options.dio ?? Dio(),
-        _stateStore = options.stateStore,
-        clientMetadata = validateClientMetadata(
-          options.clientMetadata,
-          options.keyset,
-        ),
-        oauthResolver = _createOAuthResolver(options),
-        serverFactory = _createServerFactory(options),
-        _sessionGetter = _createSessionGetter(options) {
+    : keyset = options.keyset,
+      responseMode = options.responseMode,
+      runtime = runtime_lib.Runtime(options.runtimeImplementation),
+      dio = options.dio ?? Dio(),
+      _stateStore = options.stateStore,
+      clientMetadata = validateClientMetadata(
+        options.clientMetadata,
+        options.keyset,
+      ),
+      oauthResolver = _createOAuthResolver(options),
+      serverFactory = _createServerFactory(options),
+      _sessionGetter = _createSessionGetter(options) {
     // Proxy session events from SessionGetter
     _sessionGetter.onUpdated.listen((event) {
       _updatedController.add(event);
@@ -288,7 +284,8 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
     final dio = options.dio ?? Dio();
 
     return OAuthResolver(
-      identityResolver: options.identityResolver ??
+      identityResolver:
+          options.identityResolver ??
           AtprotoIdentityResolver.withDefaults(
             handleResolverUrl:
                 options.handleResolverUrl ?? 'https://bsky.social',
@@ -307,13 +304,14 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
       ),
       authorizationServerMetadataResolver:
           auth_resolver.OAuthAuthorizationServerMetadataResolver(
-        options.authorizationServerMetadataCache ??
-            InMemoryStore<String, Map<String, dynamic>>(),
-        dio: dio,
-        config: auth_resolver.OAuthAuthorizationServerMetadataResolverConfig(
-          allowHttpIssuer: options.allowHttp,
-        ),
-      ),
+            options.authorizationServerMetadataCache ??
+                InMemoryStore<String, Map<String, dynamic>>(),
+            dio: dio,
+            config:
+                auth_resolver.OAuthAuthorizationServerMetadataResolverConfig(
+                  allowHttpIssuer: options.allowHttp,
+                ),
+          ),
     );
   }
 
@@ -328,8 +326,7 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
       resolver: _createOAuthResolver(options),
       dio: options.dio ?? Dio(),
       keyset: options.keyset,
-      dpopNonceCache:
-          options.dpopNonceCache ?? InMemoryStore<String, String>(),
+      dpopNonceCache: options.dpopNonceCache ?? InMemoryStore<String, String>(),
     );
   }
 
@@ -493,7 +490,7 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
         dpopKey: dpopKeyJwk,
         authMethod: authMethod.toJson(),
         verifier: pkce['verifier'] as String,
-        redirectUri: redirectUri,  // Store the exact redirectUri used in PAR
+        redirectUri: redirectUri, // Store the exact redirectUri used in PAR
         appState: opts.state,
       ),
     );
@@ -533,8 +530,9 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
     }
 
     // Build authorization URL
-    final authorizationUrl =
-        Uri.parse(metadata['authorization_endpoint'] as String);
+    final authorizationUrl = Uri.parse(
+      metadata['authorization_endpoint'] as String,
+    );
 
     // Validate authorization endpoint protocol
     if (authorizationUrl.scheme != 'https' &&
@@ -664,20 +662,28 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
       // TODO: Implement proper Key reconstruction from stored bareJwk
       // For now, we regenerate the key with the same algorithms
       // This works but is not ideal - we should restore the exact same key
-      final authMethod = stateData.authMethod != null
-          ? ClientAuthMethod.fromJson(
-              stateData.authMethod as Map<String, dynamic>)
-          : const ClientAuthMethod.none(); // Legacy fallback
+      final authMethod =
+          stateData.authMethod != null
+              ? ClientAuthMethod.fromJson(
+                stateData.authMethod as Map<String, dynamic>,
+              )
+              : const ClientAuthMethod.none(); // Legacy fallback
 
       // Restore dpopKey from stored private JWK
       // Import FlutterKey to access fromJwk factory
       if (kDebugMode) {
         print('🔓 Restoring DPoP key:');
-        print('   Stored JWK has "d" (private): ${(stateData.dpopKey as Map).containsKey('d')}');
-        print('   Stored JWK keys: ${(stateData.dpopKey as Map).keys.toList()}');
+        print(
+          '   Stored JWK has "d" (private): ${(stateData.dpopKey as Map).containsKey('d')}',
+        );
+        print(
+          '   Stored JWK keys: ${(stateData.dpopKey as Map).keys.toList()}',
+        );
       }
 
-      final dpopKey = FlutterKey.fromJwk(stateData.dpopKey as Map<String, dynamic>);
+      final dpopKey = FlutterKey.fromJwk(
+        stateData.dpopKey as Map<String, dynamic>,
+      );
 
       if (kDebugMode) {
         print('   ✅ DPoP key restored successfully');
@@ -706,8 +712,8 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
             state: stateData.appState,
           );
         }
-      } else if (server.serverMetadata[
-              'authorization_response_iss_parameter_supported'] ==
+      } else if (server
+              .serverMetadata['authorization_response_iss_parameter_supported'] ==
           true) {
         throw OAuthCallbackError(
           params,
@@ -719,16 +725,21 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
       // Exchange authorization code for tokens
       // CRITICAL: Use the EXACT same redirectUri that was used during authorization
       // The redirectUri in the token exchange MUST match the one in the PAR request
-      final redirectUriForExchange = stateData.redirectUri ??
-                                      opts.redirectUri ??
-                                      clientMetadata.redirectUris.first;
+      final redirectUriForExchange =
+          stateData.redirectUri ??
+          opts.redirectUri ??
+          clientMetadata.redirectUris.first;
 
       if (kDebugMode) {
         print('🔄 Exchanging authorization code for tokens:');
         print('   Code: ${codeParam.substring(0, 20)}...');
-        print('   Code verifier: ${stateData.verifier?.substring(0, 20) ?? "none"}...');
+        print(
+          '   Code verifier: ${stateData.verifier?.substring(0, 20) ?? "none"}...',
+        );
         print('   Redirect URI: $redirectUriForExchange');
-        print('   Redirect URI source: ${stateData.redirectUri != null ? "stored" : "fallback"}');
+        print(
+          '   Redirect URI source: ${stateData.redirectUri != null ? "stored" : "fallback"}',
+        );
         print('   Issuer: ${server.issuer}');
       }
 
@@ -766,10 +777,7 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
           print('🎉 OAuth callback complete!');
         }
 
-        return CallbackResult(
-          session: session,
-          state: stateData.appState,
-        );
+        return CallbackResult(session: session, state: stateData.appState);
       } catch (err, stackTrace) {
         // If session storage failed, revoke the tokens
         if (kDebugMode) {
@@ -824,10 +832,12 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
 
     try {
       // Determine auth method (with legacy fallback)
-      final authMethod = session.authMethod != null
-          ? ClientAuthMethod.fromJson(
-              session.authMethod as Map<String, dynamic>)
-          : const ClientAuthMethod.none(); // Legacy
+      final authMethod =
+          session.authMethod != null
+              ? ClientAuthMethod.fromJson(
+                session.authMethod as Map<String, dynamic>,
+              )
+              : const ClientAuthMethod.none(); // Legacy
 
       // TODO: Implement proper Key reconstruction from stored bareJwk
       // For now, we regenerate the key
@@ -866,27 +876,24 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
   ///
   /// Token revocation is best-effort - even if the revocation request fails,
   /// the local session is still deleted.
-  Future<void> revoke(
-    String sub, {
-    CancelToken? cancelToken,
-  }) async {
+  Future<void> revoke(String sub, {CancelToken? cancelToken}) async {
     // Validate DID format
     assertAtprotoDid(sub);
 
     // Get session (allow stale tokens for revocation)
     final session = await _sessionGetter.get(
       sub,
-      const GetCachedOptions(
-        allowStale: true,
-      ),
+      const GetCachedOptions(allowStale: true),
     );
 
     // Try to revoke tokens on the server
     try {
-      final authMethod = session.authMethod != null
-          ? ClientAuthMethod.fromJson(
-              session.authMethod as Map<String, dynamic>)
-          : const ClientAuthMethod.none(); // Legacy
+      final authMethod =
+          session.authMethod != null
+              ? ClientAuthMethod.fromJson(
+                session.authMethod as Map<String, dynamic>,
+              )
+              : const ClientAuthMethod.none(); // Legacy
 
       // TODO: Implement proper Key reconstruction from stored bareJwk
       // For now, we regenerate the key
@@ -909,10 +916,7 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
   /// Creates an OAuthSession wrapper.
   ///
   /// Internal helper for creating session objects from server agents.
-  OAuthSession _createSession(
-    OAuthServerAgent server,
-    String sub,
-  ) {
+  OAuthSession _createSession(OAuthServerAgent server, String sub) {
     // Create a wrapper that implements SessionGetterInterface
     final sessionGetterWrapper = _SessionGetterWrapper(_sessionGetter);
 
@@ -942,11 +946,7 @@ class _SessionGetterWrapper implements SessionGetterInterface {
   _SessionGetterWrapper(this._getter);
 
   @override
-  Future<Session> get(
-    String sub, {
-    bool? noCache,
-    bool? allowStale,
-  }) async {
+  Future<Session> get(String sub, {bool? noCache, bool? allowStale}) async {
     return _getter.get(
       sub,
       GetCachedOptions(

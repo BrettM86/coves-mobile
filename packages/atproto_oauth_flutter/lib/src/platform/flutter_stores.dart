@@ -36,12 +36,11 @@ class FlutterSessionStore implements SessionStore {
   static const _prefix = 'atproto_session_';
 
   FlutterSessionStore([FlutterSecureStorage? storage])
-      : _storage = storage ??
-            const FlutterSecureStorage(
-              aOptions: AndroidOptions(
-                encryptedSharedPreferences: true,
-              ),
-            );
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            aOptions: AndroidOptions(encryptedSharedPreferences: true),
+          );
 
   @override
   Future<Session?> get(String key, {CancellationToken? signal}) async {
@@ -198,17 +197,12 @@ class InMemoryAuthorizationServerMetadataCache
   }) : _cache = _InMemoryCache(ttl);
 
   @override
-  Future<Map<String, dynamic>?> get(
-    String key, {
-    CancellationToken? signal,
-  }) =>
+  Future<Map<String, dynamic>?> get(String key, {CancellationToken? signal}) =>
       _cache.get(key);
 
   @override
-  Future<void> set(String key, Map<String, dynamic> value) => _cache.set(
-        key,
-        value,
-      );
+  Future<void> set(String key, Map<String, dynamic> value) =>
+      _cache.set(key, value);
 
   @override
   Future<void> del(String key) => _cache.del(key);
@@ -238,17 +232,12 @@ class InMemoryProtectedResourceMetadataCache
   }) : _cache = _InMemoryCache(ttl);
 
   @override
-  Future<Map<String, dynamic>?> get(
-    String key, {
-    CancellationToken? signal,
-  }) =>
+  Future<Map<String, dynamic>?> get(String key, {CancellationToken? signal}) =>
       _cache.get(key);
 
   @override
-  Future<void> set(String key, Map<String, dynamic> value) => _cache.set(
-        key,
-        value,
-      );
+  Future<void> set(String key, Map<String, dynamic> value) =>
+      _cache.set(key, value);
 
   @override
   Future<void> del(String key) => _cache.del(key);
@@ -273,9 +262,8 @@ class InMemoryProtectedResourceMetadataCache
 class InMemoryDpopNonceCache implements DpopNonceCache {
   final _InMemoryCache<String> _cache;
 
-  InMemoryDpopNonceCache({
-    Duration ttl = const Duration(minutes: 10),
-  }) : _cache = _InMemoryCache(ttl);
+  InMemoryDpopNonceCache({Duration ttl = const Duration(minutes: 10)})
+    : _cache = _InMemoryCache(ttl);
 
   @override
   Future<String?> get(String key, {CancellationToken? signal}) =>
@@ -310,9 +298,8 @@ class InMemoryDpopNonceCache implements DpopNonceCache {
 class FlutterDidCache implements DidCache {
   final _InMemoryCache<DidDocument> _cache;
 
-  FlutterDidCache({
-    Duration ttl = const Duration(minutes: 1),
-  }) : _cache = _InMemoryCache(ttl);
+  FlutterDidCache({Duration ttl = const Duration(minutes: 1)})
+    : _cache = _InMemoryCache(ttl);
 
   @override
   Future<DidDocument?> get(String key) => _cache.get(key);
@@ -340,9 +327,8 @@ class FlutterDidCache implements DidCache {
 class FlutterHandleCache implements HandleCache {
   final _InMemoryCache<String> _cache;
 
-  FlutterHandleCache({
-    Duration ttl = const Duration(minutes: 1),
-  }) : _cache = _InMemoryCache(ttl);
+  FlutterHandleCache({Duration ttl = const Duration(minutes: 1)})
+    : _cache = _InMemoryCache(ttl);
 
   @override
   Future<String?> get(String key) => _cache.get(key);

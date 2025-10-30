@@ -24,11 +24,7 @@ class FeedScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.forum,
-                size: 64,
-                color: Color(0xFFFF6B35),
-              ),
+              const Icon(Icons.forum, size: 64, color: Color(0xFFFF6B35)),
               const SizedBox(height: 24),
               Text(
                 isAuthenticated ? 'Welcome to Coves!' : 'Explore Coves',
@@ -63,10 +59,7 @@ class FeedScreen extends StatelessWidget {
                 isAuthenticated
                     ? 'Your personalized feed will appear here'
                     : 'Browse communities and discover conversations',
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Color(0xFFB6C2D2),
-                ),
+                style: const TextStyle(fontSize: 16, color: Color(0xFFB6C2D2)),
                 textAlign: TextAlign.center,
               ),
             ],

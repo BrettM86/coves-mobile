@@ -80,7 +80,6 @@ void main() async {
     // final profile = await agent.getProfile();
 
     print('Session is ready for API calls');
-
   } on OAuthCallbackError catch (e) {
     // Handle OAuth errors (user cancelled, invalid state, etc.)
     print('OAuth callback error: ${e.error}');
@@ -110,7 +109,6 @@ void main() async {
 
     print('✓ Session restored!');
     print('  Access token expires: ${session.info['expiresAt']}');
-
   } catch (e) {
     print('Failed to restore session: $e');
     // Session may have been revoked or expired
@@ -133,7 +131,6 @@ void main() async {
     await client.revoke(did);
 
     print('✓ Signed out successfully');
-
   } catch (e) {
     print('Sign out error: $e');
     // Session is still deleted locally even if revocation fails
@@ -169,9 +166,7 @@ void main() async {
 
     // Custom secure storage instance
     secureStorage: const FlutterSecureStorage(
-      aOptions: AndroidOptions(
-        encryptedSharedPreferences: true,
-      ),
+      aOptions: AndroidOptions(encryptedSharedPreferences: true),
     ),
 
     // Custom PLC directory URL (for private deployments)
