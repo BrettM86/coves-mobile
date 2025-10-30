@@ -65,6 +65,11 @@ class _FeedScreenState extends State<FeedScreen> {
     );
     final isLoading = context.select<FeedProvider, bool>((p) => p.isLoading);
     final error = context.select<FeedProvider, String?>((p) => p.error);
+
+    // IMPORTANT: This works because FeedProvider replaces the list (_posts = ...)
+    // rather than mutating it in-place (_posts.addAll(...)).
+    // If you change FeedProvider to use in-place mutations, this will break
+    // because Lists use reference equality by default.
     final posts = context.select<FeedProvider, List<FeedViewPost>>(
       (p) => p.posts,
     );
@@ -106,8 +111,9 @@ class _FeedScreenState extends State<FeedScreen> {
       );
     }
 
-    // Error state
-    if (error != null) {
+    // Error state (only show full-screen error when no posts loaded yet)
+    // If we have posts but pagination failed, we'll show the error at the bottom
+    if (error != null && posts.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -192,15 +198,65 @@ class _FeedScreenState extends State<FeedScreen> {
       color: const Color(0xFFFF6B35),
       child: ListView.builder(
         controller: _scrollController,
-        itemCount: posts.length + (isLoadingMore ? 1 : 0),
+        // Add extra item for loading indicator or pagination error
+        itemCount: posts.length + (isLoadingMore || error != null ? 1 : 0),
         itemBuilder: (context, index) {
+          // Footer: loading indicator or error message
           if (index == posts.length) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(color: Color(0xFFFF6B35)),
-              ),
-            );
+            // Show loading indicator for pagination
+            if (isLoadingMore) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(color: Color(0xFFFF6B35)),
+                ),
+              );
+            }
+            // Show error message for pagination failures
+            if (error != null) {
+              return Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1F26),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFFF6B35)),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Color(0xFFFF6B35),
+                      size: 32,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _getUserFriendlyError(error),
+                      style: const TextStyle(
+                        color: Color(0xFFB6C2D2),
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () {
+                        final feedProvider = Provider.of<FeedProvider>(
+                          context,
+                          listen: false,
+                        );
+                        feedProvider.clearError();
+                        feedProvider.loadMore();
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFFF6B35),
+                      ),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              );
+            }
           }
 
           final post = posts[index];
