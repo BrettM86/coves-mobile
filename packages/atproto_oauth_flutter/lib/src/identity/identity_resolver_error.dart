@@ -30,7 +30,7 @@ class InvalidDidError extends IdentityResolverError {
   final String did;
 
   InvalidDidError(this.did, String message, [Object? cause])
-      : super('Invalid DID "$did": $message', cause);
+    : super('Invalid DID "$did": $message', cause);
 }
 
 /// Error thrown when a handle is invalid or malformed.
@@ -39,7 +39,7 @@ class InvalidHandleError extends IdentityResolverError {
   final String handle;
 
   InvalidHandleError(this.handle, String message, [Object? cause])
-      : super('Invalid handle "$handle": $message', cause);
+    : super('Invalid handle "$handle": $message', cause);
 }
 
 /// Error thrown when handle resolution fails.

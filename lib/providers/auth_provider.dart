@@ -1,6 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:atproto_oauth_flutter/atproto_oauth_flutter.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../services/oauth_service.dart';
 
 /// Authentication Provider
@@ -38,6 +39,31 @@ class AuthProvider with ChangeNotifier {
   String? get error => _error;
   String? get did => _did;
   String? get handle => _handle;
+
+  /// Get the current access token
+  ///
+  /// This fetches the token from the session's token set.
+  /// The token is automatically refreshed if expired.
+  /// If token refresh fails (e.g., revoked server-side), signs out the user.
+  Future<String?> getAccessToken() async {
+    if (_session == null) return null;
+
+    try {
+      // Access the session getter to get the token set
+      final session = await _session!.sessionGetter.get(_session!.sub);
+      return session.tokenSet.accessToken;
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ Failed to get access token: $e');
+        print('🔄 Token refresh failed - signing out user');
+      }
+
+      // Token refresh failed (likely revoked or expired beyond refresh)
+      // Sign out user to clear invalid session
+      await signOut();
+      return null;
+    }
+  }
 
   /// Initialize the provider and restore any existing session
   ///

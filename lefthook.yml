@@ -1,0 +1,46 @@
+# Lefthook configuration for Coves Flutter app
+#
+# Install on PopOS/Ubuntu/Debian:
+#   curl -1sLf 'https://dl.cloudsmith.io/public/evilmartians/lefthook/setup.deb.sh' | sudo -E bash
+#   sudo apt install lefthook
+#
+# Setup (after install):
+#   lefthook install
+#
+# This will auto-format and analyze code before commits!
+
+pre-commit:
+  parallel: true
+  commands:
+    # Format Dart code automatically
+    format:
+      glob: "*.dart"
+      run: dart format {staged_files} && git add {staged_files}
+
+    # Analyze staged Dart files
+    analyze:
+      glob: "*.dart"
+      run: flutter analyze {staged_files}
+
+    # Check for TODOs in production code (optional - comment out if annoying)
+    # check-todos:
+    #   glob: "*.dart"
+    #   exclude: "test/"
+    #   run: |
+    #     if grep -r "TODO:" {staged_files}; then
+    #       echo "⚠️  Warning: TODOs found in staged files"
+    #     fi
+
+pre-push:
+  commands:
+    # Full analyze before push
+    analyze:
+      run: flutter analyze
+
+    # Run all tests before push
+    test:
+      run: flutter test
+
+    # Verify formatting
+    format-check:
+      run: dart format --output=none --set-exit-if-changed .

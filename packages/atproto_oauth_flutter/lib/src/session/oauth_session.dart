@@ -50,11 +50,7 @@ class TokenInfo {
 /// This will be implemented by SessionGetter in session_getter.dart.
 /// We define it here to avoid circular dependencies.
 abstract class SessionGetterInterface {
-  Future<Session> get(
-    AtprotoDid sub, {
-    bool? noCache,
-    bool? allowStale,
-  });
+  Future<Session> get(AtprotoDid sub, {bool? noCache, bool? allowStale});
 
   Future<void> delStored(AtprotoDid sub, [Object? cause]);
 }
@@ -189,13 +185,17 @@ class OAuthSession {
   Future<TokenInfo> getTokenInfo([dynamic refresh = 'auto']) async {
     final tokenSet = await _getTokenSet(refresh);
     final expiresAtStr = tokenSet.expiresAt;
-    final expiresAt = expiresAtStr != null ? DateTime.parse(expiresAtStr) : null;
+    final expiresAt =
+        expiresAtStr != null ? DateTime.parse(expiresAtStr) : null;
 
     return TokenInfo(
       expiresAt: expiresAt,
-      expired: expiresAt != null
-          ? expiresAt.isBefore(DateTime.now().subtract(Duration(seconds: 5)))
-          : null,
+      expired:
+          expiresAt != null
+              ? expiresAt.isBefore(
+                DateTime.now().subtract(Duration(seconds: 5)),
+              )
+              : null,
       scope: tokenSet.scope,
       iss: tokenSet.iss,
       aud: tokenSet.aud,

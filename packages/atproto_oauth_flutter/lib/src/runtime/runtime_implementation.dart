@@ -95,10 +95,8 @@ class DigestAlgorithm {
 ///
 /// The algorithm specifies which hash function to use (SHA-256, SHA-384, SHA-512).
 /// Returns the hash as a Uint8List.
-typedef RuntimeDigest = FutureOr<Uint8List> Function(
-  Uint8List data,
-  DigestAlgorithm alg,
-);
+typedef RuntimeDigest =
+    FutureOr<Uint8List> Function(Uint8List data, DigestAlgorithm alg);
 
 /// Acquires a lock for the given name and executes the function while holding the lock.
 ///
@@ -112,10 +110,8 @@ typedef RuntimeDigest = FutureOr<Uint8List> Function(
 ///   return await refreshToken();
 /// });
 /// ```
-typedef RuntimeLock = Future<T> Function<T>(
-  String name,
-  FutureOr<T> Function() fn,
-);
+typedef RuntimeLock =
+    Future<T> Function<T>(String name, FutureOr<T> Function() fn);
 
 /// Platform-specific runtime implementation for cryptographic operations.
 ///

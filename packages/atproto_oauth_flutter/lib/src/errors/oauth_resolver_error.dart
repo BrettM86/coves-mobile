@@ -20,10 +20,7 @@ class OAuthResolverError implements Exception {
   /// Otherwise, wraps the error with an appropriate message.
   ///
   /// For validation errors, extracts the first error details.
-  static OAuthResolverError from(
-    Object cause, [
-    String? message,
-  ]) {
+  static OAuthResolverError from(Object cause, [String? message]) {
     if (cause is OAuthResolverError) return cause;
 
     String? validationReason;
@@ -33,7 +30,8 @@ class OAuthResolverError implements Exception {
       validationReason = cause.message;
     }
 
-    final fullMessage = (message ?? 'Unable to resolve OAuth metadata') +
+    final fullMessage =
+        (message ?? 'Unable to resolve OAuth metadata') +
         (validationReason != null ? ' ($validationReason)' : '');
 
     return OAuthResolverError(fullMessage, cause: cause);

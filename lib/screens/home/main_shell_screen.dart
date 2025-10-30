@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'feed_screen.dart';
-import 'search_screen.dart';
+
 import 'create_post_screen.dart';
+import 'feed_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
+import 'search_screen.dart';
 
 class MainShellScreen extends StatefulWidget {
   const MainShellScreen({super.key});
@@ -36,12 +37,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: Color(0xFF0B0F14),
-          border: Border(
-            top: BorderSide(
-              color: Color(0xFF0B0F14),
-              width: 0.5,
-            ),
-          ),
+          border: Border(top: BorderSide(color: Color(0xFF0B0F14), width: 0.5)),
         ),
         child: SafeArea(
           child: SizedBox(
@@ -64,20 +60,17 @@ class _MainShellScreenState extends State<MainShellScreen> {
 
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _selectedIndex == index;
-    final color = isSelected
-        ? const Color(0xFFFF6B35)
-        : const Color(0xFFB6C2D2).withValues(alpha: 0.6);
+    final color =
+        isSelected
+            ? const Color(0xFFFF6B35)
+            : const Color(0xFFB6C2D2).withValues(alpha: 0.6);
 
     return Expanded(
       child: InkWell(
         onTap: () => _onItemTapped(index),
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
-        child: Icon(
-          icon,
-          size: 28,
-          color: color,
-        ),
+        child: Icon(icon, size: 28, color: color),
       ),
     );
   }

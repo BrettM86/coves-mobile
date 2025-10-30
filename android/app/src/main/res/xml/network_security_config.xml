@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+        ⚠️ DEVELOPMENT ONLY - Remove cleartext traffic before production release ⚠️
+
+        This configuration allows HTTP (cleartext) traffic to localhost and local IPs
+        for development purposes only. In production, ALL traffic should use HTTPS.
+
+        TODO: Use build flavors (dev/prod) to separate network configs
+        TODO: Remove this file entirely for production builds
+        TODO: Ensure production API uses HTTPS only
+
+        Security Risk: Cleartext traffic can be intercepted and modified by attackers.
+        This is ONLY acceptable for local development against localhost.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Local IP addresses for development -->
+        <domain includeSubdomains="true">192.168.1.7</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

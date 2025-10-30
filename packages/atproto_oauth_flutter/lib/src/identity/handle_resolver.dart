@@ -11,10 +11,7 @@ class ResolveHandleOptions {
   /// Cancellation token for the request
   final CancelToken? cancelToken;
 
-  const ResolveHandleOptions({
-    this.noCache = false,
-    this.cancelToken,
-  });
+  const ResolveHandleOptions({this.noCache = false, this.cancelToken});
 }
 
 /// Interface for resolving atProto handles to DIDs.
@@ -37,11 +34,9 @@ class XrpcHandleResolver implements HandleResolver {
   /// HTTP client for making requests
   final Dio dio;
 
-  XrpcHandleResolver(
-    String serviceUrl, {
-    Dio? dio,
-  })  : serviceUrl = Uri.parse(serviceUrl),
-        dio = dio ?? Dio();
+  XrpcHandleResolver(String serviceUrl, {Dio? dio})
+    : serviceUrl = Uri.parse(serviceUrl),
+      dio = dio ?? Dio();
 
   @override
   Future<String?> resolve(
@@ -55,9 +50,7 @@ class XrpcHandleResolver implements HandleResolver {
       final response = await dio.getUri(
         uri,
         options: Options(
-          headers: {
-            if (options?.noCache ?? false) 'Cache-Control': 'no-cache',
-          },
+          headers: {if (options?.noCache ?? false) 'Cache-Control': 'no-cache'},
           validateStatus: (status) {
             // Allow 400 and 200 status codes
             return status == 200 || status == 400;
@@ -119,17 +112,11 @@ class XrpcHandleResolver implements HandleResolver {
         throw HandleResolverError('Handle resolution was cancelled');
       }
 
-      throw HandleResolverError(
-        'Failed to resolve handle: ${e.message}',
-        e,
-      );
+      throw HandleResolverError('Failed to resolve handle: ${e.message}', e);
     } catch (e) {
       if (e is HandleResolverError) rethrow;
 
-      throw HandleResolverError(
-        'Unexpected error resolving handle: $e',
-        e,
-      );
+      throw HandleResolverError('Unexpected error resolving handle: $e', e);
     }
   }
 }
@@ -140,7 +127,7 @@ class CachedHandleResolver implements HandleResolver {
   final HandleCache _cache;
 
   CachedHandleResolver(this._resolver, [HandleCache? cache])
-      : _cache = cache ?? InMemoryHandleCache();
+    : _cache = cache ?? InMemoryHandleCache();
 
   @override
   Future<String?> resolve(
@@ -180,8 +167,7 @@ class InMemoryHandleCache implements HandleCache {
   final Map<String, _CacheEntry> _cache = {};
   final Duration _ttl;
 
-  InMemoryHandleCache({Duration? ttl})
-      : _ttl = ttl ?? const Duration(hours: 1);
+  InMemoryHandleCache({Duration? ttl}) : _ttl = ttl ?? const Duration(hours: 1);
 
   @override
   Future<String?> get(String handle) async {
@@ -199,10 +185,7 @@ class InMemoryHandleCache implements HandleCache {
 
   @override
   Future<void> set(String handle, String did) async {
-    _cache[handle] = _CacheEntry(
-      did: did,
-      expiresAt: DateTime.now().add(_ttl),
-    );
+    _cache[handle] = _CacheEntry(did: did, expiresAt: DateTime.now().add(_ttl));
   }
 
   @override

@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'screens/landing_screen.dart';
+
+import 'config/oauth_config.dart';
+import 'providers/auth_provider.dart';
+import 'providers/feed_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/main_shell_screen.dart';
-import 'providers/auth_provider.dart';
-import 'config/oauth_config.dart';
+import 'screens/landing_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,8 +27,11 @@ void main() async {
   await authProvider.initialize();
 
   runApp(
-    ChangeNotifierProvider.value(
-      value: authProvider,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: authProvider),
+        ChangeNotifierProvider(create: (_) => FeedProvider(authProvider)),
+      ],
       child: const CovesApp(),
     ),
   );
@@ -58,14 +63,8 @@ class CovesApp extends StatelessWidget {
 GoRouter _createRouter(AuthProvider authProvider) {
   return GoRouter(
     routes: [
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const LandingScreen(),
-      ),
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
+      GoRoute(path: '/', builder: (context, state) => const LandingScreen()),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/feed',
         builder: (context, state) => const MainShellScreen(),
@@ -98,7 +97,9 @@ GoRouter _createRouter(AuthProvider authProvider) {
       // Check if this is an OAuth callback
       if (state.uri.scheme == OAuthConfig.customScheme) {
         if (kDebugMode) {
-          print('⚠️ OAuth callback in errorBuilder - flutter_web_auth_2 should handle it');
+          print(
+            '⚠️ OAuth callback in errorBuilder - flutter_web_auth_2 should handle it',
+          );
           print('   URI: ${state.uri}');
         }
         // Return nothing - just stay on current screen

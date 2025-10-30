@@ -73,37 +73,37 @@ class FlutterOAuthClient extends OAuthClient {
     String? plcDirectoryUrl,
     String? handleResolverUrl,
   }) : super(
-          OAuthClientOptions(
-            // Config
-            responseMode: responseMode,
-            clientMetadata: clientMetadata.toJson(),
-            keyset: null, // Mobile apps are public clients
-            allowHttp: allowHttp,
+         OAuthClientOptions(
+           // Config
+           responseMode: responseMode,
+           clientMetadata: clientMetadata.toJson(),
+           keyset: null, // Mobile apps are public clients
+           allowHttp: allowHttp,
 
-            // Storage (Flutter-specific)
-            stateStore: FlutterStateStore(),
-            sessionStore: FlutterSessionStore(secureStorage),
+           // Storage (Flutter-specific)
+           stateStore: FlutterStateStore(),
+           sessionStore: FlutterSessionStore(secureStorage),
 
-            // Caches (in-memory with TTL)
-            authorizationServerMetadataCache:
-                InMemoryAuthorizationServerMetadataCache(),
-            protectedResourceMetadataCache:
-                InMemoryProtectedResourceMetadataCache(),
-            dpopNonceCache: InMemoryDpopNonceCache(),
-            didCache: FlutterDidCache(),
-            handleCache: FlutterHandleCache(),
+           // Caches (in-memory with TTL)
+           authorizationServerMetadataCache:
+               InMemoryAuthorizationServerMetadataCache(),
+           protectedResourceMetadataCache:
+               InMemoryProtectedResourceMetadataCache(),
+           dpopNonceCache: InMemoryDpopNonceCache(),
+           didCache: FlutterDidCache(),
+           handleCache: FlutterHandleCache(),
 
-            // Platform implementation
-            runtimeImplementation: const FlutterRuntime(),
+           // Platform implementation
+           runtimeImplementation: const FlutterRuntime(),
 
-            // HTTP client
-            dio: dio,
+           // HTTP client
+           dio: dio,
 
-            // Optional overrides
-            plcDirectoryUrl: plcDirectoryUrl,
-            handleResolverUrl: handleResolverUrl,
-          ),
-        );
+           // Optional overrides
+           plcDirectoryUrl: plcDirectoryUrl,
+           handleResolverUrl: handleResolverUrl,
+         ),
+       );
 
   /// Sign in with an atProto handle, DID, or URL.
   ///
@@ -152,7 +152,8 @@ class FlutterOAuthClient extends OAuthClient {
     // CRITICAL: Use HTTPS redirect URI for OAuth (prevents browser retry)
     // but listen for CUSTOM SCHEME in FlutterWebAuth2 (only custom schemes can be intercepted)
     // The HTTPS page will redirect to custom scheme, triggering the callback
-    final redirectUri = options?.redirectUri ?? clientMetadata.redirectUris.first;
+    final redirectUri =
+        options?.redirectUri ?? clientMetadata.redirectUris.first;
 
     if (!clientMetadata.redirectUris.contains(redirectUri)) {
       throw FormatException('Invalid redirect_uri: $redirectUri');
@@ -162,7 +163,8 @@ class FlutterOAuthClient extends OAuthClient {
     // FlutterWebAuth2 can ONLY intercept custom schemes, not HTTPS
     final customSchemeUri = clientMetadata.redirectUris.firstWhere(
       (uri) => !uri.startsWith('http://') && !uri.startsWith('https://'),
-      orElse: () => redirectUri, // Fallback to primary if no custom scheme found
+      orElse:
+          () => redirectUri, // Fallback to primary if no custom scheme found
     );
 
     final callbackUrlScheme = _extractScheme(customSchemeUri);
@@ -170,25 +172,26 @@ class FlutterOAuthClient extends OAuthClient {
     // Step 1: Start OAuth authorization flow
     final authUrl = await authorize(
       input,
-      options: options != null
-          ? AuthorizeOptions(
-              redirectUri: redirectUri,
-              state: options.state,
-              scope: options.scope,
-              nonce: options.nonce,
-              dpopJkt: options.dpopJkt,
-              maxAge: options.maxAge,
-              claims: options.claims,
-              uiLocales: options.uiLocales,
-              idTokenHint: options.idTokenHint,
-              display: options.display ?? 'touch', // Mobile-friendly default
-              prompt: options.prompt,
-              authorizationDetails: options.authorizationDetails,
-            )
-          : AuthorizeOptions(
-              redirectUri: redirectUri,
-              display: 'touch', // Mobile-friendly default
-            ),
+      options:
+          options != null
+              ? AuthorizeOptions(
+                redirectUri: redirectUri,
+                state: options.state,
+                scope: options.scope,
+                nonce: options.nonce,
+                dpopJkt: options.dpopJkt,
+                maxAge: options.maxAge,
+                claims: options.claims,
+                uiLocales: options.uiLocales,
+                idTokenHint: options.idTokenHint,
+                display: options.display ?? 'touch', // Mobile-friendly default
+                prompt: options.prompt,
+                authorizationDetails: options.authorizationDetails,
+              )
+              : AuthorizeOptions(
+                redirectUri: redirectUri,
+                display: 'touch', // Mobile-friendly default
+              ),
       cancelToken: cancelToken,
     );
 
@@ -197,7 +200,9 @@ class FlutterOAuthClient extends OAuthClient {
       print('🔐 Opening browser for OAuth...');
       print('   Auth URL: $authUrl');
       print('   OAuth redirect URI (PDS will redirect here): $redirectUri');
-      print('   FlutterWebAuth2 callback scheme (listening for): $callbackUrlScheme');
+      print(
+        '   FlutterWebAuth2 callback scheme (listening for): $callbackUrlScheme',
+      );
     }
 
     String? callbackUrl;
@@ -220,7 +225,9 @@ class FlutterOAuthClient extends OAuthClient {
       if (kDebugMode) {
         print('✅ FlutterWebAuth2 returned successfully!');
         print('   Callback URL: $callbackUrl');
-        print('   ⏱️  Callback received at: ${DateTime.now().toIso8601String()}');
+        print(
+          '   ⏱️  Callback received at: ${DateTime.now().toIso8601String()}',
+        );
       }
     } catch (e, stackTrace) {
       if (kDebugMode) {
@@ -234,9 +241,10 @@ class FlutterOAuthClient extends OAuthClient {
 
     // Step 3: Parse callback URL parameters
     final uri = Uri.parse(callbackUrl);
-    final params = responseMode == OAuthResponseMode.fragment
-        ? _parseFragment(uri.fragment)
-        : Map<String, String>.from(uri.queryParameters);
+    final params =
+        responseMode == OAuthResponseMode.fragment
+            ? _parseFragment(uri.fragment)
+            : Map<String, String>.from(uri.queryParameters);
 
     if (kDebugMode) {
       print('🔄 Parsing callback parameters...');

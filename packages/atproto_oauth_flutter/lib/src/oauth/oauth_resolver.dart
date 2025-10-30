@@ -61,8 +61,10 @@ typedef ResolveOAuthOptions = GetCachedOptions;
 /// host their data on any PDS, and we discover the OAuth server dynamically.
 class OAuthResolver {
   final IdentityResolver identityResolver;
-  final OAuthProtectedResourceMetadataResolver protectedResourceMetadataResolver;
-  final OAuthAuthorizationServerMetadataResolver authorizationServerMetadataResolver;
+  final OAuthProtectedResourceMetadataResolver
+  protectedResourceMetadataResolver;
+  final OAuthAuthorizationServerMetadataResolver
+  authorizationServerMetadataResolver;
 
   OAuthResolver({
     required this.identityResolver,
@@ -121,8 +123,10 @@ class OAuthResolver {
           // Fallback to trying to fetch as an issuer (Entryway/Authorization Server)
           final issuerUri = Uri.tryParse(input);
           if (issuerUri != null && issuerUri.hasScheme) {
-            final metadata =
-                await getAuthorizationServerMetadata(input, options);
+            final metadata = await getAuthorizationServerMetadata(
+              input,
+              options,
+            );
             return ResolvedOAuthIdentityFromService(metadata: metadata);
           }
         } catch (_) {
@@ -151,9 +155,9 @@ class OAuthResolver {
       input,
       options != null
           ? ResolveIdentityOptions(
-              noCache: options.noCache,
-              cancelToken: options.cancelToken,
-            )
+            noCache: options.noCache,
+            cancelToken: options.cancelToken,
+          )
           : null,
     );
 
@@ -214,8 +218,10 @@ class OAuthResolver {
     GetCachedOptions? options,
   ]) async {
     try {
-      final rsMetadata =
-          await protectedResourceMetadataResolver.get(pdsUrl, options);
+      final rsMetadata = await protectedResourceMetadataResolver.get(
+        pdsUrl,
+        options,
+      );
 
       // ATPROTO requires exactly one authorization server
       final authServers = rsMetadata['authorization_servers'];
@@ -259,9 +265,11 @@ class OAuthResolver {
     // Find the atproto_pds service
     final service = document.service?.firstWhere(
       (s) => _isAtprotoPersonalDataServerService(s, document),
-      orElse: () => throw OAuthResolverError(
-        'Identity "${document.id}" does not have a PDS URL',
-      ),
+      orElse:
+          () =>
+              throw OAuthResolverError(
+                'Identity "${document.id}" does not have a PDS URL',
+              ),
     );
 
     if (service == null) {

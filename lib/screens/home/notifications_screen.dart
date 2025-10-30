@@ -36,10 +36,7 @@ class NotificationsScreen extends StatelessWidget {
               SizedBox(height: 16),
               Text(
                 'Stay updated with your activity',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Color(0xFFB6C2D2),
-                ),
+                style: TextStyle(fontSize: 16, color: Color(0xFFB6C2D2)),
                 textAlign: TextAlign.center,
               ),
             ],

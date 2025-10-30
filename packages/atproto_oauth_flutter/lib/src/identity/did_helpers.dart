@@ -116,10 +116,7 @@ void _assertDidMsid(String input, int start, int end) {
       continue;
     }
 
-    throw InvalidDidError(
-      input,
-      'Disallowed character in DID at position $i',
-    );
+    throw InvalidDidError(input, 'Disallowed character in DID at position $i');
   }
 }
 
@@ -226,15 +223,17 @@ Uri didWebToUrl(String did) {
   final hostIdx = didWebPrefix.length;
   final pathIdx = did.indexOf(':', hostIdx);
 
-  final hostEnc = pathIdx == -1 ? did.substring(hostIdx) : did.substring(hostIdx, pathIdx);
+  final hostEnc =
+      pathIdx == -1 ? did.substring(hostIdx) : did.substring(hostIdx, pathIdx);
   final host = hostEnc.replaceAll('%3A', ':');
   final path = pathIdx == -1 ? '' : did.substring(pathIdx).replaceAll(':', '/');
 
   // Use http for localhost, https for everything else
-  final proto = host.startsWith('localhost') &&
-          (host.length == 9 || host.codeUnitAt(9) == 0x3a) // ':'
-      ? 'http'
-      : 'https';
+  final proto =
+      host.startsWith('localhost') &&
+              (host.length == 9 || host.codeUnitAt(9) == 0x3a) // ':'
+          ? 'http'
+          : 'https';
 
   return Uri.parse('$proto://$host$path');
 }

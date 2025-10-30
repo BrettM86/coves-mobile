@@ -24,11 +24,7 @@ class GetCachedOptions {
   /// Allow returning stale values from the cache.
   final bool? allowStale;
 
-  const GetCachedOptions({
-    this.signal,
-    this.noCache,
-    this.allowStale,
-  });
+  const GetCachedOptions({this.signal, this.noCache, this.allowStale});
 }
 
 /// Abstract storage interface for values.
@@ -83,10 +79,7 @@ class SessionDeletedEvent {
   /// The cause of deletion
   final Object cause;
 
-  const SessionDeletedEvent({
-    required this.sub,
-    required this.cause,
-  });
+  const SessionDeletedEvent({required this.sub, required this.cause});
 }
 
 /// Manages session retrieval, caching, and refreshing.
@@ -143,78 +136,78 @@ class SessionGetter extends CachedGetter<AtprotoDid, Session> {
     required super.sessionStore,
     required OAuthServerFactory serverFactory,
     required Runtime runtime,
-  })  : _serverFactory = serverFactory,
-        _runtime = runtime,
-        super(
-          getter: null, // Will be set in _createGetter
-          options: CachedGetterOptions(
-            isStale: (sub, session) {
-              final tokenSet = session.tokenSet;
-              if (tokenSet.expiresAt == null) return false;
+  }) : _serverFactory = serverFactory,
+       _runtime = runtime,
+       super(
+         getter: null, // Will be set in _createGetter
+         options: CachedGetterOptions(
+           isStale: (sub, session) {
+             final tokenSet = session.tokenSet;
+             if (tokenSet.expiresAt == null) return false;
 
-              final expiresAt = DateTime.parse(tokenSet.expiresAt!);
-              final now = DateTime.now();
+             final expiresAt = DateTime.parse(tokenSet.expiresAt!);
+             final now = DateTime.now();
 
-              // Add some lee way to ensure the token is not expired when it
-              // reaches the server (10 seconds)
-              // Add some randomness to reduce the chances of multiple
-              // instances trying to refresh the token at the same time (0-30 seconds)
-              final buffer = Duration(
-                milliseconds: 10000 + (math.Random().nextDouble() * 30000).toInt(),
-              );
+             // Add some lee way to ensure the token is not expired when it
+             // reaches the server (10 seconds)
+             // Add some randomness to reduce the chances of multiple
+             // instances trying to refresh the token at the same time (0-30 seconds)
+             final buffer = Duration(
+               milliseconds:
+                   10000 + (math.Random().nextDouble() * 30000).toInt(),
+             );
 
-              return expiresAt.isBefore(now.add(buffer));
-            },
-            onStoreError: (err, sub, session) async {
-              if (err is! AuthMethodUnsatisfiableError) {
-                // If the error was an AuthMethodUnsatisfiableError, there is no
-                // point in trying to call `fromIssuer`.
-                try {
-                  // Parse authMethod
-                  final authMethodValue = session.authMethod;
-                  final authMethod = authMethodValue is Map<String, dynamic>
-                      ? ClientAuthMethod.fromJson(authMethodValue)
-                      : (authMethodValue as String?) ?? 'legacy';
+             return expiresAt.isBefore(now.add(buffer));
+           },
+           onStoreError: (err, sub, session) async {
+             if (err is! AuthMethodUnsatisfiableError) {
+               // If the error was an AuthMethodUnsatisfiableError, there is no
+               // point in trying to call `fromIssuer`.
+               try {
+                 // Parse authMethod
+                 final authMethodValue = session.authMethod;
+                 final authMethod =
+                     authMethodValue is Map<String, dynamic>
+                         ? ClientAuthMethod.fromJson(authMethodValue)
+                         : (authMethodValue as String?) ?? 'legacy';
 
-                  // Generate new DPoP key for revocation
-                  // (stored key is serialized and can't be directly used)
-                  final dpopKeyAlgs = ['ES256', 'RS256'];
-                  final newDpopKey = await runtime.generateKey(dpopKeyAlgs);
+                 // Generate new DPoP key for revocation
+                 // (stored key is serialized and can't be directly used)
+                 final dpopKeyAlgs = ['ES256', 'RS256'];
+                 final newDpopKey = await runtime.generateKey(dpopKeyAlgs);
 
-                  // If the token data cannot be stored, let's revoke it
-                  final server = await serverFactory.fromIssuer(
-                    session.tokenSet.iss,
-                    authMethod,
-                    newDpopKey,
-                  );
-                  await server.revoke(
-                    session.tokenSet.refreshToken ?? session.tokenSet.accessToken,
-                  );
-                } catch (_) {
-                  // Let the original error propagate
-                }
-              }
+                 // If the token data cannot be stored, let's revoke it
+                 final server = await serverFactory.fromIssuer(
+                   session.tokenSet.iss,
+                   authMethod,
+                   newDpopKey,
+                 );
+                 await server.revoke(
+                   session.tokenSet.refreshToken ??
+                       session.tokenSet.accessToken,
+                 );
+               } catch (_) {
+                 // Let the original error propagate
+               }
+             }
 
-              throw err;
-            },
-            deleteOnError: (err) async {
-              return err is TokenRefreshError ||
-                  err is TokenRevokedError ||
-                  err is TokenInvalidError ||
-                  err is AuthMethodUnsatisfiableError;
-            },
-          ),
-        ) {
+             throw err;
+           },
+           deleteOnError: (err) async {
+             return err is TokenRefreshError ||
+                 err is TokenRevokedError ||
+                 err is TokenInvalidError ||
+                 err is AuthMethodUnsatisfiableError;
+           },
+         ),
+       ) {
     // Set the getter function after construction
     _getter = _createGetter();
   }
 
   /// Creates the getter function for refreshing sessions.
-  Future<Session> Function(
-    AtprotoDid,
-    GetCachedOptions,
-    Session?,
-  ) _createGetter() {
+  Future<Session> Function(AtprotoDid, GetCachedOptions, Session?)
+  _createGetter() {
     return (sub, options, storedSession) async {
       // There needs to be a previous session to be able to refresh. If
       // storedSession is null, it means that the store does not contain
@@ -240,9 +233,10 @@ class SessionGetter extends CachedGetter<AtprotoDid, Session> {
       final dpopKey = storedSession.dpopKey;
       // authMethod can be a Map (serialized ClientAuthMethod) or String ('legacy')
       final authMethodValue = storedSession.authMethod;
-      final authMethod = authMethodValue is Map<String, dynamic>
-          ? ClientAuthMethod.fromJson(authMethodValue)
-          : (authMethodValue as String?) ?? 'legacy';
+      final authMethod =
+          authMethodValue is Map<String, dynamic>
+              ? ClientAuthMethod.fromJson(authMethodValue)
+              : (authMethodValue as String?) ?? 'legacy';
       final tokenSet = storedSession.tokenSet;
 
       if (sub != tokenSet.sub) {
@@ -368,12 +362,7 @@ class SessionGetter extends CachedGetter<AtprotoDid, Session> {
       authMethodString = null;
     }
 
-    _dispatchUpdatedEvent(
-      key,
-      value.dpopKey,
-      authMethodString,
-      value.tokenSet,
-    );
+    _dispatchUpdatedEvent(key, value.dpopKey, authMethodString, value.tokenSet);
   }
 
   @override
@@ -392,10 +381,7 @@ class SessionGetter extends CachedGetter<AtprotoDid, Session> {
   Future<Session> getSession(AtprotoDid sub, [dynamic refresh = 'auto']) {
     return get(
       sub,
-      GetCachedOptions(
-        noCache: refresh == true,
-        allowStale: refresh == false,
-      ),
+      GetCachedOptions(noCache: refresh == true, allowStale: refresh == false),
     );
   }
 
@@ -409,9 +395,10 @@ class SessionGetter extends CachedGetter<AtprotoDid, Session> {
         final timeoutToken = CancellationToken();
         Timer(Duration(seconds: 30), () => timeoutToken.cancel());
 
-        final combinedSignal = options?.signal != null
-            ? combineSignals([options!.signal, timeoutToken])
-            : CombinedCancellationToken([timeoutToken]);
+        final combinedSignal =
+            options?.signal != null
+                ? combineSignals([options!.signal, timeoutToken])
+                : CombinedCancellationToken([timeoutToken]);
 
         try {
           return await super.get(
@@ -476,11 +463,7 @@ class OAuthResponseError implements Exception {
   final String? error;
   final String? errorDescription;
 
-  OAuthResponseError({
-    required this.status,
-    this.error,
-    this.errorDescription,
-  });
+  OAuthResponseError({required this.status, this.error, this.errorDescription});
 }
 
 /// Options for the CachedGetter.
@@ -528,8 +511,8 @@ class CachedGetter<K, V> {
     required SimpleStore<K, V> sessionStore,
     required Future<V> Function(K, GetCachedOptions, V?)? getter,
     required CachedGetterOptions<K, V> options,
-  })  : _store = sessionStore,
-        _options = options {
+  }) : _store = sessionStore,
+       _options = options {
     if (getter != null) {
       _getter = getter;
     }
@@ -588,23 +571,25 @@ class CachedGetter<K, V> {
         }
 
         return Future(() async {
-          return await _getter(key, options!, storedValue);
-        }).catchError((err) async {
-          if (storedValue != null) {
-            try {
-              if (deleteOnError != null && await deleteOnError(err)) {
-                await delStored(key, err);
+              return await _getter(key, options!, storedValue);
+            })
+            .catchError((err) async {
+              if (storedValue != null) {
+                try {
+                  if (deleteOnError != null && await deleteOnError(err)) {
+                    await delStored(key, err);
+                  }
+                } catch (error) {
+                  throw Exception('Error while deleting stored value: $error');
+                }
               }
-            } catch (error) {
-              throw Exception('Error while deleting stored value: $error');
-            }
-          }
-          throw err;
-        }).then((value) async {
-          // The value should be stored even if the signal was cancelled.
-          await setStored(key, value);
-          return (value: value, isFresh: true);
-        });
+              throw err;
+            })
+            .then((value) async {
+              // The value should be stored even if the signal was cancelled.
+              await setStored(key, value);
+              return (value: value, isFresh: true);
+            });
       }).whenComplete(() {
         _pending.remove(key);
       }),

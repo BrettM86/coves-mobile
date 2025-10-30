@@ -38,7 +38,6 @@ class LandingScreen extends StatelessWidget {
                   onPressed: () {
                     context.go('/login');
                   },
-                  variant: ButtonVariant.solid,
                 ),
 
                 const SizedBox(height: 12),

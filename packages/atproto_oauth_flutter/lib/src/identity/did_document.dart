@@ -41,12 +41,14 @@ class DidDocument {
   factory DidDocument.fromJson(Map<String, dynamic> json) {
     return DidDocument(
       id: json['id'] as String,
-      alsoKnownAs: (json['alsoKnownAs'] as List<dynamic>?)
-          ?.map((e) => e as String)
-          .toList(),
-      service: (json['service'] as List<dynamic>?)
-          ?.map((e) => DidService.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      alsoKnownAs:
+          (json['alsoKnownAs'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList(),
+      service:
+          (json['service'] as List<dynamic>?)
+              ?.map((e) => DidService.fromJson(e as Map<String, dynamic>))
+              .toList(),
       verificationMethod: json['verificationMethod'] as List<dynamic>?,
       authentication: json['authentication'] as List<dynamic>?,
       controller: json['controller'],
@@ -149,10 +151,6 @@ class DidService {
 
   /// Converts the service to JSON.
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'type': type,
-      'serviceEndpoint': serviceEndpoint,
-    };
+    return {'id': id, 'type': type, 'serviceEndpoint': serviceEndpoint};
   }
 }

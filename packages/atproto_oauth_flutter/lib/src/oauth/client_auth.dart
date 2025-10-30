@@ -30,10 +30,7 @@ class ClientAuthMethod {
   int get hashCode => method.hashCode ^ kid.hashCode;
 
   Map<String, dynamic> toJson() {
-    return {
-      'method': method,
-      if (kid != null) 'kid': kid,
-    };
+    return {'method': method, if (kid != null) 'kid': kid};
   }
 
   factory ClientAuthMethod.fromJson(Map<String, dynamic> json) {
@@ -84,10 +81,7 @@ class ClientCredentialsResult {
   /// Payload to include in the request body
   final OAuthClientCredentials payload;
 
-  const ClientCredentialsResult({
-    this.headers,
-    required this.payload,
-  });
+  const ClientCredentialsResult({this.headers, required this.payload});
 }
 
 /// Factory function that creates client credentials.
@@ -241,9 +235,7 @@ ClientCredentialsFactory createClientCredentialsFactory(
         );
       };
     } catch (cause) {
-      throw AuthMethodUnsatisfiableError(
-        'Failed to load private key: $cause',
-      );
+      throw AuthMethodUnsatisfiableError('Failed to load private key: $cause');
     }
   }
 
@@ -288,8 +280,6 @@ class Keyset {
   int get size => keys.length;
 
   Map<String, dynamic> toJSON() {
-    return {
-      'keys': keys.map((k) => k.bareJwk).toList(),
-    };
+    return {'keys': keys.map((k) => k.bareJwk).toList()};
   }
 }

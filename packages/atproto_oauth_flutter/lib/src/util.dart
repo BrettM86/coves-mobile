@@ -48,7 +48,8 @@ class CustomEventTarget<EventDetailMap> {
     final existingController = _controllers[type];
 
     // Check if a controller already exists with a different type
-    if (existingController != null && existingController is! StreamController<T>) {
+    if (existingController != null &&
+        existingController is! StreamController<T>) {
       throw TypeError();
     }
 

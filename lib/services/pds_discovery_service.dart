@@ -105,7 +105,9 @@ class PDSDiscoveryService {
         }
 
         // Remove trailing slash if present
-        return endpoint.endsWith('/') ? endpoint.substring(0, endpoint.length - 1) : endpoint;
+        return endpoint.endsWith('/')
+            ? endpoint.substring(0, endpoint.length - 1)
+            : endpoint;
       }
     }
 

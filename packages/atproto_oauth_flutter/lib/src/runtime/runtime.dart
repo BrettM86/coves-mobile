@@ -26,8 +26,8 @@ class Runtime {
   final RuntimeLock usingLock;
 
   Runtime(this._implementation)
-      : hasImplementationLock = _implementation.requestLock != null,
-        usingLock = _implementation.requestLock ?? requestLocalLock;
+    : hasImplementationLock = _implementation.requestLock != null,
+      usingLock = _implementation.requestLock ?? requestLocalLock;
 
   /// Generates a cryptographic key that supports the given algorithms.
   ///
@@ -116,11 +116,7 @@ class Runtime {
   Future<Map<String, String>> generatePKCE([int? byteLength]) async {
     final verifier = await _generateVerifier(byteLength);
     final challenge = await sha256(verifier);
-    return {
-      'verifier': verifier,
-      'challenge': challenge,
-      'method': 'S256',
-    };
+    return {'verifier': verifier, 'challenge': challenge, 'method': 'S256'};
   }
 
   /// Calculates the JWK thumbprint (jkt) for a given JSON Web Key.
@@ -221,26 +217,15 @@ Map<String, String> _extractJktComponents(Map<String, dynamic> jwk) {
 
     case 'OKP':
       // Octet Key Pair (EdDSA)
-      return {
-        'crv': getRequired('crv'),
-        'kty': kty,
-        'x': getRequired('x'),
-      };
+      return {'crv': getRequired('crv'), 'kty': kty, 'x': getRequired('x')};
 
     case 'RSA':
       // RSA keys (RS256, RS384, RS512, PS256, PS384, PS512)
-      return {
-        'e': getRequired('e'),
-        'kty': kty,
-        'n': getRequired('n'),
-      };
+      return {'e': getRequired('e'), 'kty': kty, 'n': getRequired('n')};
 
     case 'oct':
       // Symmetric keys (HS256, HS384, HS512)
-      return {
-        'k': getRequired('k'),
-        'kty': kty,
-      };
+      return {'k': getRequired('k'), 'kty': kty};
 
     default:
       throw ArgumentError(

@@ -68,8 +68,10 @@ class OAuthServerFactory {
     Key dpopKey, [
     GetCachedOptions? options,
   ]) async {
-    final serverMetadata =
-        await resolver.getAuthorizationServerMetadata(issuer, options);
+    final serverMetadata = await resolver.getAuthorizationServerMetadata(
+      issuer,
+      options,
+    );
 
     ClientAuthMethod finalAuthMethod;
     if (authMethod == 'legacy') {

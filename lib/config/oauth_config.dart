@@ -13,9 +13,12 @@ class OAuthConfig {
   // Custom URL scheme for deep linking
   // Must match AndroidManifest.xml intent filters
   // Using the same format as working Expo implementation
-  static const String customScheme = 'dev.workers.brettmay0212.lingering-darkness-50a6';
+  static const String customScheme =
+      'dev.workers.brettmay0212.lingering-darkness-50a6';
 
   // API Configuration
+  // Using adb reverse port forwarding, phone can access via localhost
+  // Setup: adb reverse tcp:8081 tcp:8081
   static const String apiUrl = 'http://localhost:8081';
 
   // Derived OAuth URLs
@@ -44,7 +47,7 @@ class OAuthConfig {
   /// - DPoP enabled for token security
   /// - Proper scopes for atProto access
   static ClientMetadata createClientMetadata() {
-    return ClientMetadata(
+    return const ClientMetadata(
       clientId: clientId,
       // Use HTTPS as PRIMARY - prevents browser re-navigation that invalidates auth codes
       // Custom scheme as fallback (Worker page redirects to custom scheme anyway)
@@ -53,8 +56,7 @@ class OAuthConfig {
       clientName: clientName,
       dpopBoundAccessTokens: true, // Enable DPoP for security
       applicationType: 'native',
-      grantTypes: const ['authorization_code', 'refresh_token'],
-      responseTypes: const ['code'],
+      grantTypes: ['authorization_code', 'refresh_token'],
       tokenEndpointAuthMethod: 'none', // Public client (mobile apps)
     );
   }

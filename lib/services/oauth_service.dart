@@ -21,9 +21,9 @@ import '../config/oauth_config.dart';
 /// 6. Token exchange and storage
 /// 7. Automatic refresh and revocation
 class OAuthService {
-  static final OAuthService _instance = OAuthService._internal();
   factory OAuthService() => _instance;
   OAuthService._internal();
+  static final OAuthService _instance = OAuthService._internal();
 
   FlutterOAuthClient? _client;
 
@@ -43,7 +43,6 @@ class OAuthService {
       // Create client with metadata from config
       _client = FlutterOAuthClient(
         clientMetadata: OAuthConfig.createClientMetadata(),
-        responseMode: OAuthResponseMode.query, // Mobile-friendly response mode
       );
 
       // Set up session event listeners
@@ -105,7 +104,9 @@ class OAuthService {
   Future<OAuthSession> signIn(String input) async {
     try {
       if (_client == null) {
-        throw Exception('OAuth client not initialized. Call initialize() first.');
+        throw Exception(
+          'OAuth client not initialized. Call initialize() first.',
+        );
       }
 
       // Validate input
@@ -168,7 +169,8 @@ class OAuthService {
       }
 
       // Check if user cancelled (flutter_web_auth_2 throws PlatformException with "CANCELED" code)
-      if (e.toString().contains('CANCELED') || e.toString().contains('User cancelled')) {
+      if (e.toString().contains('CANCELED') ||
+          e.toString().contains('User cancelled')) {
         throw Exception('Sign in cancelled by user');
       }
 
@@ -192,10 +194,15 @@ class OAuthService {
   ///   - false: Use cached tokens even if expired
   ///
   /// Returns the restored session or null if no session found.
-  Future<OAuthSession?> restoreSession(String did, {dynamic refresh = 'auto'}) async {
+  Future<OAuthSession?> restoreSession(
+    String did, {
+    refresh = 'auto',
+  }) async {
     try {
       if (_client == null) {
-        throw Exception('OAuth client not initialized. Call initialize() first.');
+        throw Exception(
+          'OAuth client not initialized. Call initialize() first.',
+        );
       }
 
       if (kDebugMode) {
@@ -231,7 +238,9 @@ class OAuthService {
   Future<void> signOut(String did) async {
     try {
       if (_client == null) {
-        throw Exception('OAuth client not initialized. Call initialize() first.');
+        throw Exception(
+          'OAuth client not initialized. Call initialize() first.',
+        );
       }
 
       if (kDebugMode) {
