@@ -87,9 +87,9 @@ class FeedProvider with ChangeNotifier {
     try {
       if (refresh) {
         _isLoading = true;
-        _posts = [];
-        _cursor = null;
-        _hasMore = true;
+        // DON'T clear _posts, _cursor, or _hasMore yet
+        // Keep existing data visible until refresh succeeds
+        // This prevents transient failures from wiping the user's feed and pagination state
         _error = null;
       } else {
         _isLoadingMore = true;
@@ -98,10 +98,13 @@ class FeedProvider with ChangeNotifier {
 
       final response = await fetcher();
 
+      // Only update state after successful fetch
       if (refresh) {
         _posts = response.feed;
       } else {
-        _posts.addAll(response.feed);
+        // Create new list instance to trigger context.select rebuilds
+        // Using spread operator instead of addAll to ensure reference changes
+        _posts = [..._posts, ...response.feed];
       }
 
       _cursor = response.cursor;

@@ -66,10 +66,10 @@ class _FeedScreenState extends State<FeedScreen> {
     final isLoading = context.select<FeedProvider, bool>((p) => p.isLoading);
     final error = context.select<FeedProvider, String?>((p) => p.error);
 
-    // IMPORTANT: This works because FeedProvider replaces the list (_posts = ...)
-    // rather than mutating it in-place (_posts.addAll(...)).
-    // If you change FeedProvider to use in-place mutations, this will break
-    // because Lists use reference equality by default.
+    // IMPORTANT: This relies on FeedProvider creating new list instances
+    // (_posts = [..._posts, ...response.feed]) rather than mutating in-place.
+    // context.select uses == for comparison, and Lists use reference equality,
+    // so in-place mutations (_posts.addAll(...)) would not trigger rebuilds.
     final posts = context.select<FeedProvider, List<FeedViewPost>>(
       (p) => p.posts,
     );
@@ -104,8 +104,8 @@ class _FeedScreenState extends State<FeedScreen> {
     required bool isLoadingMore,
     required bool isAuthenticated,
   }) {
-    // Loading state
-    if (isLoading) {
+    // Loading state (only show full-screen loader for initial load, not refresh)
+    if (isLoading && posts.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFFFF6B35)),
       );
