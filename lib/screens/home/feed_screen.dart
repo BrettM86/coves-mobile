@@ -39,15 +39,13 @@ class _FeedScreenState extends State<FeedScreen> {
 
   /// Load feed - business logic is now in FeedProvider
   void _loadFeed() {
-    final feedProvider = Provider.of<FeedProvider>(context, listen: false);
-    feedProvider.loadFeed(refresh: true);
+    Provider.of<FeedProvider>(context, listen: false).loadFeed(refresh: true);
   }
 
   void _onScroll() {
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200) {
-      final feedProvider = Provider.of<FeedProvider>(context, listen: false);
-      feedProvider.loadMore();
+      Provider.of<FeedProvider>(context, listen: false).loadMore();
     }
   }
 
@@ -104,15 +102,17 @@ class _FeedScreenState extends State<FeedScreen> {
     required bool isLoadingMore,
     required bool isAuthenticated,
   }) {
-    // Loading state (only show full-screen loader for initial load, not refresh)
+    // Loading state (only show full-screen loader for initial load,
+    // not refresh)
     if (isLoading && posts.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFFFF6B35)),
       );
     }
 
-    // Error state (only show full-screen error when no posts loaded yet)
-    // If we have posts but pagination failed, we'll show the error at the bottom
+    // Error state (only show full-screen error when no posts loaded
+    // yet). If we have posts but pagination failed, we'll show the error
+    // at the bottom
     if (error != null && posts.isEmpty) {
       return Center(
         child: Padding(
@@ -143,11 +143,10 @@ class _FeedScreenState extends State<FeedScreen> {
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: () {
-                  final feedProvider = Provider.of<FeedProvider>(
+                  Provider.of<FeedProvider>(
                     context,
                     listen: false,
-                  );
-                  feedProvider.retry();
+                  ).retry();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6B35),
@@ -199,7 +198,8 @@ class _FeedScreenState extends State<FeedScreen> {
       child: ListView.builder(
         controller: _scrollController,
         // Add extra item for loading indicator or pagination error
-        itemCount: posts.length + (isLoadingMore || error != null ? 1 : 0),
+        itemCount:
+            posts.length + (isLoadingMore || error != null ? 1 : 0),
         itemBuilder: (context, index) {
           // Footer: loading indicator or error message
           if (index == posts.length) {
@@ -241,12 +241,12 @@ class _FeedScreenState extends State<FeedScreen> {
                     const SizedBox(height: 12),
                     TextButton(
                       onPressed: () {
-                        final feedProvider = Provider.of<FeedProvider>(
+                        Provider.of<FeedProvider>(
                           context,
                           listen: false,
-                        );
-                        feedProvider.clearError();
-                        feedProvider.loadMore();
+                        )
+                          ..clearError()
+                          ..loadMore();
                       },
                       style: TextButton.styleFrom(
                         foregroundColor: const Color(0xFFFF6B35),
@@ -261,8 +261,9 @@ class _FeedScreenState extends State<FeedScreen> {
 
           final post = posts[index];
           return Semantics(
-            label:
-                'Feed post in ${post.post.community.name} by ${post.post.author.displayName ?? post.post.author.handle}. ${post.post.title ?? ""}',
+            label: 'Feed post in ${post.post.community.name} by '
+                '${post.post.author.displayName ?? post.post.author.handle}. '
+                '${post.post.title ?? ""}',
             button: true,
             child: _PostCard(post: post),
           );
@@ -351,7 +352,8 @@ class _PostCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'Posted by ${post.post.author.displayName ?? post.post.author.handle}',
+                        'Posted by ${post.post.author.displayName ?? ''
+                        '${post.post.author.handle}'}',
                         style: const TextStyle(
                           color: Color(0xFFB6C2D2),
                           fontSize: 12,
@@ -430,7 +432,9 @@ class _EmbedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Only show image if thumbnail exists
-    if (embed.thumb == null) return const SizedBox.shrink();
+    if (embed.thumb == null) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -443,8 +447,7 @@ class _EmbedCard extends StatelessWidget {
         width: double.infinity,
         height: 180,
         fit: BoxFit.cover,
-        placeholder:
-            (context, url) => Container(
+        placeholder: (context, url) => Container(
               width: double.infinity,
               height: 180,
               color: const Color(0xFF1A1F26),

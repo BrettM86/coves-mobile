@@ -3,14 +3,17 @@ import 'package:atproto_oauth_flutter/atproto_oauth_flutter.dart';
 import 'package:flutter/foundation.dart';
 import '../config/oauth_config.dart';
 
-/// OAuth Service for atProto authentication using the new atproto_oauth_flutter package
+/// OAuth Service for atProto authentication using the new
+/// atproto_oauth_flutter package
 ///
 /// Key improvements over the old implementation:
-/// ✅ Proper decentralized OAuth discovery - works with ANY PDS (not just bsky.social)
+/// ✅ Proper decentralized OAuth discovery - works with ANY PDS
+///    (not just bsky.social)
 /// ✅ Built-in session management - no manual token storage
 /// ✅ Automatic token refresh with concurrency control
 /// ✅ Session event streams for updates and deletions
-/// ✅ Secure storage handled internally (iOS Keychain, Android EncryptedSharedPreferences)
+/// ✅ Secure storage handled internally
+///    (iOS Keychain, Android EncryptedSharedPreferences)
 ///
 /// The new package handles the complete OAuth flow:
 /// 1. Handle/DID resolution
@@ -64,7 +67,9 @@ class OAuthService {
 
   /// Set up listeners for session events
   void _setupEventListeners() {
-    if (_client == null) return;
+    if (_client == null) {
+      return;
+    }
 
     // Listen for session updates (token refresh, etc.)
     _onUpdatedSubscription = _client!.onUpdated.listen((event) {
@@ -121,7 +126,8 @@ class OAuthService {
       }
 
       // Call the new package's signIn method
-      // This does EVERYTHING: handle resolution, PDS discovery, OAuth flow, token storage
+      // This does EVERYTHING: handle resolution, PDS discovery, OAuth flow,
+      // token storage
       if (kDebugMode) {
         print('📞 Calling FlutterOAuthClient.signIn()...');
       }
@@ -168,7 +174,8 @@ class OAuthService {
         print('$stackTrace');
       }
 
-      // Check if user cancelled (flutter_web_auth_2 throws PlatformException with "CANCELED" code)
+      // Check if user cancelled (flutter_web_auth_2 throws
+      // PlatformException with "CANCELED" code)
       if (e.toString().contains('CANCELED') ||
           e.toString().contains('User cancelled')) {
         throw Exception('Sign in cancelled by user');
@@ -196,7 +203,7 @@ class OAuthService {
   /// Returns the restored session or null if no session found.
   Future<OAuthSession?> restoreSession(
     String did, {
-    refresh = 'auto',
+    String refresh = 'auto',
   }) async {
     try {
       if (_client == null) {
@@ -219,7 +226,7 @@ class OAuthService {
       }
 
       return session;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('⚠️ Failed to restore session: $e');
       }

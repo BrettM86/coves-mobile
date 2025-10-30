@@ -193,7 +193,6 @@ void main() {
             sort: anyNamed('sort'),
             timeframe: anyNamed('timeframe'),
             limit: anyNamed('limit'),
-            cursor: null,
           ),
         ).thenAnswer((_) async => refreshResponse);
 
@@ -277,7 +276,6 @@ void main() {
             sort: anyNamed('sort'),
             timeframe: anyNamed('timeframe'),
             limit: anyNamed('limit'),
-            cursor: null,
           ),
         ).thenAnswer((_) async => firstResponse);
 
@@ -304,7 +302,7 @@ void main() {
       });
 
       test('should not load more if already loading', () async {
-        feedProvider.fetchTimeline(refresh: true);
+        await feedProvider.fetchTimeline(refresh: true);
         await feedProvider.loadMore();
 
         // Should not make additional calls while loading

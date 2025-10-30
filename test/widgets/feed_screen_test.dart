@@ -17,12 +17,12 @@ class FakeAuthProvider extends AuthProvider {
   @override
   bool get isLoading => _isLoading;
 
-  void setAuthenticated(bool value) {
+  void setAuthenticated({required bool value}) {
     _isAuthenticated = value;
     notifyListeners();
   }
 
-  void setLoading(bool value) {
+  void setLoading({required bool value}) {
     _isLoading = value;
     notifyListeners();
   }
@@ -63,12 +63,12 @@ class FakeFeedProvider extends FeedProvider {
     notifyListeners();
   }
 
-  void setLoading(bool value) {
+  void setLoading({required bool value}) {
     _isLoading = value;
     notifyListeners();
   }
 
-  void setLoadingMore(bool value) {
+  void setLoadingMore({required bool value}) {
     _isLoadingMore = value;
     notifyListeners();
   }
@@ -78,7 +78,7 @@ class FakeFeedProvider extends FeedProvider {
     notifyListeners();
   }
 
-  void setHasMore(bool value) {
+  void setHasMore({required bool value}) {
     _hasMore = value;
     notifyListeners();
   }
@@ -122,7 +122,7 @@ void main() {
     testWidgets('should display loading indicator when loading', (
       tester,
     ) async {
-      fakeFeedProvider.setLoading(true);
+      fakeFeedProvider.setLoading(value: true);
 
       await tester.pumpWidget(createTestWidget());
 
@@ -136,7 +136,10 @@ void main() {
 
       expect(find.text('Failed to load feed'), findsOneWidget);
       // Error message is transformed to user-friendly message
-      expect(find.text('Please check your internet connection'), findsOneWidget);
+      expect(
+        find.text('Please check your internet connection'),
+        findsOneWidget,
+      );
       expect(find.text('Retry'), findsOneWidget);
 
       // Test retry button
@@ -148,7 +151,7 @@ void main() {
 
     testWidgets('should display empty state when no posts', (tester) async {
       fakeFeedProvider.setPosts([]);
-      fakeAuthProvider.setAuthenticated(false);
+      fakeAuthProvider.setAuthenticated(value: false);
 
       await tester.pumpWidget(createTestWidget());
 
@@ -160,7 +163,7 @@ void main() {
       tester,
     ) async {
       fakeFeedProvider.setPosts([]);
-      fakeAuthProvider.setAuthenticated(true);
+      fakeAuthProvider.setAuthenticated(value: true);
 
       await tester.pumpWidget(createTestWidget());
 
@@ -188,7 +191,7 @@ void main() {
     testWidgets('should display "Feed" title when authenticated', (
       tester,
     ) async {
-      fakeAuthProvider.setAuthenticated(true);
+      fakeAuthProvider.setAuthenticated(value: true);
 
       await tester.pumpWidget(createTestWidget());
 
@@ -198,7 +201,7 @@ void main() {
     testWidgets('should display "Explore" title when not authenticated', (
       tester,
     ) async {
-      fakeAuthProvider.setAuthenticated(false);
+      fakeAuthProvider.setAuthenticated(value: false);
 
       await tester.pumpWidget(createTestWidget());
 
@@ -223,8 +226,9 @@ void main() {
       tester,
     ) async {
       final mockPosts = [_createMockPost('Test Post')];
-      fakeFeedProvider.setPosts(mockPosts);
-      fakeFeedProvider.setLoadingMore(true);
+      fakeFeedProvider
+        ..setPosts(mockPosts)
+        ..setLoadingMore(value: true);
 
       await tester.pumpWidget(createTestWidget());
 

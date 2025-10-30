@@ -2,11 +2,13 @@ import 'package:atproto_oauth_flutter/atproto_oauth_flutter.dart';
 
 /// OAuth Configuration for atProto
 ///
-/// This configuration provides ClientMetadata for the new atproto_oauth_flutter package.
-/// The new package handles proper decentralized OAuth discovery (works with ANY PDS).
+/// This configuration provides ClientMetadata for the new
+/// atproto_oauth_flutter package. The new package handles proper
+/// decentralized OAuth discovery (works with ANY PDS).
 class OAuthConfig {
   // OAuth Server Configuration
-  // Cloudflare Worker that hosts client-metadata.json and handles OAuth callbacks
+  // Cloudflare Worker that hosts client-metadata.json and handles OAuth
+  // callbacks
   static const String oauthServerUrl =
       'https://lingering-darkness-50a6.brettmay0212.workers.dev';
 
@@ -24,12 +26,15 @@ class OAuthConfig {
   // Derived OAuth URLs
   static const String clientId = '$oauthServerUrl/client-metadata.json';
 
-  // IMPORTANT: Private-use URI schemes (RFC 8252) require SINGLE slash, not double!
+  // IMPORTANT: Private-use URI schemes (RFC 8252) require SINGLE slash,
+  // not double!
   // Correct:   dev.workers.example:/oauth/callback
   // Incorrect: dev.workers.example://oauth/callback
-  static const String customSchemeCallback = '$customScheme:/oauth/callback';
+  static const String customSchemeCallback =
+      '$customScheme:/oauth/callback';
 
-  // HTTPS callback (fallback for PDS that don't support custom URI schemes)
+  // HTTPS callback (fallback for PDS that don't support custom
+  // URI schemes)
   static const String httpsCallback = '$oauthServerUrl/oauth/callback';
 
   // OAuth Scopes - recommended scope for atProto
@@ -49,8 +54,9 @@ class OAuthConfig {
   static ClientMetadata createClientMetadata() {
     return const ClientMetadata(
       clientId: clientId,
-      // Use HTTPS as PRIMARY - prevents browser re-navigation that invalidates auth codes
-      // Custom scheme as fallback (Worker page redirects to custom scheme anyway)
+      // Use HTTPS as PRIMARY - prevents browser re-navigation that
+      // invalidates auth codes. Custom scheme as fallback (Worker page
+      // redirects to custom scheme anyway)
       redirectUris: [httpsCallback, customSchemeCallback],
       scope: scope,
       clientName: clientName,

@@ -42,14 +42,16 @@ class CovesApiService {
             } else {
               if (kDebugMode) {
                 debugPrint(
-                  '⚠️ Token getter returned null - making unauthenticated request',
+                  '⚠️ Token getter returned null - '
+                  'making unauthenticated request',
                 );
               }
             }
           } else {
             if (kDebugMode) {
               debugPrint(
-                '⚠️ No token getter provided - making unauthenticated request',
+                '⚠️ No token getter provided - '
+                'making unauthenticated request',
               );
             }
           }
@@ -68,7 +70,8 @@ class CovesApiService {
       ),
     );
 
-    // Add logging interceptor AFTER auth (so it can see the Authorization header)
+    // Add logging interceptor AFTER auth (so it can see the
+    // Authorization header)
     if (kDebugMode) {
       _dio.interceptors.add(
         LogInterceptor(
@@ -89,7 +92,8 @@ class CovesApiService {
   ///
   /// Parameters:
   /// - [sort]: 'hot', 'top', or 'new' (default: 'hot')
-  /// - [timeframe]: 'hour', 'day', 'week', 'month', 'year', 'all' (default: 'day' for top sort)
+  /// - [timeframe]: 'hour', 'day', 'week', 'month', 'year', 'all'
+  ///   (default: 'day' for top sort)
   /// - [limit]: Number of posts per page (default: 15, max: 50)
   /// - [cursor]: Pagination cursor from previous response
   Future<TimelineResponse> getTimeline({
@@ -120,7 +124,8 @@ class CovesApiService {
 
       if (kDebugMode) {
         debugPrint(
-          '✅ Timeline fetched: ${response.data['feed']?.length ?? 0} posts',
+          '✅ Timeline fetched: '
+          '${response.data['feed']?.length ?? 0} posts',
         );
       }
 
@@ -162,7 +167,8 @@ class CovesApiService {
 
       if (kDebugMode) {
         debugPrint(
-          '✅ Discover feed fetched: ${response.data['feed']?.length ?? 0} posts',
+          '✅ Discover feed fetched: '
+          '${response.data['feed']?.length ?? 0} posts',
         );
       }
 
@@ -188,17 +194,20 @@ class CovesApiService {
     // Handle specific HTTP status codes
     if (e.response != null) {
       final statusCode = e.response!.statusCode;
-      final message = e.response!.data?['error'] ?? e.response!.data?['message'];
+      final message =
+          e.response!.data?['error'] ?? e.response!.data?['message'];
 
       if (statusCode != null) {
         if (statusCode == 401) {
           throw AuthenticationException(
-            message?.toString() ?? 'Authentication failed. Token expired or invalid',
+            message?.toString() ??
+                'Authentication failed. Token expired or invalid',
             originalError: e,
           );
         } else if (statusCode == 404) {
           throw NotFoundException(
-            message?.toString() ?? 'Resource not found. PDS or content may not exist',
+            message?.toString() ??
+                'Resource not found. PDS or content may not exist',
             originalError: e,
           );
         } else if (statusCode >= 500) {

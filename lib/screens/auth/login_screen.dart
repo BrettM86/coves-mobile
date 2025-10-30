@@ -38,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
         // Navigate to feed on successful login
         context.go('/feed');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -147,7 +147,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       }
                       // Basic handle validation
                       if (!value.contains('.')) {
-                        return 'Handle must contain a domain (e.g., user.bsky.social)';
+                        return 'Handle must contain a domain '
+                            '(e.g., user.bsky.social)';
                       }
                       return null;
                     },
@@ -166,7 +167,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   // Info text
                   const Text(
-                    'You\'ll be redirected to authorize this app with your atProto provider.',
+                    'You\'ll be redirected to authorize this app with your '
+                    'atProto provider.',
                     style: TextStyle(fontSize: 14, color: Color(0xFF5A6B7F)),
                     textAlign: TextAlign.center,
                   ),
@@ -179,17 +181,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: () {
                         showDialog(
                           context: context,
-                          builder:
-                              (context) => AlertDialog(
+                          builder: (context) => AlertDialog(
                                 backgroundColor: const Color(0xFF1A2028),
                                 title: const Text(
                                   'What is a handle?',
                                   style: TextStyle(color: Colors.white),
                                 ),
                                 content: const Text(
-                                  'Your handle is your unique identifier on the atProto network, '
-                                  'like alice.bsky.social. If you don\'t have one yet, you can create '
-                                  'an account at bsky.app.',
+                                  'Your handle is your unique identifier '
+                                  'on the atProto network, like '
+                                  'alice.bsky.social. If you don\'t have one '
+                                  'yet, you can create an account at bsky.app.',
                                   style: TextStyle(color: Color(0xFFB6C2D2)),
                                 ),
                                 actions: [

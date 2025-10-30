@@ -8,8 +8,9 @@ import 'auth_provider.dart';
 /// Manages feed state and fetching logic.
 /// Supports both authenticated timeline and public discover feed.
 ///
-/// IMPORTANT: Accepts AuthProvider reference to fetch fresh access tokens
-/// before each authenticated request (critical for atProto OAuth token rotation).
+/// IMPORTANT: Accepts AuthProvider reference to fetch fresh access
+/// tokens before each authenticated request (critical for atProto OAuth
+/// token rotation).
 class FeedProvider with ChangeNotifier {
 
   FeedProvider(this._authProvider, {CovesApiService? apiService}) {
@@ -19,21 +20,24 @@ class FeedProvider with ChangeNotifier {
         CovesApiService(tokenGetter: _authProvider.getAccessToken);
 
     // [P0 FIX] Listen to auth state changes and clear feed on sign-out
-    // This prevents privacy bug where logged-out users see their private timeline
-    // until they manually refresh.
+    // This prevents privacy bug where logged-out users see their private
+    // timeline until they manually refresh.
     _authProvider.addListener(_onAuthChanged);
   }
 
   /// Handle authentication state changes
   ///
-  /// When the user signs out (isAuthenticated becomes false), immediately
-  /// clear the feed to prevent showing personalized content to logged-out users.
-  /// This fixes a privacy bug where token refresh failures would sign out the user
-  /// but leave their private timeline visible until manual refresh.
+  /// When the user signs out (isAuthenticated becomes false),
+  /// immediately clear the feed to prevent showing personalized content
+  /// to logged-out users. This fixes a privacy bug where token refresh
+  /// failures would sign out the user but leave their private timeline
+  /// visible until manual refresh.
   void _onAuthChanged() {
     if (!_authProvider.isAuthenticated && _posts.isNotEmpty) {
       if (kDebugMode) {
-        debugPrint('🔒 Auth state changed to unauthenticated - clearing feed');
+        debugPrint(
+          '🔒 Auth state changed to unauthenticated - clearing feed',
+        );
       }
       reset();
       // Automatically load the public discover feed
@@ -64,10 +68,12 @@ class FeedProvider with ChangeNotifier {
   String get sort => _sort;
   String? get timeframe => _timeframe;
 
-  /// Load feed based on authentication state (business logic encapsulation)
+  /// Load feed based on authentication state (business logic
+  /// encapsulation)
   ///
-  /// This method encapsulates the business logic of deciding which feed to fetch.
-  /// Previously this logic was in the UI layer (FeedScreen), violating clean architecture.
+  /// This method encapsulates the business logic of deciding which feed
+  /// to fetch. Previously this logic was in the UI layer (FeedScreen),
+  /// violating clean architecture.
   Future<void> loadFeed({bool refresh = false}) async {
     if (_authProvider.isAuthenticated) {
       await fetchTimeline(refresh: refresh);
@@ -76,20 +82,24 @@ class FeedProvider with ChangeNotifier {
     }
   }
 
-  /// Common feed fetching logic (DRY principle - eliminates code duplication)
+  /// Common feed fetching logic (DRY principle - eliminates code
+  /// duplication)
   Future<void> _fetchFeed({
     required bool refresh,
     required Future<TimelineResponse> Function() fetcher,
     required String feedName,
   }) async {
-    if (_isLoading || _isLoadingMore) return;
+    if (_isLoading || _isLoadingMore) {
+      return;
+    }
 
     try {
       if (refresh) {
         _isLoading = true;
         // DON'T clear _posts, _cursor, or _hasMore yet
         // Keep existing data visible until refresh succeeds
-        // This prevents transient failures from wiping the user's feed and pagination state
+        // This prevents transient failures from wiping the user's feed
+        // and pagination state
         _error = null;
       } else {
         _isLoadingMore = true;
@@ -114,7 +124,7 @@ class FeedProvider with ChangeNotifier {
       if (kDebugMode) {
         debugPrint('✅ $feedName loaded: ${_posts.length} posts total');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       _error = e.toString();
       if (kDebugMode) {
         debugPrint('❌ Failed to fetch $feedName: $e');
@@ -158,7 +168,9 @@ class FeedProvider with ChangeNotifier {
 
   /// Load more posts (pagination)
   Future<void> loadMore() async {
-    if (!_hasMore || _isLoadingMore) return;
+    if (!_hasMore || _isLoadingMore) {
+      return;
+    }
     await loadFeed();
   }
 

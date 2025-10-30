@@ -98,7 +98,8 @@ GoRouter _createRouter(AuthProvider authProvider) {
       if (state.uri.scheme == OAuthConfig.customScheme) {
         if (kDebugMode) {
           print(
-            '⚠️ OAuth callback in errorBuilder - flutter_web_auth_2 should handle it',
+            '⚠️ OAuth callback in errorBuilder - '
+            'flutter_web_auth_2 should handle it',
           );
           print('   URI: ${state.uri}');
         }

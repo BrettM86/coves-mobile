@@ -15,11 +15,11 @@ import '../services/oauth_service.dart';
 /// ✅ Tokens are stored securely by the package (iOS Keychain / Android EncryptedSharedPreferences)
 /// ✅ Automatic token refresh handled by the package
 class AuthProvider with ChangeNotifier {
-  final OAuthService _oauthService;
 
   /// Constructor with optional OAuthService for dependency injection (testing)
   AuthProvider({OAuthService? oauthService})
       : _oauthService = oauthService ?? OAuthService();
+  final OAuthService _oauthService;
 
   // SharedPreferences keys for storing session info
   // The DID and handle are public information, so SharedPreferences is fine
@@ -51,13 +51,15 @@ class AuthProvider with ChangeNotifier {
   /// The token is automatically refreshed if expired.
   /// If token refresh fails (e.g., revoked server-side), signs out the user.
   Future<String?> getAccessToken() async {
-    if (_session == null) return null;
+    if (_session == null) {
+      return null;
+    }
 
     try {
       // Access the session getter to get the token set
       final session = await _session!.sessionGetter.get(_session!.sub);
       return session.tokenSet.accessToken;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         print('❌ Failed to get access token: $e');
         print('🔄 Token refresh failed - signing out user');
@@ -124,7 +126,7 @@ class AuthProvider with ChangeNotifier {
           print('No stored DID found - user not logged in');
         }
       }
-    } catch (e) {
+    } on Exception catch (e) {
       _error = e.toString();
       if (kDebugMode) {
         print('❌ Failed to initialize auth: $e');
@@ -168,7 +170,8 @@ class AuthProvider with ChangeNotifier {
       _did = session.sub;
       _handle = trimmedHandle;
 
-      // Store the DID and handle in SharedPreferences so we can restore on next launch
+      // Store the DID and handle in SharedPreferences so we can restore
+      // on next launch
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_prefKeyDid, session.sub);
       await prefs.setString(_prefKeyHandle, trimmedHandle);
@@ -232,7 +235,7 @@ class AuthProvider with ChangeNotifier {
       if (kDebugMode) {
         print('✅ Successfully signed out');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       _error = e.toString();
       if (kDebugMode) {
         print('⚠️ Sign out failed: $e');

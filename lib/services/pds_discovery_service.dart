@@ -2,9 +2,10 @@ import 'package:dio/dio.dart';
 
 /// PDS Discovery Service
 ///
-/// Handles the resolution of atProto handles to their Personal Data Servers (PDS).
-/// This is crucial for proper decentralized authentication - each user may be on
-/// a different PDS, and we need to redirect them to THEIR PDS's OAuth server.
+/// Handles the resolution of atProto handles to their Personal Data
+/// Servers (PDS). This is crucial for proper decentralized
+/// authentication - each user may be on a different PDS, and we need to
+/// redirect them to THEIR PDS's OAuth server.
 ///
 /// Flow:
 /// 1. Resolve handle to DID using a handle resolver (bsky.social)
@@ -67,7 +68,8 @@ class PDSDiscoveryService {
   /// Fetch a DID document from the PLC directory
   Future<Map<String, dynamic>> _fetchDIDDocument(String did) async {
     try {
-      final response = await _dio.get('https://plc.directory/$did');
+      final response =
+          await _dio.get('https://plc.directory/$did');
 
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch DID document: ${response.statusCode}');

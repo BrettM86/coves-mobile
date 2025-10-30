@@ -206,16 +206,22 @@ void main() {
       // that are not exported from atproto_oauth_flutter package.
       // These tests would need integration testing or a different approach.
 
-      test('should return null when not authenticated (skipped - needs integration test)', () async {
+      test(
+        'should return null when not authenticated '
+        '(skipped - needs integration test)',
+        () async {
         // This test is skipped as it requires mocking internal OAuth classes
         // that cannot be mocked with mockito
-      }, skip: true);
+      }, skip: true,);
 
-      test('should sign out user if token refresh fails (skipped - needs integration test)', () async {
+      test(
+        'should sign out user if token refresh fails '
+        '(skipped - needs integration test)',
+        () async {
         // This test demonstrates the critical fix for issue #7
         // Token refresh failure should trigger sign out
         // Skipped as it requires mocking internal OAuth classes
-      }, skip: true);
+      }, skip: true,);
     });
 
     group('State Management', () {
