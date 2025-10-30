@@ -21,10 +21,11 @@ class AuthProvider with ChangeNotifier {
   AuthProvider({OAuthService? oauthService})
       : _oauthService = oauthService ?? OAuthService();
 
-  // SharedPreferences key for storing the current user's DID
-  // The DID is public information (like a username), so SharedPreferences is fine
+  // SharedPreferences keys for storing session info
+  // The DID and handle are public information, so SharedPreferences is fine
   // The actual tokens are stored securely by the atproto_oauth_flutter package
   static const String _prefKeyDid = 'current_user_did';
+  static const String _prefKeyHandle = 'current_user_handle';
 
   // Session state
   OAuthSession? _session;
@@ -87,10 +88,12 @@ class AuthProvider with ChangeNotifier {
       // Check if we have a stored DID from a previous session
       final prefs = await SharedPreferences.getInstance();
       final storedDid = prefs.getString(_prefKeyDid);
+      final storedHandle = prefs.getString(_prefKeyHandle);
 
       if (storedDid != null) {
         if (kDebugMode) {
           print('Found stored DID: $storedDid');
+          print('Found stored handle: $storedHandle');
         }
 
         // Try to restore the session
@@ -101,20 +104,19 @@ class AuthProvider with ChangeNotifier {
           _session = restoredSession;
           _isAuthenticated = true;
           _did = restoredSession.sub;
-
-          // Extract handle from session metadata if available
-          // The handle might be in the session metadata or we can store it separately
-          _handle = storedDid; // TODO: Store handle separately if needed
+          _handle = storedHandle; // Restore handle from preferences
 
           if (kDebugMode) {
             print('✅ Successfully restored session');
             print('   DID: ${restoredSession.sub}');
+            print('   Handle: $storedHandle');
           }
         } else {
-          // Failed to restore - clear the stored DID
+          // Failed to restore - clear the stored data
           await prefs.remove(_prefKeyDid);
+          await prefs.remove(_prefKeyHandle);
           if (kDebugMode) {
-            print('⚠️ Could not restore session - cleared stored DID');
+            print('⚠️ Could not restore session - cleared stored data');
           }
         }
       } else {
@@ -166,9 +168,10 @@ class AuthProvider with ChangeNotifier {
       _did = session.sub;
       _handle = trimmedHandle;
 
-      // Store the DID in SharedPreferences so we can restore on next launch
+      // Store the DID and handle in SharedPreferences so we can restore on next launch
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_prefKeyDid, session.sub);
+      await prefs.setString(_prefKeyHandle, trimmedHandle);
 
       if (kDebugMode) {
         print('✅ Successfully signed in');
@@ -214,9 +217,10 @@ class AuthProvider with ChangeNotifier {
         await _oauthService.signOut(currentDid);
       }
 
-      // Clear the stored DID from SharedPreferences
+      // Clear the stored DID and handle from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_prefKeyDid);
+      await prefs.remove(_prefKeyHandle);
 
       // Clear state
       _session = null;

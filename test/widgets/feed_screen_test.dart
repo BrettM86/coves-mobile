@@ -135,7 +135,8 @@ void main() {
       await tester.pumpWidget(createTestWidget());
 
       expect(find.text('Failed to load feed'), findsOneWidget);
-      expect(find.text('Network error'), findsOneWidget);
+      // Error message is transformed to user-friendly message
+      expect(find.text('Please check your internet connection'), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
 
       // Test retry button
@@ -337,8 +338,8 @@ FeedViewPost _createMockPost(String title) {
         did: 'did:plc:community',
         name: 'test-community',
       ),
-      createdAt: DateTime.now(),
-      indexedAt: DateTime.now(),
+      createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
+      indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
       text: 'Test body',
       title: title,
       stats: PostStats(

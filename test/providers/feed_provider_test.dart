@@ -445,8 +445,8 @@ FeedViewPost _createMockPost() {
         did: 'did:plc:community',
         name: 'test-community',
       ),
-      createdAt: DateTime.now(),
-      indexedAt: DateTime.now(),
+      createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
+      indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
       text: 'Test body',
       title: 'Test Post',
       stats: PostStats(

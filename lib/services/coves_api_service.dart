@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../config/oauth_config.dart';
 import '../models/post.dart';
+import 'api_exceptions.dart';
 
 /// Coves API Service
 ///
@@ -125,10 +126,7 @@ class CovesApiService {
 
       return TimelineResponse.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Failed to fetch timeline: ${e.message}');
-      }
-      rethrow;
+      _handleDioException(e, 'timeline');
     }
   }
 
@@ -170,10 +168,97 @@ class CovesApiService {
 
       return TimelineResponse.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Failed to fetch discover feed: ${e.message}');
+      _handleDioException(e, 'discover feed');
+    }
+  }
+
+  /// Handle Dio exceptions with specific error types
+  ///
+  /// Converts generic DioException into specific typed exceptions
+  /// for better error handling throughout the app.
+  Never _handleDioException(DioException e, String operation) {
+    if (kDebugMode) {
+      debugPrint('❌ Failed to fetch $operation: ${e.message}');
+      if (e.response != null) {
+        debugPrint('   Status: ${e.response?.statusCode}');
+        debugPrint('   Data: ${e.response?.data}');
       }
-      rethrow;
+    }
+
+    // Handle specific HTTP status codes
+    if (e.response != null) {
+      final statusCode = e.response!.statusCode;
+      final message = e.response!.data?['error'] ?? e.response!.data?['message'];
+
+      if (statusCode != null) {
+        if (statusCode == 401) {
+          throw AuthenticationException(
+            message?.toString() ?? 'Authentication failed. Token expired or invalid',
+            originalError: e,
+          );
+        } else if (statusCode == 404) {
+          throw NotFoundException(
+            message?.toString() ?? 'Resource not found. PDS or content may not exist',
+            originalError: e,
+          );
+        } else if (statusCode >= 500) {
+          throw ServerException(
+            message?.toString() ?? 'Server error. Please try again later',
+            statusCode: statusCode,
+            originalError: e,
+          );
+        } else {
+          // Other HTTP errors
+          throw ApiException(
+            message?.toString() ?? 'Request failed: ${e.message}',
+            statusCode: statusCode,
+            originalError: e,
+          );
+        }
+      } else {
+        // No status code in response
+        throw ApiException(
+          message?.toString() ?? 'Request failed: ${e.message}',
+          originalError: e,
+        );
+      }
+    }
+
+    // Handle network-level errors (no response from server)
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        throw NetworkException(
+          'Connection timeout. Please check your internet connection',
+          originalError: e,
+        );
+      case DioExceptionType.connectionError:
+        // Could be federation issue if it's a PDS connection failure
+        if (e.message?.contains('Failed host lookup') ?? false) {
+          throw FederationException(
+            'Failed to connect to PDS. Server may be unreachable',
+            originalError: e,
+          );
+        }
+        throw NetworkException(
+          'Network error. Please check your internet connection',
+          originalError: e,
+        );
+      case DioExceptionType.badResponse:
+        // Already handled above by response status code check
+        throw ApiException(
+          'Bad response from server: ${e.message}',
+          statusCode: e.response?.statusCode,
+          originalError: e,
+        );
+      case DioExceptionType.cancel:
+        throw ApiException('Request cancelled', originalError: e);
+      default:
+        throw ApiException(
+          'Unknown error: ${e.message}',
+          originalError: e,
+        );
     }
   }
 

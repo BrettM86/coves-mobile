@@ -58,11 +58,19 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Use select to only rebuild when specific fields change
+    // Optimized: Use select to only rebuild when specific fields change
+    // This prevents unnecessary rebuilds when unrelated provider fields change
     final isAuthenticated = context.select<AuthProvider, bool>(
       (p) => p.isAuthenticated,
     );
-    final feedProvider = Provider.of<FeedProvider>(context);
+    final isLoading = context.select<FeedProvider, bool>((p) => p.isLoading);
+    final error = context.select<FeedProvider, String?>((p) => p.error);
+    final posts = context.select<FeedProvider, List<FeedViewPost>>(
+      (p) => p.posts,
+    );
+    final isLoadingMore = context.select<FeedProvider, bool>(
+      (p) => p.isLoadingMore,
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B0F14),
@@ -72,20 +80,34 @@ class _FeedScreenState extends State<FeedScreen> {
         title: Text(isAuthenticated ? 'Feed' : 'Explore'),
         automaticallyImplyLeading: false,
       ),
-      body: SafeArea(child: _buildBody(feedProvider, isAuthenticated)),
+      body: SafeArea(
+        child: _buildBody(
+          isLoading: isLoading,
+          error: error,
+          posts: posts,
+          isLoadingMore: isLoadingMore,
+          isAuthenticated: isAuthenticated,
+        ),
+      ),
     );
   }
 
-  Widget _buildBody(FeedProvider feedProvider, bool isAuthenticated) {
+  Widget _buildBody({
+    required bool isLoading,
+    required String? error,
+    required List<FeedViewPost> posts,
+    required bool isLoadingMore,
+    required bool isAuthenticated,
+  }) {
     // Loading state
-    if (feedProvider.isLoading) {
+    if (isLoading) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFFFF6B35)),
       );
     }
 
     // Error state
-    if (feedProvider.error != null) {
+    if (error != null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -108,13 +130,19 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                feedProvider.error!,
+                _getUserFriendlyError(error),
                 style: const TextStyle(fontSize: 14, color: Color(0xFFB6C2D2)),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () => feedProvider.retry(),
+                onPressed: () {
+                  final feedProvider = Provider.of<FeedProvider>(
+                    context,
+                    listen: false,
+                  );
+                  feedProvider.retry();
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6B35),
                 ),
@@ -127,7 +155,7 @@ class _FeedScreenState extends State<FeedScreen> {
     }
 
     // Empty state
-    if (feedProvider.posts.isEmpty) {
+    if (posts.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -164,10 +192,9 @@ class _FeedScreenState extends State<FeedScreen> {
       color: const Color(0xFFFF6B35),
       child: ListView.builder(
         controller: _scrollController,
-        itemCount:
-            feedProvider.posts.length + (feedProvider.isLoadingMore ? 1 : 0),
+        itemCount: posts.length + (isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
-          if (index == feedProvider.posts.length) {
+          if (index == posts.length) {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(16),
@@ -176,7 +203,7 @@ class _FeedScreenState extends State<FeedScreen> {
             );
           }
 
-          final post = feedProvider.posts[index];
+          final post = posts[index];
           return Semantics(
             label:
                 'Feed post in ${post.post.community.name} by ${post.post.author.displayName ?? post.post.author.handle}. ${post.post.title ?? ""}',
@@ -186,6 +213,31 @@ class _FeedScreenState extends State<FeedScreen> {
         },
       ),
     );
+  }
+
+  /// Transform technical error messages into user-friendly ones
+  String _getUserFriendlyError(String error) {
+    final lowerError = error.toLowerCase();
+
+    if (lowerError.contains('socketexception') ||
+        lowerError.contains('network') ||
+        lowerError.contains('connection refused')) {
+      return 'Please check your internet connection';
+    } else if (lowerError.contains('timeoutexception') ||
+        lowerError.contains('timeout')) {
+      return 'Request timed out. Please try again';
+    } else if (lowerError.contains('401') ||
+        lowerError.contains('unauthorized')) {
+      return 'Authentication failed. Please sign in again';
+    } else if (lowerError.contains('404') || lowerError.contains('not found')) {
+      return 'Content not found';
+    } else if (lowerError.contains('500') ||
+        lowerError.contains('internal server')) {
+      return 'Server error. Please try again later';
+    }
+
+    // Fallback to generic message for unknown errors
+    return 'Something went wrong. Please try again';
   }
 }
 

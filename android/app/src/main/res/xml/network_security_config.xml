@@ -14,10 +14,10 @@
         This is ONLY acceptable for local development against localhost.
     -->
     <domain-config cleartextTrafficPermitted="true">
-        <!-- Local IP addresses for development -->
+        <!-- Local development addresses only -->
         <domain includeSubdomains="true">192.168.1.7</domain>
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
-        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain> <!-- Android emulator -->
     </domain-config>
 </network-security-config>

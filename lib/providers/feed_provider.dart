@@ -17,6 +17,28 @@ class FeedProvider with ChangeNotifier {
     // Pass token getter to API service for automatic fresh token retrieval
     _apiService = apiService ??
         CovesApiService(tokenGetter: _authProvider.getAccessToken);
+
+    // [P0 FIX] Listen to auth state changes and clear feed on sign-out
+    // This prevents privacy bug where logged-out users see their private timeline
+    // until they manually refresh.
+    _authProvider.addListener(_onAuthChanged);
+  }
+
+  /// Handle authentication state changes
+  ///
+  /// When the user signs out (isAuthenticated becomes false), immediately
+  /// clear the feed to prevent showing personalized content to logged-out users.
+  /// This fixes a privacy bug where token refresh failures would sign out the user
+  /// but leave their private timeline visible until manual refresh.
+  void _onAuthChanged() {
+    if (!_authProvider.isAuthenticated && _posts.isNotEmpty) {
+      if (kDebugMode) {
+        debugPrint('🔒 Auth state changed to unauthenticated - clearing feed');
+      }
+      reset();
+      // Automatically load the public discover feed
+      loadFeed(refresh: true);
+    }
   }
   final AuthProvider _authProvider;
   late final CovesApiService _apiService;
@@ -169,6 +191,8 @@ class FeedProvider with ChangeNotifier {
 
   @override
   void dispose() {
+    // Remove auth listener to prevent memory leaks
+    _authProvider.removeListener(_onAuthChanged);
     _apiService.dispose();
     super.dispose();
   }
