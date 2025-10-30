@@ -25,9 +25,8 @@ void main() {
       // Create mock OAuth service
       mockOAuthService = MockOAuthService();
 
-      // Create auth provider (we'll need to inject the mock)
-      // Note: This requires modifying AuthProvider to accept OAuthService for testing
-      authProvider = AuthProvider();
+      // Create auth provider with injected mock service
+      authProvider = AuthProvider(oauthService: mockOAuthService);
     });
 
     tearDown(() {
