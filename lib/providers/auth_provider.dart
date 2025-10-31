@@ -15,10 +15,9 @@ import '../services/oauth_service.dart';
 /// ✅ Tokens are stored securely by the package (iOS Keychain / Android EncryptedSharedPreferences)
 /// ✅ Automatic token refresh handled by the package
 class AuthProvider with ChangeNotifier {
-
   /// Constructor with optional OAuthService for dependency injection (testing)
   AuthProvider({OAuthService? oauthService})
-      : _oauthService = oauthService ?? OAuthService();
+    : _oauthService = oauthService ?? OAuthService();
   final OAuthService _oauthService;
 
   // SharedPreferences keys for storing session info

@@ -5,7 +5,6 @@
 // /xrpc/social.coves.feed.getDiscover
 
 class TimelineResponse {
-
   TimelineResponse({required this.feed, this.cursor});
 
   factory TimelineResponse.fromJson(Map<String, dynamic> json) {
@@ -33,7 +32,6 @@ class TimelineResponse {
 }
 
 class FeedViewPost {
-
   FeedViewPost({required this.post, this.reason});
 
   factory FeedViewPost.fromJson(Map<String, dynamic> json) {
@@ -50,7 +48,6 @@ class FeedViewPost {
 }
 
 class PostView {
-
   PostView({
     required this.uri,
     required this.cid,
@@ -107,7 +104,6 @@ class PostView {
 }
 
 class AuthorView {
-
   AuthorView({
     required this.did,
     required this.handle,
@@ -130,7 +126,6 @@ class AuthorView {
 }
 
 class CommunityRef {
-
   CommunityRef({required this.did, required this.name, this.avatar});
 
   factory CommunityRef.fromJson(Map<String, dynamic> json) {
@@ -146,7 +141,6 @@ class CommunityRef {
 }
 
 class PostStats {
-
   PostStats({
     required this.upvotes,
     required this.downvotes,
@@ -169,7 +163,6 @@ class PostStats {
 }
 
 class PostEmbed {
-
   PostEmbed({required this.type, this.external, required this.data});
 
   factory PostEmbed.fromJson(Map<String, dynamic> json) {
@@ -191,7 +184,6 @@ class PostEmbed {
 }
 
 class ExternalEmbed {
-
   ExternalEmbed({
     required this.uri,
     this.title,
@@ -217,7 +209,6 @@ class ExternalEmbed {
 }
 
 class PostFacet {
-
   PostFacet({required this.data});
 
   factory PostFacet.fromJson(Map<String, dynamic> json) {
@@ -227,7 +218,6 @@ class PostFacet {
 }
 
 class FeedReason {
-
   FeedReason({required this.type, required this.data});
 
   factory FeedReason.fromJson(Map<String, dynamic> json) {

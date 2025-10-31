@@ -68,8 +68,7 @@ class PDSDiscoveryService {
   /// Fetch a DID document from the PLC directory
   Future<Map<String, dynamic>> _fetchDIDDocument(String did) async {
     try {
-      final response =
-          await _dio.get('https://plc.directory/$did');
+      final response = await _dio.get('https://plc.directory/$did');
 
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch DID document: ${response.statusCode}');

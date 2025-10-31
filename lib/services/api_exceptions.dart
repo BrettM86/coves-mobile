@@ -6,7 +6,6 @@ library;
 
 /// Base class for all API exceptions
 class ApiException implements Exception {
-
   ApiException(this.message, {this.statusCode, this.originalError});
   final String message;
   final int? statusCode;
@@ -20,14 +19,14 @@ class ApiException implements Exception {
 /// Token expired, invalid, or missing
 class AuthenticationException extends ApiException {
   AuthenticationException(super.message, {super.originalError})
-      : super(statusCode: 401);
+    : super(statusCode: 401);
 }
 
 /// Resource not found (404)
 /// PDS, community, post, or user not found
 class NotFoundException extends ApiException {
   NotFoundException(super.message, {super.originalError})
-      : super(statusCode: 404);
+    : super(statusCode: 404);
 }
 
 /// Server error (500+)
@@ -40,12 +39,12 @@ class ServerException extends ApiException {
 /// No internet, connection refused, timeout
 class NetworkException extends ApiException {
   NetworkException(super.message, {super.originalError})
-      : super(statusCode: null);
+    : super(statusCode: null);
 }
 
 /// Federation error
 /// atProto PDS unreachable or DID resolution failure
 class FederationException extends ApiException {
   FederationException(super.message, {super.originalError})
-      : super(statusCode: null);
+    : super(statusCode: null);
 }

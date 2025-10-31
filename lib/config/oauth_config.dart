@@ -30,8 +30,7 @@ class OAuthConfig {
   // not double!
   // Correct:   dev.workers.example:/oauth/callback
   // Incorrect: dev.workers.example://oauth/callback
-  static const String customSchemeCallback =
-      '$customScheme:/oauth/callback';
+  static const String customSchemeCallback = '$customScheme:/oauth/callback';
 
   // HTTPS callback (fallback for PDS that don't support custom
   // URI schemes)

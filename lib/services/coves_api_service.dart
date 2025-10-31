@@ -15,7 +15,6 @@ import 'api_exceptions.dart';
 /// rotates tokens automatically (~1 hour expiry), and caching tokens would
 /// cause 401 errors after the first token expires.
 class CovesApiService {
-
   CovesApiService({Future<String?> Function()? tokenGetter})
     : _tokenGetter = tokenGetter {
     _dio = Dio(
@@ -264,10 +263,7 @@ class CovesApiService {
       case DioExceptionType.cancel:
         throw ApiException('Request cancelled', originalError: e);
       default:
-        throw ApiException(
-          'Unknown error: ${e.message}',
-          originalError: e,
-        );
+        throw ApiException('Unknown error: ${e.message}', originalError: e);
     }
   }
 

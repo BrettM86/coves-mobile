@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 class CovesLogo extends StatelessWidget {
-
   const CovesLogo({super.key, this.size = 150, this.useColorVersion = false});
   final double size;
   final bool useColorVersion;

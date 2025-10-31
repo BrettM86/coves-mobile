@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 enum ButtonVariant { solid, outline, tertiary }
 
 class PrimaryButton extends StatelessWidget {
-
   const PrimaryButton({
     super.key,
     required this.title,

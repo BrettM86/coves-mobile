@@ -181,7 +181,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: () {
                         showDialog(
                           context: context,
-                          builder: (context) => AlertDialog(
+                          builder:
+                              (context) => AlertDialog(
                                 backgroundColor: const Color(0xFF1A2028),
                                 title: const Text(
                                   'What is a handle?',
