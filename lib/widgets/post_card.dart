@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../models/post.dart';
 import '../utils/date_time_utils.dart';
+import 'icons/animated_heart_icon.dart';
+import 'icons/reply_icon.dart';
+import 'icons/share_icon.dart';
 
 /// Post card widget for displaying feed posts
 ///
@@ -18,11 +21,18 @@ import '../utils/date_time_utils.dart';
 /// time-ago calculations, enabling:
 /// - Periodic updates of time strings
 /// - Deterministic testing without DateTime.now()
-class PostCard extends StatelessWidget {
+class PostCard extends StatefulWidget {
   const PostCard({required this.post, this.currentTime, super.key});
 
   final FeedViewPost post;
   final DateTime? currentTime;
+
+  @override
+  State<PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends State<PostCard> {
+  bool _isLiked = false;
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +60,7 @@ class PostCard extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      post.post.community.name[0].toUpperCase(),
+                      widget.post.post.community.name[0].toUpperCase(),
                       style: const TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 12,
@@ -65,7 +75,7 @@ class PostCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'c/${post.post.community.name}',
+                        'c/${widget.post.post.community.name}',
                         style: const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 14,
@@ -73,7 +83,7 @@ class PostCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '@${post.post.author.handle}',
+                        '@${widget.post.post.author.handle}',
                         style: const TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12,
@@ -85,8 +95,8 @@ class PostCard extends StatelessWidget {
                 // Time ago
                 Text(
                   DateTimeUtils.formatTimeAgo(
-                    post.post.createdAt,
-                    currentTime: currentTime,
+                    widget.post.post.createdAt,
+                    currentTime: widget.currentTime,
                   ),
                   style: TextStyle(
                     color: AppColors.textPrimary.withValues(alpha: 0.5),
@@ -98,9 +108,9 @@ class PostCard extends StatelessWidget {
             const SizedBox(height: 8),
 
             // Post title
-            if (post.post.title != null) ...[
+            if (widget.post.post.title != null) ...[
               Text(
-                post.post.title!,
+                widget.post.post.title!,
                 style: const TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 16,
@@ -110,19 +120,19 @@ class PostCard extends StatelessWidget {
             ],
 
             // Spacing after title (only if we have content below)
-            if (post.post.title != null &&
-                (post.post.embed?.external != null ||
-                    post.post.text.isNotEmpty))
+            if (widget.post.post.title != null &&
+                (widget.post.post.embed?.external != null ||
+                    widget.post.post.text.isNotEmpty))
               const SizedBox(height: 8),
 
             // Embed (link preview)
-            if (post.post.embed?.external != null) ...[
-              _EmbedCard(embed: post.post.embed!.external!),
+            if (widget.post.post.embed?.external != null) ...[
+              _EmbedCard(embed: widget.post.post.embed!.external!),
               const SizedBox(height: 8),
             ],
 
             // Post text body preview
-            if (post.post.text.isNotEmpty) ...[
+            if (widget.post.post.text.isNotEmpty) ...[
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
@@ -130,7 +140,7 @@ class PostCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  post.post.text,
+                  widget.post.post.text,
                   style: TextStyle(
                     color: AppColors.textPrimary.withValues(alpha: 0.7),
                     fontSize: 13,
@@ -163,8 +173,7 @@ class PostCard extends StatelessWidget {
                       horizontal: 12,
                       vertical: 10,
                     ),
-                    child: Icon(
-                      Icons.ios_share,
+                    child: ShareIcon(
                       size: 18,
                       color: AppColors.textPrimary.withValues(alpha: 0.6),
                     ),
@@ -189,15 +198,14 @@ class PostCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
+                        ReplyIcon(
                           size: 18,
                           color: AppColors.textPrimary.withValues(alpha: 0.6),
                         ),
                         const SizedBox(width: 5),
                         Text(
                           DateTimeUtils.formatCount(
-                            post.post.stats.commentCount,
+                            widget.post.post.stats.commentCount,
                           ),
                           style: TextStyle(
                             color: AppColors.textPrimary.withValues(alpha: 0.6),
@@ -213,6 +221,9 @@ class PostCard extends StatelessWidget {
                 // Heart button
                 InkWell(
                   onTap: () {
+                    setState(() {
+                      _isLiked = !_isLiked;
+                    });
                     // TODO: Handle upvote/like interaction with backend
                     if (kDebugMode) {
                       debugPrint('Heart button tapped for post');
@@ -227,14 +238,15 @@ class PostCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.favorite_border,
+                        AnimatedHeartIcon(
+                          isLiked: _isLiked,
                           size: 18,
                           color: AppColors.textPrimary.withValues(alpha: 0.6),
+                          likedColor: const Color(0xFFFF0033), // Bright red
                         ),
                         const SizedBox(width: 5),
                         Text(
-                          DateTimeUtils.formatCount(post.post.stats.score),
+                          DateTimeUtils.formatCount(widget.post.post.stats.score),
                           style: TextStyle(
                             color: AppColors.textPrimary.withValues(alpha: 0.6),
                             fontSize: 13,
