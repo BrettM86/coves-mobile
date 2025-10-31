@@ -1,11 +1,11 @@
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../constants/app_colors.dart';
 import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/feed_provider.dart';
+import '../../widgets/post_card.dart';
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
@@ -74,12 +74,15 @@ class _FeedScreenState extends State<FeedScreen> {
     final isLoadingMore = context.select<FeedProvider, bool>(
       (p) => p.isLoadingMore,
     );
+    final currentTime = context.select<FeedProvider, DateTime?>(
+      (p) => p.currentTime,
+    );
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F14),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0B0F14),
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.background,
+        foregroundColor: AppColors.textPrimary,
         title: Text(isAuthenticated ? 'Feed' : 'Explore'),
         automaticallyImplyLeading: false,
       ),
@@ -90,6 +93,7 @@ class _FeedScreenState extends State<FeedScreen> {
           posts: posts,
           isLoadingMore: isLoadingMore,
           isAuthenticated: isAuthenticated,
+          currentTime: currentTime,
         ),
       ),
     );
@@ -101,12 +105,13 @@ class _FeedScreenState extends State<FeedScreen> {
     required List<FeedViewPost> posts,
     required bool isLoadingMore,
     required bool isAuthenticated,
+    required DateTime? currentTime,
   }) {
     // Loading state (only show full-screen loader for initial load,
     // not refresh)
     if (isLoading && posts.isEmpty) {
       return const Center(
-        child: CircularProgressIndicator(color: Color(0xFFFF6B35)),
+        child: CircularProgressIndicator(color: AppColors.primary),
       );
     }
 
@@ -123,33 +128,33 @@ class _FeedScreenState extends State<FeedScreen> {
               const Icon(
                 Icons.error_outline,
                 size: 64,
-                color: Color(0xFFFF6B35),
+                color: AppColors.primary,
               ),
               const SizedBox(height: 16),
               const Text(
                 'Failed to load feed',
                 style: TextStyle(
                   fontSize: 20,
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 _getUserFriendlyError(error),
-                style: const TextStyle(fontSize: 14, color: Color(0xFFB6C2D2)),
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: () {
-                  Provider.of<FeedProvider>(
-                    context,
-                    listen: false,
-                  ).retry();
+                  Provider.of<FeedProvider>(context, listen: false).retry();
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6B35),
+                  backgroundColor: AppColors.primary,
                 ),
                 child: const Text('Retry'),
               ),
@@ -167,13 +172,13 @@ class _FeedScreenState extends State<FeedScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.forum, size: 64, color: Color(0xFFFF6B35)),
+              const Icon(Icons.forum, size: 64, color: AppColors.primary),
               const SizedBox(height: 24),
               Text(
                 isAuthenticated ? 'No posts yet' : 'No posts to discover',
                 style: const TextStyle(
                   fontSize: 20,
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -182,7 +187,10 @@ class _FeedScreenState extends State<FeedScreen> {
                 isAuthenticated
                     ? 'Subscribe to communities to see posts in your feed'
                     : 'Check back later for new posts',
-                style: const TextStyle(fontSize: 14, color: Color(0xFFB6C2D2)),
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -194,12 +202,11 @@ class _FeedScreenState extends State<FeedScreen> {
     // Posts list
     return RefreshIndicator(
       onRefresh: _onRefresh,
-      color: const Color(0xFFFF6B35),
+      color: AppColors.primary,
       child: ListView.builder(
         controller: _scrollController,
         // Add extra item for loading indicator or pagination error
-        itemCount:
-            posts.length + (isLoadingMore || error != null ? 1 : 0),
+        itemCount: posts.length + (isLoadingMore || error != null ? 1 : 0),
         itemBuilder: (context, index) {
           // Footer: loading indicator or error message
           if (index == posts.length) {
@@ -208,7 +215,7 @@ class _FeedScreenState extends State<FeedScreen> {
               return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(16),
-                  child: CircularProgressIndicator(color: Color(0xFFFF6B35)),
+                  child: CircularProgressIndicator(color: AppColors.primary),
                 ),
               );
             }
@@ -218,22 +225,22 @@ class _FeedScreenState extends State<FeedScreen> {
                 margin: const EdgeInsets.all(16),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1A1F26),
+                  color: AppColors.background,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFFF6B35)),
+                  border: Border.all(color: AppColors.primary),
                 ),
                 child: Column(
                   children: [
                     const Icon(
                       Icons.error_outline,
-                      color: Color(0xFFFF6B35),
+                      color: AppColors.primary,
                       size: 32,
                     ),
                     const SizedBox(height: 8),
                     Text(
                       _getUserFriendlyError(error),
                       style: const TextStyle(
-                        color: Color(0xFFB6C2D2),
+                        color: AppColors.textSecondary,
                         fontSize: 14,
                       ),
                       textAlign: TextAlign.center,
@@ -241,15 +248,12 @@ class _FeedScreenState extends State<FeedScreen> {
                     const SizedBox(height: 12),
                     TextButton(
                       onPressed: () {
-                        Provider.of<FeedProvider>(
-                          context,
-                          listen: false,
-                        )
+                        Provider.of<FeedProvider>(context, listen: false)
                           ..clearError()
                           ..loadMore();
                       },
                       style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFFFF6B35),
+                        foregroundColor: AppColors.primary,
                       ),
                       child: const Text('Retry'),
                     ),
@@ -261,11 +265,12 @@ class _FeedScreenState extends State<FeedScreen> {
 
           final post = posts[index];
           return Semantics(
-            label: 'Feed post in ${post.post.community.name} by '
+            label:
+                'Feed post in ${post.post.community.name} by '
                 '${post.post.author.displayName ?? post.post.author.handle}. '
                 '${post.post.title ?? ""}',
             button: true,
-            child: _PostCard(post: post),
+            child: PostCard(post: post, currentTime: currentTime),
           );
         },
       ),
@@ -295,183 +300,5 @@ class _FeedScreenState extends State<FeedScreen> {
 
     // Fallback to generic message for unknown errors
     return 'Something went wrong. Please try again';
-  }
-}
-
-class _PostCard extends StatelessWidget {
-
-  const _PostCard({required this.post});
-  final FeedViewPost post;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1F26),
-        border: Border(bottom: BorderSide(color: Color(0xFF2A2F36))),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Community and author info
-            Row(
-              children: [
-                // Community avatar placeholder
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF6B35),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Center(
-                    child: Text(
-                      post.post.community.name[0].toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'c/${post.post.community.name}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        'Posted by ${post.post.author.displayName ?? ''
-                        '${post.post.author.handle}'}',
-                        style: const TextStyle(
-                          color: Color(0xFFB6C2D2),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Post title
-            if (post.post.title != null) ...[
-              Text(
-                post.post.title!,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            // Embed (link preview)
-            if (post.post.embed?.external != null) ...[
-              _EmbedCard(embed: post.post.embed!.external!),
-              const SizedBox(height: 12),
-            ],
-
-            // Stats row
-            Row(
-              children: [
-                Icon(
-                  Icons.arrow_upward,
-                  size: 16,
-                  color: Colors.white.withValues(alpha: 0.6),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${post.post.stats.score}',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Icon(
-                  Icons.comment_outlined,
-                  size: 16,
-                  color: Colors.white.withValues(alpha: 0.6),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${post.post.stats.commentCount}',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmbedCard extends StatelessWidget {
-
-  const _EmbedCard({required this.embed});
-  final ExternalEmbed embed;
-
-  @override
-  Widget build(BuildContext context) {
-    // Only show image if thumbnail exists
-    if (embed.thumb == null) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF2A2F36)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: CachedNetworkImage(
-        imageUrl: embed.thumb!,
-        width: double.infinity,
-        height: 180,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
-              width: double.infinity,
-              height: 180,
-              color: const Color(0xFF1A1F26),
-              child: const Center(
-                child: CircularProgressIndicator(color: Color(0xFF484F58)),
-              ),
-            ),
-        errorWidget: (context, url, error) {
-          if (kDebugMode) {
-            debugPrint('❌ Image load error: $error');
-            debugPrint('URL: $url');
-          }
-          return Container(
-            width: double.infinity,
-            height: 180,
-            color: const Color(0xFF1A1F26),
-            child: const Icon(
-              Icons.broken_image,
-              color: Color(0xFF484F58),
-              size: 48,
-            ),
-          );
-        },
-      ),
-    );
   }
 }
