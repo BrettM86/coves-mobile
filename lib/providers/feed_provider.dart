@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import '../models/post.dart';
 import '../services/coves_api_service.dart';
@@ -12,11 +14,11 @@ import 'auth_provider.dart';
 /// tokens before each authenticated request (critical for atProto OAuth
 /// token rotation).
 class FeedProvider with ChangeNotifier {
-
   FeedProvider(this._authProvider, {CovesApiService? apiService}) {
     // Use injected service (for testing) or create new one (for production)
     // Pass token getter to API service for automatic fresh token retrieval
-    _apiService = apiService ??
+    _apiService =
+        apiService ??
         CovesApiService(tokenGetter: _authProvider.getAccessToken);
 
     // [P0 FIX] Listen to auth state changes and clear feed on sign-out
@@ -35,15 +37,14 @@ class FeedProvider with ChangeNotifier {
   void _onAuthChanged() {
     if (!_authProvider.isAuthenticated && _posts.isNotEmpty) {
       if (kDebugMode) {
-        debugPrint(
-          '🔒 Auth state changed to unauthenticated - clearing feed',
-        );
+        debugPrint('🔒 Auth state changed to unauthenticated - clearing feed');
       }
       reset();
       // Automatically load the public discover feed
       loadFeed(refresh: true);
     }
   }
+
   final AuthProvider _authProvider;
   late final CovesApiService _apiService;
 
@@ -59,6 +60,10 @@ class FeedProvider with ChangeNotifier {
   String _sort = 'hot';
   String? _timeframe;
 
+  // Time update mechanism for periodic UI refreshes
+  Timer? _timeUpdateTimer;
+  DateTime? _currentTime;
+
   // Getters
   List<FeedViewPost> get posts => _posts;
   bool get isLoading => _isLoading;
@@ -67,6 +72,42 @@ class FeedProvider with ChangeNotifier {
   bool get hasMore => _hasMore;
   String get sort => _sort;
   String? get timeframe => _timeframe;
+  DateTime? get currentTime => _currentTime;
+
+  /// Start periodic time updates for "time ago" strings
+  ///
+  /// Updates currentTime every minute to trigger UI rebuilds for
+  /// post timestamps. This ensures "5m ago" updates to "6m ago" without
+  /// requiring user interaction.
+  void startTimeUpdates() {
+    // Cancel existing timer if any
+    _timeUpdateTimer?.cancel();
+
+    // Update current time immediately
+    _currentTime = DateTime.now();
+    notifyListeners();
+
+    // Set up periodic updates (every minute)
+    _timeUpdateTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      _currentTime = DateTime.now();
+      notifyListeners();
+    });
+
+    if (kDebugMode) {
+      debugPrint('⏰ Started periodic time updates for feed timestamps');
+    }
+  }
+
+  /// Stop periodic time updates
+  void stopTimeUpdates() {
+    _timeUpdateTimer?.cancel();
+    _timeUpdateTimer = null;
+    _currentTime = null;
+
+    if (kDebugMode) {
+      debugPrint('⏰ Stopped periodic time updates');
+    }
+  }
 
   /// Load feed based on authentication state (business logic
   /// encapsulation)
@@ -79,6 +120,11 @@ class FeedProvider with ChangeNotifier {
       await fetchTimeline(refresh: refresh);
     } else {
       await fetchDiscover(refresh: refresh);
+    }
+
+    // Start time updates when feed is loaded
+    if (_posts.isNotEmpty && _timeUpdateTimer == null) {
+      startTimeUpdates();
     }
   }
 
@@ -206,6 +252,8 @@ class FeedProvider with ChangeNotifier {
 
   @override
   void dispose() {
+    // Stop time updates and cancel timer
+    stopTimeUpdates();
     // Remove auth listener to prevent memory leaks
     _authProvider.removeListener(_onAuthChanged);
     _apiService.dispose();
