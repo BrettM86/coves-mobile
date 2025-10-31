@@ -288,7 +288,7 @@ void main() {
       await tester.pumpWidget(createTestWidget());
 
       expect(find.text('c/test-community'), findsOneWidget);
-      expect(find.text('Posted by Test User'), findsOneWidget);
+      expect(find.text('@test.user'), findsOneWidget);
     });
 
     testWidgets('should call loadFeed on init', (tester) async {
@@ -338,20 +338,12 @@ FeedViewPost _createMockPost(String title) {
         handle: 'test.user',
         displayName: 'Test User',
       ),
-      community: CommunityRef(
-        did: 'did:plc:community',
-        name: 'test-community',
-      ),
+      community: CommunityRef(did: 'did:plc:community', name: 'test-community'),
       createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
       indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
       text: 'Test body',
       title: title,
-      stats: PostStats(
-        score: 42,
-        upvotes: 50,
-        downvotes: 8,
-        commentCount: 5,
-      ),
+      stats: PostStats(score: 42, upvotes: 50, downvotes: 8, commentCount: 5),
       facets: [],
     ),
   );

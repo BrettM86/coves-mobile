@@ -10,7 +10,6 @@ import 'feed_provider_test.mocks.dart';
 
 // Generate mocks
 @GenerateMocks([AuthProvider, CovesApiService])
-
 void main() {
   group('FeedProvider', () {
     late FeedProvider feedProvider;
@@ -201,9 +200,7 @@ void main() {
       });
 
       test('should set hasMore to false when no cursor', () async {
-        final response = TimelineResponse(
-          feed: [_createMockPost()],
-        );
+        final response = TimelineResponse(feed: [_createMockPost()]);
 
         when(
           mockApiService.getTimeline(
@@ -309,9 +306,7 @@ void main() {
       });
 
       test('should not load more if hasMore is false', () async {
-        final response = TimelineResponse(
-          feed: [_createMockPost()],
-        );
+        final response = TimelineResponse(feed: [_createMockPost()]);
 
         when(
           mockApiService.getTimeline(
@@ -439,20 +434,12 @@ FeedViewPost _createMockPost() {
         handle: 'test.user',
         displayName: 'Test User',
       ),
-      community: CommunityRef(
-        did: 'did:plc:community',
-        name: 'test-community',
-      ),
+      community: CommunityRef(did: 'did:plc:community', name: 'test-community'),
       createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
       indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
       text: 'Test body',
       title: 'Test Post',
-      stats: PostStats(
-        score: 42,
-        upvotes: 50,
-        downvotes: 8,
-        commentCount: 5,
-      ),
+      stats: PostStats(score: 42, upvotes: 50, downvotes: 8, commentCount: 5),
       facets: [],
     ),
   );
