@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'package:dio/dio.dart';
 import 'package:http/http.dart' as http;
 
+import '../dpop/fetch_dpop.dart';
 import '../errors/token_invalid_error.dart';
 import '../errors/token_revoked_error.dart';
 import '../oauth/oauth_server_agent.dart';
@@ -137,8 +139,8 @@ class OAuthSession {
   /// The session getter for retrieving and refreshing tokens
   final SessionGetterInterface sessionGetter;
 
-  /// HTTP client for making requests
-  final http.Client _httpClient;
+  /// Dio instance with DPoP interceptor for authenticated requests
+  final Dio _dio;
 
   /// Creates a new OAuth session.
   ///
@@ -146,13 +148,23 @@ class OAuthSession {
   /// - [server]: The OAuth server agent
   /// - [sub]: The subject (user's DID)
   /// - [sessionGetter]: The session getter for token management
-  /// - [httpClient]: Optional HTTP client (defaults to http.Client())
   OAuthSession({
     required this.server,
     required this.sub,
     required this.sessionGetter,
-    http.Client? httpClient,
-  }) : _httpClient = httpClient ?? http.Client();
+  }) : _dio = Dio() {
+    // Add DPoP interceptor for authenticated requests to resource servers
+    _dio.interceptors.add(
+      createDpopInterceptor(
+        DpopFetchWrapperOptions(
+          key: server.dpopKey,
+          nonces: server.dpopNonces,
+          sha256: server.runtime.sha256,
+          isAuthServer: false, // Resource server requests (PDS)
+        ),
+      ),
+    );
+  }
 
   /// Alias for [sub]
   AtprotoDid get did => sub;
@@ -257,10 +269,8 @@ class OAuthSession {
       'Authorization': initialAuth,
     };
 
-    // TODO: In later chunks, add DPoP header generation
-    // For now, just make the request with Authorization header
-
-    final initialResponse = await _makeRequest(
+    // Make request with DPoP - the interceptor will automatically add DPoP header
+    final initialResponse = await _makeDpopRequest(
       initialUrl,
       method: method,
       headers: initialHeaders,
@@ -291,7 +301,7 @@ class OAuthSession {
       'Authorization': finalAuth,
     };
 
-    final finalResponse = await _makeRequest(
+    final finalResponse = await _makeDpopRequest(
       finalUrl,
       method: method,
       headers: finalHeaders,
@@ -309,31 +319,60 @@ class OAuthSession {
     return finalResponse;
   }
 
-  /// Makes an HTTP request.
-  Future<http.Response> _makeRequest(
+  /// Makes an HTTP request with DPoP authentication.
+  ///
+  /// Uses Dio with DPoP interceptor which automatically adds:
+  /// - DPoP header with proof JWT
+  /// - Access token hash (ath) binding
+  ///
+  /// Throws [DioException] for network errors, timeouts, and cancellations.
+  Future<http.Response> _makeDpopRequest(
     Uri url, {
     required String method,
     Map<String, String>? headers,
     dynamic body,
   }) async {
-    final request = http.Request(method, url);
+    try {
+      // Make request with Dio - interceptor will add DPoP header
+      final response = await _dio.requestUri(
+        url,
+        options: Options(
+          method: method,
+          headers: headers,
+          responseType: ResponseType.bytes, // Get raw bytes for compatibility
+          validateStatus: (status) =>
+              true, // Don't throw on any status code
+        ),
+        data: body,
+      );
 
-    if (headers != null) {
-      request.headers.addAll(headers);
-    }
-
-    if (body != null) {
-      if (body is String) {
-        request.body = body;
-      } else if (body is List<int>) {
-        request.bodyBytes = body;
-      } else {
-        throw ArgumentError('Body must be String or List<int>');
+      // Convert Dio Response to http.Response for compatibility
+      return http.Response.bytes(
+        response.data as List<int>,
+        response.statusCode!,
+        headers: response.headers.map.map(
+          (key, value) => MapEntry(key, value.join(', ')),
+        ),
+        reasonPhrase: response.statusMessage,
+      );
+    } on DioException catch (e) {
+      // If we have a response (4xx/5xx), convert it to http.Response
+      if (e.response != null) {
+        final errorResponse = e.response!;
+        return http.Response.bytes(
+          errorResponse.data is List<int>
+              ? errorResponse.data as List<int>
+              : (errorResponse.data?.toString() ?? '').codeUnits,
+          errorResponse.statusCode!,
+          headers: errorResponse.headers.map.map(
+            (key, value) => MapEntry(key, value.join(', ')),
+          ),
+          reasonPhrase: errorResponse.statusMessage,
+        );
       }
+      // Network errors, timeouts, cancellations - rethrow
+      rethrow;
     }
-
-    final streamedResponse = await _httpClient.send(request);
-    return await http.Response.fromStream(streamedResponse);
   }
 
   /// Checks if a response indicates an invalid token.
@@ -352,6 +391,6 @@ class OAuthSession {
 
   /// Disposes of resources used by this session.
   void dispose() {
-    _httpClient.close();
+    _dio.close();
   }
 }
