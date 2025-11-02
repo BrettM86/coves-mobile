@@ -1,5 +1,7 @@
 import 'package:atproto_oauth_flutter/atproto_oauth_flutter.dart';
 
+import 'environment_config.dart';
+
 /// OAuth Configuration for atProto
 ///
 /// This configuration provides ClientMetadata for the new
@@ -19,9 +21,8 @@ class OAuthConfig {
       'dev.workers.brettmay0212.lingering-darkness-50a6';
 
   // API Configuration
-  // Using adb reverse port forwarding, phone can access via localhost
-  // Setup: adb reverse tcp:8081 tcp:8081
-  static const String apiUrl = 'http://localhost:8081';
+  // Environment-aware API URL
+  static String get apiUrl => EnvironmentConfig.current.apiUrl;
 
   // Derived OAuth URLs
   static const String clientId = '$oauthServerUrl/client-metadata.json';

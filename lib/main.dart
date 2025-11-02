@@ -7,9 +7,11 @@ import 'package:provider/provider.dart';
 import 'config/oauth_config.dart';
 import 'providers/auth_provider.dart';
 import 'providers/feed_provider.dart';
+import 'providers/vote_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/main_shell_screen.dart';
 import 'screens/landing_screen.dart';
+import 'services/vote_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,11 +28,25 @@ void main() async {
   final authProvider = AuthProvider();
   await authProvider.initialize();
 
+  // Initialize vote service with auth callbacks for direct PDS writes
+  // Uses DPoP authentication (not Bearer tokens!)
+  final voteService = VoteService(
+    sessionGetter: () async => authProvider.session,
+    didGetter: () => authProvider.did,
+    pdsUrlGetter: authProvider.getPdsUrl,
+  );
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider(create: (_) => FeedProvider(authProvider)),
+        ChangeNotifierProvider(
+          create: (_) => VoteProvider(
+            voteService: voteService,
+            authProvider: authProvider,
+          ),
+        ),
       ],
       child: const CovesApp(),
     ),

@@ -4,9 +4,58 @@
 /// This allows better error handling and user-friendly error messages.
 library;
 
+import 'package:dio/dio.dart';
+
 /// Base class for all API exceptions
 class ApiException implements Exception {
   ApiException(this.message, {this.statusCode, this.originalError});
+
+  /// Create ApiException from DioException
+  factory ApiException.fromDioError(DioException error) {
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return NetworkException(
+          'Request timeout. Please check your connection.',
+          originalError: error,
+        );
+      case DioExceptionType.badResponse:
+        final statusCode = error.response?.statusCode;
+        final message =
+            error.response?.data?['message'] as String? ??
+            error.response?.data?['error'] as String? ??
+            'Server error';
+
+        if (statusCode == 401) {
+          return AuthenticationException(message, originalError: error);
+        } else if (statusCode == 404) {
+          return NotFoundException(message, originalError: error);
+        } else if (statusCode != null && statusCode >= 500) {
+          return ServerException(
+            message,
+            statusCode: statusCode,
+            originalError: error,
+          );
+        }
+        return ApiException(
+          message,
+          statusCode: statusCode,
+          originalError: error,
+        );
+      case DioExceptionType.cancel:
+        return ApiException('Request was cancelled', originalError: error);
+      case DioExceptionType.connectionError:
+        return NetworkException(
+          'Connection failed. Please check your internet.',
+          originalError: error,
+        );
+      case DioExceptionType.badCertificate:
+        return NetworkException('SSL certificate error', originalError: error);
+      case DioExceptionType.unknown:
+        return NetworkException('Network error occurred', originalError: error);
+    }
+  }
   final String message;
   final int? statusCode;
   final dynamic originalError;

@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+import '../config/environment_config.dart';
+
 /// PDS Discovery Service
 ///
 /// Handles the resolution of atProto handles to their Personal Data
@@ -8,12 +10,16 @@ import 'package:dio/dio.dart';
 /// redirect them to THEIR PDS's OAuth server.
 ///
 /// Flow:
-/// 1. Resolve handle to DID using a handle resolver (bsky.social)
+/// 1. Resolve handle to DID using a handle resolver
 /// 2. Fetch the DID document from the PLC directory
 /// 3. Extract the PDS endpoint from the service array
 /// 4. Return the PDS URL for OAuth discovery
 class PDSDiscoveryService {
+  PDSDiscoveryService({EnvironmentConfig? config})
+      : _config = config ?? EnvironmentConfig.current;
+
   final Dio _dio = Dio();
+  final EnvironmentConfig _config;
 
   /// Discover the PDS URL for a given atProto handle
   ///
@@ -41,12 +47,11 @@ class PDSDiscoveryService {
 
   /// Resolve an atProto handle to a DID
   ///
-  /// Uses Bluesky's public resolver which can resolve ANY atProto handle,
-  /// not just bsky.social handles.
+  /// Uses configured handle resolver (production: Bluesky, local: your PDS)
   Future<String> _resolveHandle(String handle) async {
     try {
       final response = await _dio.get(
-        'https://bsky.social/xrpc/com.atproto.identity.resolveHandle',
+        _config.handleResolverUrl,
         queryParameters: {'handle': handle},
       );
 
@@ -68,7 +73,7 @@ class PDSDiscoveryService {
   /// Fetch a DID document from the PLC directory
   Future<Map<String, dynamic>> _fetchDIDDocument(String did) async {
     try {
-      final response = await _dio.get('https://plc.directory/$did');
+      final response = await _dio.get('${_config.plcDirectoryUrl}/$did');
 
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch DID document: ${response.statusCode}');

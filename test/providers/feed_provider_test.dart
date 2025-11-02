@@ -299,6 +299,22 @@ void main() {
       });
 
       test('should not load more if already loading', () async {
+        when(mockAuthProvider.isAuthenticated).thenReturn(true);
+
+        final response = TimelineResponse(
+          feed: [_createMockPost()],
+          cursor: 'cursor-1',
+        );
+
+        when(
+          mockApiService.getTimeline(
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+          ),
+        ).thenAnswer((_) async => response);
+
         await feedProvider.fetchTimeline(refresh: true);
         await feedProvider.loadMore();
 

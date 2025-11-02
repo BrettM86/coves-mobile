@@ -71,6 +71,20 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  /// Get the user's PDS URL
+  ///
+  /// Returns the URL of the user's Personal Data Server from the OAuth session.
+  /// This is needed for direct XRPC calls to the PDS (e.g., createRecord).
+  ///
+  /// The PDS URL is stored in serverMetadata['issuer'] from the OAuth session.
+  String? getPdsUrl() {
+    if (_session == null) {
+      return null;
+    }
+
+    return _session!.serverMetadata['issuer'] as String?;
+  }
+
   /// Initialize the provider and restore any existing session
   ///
   /// This is called on app startup to:

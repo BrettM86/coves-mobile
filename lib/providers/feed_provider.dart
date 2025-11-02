@@ -21,6 +21,9 @@ class FeedProvider with ChangeNotifier {
         apiService ??
         CovesApiService(tokenGetter: _authProvider.getAccessToken);
 
+    // Track initial auth state
+    _wasAuthenticated = _authProvider.isAuthenticated;
+
     // [P0 FIX] Listen to auth state changes and clear feed on sign-out
     // This prevents privacy bug where logged-out users see their private
     // timeline until they manually refresh.
@@ -29,24 +32,31 @@ class FeedProvider with ChangeNotifier {
 
   /// Handle authentication state changes
   ///
-  /// When the user signs out (isAuthenticated becomes false),
-  /// immediately clear the feed to prevent showing personalized content
-  /// to logged-out users. This fixes a privacy bug where token refresh
-  /// failures would sign out the user but leave their private timeline
-  /// visible until manual refresh.
+  /// Only clears and reloads feed when transitioning from authenticated
+  /// to unauthenticated (actual sign-out), not when staying unauthenticated
+  /// (e.g., failed sign-in attempt). This prevents unnecessary API calls.
   void _onAuthChanged() {
-    if (!_authProvider.isAuthenticated && _posts.isNotEmpty) {
+    final isAuthenticated = _authProvider.isAuthenticated;
+
+    // Only reload if transitioning from authenticated → unauthenticated
+    if (_wasAuthenticated && !isAuthenticated && _posts.isNotEmpty) {
       if (kDebugMode) {
-        debugPrint('🔒 Auth state changed to unauthenticated - clearing feed');
+        debugPrint('🔒 User signed out - clearing feed');
       }
       reset();
       // Automatically load the public discover feed
       loadFeed(refresh: true);
     }
+
+    // Update tracked state
+    _wasAuthenticated = isAuthenticated;
   }
 
   final AuthProvider _authProvider;
   late final CovesApiService _apiService;
+
+  // Track previous auth state to detect transitions
+  bool _wasAuthenticated = false;
 
   // Feed state
   List<FeedViewPost> _posts = [];
