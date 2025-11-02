@@ -1,13 +1,18 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
 import '../models/post.dart';
+import '../providers/auth_provider.dart';
+import '../providers/vote_provider.dart';
 import '../utils/date_time_utils.dart';
 import 'icons/animated_heart_icon.dart';
 import 'icons/reply_icon.dart';
 import 'icons/share_icon.dart';
+import 'sign_in_dialog.dart';
 
 /// Post card widget for displaying feed posts
 ///
@@ -21,18 +26,11 @@ import 'icons/share_icon.dart';
 /// time-ago calculations, enabling:
 /// - Periodic updates of time strings
 /// - Deterministic testing without DateTime.now()
-class PostCard extends StatefulWidget {
+class PostCard extends StatelessWidget {
   const PostCard({required this.post, this.currentTime, super.key});
 
   final FeedViewPost post;
   final DateTime? currentTime;
-
-  @override
-  State<PostCard> createState() => _PostCardState();
-}
-
-class _PostCardState extends State<PostCard> {
-  bool _isLiked = false;
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +58,7 @@ class _PostCardState extends State<PostCard> {
                   ),
                   child: Center(
                     child: Text(
-                      widget.post.post.community.name[0].toUpperCase(),
+                      post.post.community.name[0].toUpperCase(),
                       style: const TextStyle(
                         color: AppColors.textPrimary,
                         fontSize: 12,
@@ -75,7 +73,7 @@ class _PostCardState extends State<PostCard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'c/${widget.post.post.community.name}',
+                        'c/${post.post.community.name}',
                         style: const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 14,
@@ -83,7 +81,7 @@ class _PostCardState extends State<PostCard> {
                         ),
                       ),
                       Text(
-                        '@${widget.post.post.author.handle}',
+                        '@${post.post.author.handle}',
                         style: const TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12,
@@ -95,8 +93,8 @@ class _PostCardState extends State<PostCard> {
                 // Time ago
                 Text(
                   DateTimeUtils.formatTimeAgo(
-                    widget.post.post.createdAt,
-                    currentTime: widget.currentTime,
+                    post.post.createdAt,
+                    currentTime: currentTime,
                   ),
                   style: TextStyle(
                     color: AppColors.textPrimary.withValues(alpha: 0.5),
@@ -108,9 +106,9 @@ class _PostCardState extends State<PostCard> {
             const SizedBox(height: 8),
 
             // Post title
-            if (widget.post.post.title != null) ...[
+            if (post.post.title != null) ...[
               Text(
-                widget.post.post.title!,
+                post.post.title!,
                 style: const TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 16,
@@ -120,19 +118,19 @@ class _PostCardState extends State<PostCard> {
             ],
 
             // Spacing after title (only if we have content below)
-            if (widget.post.post.title != null &&
-                (widget.post.post.embed?.external != null ||
-                    widget.post.post.text.isNotEmpty))
+            if (post.post.title != null &&
+                (post.post.embed?.external != null ||
+                    post.post.text.isNotEmpty))
               const SizedBox(height: 8),
 
             // Embed (link preview)
-            if (widget.post.post.embed?.external != null) ...[
-              _EmbedCard(embed: widget.post.post.embed!.external!),
+            if (post.post.embed?.external != null) ...[
+              _EmbedCard(embed: post.post.embed!.external!),
               const SizedBox(height: 8),
             ],
 
             // Post text body preview
-            if (widget.post.post.text.isNotEmpty) ...[
+            if (post.post.text.isNotEmpty) ...[
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
@@ -140,7 +138,7 @@ class _PostCardState extends State<PostCard> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  widget.post.post.text,
+                  post.post.text,
                   style: TextStyle(
                     color: AppColors.textPrimary.withValues(alpha: 0.7),
                     fontSize: 13,
@@ -174,7 +172,6 @@ class _PostCardState extends State<PostCard> {
                       vertical: 10,
                     ),
                     child: ShareIcon(
-                      size: 18,
                       color: AppColors.textPrimary.withValues(alpha: 0.6),
                     ),
                   ),
@@ -199,13 +196,12 @@ class _PostCardState extends State<PostCard> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         ReplyIcon(
-                          size: 18,
                           color: AppColors.textPrimary.withValues(alpha: 0.6),
                         ),
                         const SizedBox(width: 5),
                         Text(
                           DateTimeUtils.formatCount(
-                            widget.post.post.stats.commentCount,
+                            post.post.stats.commentCount,
                           ),
                           style: TextStyle(
                             color: AppColors.textPrimary.withValues(alpha: 0.6),
@@ -219,42 +215,75 @@ class _PostCardState extends State<PostCard> {
                 const SizedBox(width: 8),
 
                 // Heart button
-                InkWell(
-                  onTap: () {
-                    setState(() {
-                      _isLiked = !_isLiked;
-                    });
-                    // TODO: Handle upvote/like interaction with backend
-                    if (kDebugMode) {
-                      debugPrint('Heart button tapped for post');
-                    }
+                Consumer<VoteProvider>(
+                  builder: (context, voteProvider, child) {
+                    final isLiked = voteProvider.isLiked(post.post.uri);
+
+                    return InkWell(
+                      onTap: () async {
+                        // Check authentication
+                        final authProvider = context.read<AuthProvider>();
+                        if (!authProvider.isAuthenticated) {
+                          // Show sign-in dialog
+                          final shouldSignIn = await SignInDialog.show(
+                            context,
+                            message: 'You need to sign in to like posts.',
+                          );
+
+                          if ((shouldSignIn ?? false) && context.mounted) {
+                            // TODO: Navigate to sign-in screen
+                            if (kDebugMode) {
+                              debugPrint('Navigate to sign-in screen');
+                            }
+                          }
+                          return;
+                        }
+
+                        // Light haptic feedback on both like and unlike
+                        await HapticFeedback.lightImpact();
+
+                        // Toggle vote with optimistic update
+                        try {
+                          await voteProvider.toggleVote(
+                            postUri: post.post.uri,
+                            postCid: post.post.cid,
+                          );
+                        } on Exception catch (e) {
+                          if (kDebugMode) {
+                            debugPrint('Failed to toggle vote: $e');
+                          }
+                          // TODO: Show error snackbar
+                        }
+                      },
+                      child: Padding(
+                        // Increased padding for better touch targets
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AnimatedHeartIcon(
+                              isLiked: isLiked,
+                              color: AppColors.textPrimary
+                                  .withValues(alpha: 0.6),
+                              likedColor: const Color(0xFFFF0033),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              DateTimeUtils.formatCount(post.post.stats.score),
+                              style: TextStyle(
+                                color: AppColors.textPrimary
+                                    .withValues(alpha: 0.6),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
                   },
-                  child: Padding(
-                    // Increased padding for better touch targets
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedHeartIcon(
-                          isLiked: _isLiked,
-                          size: 18,
-                          color: AppColors.textPrimary.withValues(alpha: 0.6),
-                          likedColor: const Color(0xFFFF0033), // Bright red
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          DateTimeUtils.formatCount(widget.post.post.stats.score),
-                          style: TextStyle(
-                            color: AppColors.textPrimary.withValues(alpha: 0.6),
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
               ],
             ),

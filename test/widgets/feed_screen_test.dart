@@ -1,7 +1,9 @@
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/feed_provider.dart';
+import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/feed_screen.dart';
+import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -24,6 +26,29 @@ class FakeAuthProvider extends AuthProvider {
 
   void setLoading({required bool value}) {
     _isLoading = value;
+    notifyListeners();
+  }
+}
+
+// Fake VoteProvider for testing
+class FakeVoteProvider extends VoteProvider {
+  FakeVoteProvider()
+      : super(
+          voteService: VoteService(
+            sessionGetter: () async => null,
+            didGetter: () => null,
+            pdsUrlGetter: () => null,
+          ),
+          authProvider: FakeAuthProvider(),
+        );
+
+  final Map<String, bool> _likes = {};
+
+  @override
+  bool isLiked(String postUri) => _likes[postUri] ?? false;
+
+  void setLiked(String postUri, bool value) {
+    _likes[postUri] = value;
     notifyListeners();
   }
 }
@@ -103,10 +128,12 @@ void main() {
   group('FeedScreen Widget Tests', () {
     late FakeAuthProvider fakeAuthProvider;
     late FakeFeedProvider fakeFeedProvider;
+    late FakeVoteProvider fakeVoteProvider;
 
     setUp(() {
       fakeAuthProvider = FakeAuthProvider();
       fakeFeedProvider = FakeFeedProvider();
+      fakeVoteProvider = FakeVoteProvider();
     });
 
     Widget createTestWidget() {
@@ -114,6 +141,7 @@ void main() {
         providers: [
           ChangeNotifierProvider<AuthProvider>.value(value: fakeAuthProvider),
           ChangeNotifierProvider<FeedProvider>.value(value: fakeFeedProvider),
+          ChangeNotifierProvider<VoteProvider>.value(value: fakeVoteProvider),
         ],
         child: const MaterialApp(home: FeedScreen()),
       );
