@@ -145,6 +145,9 @@ class VoteService {
   /// Find existing vote for a post
   ///
   /// Queries the user's PDS to check if they've already voted on this post.
+  /// Uses cursor-based pagination to search through all vote records, not just
+  /// the first 100. This prevents duplicate votes when users have voted on
+  /// more than 100 posts.
   ///
   /// Returns ExistingVote with direction and rkey if found, null otherwise.
   Future<ExistingVote?> _findExistingVote({
@@ -157,53 +160,63 @@ class VoteService {
         return null;
       }
 
-      // Query listRecords to find votes using session's fetchHandler
-      final response = await session.fetchHandler(
-        '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=100&reverse=true',
-        method: 'GET',
-      );
+      // Paginate through all vote records using cursor
+      String? cursor;
+      const pageSize = 100;
 
-      if (response.statusCode != 200) {
-        if (kDebugMode) {
-          debugPrint('⚠️  Failed to list votes: ${response.statusCode}');
-        }
-        return null;
-      }
+      do {
+        // Build URL with cursor if available
+        final url = cursor == null
+            ? '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=$pageSize&reverse=true'
+            : '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=$pageSize&reverse=true&cursor=$cursor';
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final records = data['records'] as List<dynamic>?;
-      if (records == null || records.isEmpty) {
-        return null;
-      }
+        final response = await session.fetchHandler(url, method: 'GET');
 
-      // Find vote for this specific post
-      for (final record in records) {
-        final recordMap = record as Map<String, dynamic>;
-        final value = recordMap['value'] as Map<String, dynamic>?;
-
-        if (value == null) {
-          continue;
+        if (response.statusCode != 200) {
+          if (kDebugMode) {
+            debugPrint('⚠️  Failed to list votes: ${response.statusCode}');
+          }
+          return null;
         }
 
-        final subject = value['subject'] as Map<String, dynamic>?;
-        if (subject == null) {
-          continue;
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final records = data['records'] as List<dynamic>?;
+
+        // Search current page for matching vote
+        if (records != null) {
+          for (final record in records) {
+            final recordMap = record as Map<String, dynamic>;
+            final value = recordMap['value'] as Map<String, dynamic>?;
+
+            if (value == null) {
+              continue;
+            }
+
+            final subject = value['subject'] as Map<String, dynamic>?;
+            if (subject == null) {
+              continue;
+            }
+
+            final subjectUri = subject['uri'] as String?;
+            if (subjectUri == postUri) {
+              // Found existing vote!
+              final direction = value['direction'] as String;
+              final uri = recordMap['uri'] as String;
+
+              // Extract rkey from URI
+              // Format: at://did:plc:xyz/social.coves.interaction.vote/3kby...
+              final rkey = uri.split('/').last;
+
+              return ExistingVote(direction: direction, rkey: rkey);
+            }
+          }
         }
 
-        final subjectUri = subject['uri'] as String?;
-        if (subjectUri == postUri) {
-          // Found existing vote!
-          final direction = value['direction'] as String;
-          final uri = recordMap['uri'] as String;
+        // Get cursor for next page
+        cursor = data['cursor'] as String?;
+      } while (cursor != null);
 
-          // Extract rkey from URI
-          // Format: at://did:plc:xyz/social.coves.interaction.vote/3kby...
-          final rkey = uri.split('/').last;
-
-          return ExistingVote(direction: direction, rkey: rkey);
-        }
-      }
-
+      // Vote not found after searching all pages
       return null;
     } catch (e) {
       if (kDebugMode) {
