@@ -84,7 +84,7 @@ class MockOAuthService extends _i1.Mock implements _i5.OAuthService {
   @override
   _i6.Future<_i2.OAuthSession?> restoreSession(
     String? did, {
-    dynamic refresh = 'auto',
+    String? refresh = 'auto',
   }) =>
       (super.noSuchMethod(
             Invocation.method(#restoreSession, [did], {#refresh: refresh}),

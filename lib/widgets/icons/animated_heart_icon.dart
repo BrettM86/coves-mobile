@@ -121,7 +121,7 @@ class _AnimatedHeartIconState extends State<AnimatedHeartIcon>
       _hasBeenToggled = true;
       _previousIsLiked = widget.isLiked;
 
-      if (widget.isLiked) {
+      if (widget.isLiked && mounted) {
         _controller.forward(from: 0);
       }
     }
@@ -134,7 +134,9 @@ class _AnimatedHeartIconState extends State<AnimatedHeartIcon>
   }
 
   double _getHeartScale() {
-    if (!widget.isLiked || !_hasBeenToggled) return 1;
+    if (!widget.isLiked || !_hasBeenToggled) {
+      return 1;
+    }
 
     final progress = _controller.value;
     if (progress < 0.15) {
@@ -233,7 +235,7 @@ class _AnimatedHeartIconState extends State<AnimatedHeartIcon>
     final particles = <Widget>[];
     final containerSize = widget.size * 2.5;
 
-    for (int i = 0; i < particleCount; i++) {
+    for (var i = 0; i < particleCount; i++) {
       final angle = (2 * math.pi * i) / particleCount;
       final distance = widget.size * 1 * _particleScaleAnimation.value;
       final dx = math.cos(angle) * distance;
@@ -283,36 +285,37 @@ class _HeartIconPainter extends CustomPainter {
 
     if (filled) {
       // Filled heart path from Bluesky
-      path.moveTo(12.489, 21.372);
-      path.cubicTo(21.017, 16.592, 23.115, 10.902, 21.511, 6.902);
-      path.cubicTo(20.732, 4.961, 19.097, 3.569, 17.169, 3.139);
-      path.cubicTo(15.472, 2.761, 13.617, 3.142, 12, 4.426);
-      path.cubicTo(10.383, 3.142, 8.528, 2.761, 6.83, 3.139);
-      path.cubicTo(4.903, 3.569, 3.268, 4.961, 2.49, 6.903);
-      path.cubicTo(0.885, 10.903, 2.983, 16.593, 11.511, 21.373);
-      path.cubicTo(11.826, 21.558, 12.174, 21.558, 12.489, 21.372);
-      path.close();
+      path
+        ..moveTo(12.489, 21.372)
+        ..cubicTo(21.017, 16.592, 23.115, 10.902, 21.511, 6.902)
+        ..cubicTo(20.732, 4.961, 19.097, 3.569, 17.169, 3.139)
+        ..cubicTo(15.472, 2.761, 13.617, 3.142, 12, 4.426)
+        ..cubicTo(10.383, 3.142, 8.528, 2.761, 6.83, 3.139)
+        ..cubicTo(4.903, 3.569, 3.268, 4.961, 2.49, 6.903)
+        ..cubicTo(0.885, 10.903, 2.983, 16.593, 11.511, 21.373)
+        ..cubicTo(11.826, 21.558, 12.174, 21.558, 12.489, 21.372)
+        ..close();
     } else {
       // Outline heart path from Bluesky
-      path.moveTo(16.734, 5.091);
-      path.cubicTo(15.496, 4.815, 14.026, 5.138, 12.712, 6.471);
-      path.cubicTo(12.318, 6.865, 11.682, 6.865, 11.288, 6.471);
-      path.cubicTo(9.974, 5.137, 8.504, 4.814, 7.266, 5.09);
-      path.cubicTo(6.003, 5.372, 4.887, 6.296, 4.346, 7.646);
-      path.cubicTo(3.33, 10.18, 4.252, 14.84, 12, 19.348);
-      path.cubicTo(19.747, 14.84, 20.67, 10.18, 19.654, 7.648);
-      path.cubicTo(19.113, 6.297, 17.997, 5.373, 16.734, 5.091);
-      path.close();
-
-      path.moveTo(21.511, 6.903);
-      path.cubicTo(23.115, 10.903, 21.017, 16.593, 12.489, 21.373);
-      path.cubicTo(12.174, 21.558, 11.826, 21.558, 11.511, 21.373);
-      path.cubicTo(2.983, 16.592, 0.885, 10.902, 2.49, 6.902);
-      path.cubicTo(3.269, 4.96, 4.904, 3.568, 6.832, 3.138);
-      path.cubicTo(8.529, 2.76, 10.384, 3.141, 12.001, 4.424);
-      path.cubicTo(13.618, 3.141, 15.473, 2.76, 17.171, 3.138);
-      path.cubicTo(19.098, 3.568, 20.733, 4.96, 21.511, 6.903);
-      path.close();
+      path
+        ..moveTo(16.734, 5.091)
+        ..cubicTo(15.496, 4.815, 14.026, 5.138, 12.712, 6.471)
+        ..cubicTo(12.318, 6.865, 11.682, 6.865, 11.288, 6.471)
+        ..cubicTo(9.974, 5.137, 8.504, 4.814, 7.266, 5.09)
+        ..cubicTo(6.003, 5.372, 4.887, 6.296, 4.346, 7.646)
+        ..cubicTo(3.33, 10.18, 4.252, 14.84, 12, 19.348)
+        ..cubicTo(19.747, 14.84, 20.67, 10.18, 19.654, 7.648)
+        ..cubicTo(19.113, 6.297, 17.997, 5.373, 16.734, 5.091)
+        ..close()
+        ..moveTo(21.511, 6.903)
+        ..cubicTo(23.115, 10.903, 21.017, 16.593, 12.489, 21.373)
+        ..cubicTo(12.174, 21.558, 11.826, 21.558, 11.511, 21.373)
+        ..cubicTo(2.983, 16.592, 0.885, 10.902, 2.49, 6.902)
+        ..cubicTo(3.269, 4.96, 4.904, 3.568, 6.832, 3.138)
+        ..cubicTo(8.529, 2.76, 10.384, 3.141, 12.001, 4.424)
+        ..cubicTo(13.618, 3.141, 15.473, 2.76, 17.171, 3.138)
+        ..cubicTo(19.098, 3.568, 20.733, 4.96, 21.511, 6.903)
+        ..close();
     }
 
     canvas.drawPath(path, paint);

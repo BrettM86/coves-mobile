@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:atproto_oauth_flutter/atproto_oauth_flutter.dart';
 import 'package:flutter/foundation.dart';
+import '../config/environment_config.dart';
 import '../config/oauth_config.dart';
 
 /// OAuth Service for atProto authentication using the new
@@ -43,9 +44,16 @@ class OAuthService {
   /// - Automatic session management
   Future<void> initialize() async {
     try {
+      // Get environment configuration
+      final config = EnvironmentConfig.current;
+
       // Create client with metadata from config
+      // For local development, use custom resolvers
       _client = FlutterOAuthClient(
         clientMetadata: OAuthConfig.createClientMetadata(),
+        plcDirectoryUrl: config.plcDirectoryUrl,
+        handleResolverUrl: config.handleResolverUrl,
+        allowHttp: config.isLocal, // Allow HTTP for local development
       );
 
       // Set up session event listeners
@@ -53,9 +61,13 @@ class OAuthService {
 
       if (kDebugMode) {
         print('✅ FlutterOAuthClient initialized');
+        print('   Environment: ${config.environment}');
         print('   Client ID: ${OAuthConfig.clientId}');
         print('   Redirect URI: ${OAuthConfig.customSchemeCallback}');
         print('   Scope: ${OAuthConfig.scope}');
+        print('   Handle Resolver: ${config.handleResolverUrl}');
+        print('   PLC Directory: ${config.plcDirectoryUrl}');
+        print('   Allow HTTP: ${config.isLocal}');
       }
     } catch (e) {
       if (kDebugMode) {
