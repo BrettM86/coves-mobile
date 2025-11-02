@@ -1,5 +1,6 @@
+import 'dart:convert';
+
 import 'package:atproto_oauth_flutter/atproto_oauth_flutter.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import 'api_exceptions.dart';
@@ -22,15 +23,13 @@ import 'api_exceptions.dart';
 /// - com.atproto.repo.deleteRecord (delete vote)
 /// - com.atproto.repo.listRecords (find existing votes)
 ///
-/// **DPoP Authentication TODO**:
+/// **DPoP Authentication**:
 /// atProto PDSs require DPoP (Demonstrating Proof of Possession) authentication.
-/// The current implementation uses a placeholder that will not work with real PDSs.
-/// This needs to be implemented using OAuthSession's DPoP capabilities once
-/// available in the atproto_oauth_flutter package.
-///
-/// Required for production:
+/// Uses OAuthSession.fetchHandler which automatically handles:
 /// - Authorization: DPoP <access_token>
 /// - DPoP: <proof> (signed JWT proving key possession)
+/// - Automatic token refresh on expiry
+/// - Nonce management for replay protection
 class VoteService {
   VoteService({
     Future<OAuthSession?> Function()? sessionGetter,
@@ -38,49 +37,8 @@ class VoteService {
     String? Function()? pdsUrlGetter,
   })  : _sessionGetter = sessionGetter,
         _didGetter = didGetter,
-        _pdsUrlGetter = pdsUrlGetter {
-    _dio = Dio(
-      BaseOptions(
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
-        headers: {'Content-Type': 'application/json'},
-      ),
-    );
+        _pdsUrlGetter = pdsUrlGetter;
 
-    // TODO: Add DPoP auth interceptor
-    // atProto PDSs require DPoP authentication, not Bearer tokens
-    // This needs implementation using OAuthSession's DPoP support
-    _dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          // PLACEHOLDER: This does not implement DPoP authentication
-          // and will fail on real PDSs with "Malformed token" errors
-          if (_sessionGetter != null) {
-            final session = await _sessionGetter();
-            if (session != null) {
-              // TODO: Generate DPoP proof and set headers:
-              // options.headers['Authorization'] = 'DPoP ${session.accessToken}';
-              // options.headers['DPoP'] = dpopProof;
-              if (kDebugMode) {
-                debugPrint('⚠️  DPoP authentication not yet implemented');
-              }
-            }
-          }
-          handler.next(options);
-        },
-        onError: (error, handler) {
-          if (kDebugMode) {
-            debugPrint('❌ PDS API Error: ${error.message}');
-            debugPrint('   Status: ${error.response?.statusCode}');
-            debugPrint('   Data: ${error.response?.data}');
-          }
-          handler.next(error);
-        },
-      ),
-    );
-  }
-
-  late final Dio _dio;
   final Future<OAuthSession?> Function()? _sessionGetter;
   final String? Function()? _didGetter;
   final String? Function()? _pdsUrlGetter;
@@ -136,7 +94,6 @@ class VoteService {
       // Step 1: Check for existing vote
       final existingVote = await _findExistingVote(
         userDid: userDid,
-        pdsUrl: pdsUrl,
         postUri: postUri,
       );
 
@@ -152,7 +109,6 @@ class VoteService {
           }
           await _deleteVote(
             userDid: userDid,
-            pdsUrl: pdsUrl,
             rkey: existingVote.rkey,
           );
           return const VoteResponse(deleted: true);
@@ -164,7 +120,6 @@ class VoteService {
         }
         await _deleteVote(
           userDid: userDid,
-          pdsUrl: pdsUrl,
           rkey: existingVote.rkey,
         );
       }
@@ -172,7 +127,6 @@ class VoteService {
       // Step 2: Create new vote
       final response = await _createVote(
         userDid: userDid,
-        pdsUrl: pdsUrl,
         postUri: postUri,
         postCid: postCid,
         direction: direction,
@@ -183,8 +137,6 @@ class VoteService {
       }
 
       return response;
-    } on DioException catch (e) {
-      throw ApiException.fromDioError(e);
     } catch (e) {
       throw ApiException('Failed to create vote: $e');
     }
@@ -197,26 +149,29 @@ class VoteService {
   /// Returns ExistingVote with direction and rkey if found, null otherwise.
   Future<ExistingVote?> _findExistingVote({
     required String userDid,
-    required String pdsUrl,
     required String postUri,
   }) async {
     try {
-      // Query listRecords to find votes
-      final response = await _dio.get<Map<String, dynamic>>(
-        '$pdsUrl/xrpc/com.atproto.repo.listRecords',
-        queryParameters: {
-          'repo': userDid,
-          'collection': voteCollection,
-          'limit': 100,
-          'reverse': true, // Most recent first
-        },
-      );
-
-      if (response.data == null) {
+      final session = await _sessionGetter?.call();
+      if (session == null) {
         return null;
       }
 
-      final records = response.data!['records'] as List<dynamic>?;
+      // Query listRecords to find votes using session's fetchHandler
+      final response = await session.fetchHandler(
+        '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=100&reverse=true',
+        method: 'GET',
+      );
+
+      if (response.statusCode != 200) {
+        if (kDebugMode) {
+          debugPrint('⚠️  Failed to list votes: ${response.statusCode}');
+        }
+        return null;
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final records = data['records'] as List<dynamic>?;
       if (records == null || records.isEmpty) {
         return null;
       }
@@ -250,9 +205,9 @@ class VoteService {
       }
 
       return null;
-    } on DioException catch (e) {
+    } catch (e) {
       if (kDebugMode) {
-        debugPrint('⚠️  Failed to list votes: ${e.message}');
+        debugPrint('⚠️  Failed to list votes: $e');
       }
       // Return null on error - assume no existing vote
       return null;
@@ -264,11 +219,15 @@ class VoteService {
   /// Calls com.atproto.repo.createRecord with the vote record.
   Future<VoteResponse> _createVote({
     required String userDid,
-    required String pdsUrl,
     required String postUri,
     required String postCid,
     required String direction,
   }) async {
+    final session = await _sessionGetter?.call();
+    if (session == null) {
+      throw ApiException('User not authenticated - no session available');
+    }
+
     // Build the vote record according to the lexicon
     final record = {
       r'$type': voteCollection,
@@ -280,21 +239,30 @@ class VoteService {
       'createdAt': DateTime.now().toUtc().toIso8601String(),
     };
 
-    final response = await _dio.post<Map<String, dynamic>>(
-      '$pdsUrl/xrpc/com.atproto.repo.createRecord',
-      data: {
-        'repo': userDid,
-        'collection': voteCollection,
-        'record': record,
-      },
+    final requestBody = jsonEncode({
+      'repo': userDid,
+      'collection': voteCollection,
+      'record': record,
+    });
+
+    // Use session's fetchHandler for DPoP-authenticated request
+    final response = await session.fetchHandler(
+      '/xrpc/com.atproto.repo.createRecord',
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: requestBody,
     );
 
-    if (response.data == null) {
-      throw ApiException('Empty response from PDS');
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'Failed to create vote: ${response.statusCode} - ${response.body}',
+        statusCode: response.statusCode,
+      );
     }
 
-    final uri = response.data!['uri'] as String?;
-    final cid = response.data!['cid'] as String?;
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final uri = data['uri'] as String?;
+    final cid = data['cid'] as String?;
 
     if (uri == null || cid == null) {
       throw ApiException('Invalid response from PDS - missing uri or cid');
@@ -316,17 +284,33 @@ class VoteService {
   /// Calls com.atproto.repo.deleteRecord to remove the vote.
   Future<void> _deleteVote({
     required String userDid,
-    required String pdsUrl,
     required String rkey,
   }) async {
-    await _dio.post<Map<String, dynamic>>(
-      '$pdsUrl/xrpc/com.atproto.repo.deleteRecord',
-      data: {
-        'repo': userDid,
-        'collection': voteCollection,
-        'rkey': rkey,
-      },
+    final session = await _sessionGetter?.call();
+    if (session == null) {
+      throw ApiException('User not authenticated - no session available');
+    }
+
+    final requestBody = jsonEncode({
+      'repo': userDid,
+      'collection': voteCollection,
+      'rkey': rkey,
+    });
+
+    // Use session's fetchHandler for DPoP-authenticated request
+    final response = await session.fetchHandler(
+      '/xrpc/com.atproto.repo.deleteRecord',
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: requestBody,
     );
+
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'Failed to delete vote: ${response.statusCode} - ${response.body}',
+        statusCode: response.statusCode,
+      );
+    }
   }
 }
 
