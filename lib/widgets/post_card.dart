@@ -218,6 +218,10 @@ class PostCard extends StatelessWidget {
                 Consumer<VoteProvider>(
                   builder: (context, voteProvider, child) {
                     final isLiked = voteProvider.isLiked(post.post.uri);
+                    final adjustedScore = voteProvider.getAdjustedScore(
+                      post.post.uri,
+                      post.post.stats.score,
+                    );
 
                     return InkWell(
                       onTap: () async {
@@ -272,7 +276,7 @@ class PostCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 5),
                             Text(
-                              DateTimeUtils.formatCount(post.post.stats.score),
+                              DateTimeUtils.formatCount(adjustedScore),
                               style: TextStyle(
                                 color: AppColors.textPrimary
                                     .withValues(alpha: 0.6),

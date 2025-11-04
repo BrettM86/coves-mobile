@@ -56,12 +56,12 @@ Mobile Client → User's PDS (com.atproto.repo.createRecord)
 
 ### Vote Record Schema
 
-**Collection Name**: `social.coves.interaction.vote`
+**Collection Name**: `social.coves.feed.vote`
 
 **Record Structure** (from backend lexicon):
 ```json
 {
-  "$type": "social.coves.interaction.vote",
+  "$type": "social.coves.feed.vote",
   "subject": {
     "uri": "at://did:plc:community123/social.coves.post.record/3kbx...",
     "cid": "bafy2bzacepostcid123"
@@ -154,7 +154,7 @@ class VoteState {
 
 **rkey Extraction**:
 ```dart
-// Extract rkey from URI: at://did:plc:xyz/social.coves.interaction.vote/3kby...
+// Extract rkey from URI: at://did:plc:xyz/social.coves.feed.vote/3kby...
 // Result: "3kby..."
 final rkey = voteUri.split('/').last;
 ```
@@ -353,7 +353,7 @@ void _onAuthChanged() {
 ## 9. Backend Integration Requirements
 
 ### Jetstream Listener
-The backend must listen for `social.coves.interaction.vote` records from Jetstream:
+The backend must listen for `social.coves.feed.vote` records from Jetstream:
 
 ```json
 {
@@ -361,11 +361,11 @@ The backend must listen for `social.coves.interaction.vote` records from Jetstre
   "kind": "commit",
   "commit": {
     "operation": "create",
-    "collection": "social.coves.interaction.vote",
+    "collection": "social.coves.feed.vote",
     "rkey": "3kby...",
     "cid": "bafy2bzacevotecid123",
     "record": {
-      "$type": "social.coves.interaction.vote",
+      "$type": "social.coves.feed.vote",
       "subject": {
         "uri": "at://did:plc:community/social.coves.post.record/abc",
         "cid": "bafy2bzacepostcid123"
@@ -397,7 +397,7 @@ Feed endpoints should include viewer state:
     "viewer": {
       "vote": {
         "direction": "up",
-        "uri": "at://did:plc:user/social.coves.interaction.vote/3kby..."
+        "uri": "at://did:plc:user/social.coves.feed.vote/3kby..."
       }
     }
   }

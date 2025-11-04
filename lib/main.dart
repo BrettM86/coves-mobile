@@ -40,12 +40,27 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: authProvider),
-        ChangeNotifierProvider(create: (_) => FeedProvider(authProvider)),
         ChangeNotifierProvider(
           create: (_) => VoteProvider(
             voteService: voteService,
             authProvider: authProvider,
           ),
+        ),
+        ChangeNotifierProxyProvider2<AuthProvider, VoteProvider, FeedProvider>(
+          create: (context) => FeedProvider(
+            authProvider,
+            voteProvider: context.read<VoteProvider>(),
+            voteService: voteService,
+          ),
+          update: (context, auth, vote, previous) {
+            // Reuse existing provider to maintain state across rebuilds
+            return previous ??
+                FeedProvider(
+                  auth,
+                  voteProvider: vote,
+                  voteService: voteService,
+                );
+          },
         ),
       ],
       child: const CovesApp(),

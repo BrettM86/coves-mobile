@@ -39,16 +39,30 @@ class MockVoteService extends _i1.Mock implements _i2.VoteService {
   }
 
   @override
+  _i3.Future<Map<String, _i2.VoteInfo>> getUserVotes() =>
+      (super.noSuchMethod(
+            Invocation.method(#getUserVotes, []),
+            returnValue: _i3.Future<Map<String, _i2.VoteInfo>>.value(
+              <String, _i2.VoteInfo>{},
+            ),
+          )
+          as _i3.Future<Map<String, _i2.VoteInfo>>);
+
+  @override
   _i3.Future<_i2.VoteResponse> createVote({
     required String? postUri,
     required String? postCid,
     String? direction = 'up',
+    String? existingVoteRkey,
+    String? existingVoteDirection,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#createVote, [], {
               #postUri: postUri,
               #postCid: postCid,
               #direction: direction,
+              #existingVoteRkey: existingVoteRkey,
+              #existingVoteDirection: existingVoteDirection,
             }),
             returnValue: _i3.Future<_i2.VoteResponse>.value(
               _FakeVoteResponse_0(
@@ -57,6 +71,8 @@ class MockVoteService extends _i1.Mock implements _i2.VoteService {
                   #postUri: postUri,
                   #postCid: postCid,
                   #direction: direction,
+                  #existingVoteRkey: existingVoteRkey,
+                  #existingVoteDirection: existingVoteDirection,
                 }),
               ),
             ),

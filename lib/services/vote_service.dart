@@ -44,12 +44,101 @@ class VoteService {
   final String? Function()? _pdsUrlGetter;
 
   /// Collection name for vote records
-  static const String voteCollection = 'social.coves.interaction.vote';
+  static const String voteCollection = 'social.coves.feed.vote';
+
+  /// Get all votes for the current user
+  ///
+  /// Queries the user's PDS for all their vote records and returns a map
+  /// of post URI -> vote info. This is used to initialize vote state when
+  /// loading the feed.
+  ///
+  /// Returns:
+  /// - Map<String, VoteInfo> where key is the post URI
+  /// - Empty map if not authenticated or no votes found
+  Future<Map<String, VoteInfo>> getUserVotes() async {
+    try {
+      final userDid = _didGetter?.call();
+      if (userDid == null || userDid.isEmpty) {
+        return {};
+      }
+
+      final session = await _sessionGetter?.call();
+      if (session == null) {
+        return {};
+      }
+
+      final votes = <String, VoteInfo>{};
+      String? cursor;
+
+      // Paginate through all vote records
+      do {
+        final url = cursor == null
+            ? '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=100'
+            : '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=100&cursor=$cursor';
+
+        final response = await session.fetchHandler(url, method: 'GET');
+
+        if (response.statusCode != 200) {
+          if (kDebugMode) {
+            debugPrint('⚠️  Failed to list votes: ${response.statusCode}');
+          }
+          break;
+        }
+
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final records = data['records'] as List<dynamic>?;
+
+        if (records != null) {
+          for (final record in records) {
+            final recordMap = record as Map<String, dynamic>;
+            final value = recordMap['value'] as Map<String, dynamic>?;
+            final uri = recordMap['uri'] as String?;
+
+            if (value == null || uri == null) {
+              continue;
+            }
+
+            final subject = value['subject'] as Map<String, dynamic>?;
+            final direction = value['direction'] as String?;
+
+            if (subject == null || direction == null) {
+              continue;
+            }
+
+            final subjectUri = subject['uri'] as String?;
+            if (subjectUri != null) {
+              // Extract rkey from vote URI
+              final rkey = uri.split('/').last;
+
+              votes[subjectUri] = VoteInfo(
+                direction: direction,
+                voteUri: uri,
+                rkey: rkey,
+              );
+            }
+          }
+        }
+
+        cursor = data['cursor'] as String?;
+      } while (cursor != null);
+
+      if (kDebugMode) {
+        debugPrint('📊 Loaded ${votes.length} votes from PDS');
+      }
+
+      return votes;
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️  Failed to load user votes: $e');
+      }
+      return {};
+    }
+  }
 
   /// Create or toggle vote
   ///
   /// Implements smart toggle logic:
-  /// 1. Query PDS for existing vote on this post
+  /// 1. Query PDS for existing vote on this post (or use cached state)
   /// 2. If exists with same direction → Delete (toggle off)
   /// 3. If exists with different direction → Delete old + Create new
   /// 4. If no existing vote → Create new
@@ -59,6 +148,8 @@ class VoteService {
   ///   "at://did:plc:xyz/social.coves.post.record/abc123")
   /// - [postCid]: Content ID of the post (for strong reference)
   /// - [direction]: Vote direction - "up" for like/upvote, "down" for downvote
+  /// - [existingVoteRkey]: Optional rkey from cached state (avoids O(n) lookup)
+  /// - [existingVoteDirection]: Optional direction from cached state
   ///
   /// Returns:
   /// - VoteResponse with uri/cid/rkey if created
@@ -70,6 +161,8 @@ class VoteService {
     required String postUri,
     required String postCid,
     String direction = 'up',
+    String? existingVoteRkey,
+    String? existingVoteDirection,
   }) async {
     try {
       // Get user's DID and PDS URL
@@ -92,10 +185,22 @@ class VoteService {
       }
 
       // Step 1: Check for existing vote
-      final existingVote = await _findExistingVote(
-        userDid: userDid,
-        postUri: postUri,
-      );
+      // Use cached state if available to avoid O(n) PDS lookup
+      ExistingVote? existingVote;
+      if (existingVoteRkey != null && existingVoteDirection != null) {
+        existingVote = ExistingVote(
+          direction: existingVoteDirection,
+          rkey: existingVoteRkey,
+        );
+        if (kDebugMode) {
+          debugPrint('   Using cached vote state (avoiding PDS lookup)');
+        }
+      } else {
+        existingVote = await _findExistingVote(
+          userDid: userDid,
+          postUri: postUri,
+        );
+      }
 
       if (existingVote != null) {
         if (kDebugMode) {
@@ -137,7 +242,7 @@ class VoteService {
       }
 
       return response;
-    } catch (e) {
+    } on Exception catch (e) {
       throw ApiException('Failed to create vote: $e');
     }
   }
@@ -204,7 +309,7 @@ class VoteService {
               final uri = recordMap['uri'] as String;
 
               // Extract rkey from URI
-              // Format: at://did:plc:xyz/social.coves.interaction.vote/3kby...
+              // Format: at://did:plc:xyz/social.coves.feed.vote/3kby...
               final rkey = uri.split('/').last;
 
               return ExistingVote(direction: direction, rkey: rkey);
@@ -218,7 +323,7 @@ class VoteService {
 
       // Vote not found after searching all pages
       return null;
-    } catch (e) {
+    } on Exception catch (e) {
       if (kDebugMode) {
         debugPrint('⚠️  Failed to list votes: $e');
       }
@@ -361,5 +466,25 @@ class ExistingVote {
   final String direction;
 
   /// Record key for deletion
+  final String rkey;
+}
+
+/// Vote Info
+///
+/// Information about a user's vote on a post, returned from getUserVotes().
+class VoteInfo {
+  const VoteInfo({
+    required this.direction,
+    required this.voteUri,
+    required this.rkey,
+  });
+
+  /// Vote direction ("up" or "down")
+  final String direction;
+
+  /// AT-URI of the vote record
+  final String voteUri;
+
+  /// Record key (rkey) - last segment of URI
   final String rkey;
 }
