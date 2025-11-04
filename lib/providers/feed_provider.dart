@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/post.dart';
 import '../services/coves_api_service.dart';
+import '../services/vote_service.dart';
 import 'auth_provider.dart';
+import 'vote_provider.dart';
 
 /// Feed Provider
 ///
@@ -14,7 +16,13 @@ import 'auth_provider.dart';
 /// tokens before each authenticated request (critical for atProto OAuth
 /// token rotation).
 class FeedProvider with ChangeNotifier {
-  FeedProvider(this._authProvider, {CovesApiService? apiService}) {
+  FeedProvider(
+    this._authProvider, {
+    CovesApiService? apiService,
+    VoteProvider? voteProvider,
+    VoteService? voteService,
+  })  : _voteProvider = voteProvider,
+        _voteService = voteService {
     // Use injected service (for testing) or create new one (for production)
     // Pass token getter to API service for automatic fresh token retrieval
     _apiService =
@@ -54,6 +62,8 @@ class FeedProvider with ChangeNotifier {
 
   final AuthProvider _authProvider;
   late final CovesApiService _apiService;
+  final VoteProvider? _voteProvider;
+  final VoteService? _voteService;
 
   // Track previous auth state to detect transitions
   bool _wasAuthenticated = false;
@@ -179,6 +189,22 @@ class FeedProvider with ChangeNotifier {
 
       if (kDebugMode) {
         debugPrint('✅ $feedName loaded: ${_posts.length} posts total');
+      }
+
+      // Load initial vote state from PDS (only if authenticated)
+      if (_authProvider.isAuthenticated &&
+          _voteProvider != null &&
+          _voteService != null) {
+        try {
+          final userVotes = await _voteService.getUserVotes();
+          _voteProvider.loadInitialVotes(userVotes);
+        } on Exception catch (e) {
+          if (kDebugMode) {
+            debugPrint('⚠️  Failed to load vote state: $e');
+          }
+          // Don't fail the feed load if vote loading fails
+          // Keep silent per PR review discussion
+        }
       }
     } on Exception catch (e) {
       _error = e.toString();

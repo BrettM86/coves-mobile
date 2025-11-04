@@ -29,7 +29,7 @@ void main() {
           jsonEncode({
             'records': [
               {
-                'uri': 'at://did:plc:test/social.coves.interaction.vote/abc123',
+                'uri': 'at://did:plc:test/social.coves.feed.vote/abc123',
                 'value': {
                   'subject': {
                     'uri': 'at://did:plc:author/social.coves.post.record/post1',
@@ -95,7 +95,7 @@ void main() {
           jsonEncode({
             'records': [
               {
-                'uri': 'at://did:plc:test/social.coves.interaction.vote/abc1',
+                'uri': 'at://did:plc:test/social.coves.feed.vote/abc1',
                 'value': {
                   'subject': {
                     'uri': 'at://did:plc:author/social.coves.post.record/other1',
@@ -115,7 +115,7 @@ void main() {
           jsonEncode({
             'records': [
               {
-                'uri': 'at://did:plc:test/social.coves.interaction.vote/abc123',
+                'uri': 'at://did:plc:test/social.coves.feed.vote/abc123',
                 'value': {
                   'subject': {
                     'uri': 'at://did:plc:author/social.coves.post.record/target',
@@ -197,7 +197,7 @@ void main() {
           jsonEncode({
             'records': [
               {
-                'uri': 'at://did:plc:test/social.coves.interaction.vote/abc1',
+                'uri': 'at://did:plc:test/social.coves.feed.vote/abc1',
                 'value': {
                   'subject': {
                     'uri': 'at://did:plc:author/social.coves.post.record/other',
@@ -230,7 +230,7 @@ void main() {
         ).thenAnswer(
           (_) async => http.Response(
             jsonEncode({
-              'uri': 'at://did:plc:test/social.coves.interaction.vote/new123',
+              'uri': 'at://did:plc:test/social.coves.feed.vote/new123',
               'cid': 'bafy456',
             }),
             200,
@@ -268,13 +268,13 @@ void main() {
         // We'll use a minimal test to verify the VoteResponse parsing logic
 
         const response = VoteResponse(
-          uri: 'at://did:plc:test/social.coves.interaction.vote/456',
+          uri: 'at://did:plc:test/social.coves.feed.vote/456',
           cid: 'bafy123',
           rkey: '456',
           deleted: false,
         );
 
-        expect(response.uri, 'at://did:plc:test/social.coves.interaction.vote/456');
+        expect(response.uri, 'at://did:plc:test/social.coves.feed.vote/456');
         expect(response.cid, 'bafy123');
         expect(response.rkey, '456');
         expect(response.deleted, false);

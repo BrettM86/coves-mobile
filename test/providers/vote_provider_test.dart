@@ -43,12 +43,15 @@ void main() {
         // Mock successful API response
         when(
           mockVoteService.createVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenAnswer(
           (_) async => const VoteResponse(
-            uri: 'at://did:plc:test/social.coves.interaction.vote/456',
+            uri: 'at://did:plc:test/social.coves.feed.vote/456',
             cid: 'bafy123',
             rkey: '456',
             deleted: false,
@@ -81,7 +84,7 @@ void main() {
         // Vote state should be correct
         final voteState = voteProvider.getVoteState(testPostUri);
         expect(voteState?.direction, 'up');
-        expect(voteState?.uri, 'at://did:plc:test/social.coves.interaction.vote/456');
+        expect(voteState?.uri, 'at://did:plc:test/social.coves.feed.vote/456');
         expect(voteState?.deleted, false);
       });
 
@@ -90,7 +93,7 @@ void main() {
         voteProvider.setInitialVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.interaction.vote/456',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
         );
 
         expect(voteProvider.isLiked(testPostUri), true);
@@ -98,8 +101,11 @@ void main() {
         // Mock API response for toggling off
         when(
           mockVoteService.createVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenAnswer(
           (_) async => const VoteResponse(deleted: true),
@@ -129,8 +135,11 @@ void main() {
         // Mock API failure
         when(
           mockVoteService.createVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenThrow(
           ApiException('Network error', statusCode: 500),
@@ -164,7 +173,7 @@ void main() {
         voteProvider.setInitialVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.interaction.vote/456',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
         );
 
         final initialState = voteProvider.getVoteState(testPostUri);
@@ -173,8 +182,11 @@ void main() {
         // Mock API failure when trying to toggle off
         when(
           mockVoteService.createVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenThrow(
           NetworkException('Connection failed'),
@@ -199,14 +211,17 @@ void main() {
         // Mock slow API response
         when(
           mockVoteService.createVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenAnswer(
           (_) async {
             await Future.delayed(const Duration(milliseconds: 100));
             return const VoteResponse(
-              uri: 'at://did:plc:test/social.coves.interaction.vote/456',
+              uri: 'at://did:plc:test/social.coves.feed.vote/456',
               cid: 'bafy123',
               rkey: '456',
               deleted: false,
@@ -236,8 +251,11 @@ void main() {
         // Should have only called API once
         verify(
           mockVoteService.createVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).called(1);
       });
@@ -245,13 +263,15 @@ void main() {
       test('should handle downvote direction', () async {
         when(
           mockVoteService.createVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
-            direction: 'down',
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenAnswer(
           (_) async => const VoteResponse(
-            uri: 'at://did:plc:test/social.coves.interaction.vote/456',
+            uri: 'at://did:plc:test/social.coves.feed.vote/456',
             cid: 'bafy123',
             rkey: '456',
             deleted: false,
@@ -280,14 +300,14 @@ void main() {
         voteProvider.setInitialVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.interaction.vote/456',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
         );
 
         expect(voteProvider.isLiked(testPostUri), true);
 
         final voteState = voteProvider.getVoteState(testPostUri);
         expect(voteState?.direction, 'up');
-        expect(voteState?.uri, 'at://did:plc:test/social.coves.interaction.vote/456');
+        expect(voteState?.uri, 'at://did:plc:test/social.coves.feed.vote/456');
         expect(voteState?.deleted, false);
       });
 
@@ -296,7 +316,7 @@ void main() {
         voteProvider.setInitialVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.interaction.vote/456',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
         );
 
         expect(voteProvider.isLiked(testPostUri), true);
@@ -319,7 +339,7 @@ void main() {
         voteProvider.setInitialVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.interaction.vote/456',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
         );
 
         // Should NOT notify listeners (silent initialization)
@@ -336,12 +356,12 @@ void main() {
         voteProvider.setInitialVoteState(
           postUri: post1,
           voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.interaction.vote/1',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/1',
         );
         voteProvider.setInitialVoteState(
           postUri: post2,
           voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.interaction.vote/2',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/2',
         );
 
         expect(voteProvider.isLiked(post1), true);
@@ -377,14 +397,17 @@ void main() {
         // Mock slow API response
         when(
           mockVoteService.createVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenAnswer(
           (_) async {
             await Future.delayed(const Duration(milliseconds: 50));
             return const VoteResponse(
-              uri: 'at://did:plc:test/social.coves.interaction.vote/456',
+              uri: 'at://did:plc:test/social.coves.feed.vote/456',
               cid: 'bafy123',
               rkey: '456',
               deleted: false,
@@ -419,6 +442,238 @@ void main() {
       });
     });
 
+    group('Score adjustments', () {
+      const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
+      const testPostCid = 'bafy2bzacepostcid123';
+
+      test('should adjust score when creating upvote', () async {
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
+          ),
+        ).thenAnswer(
+          (_) async => const VoteResponse(
+            uri: 'at://did:plc:test/social.coves.feed.vote/456',
+            cid: 'bafy123',
+            rkey: '456',
+            deleted: false,
+          ),
+        );
+
+        // Initial score from server
+        const serverScore = 10;
+
+        // Before vote, adjustment should be 0
+        expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 10);
+
+        // Create upvote
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+        );
+
+        // Should have +1 adjustment (upvote added)
+        expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 11);
+      });
+
+      test('should adjust score when removing upvote', () async {
+        // Set initial state with upvote
+        voteProvider.setInitialVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
+        );
+
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
+          ),
+        ).thenAnswer(
+          (_) async => const VoteResponse(deleted: true),
+        );
+
+        const serverScore = 10;
+
+        // Before removing, adjustment should be 0 (server knows about upvote)
+        expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 10);
+
+        // Remove upvote
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+        );
+
+        // Should have -1 adjustment (upvote removed)
+        expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 9);
+      });
+
+      test('should adjust score when creating downvote', () async {
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
+          ),
+        ).thenAnswer(
+          (_) async => const VoteResponse(
+            uri: 'at://did:plc:test/social.coves.feed.vote/456',
+            cid: 'bafy123',
+            rkey: '456',
+            deleted: false,
+          ),
+        );
+
+        const serverScore = 10;
+
+        // Create downvote
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          direction: 'down',
+        );
+
+        // Should have -1 adjustment (downvote added)
+        expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 9);
+      });
+
+      test('should adjust score when switching from upvote to downvote',
+          () async {
+        // Set initial state with upvote
+        voteProvider.setInitialVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
+        );
+
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
+          ),
+        ).thenAnswer(
+          (_) async => const VoteResponse(
+            uri: 'at://did:plc:test/social.coves.feed.vote/789',
+            cid: 'bafy789',
+            rkey: '789',
+            deleted: false,
+          ),
+        );
+
+        const serverScore = 10;
+
+        // Switch to downvote
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          direction: 'down',
+        );
+
+        // Should have -2 adjustment (remove +1, add -1)
+        expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 8);
+      });
+
+      test('should adjust score when switching from downvote to upvote',
+          () async {
+        // Set initial state with downvote
+        voteProvider.setInitialVoteState(
+          postUri: testPostUri,
+          voteDirection: 'down',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
+        );
+
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
+          ),
+        ).thenAnswer(
+          (_) async => const VoteResponse(
+            uri: 'at://did:plc:test/social.coves.feed.vote/789',
+            cid: 'bafy789',
+            rkey: '789',
+            deleted: false,
+          ),
+        );
+
+        const serverScore = 10;
+
+        // Switch to upvote
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          direction: 'up',
+        );
+
+        // Should have +2 adjustment (remove -1, add +1)
+        expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 12);
+      });
+
+      test('should rollback score adjustment on error', () async {
+        const serverScore = 10;
+
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+            existingVoteRkey: anyNamed('existingVoteRkey'),
+            existingVoteDirection: anyNamed('existingVoteDirection'),
+          ),
+        ).thenThrow(
+          ApiException('Network error', statusCode: 500),
+        );
+
+        // Try to vote (will fail)
+        expect(
+          () => voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+          ),
+          throwsA(isA<ApiException>()),
+        );
+
+        await Future.delayed(Duration.zero);
+
+        // Adjustment should be rolled back to 0
+        expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 10);
+      });
+
+      test('should clear score adjustments when clearing all state', () {
+        const testPostUri1 = 'at://did:plc:test/social.coves.post.record/1';
+        const testPostUri2 = 'at://did:plc:test/social.coves.post.record/2';
+
+        // Manually set some adjustments (simulating votes)
+        voteProvider.setInitialVoteState(
+          postUri: testPostUri1,
+          voteDirection: 'up',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/1',
+        );
+
+        // Clear all
+        voteProvider.clear();
+
+        // Adjustments should be cleared (back to 0)
+        expect(voteProvider.getAdjustedScore(testPostUri1, 10), 10);
+        expect(voteProvider.getAdjustedScore(testPostUri2, 5), 5);
+      });
+    });
+
     group('Auth state listener', () {
       test('should clear votes when user signs out', () {
         const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
@@ -427,7 +682,7 @@ void main() {
         voteProvider.setInitialVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.interaction.vote/456',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
         );
 
         expect(voteProvider.isLiked(testPostUri), true);
@@ -451,7 +706,7 @@ void main() {
         voteProvider.setInitialVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.interaction.vote/456',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
         );
 
         expect(voteProvider.isLiked(testPostUri), true);

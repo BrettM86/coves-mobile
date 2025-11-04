@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../services/api_exceptions.dart';
-import '../services/vote_service.dart';
+import '../services/vote_service.dart' show VoteService, VoteInfo;
 import 'auth_provider.dart';
 
 /// Vote Provider
@@ -46,6 +46,10 @@ class VoteProvider with ChangeNotifier {
   // Map of post URI -> in-flight request flag
   final Map<String, bool> _pendingRequests = {};
 
+  // Map of post URI -> score adjustment (for optimistic UI updates)
+  // Tracks the local delta from the server's score
+  final Map<String, int> _scoreAdjustments = {};
+
   /// Get vote state for a post
   VoteState? getVoteState(String postUri) => _votes[postUri];
 
@@ -56,6 +60,21 @@ class VoteProvider with ChangeNotifier {
 
   /// Check if a request is pending for a post
   bool isPending(String postUri) => _pendingRequests[postUri] ?? false;
+
+  /// Get adjusted score for a post (server score + local optimistic adjustment)
+  ///
+  /// This allows the UI to show immediate feedback when users vote, even before
+  /// the backend processes the vote and returns updated counts.
+  ///
+  /// Parameters:
+  /// - [postUri]: AT-URI of the post
+  /// - [serverScore]: The score from the server (upvotes - downvotes)
+  ///
+  /// Returns: The adjusted score based on local vote state
+  int getAdjustedScore(String postUri, int serverScore) {
+    final adjustment = _scoreAdjustments[postUri] ?? 0;
+    return serverScore + adjustment;
+  }
 
   /// Toggle vote (like/unlike)
   ///
@@ -90,7 +109,37 @@ class VoteProvider with ChangeNotifier {
 
     // Save current state for rollback on error
     final previousState = _votes[postUri];
+    final previousAdjustment = _scoreAdjustments[postUri] ?? 0;
     final currentState = previousState;
+
+    // Calculate score adjustment for optimistic update
+    int newAdjustment = previousAdjustment;
+
+    if (currentState?.direction == direction &&
+        !(currentState?.deleted ?? false)) {
+      // Toggle off - removing vote
+      if (direction == 'up') {
+        newAdjustment -= 1; // Remove upvote
+      } else {
+        newAdjustment += 1; // Remove downvote
+      }
+    } else if (currentState?.direction != null &&
+               currentState?.direction != direction &&
+               !(currentState?.deleted ?? false)) {
+      // Switching vote direction
+      if (direction == 'up') {
+        newAdjustment += 2; // Remove downvote (-1) and add upvote (+1)
+      } else {
+        newAdjustment -= 2; // Remove upvote (-1) and add downvote (+1)
+      }
+    } else {
+      // Creating new vote (or re-creating after delete)
+      if (direction == 'up') {
+        newAdjustment += 1; // Add upvote
+      } else {
+        newAdjustment -= 1; // Add downvote
+      }
+    }
 
     // Optimistic update
     if (currentState?.direction == direction &&
@@ -109,17 +158,22 @@ class VoteProvider with ChangeNotifier {
         deleted: false,
       );
     }
+
+    // Apply score adjustment
+    _scoreAdjustments[postUri] = newAdjustment;
     notifyListeners();
 
     // Mark request as pending
     _pendingRequests[postUri] = true;
 
     try {
-      // Make API call
+      // Make API call - pass existing vote info to avoid O(n) PDS lookup
       final response = await _voteService.createVote(
         postUri: postUri,
         postCid: postCid,
         direction: direction,
+        existingVoteRkey: currentState?.rkey,
+        existingVoteDirection: currentState?.direction,
       );
 
       // Update with server response
@@ -152,6 +206,14 @@ class VoteProvider with ChangeNotifier {
       } else {
         _votes.remove(postUri);
       }
+
+      // Rollback score adjustment
+      if (previousAdjustment != 0) {
+        _scoreAdjustments[postUri] = previousAdjustment;
+      } else {
+        _scoreAdjustments.remove(postUri);
+      }
+
       notifyListeners();
 
       rethrow;
@@ -176,7 +238,7 @@ class VoteProvider with ChangeNotifier {
   }) {
     if (voteDirection != null) {
       // Extract rkey from vote URI if available
-      // URI format: at://did:plc:xyz/social.coves.interaction.vote/3kby...
+      // URI format: at://did:plc:xyz/social.coves.feed.vote/3kby...
       String? rkey;
       if (voteUri != null) {
         final parts = voteUri.split('/');
@@ -197,10 +259,48 @@ class VoteProvider with ChangeNotifier {
     // Don't notify listeners - this is just initial state
   }
 
+  /// Load initial vote states from a map of votes
+  ///
+  /// This is used to bulk-load vote state after querying the user's PDS.
+  /// Typically called after loading feed posts to fill in which posts
+  /// the user has voted on.
+  ///
+  /// IMPORTANT: This clears score adjustments since the server score
+  /// already reflects the loaded votes. If we kept stale adjustments,
+  /// we'd double-count votes (server score + our adjustment).
+  ///
+  /// Parameters:
+  /// - [votes]: Map of post URI -> vote info from VoteService.getUserVotes()
+  void loadInitialVotes(Map<String, VoteInfo> votes) {
+    for (final entry in votes.entries) {
+      final postUri = entry.key;
+      final voteInfo = entry.value;
+
+      _votes[postUri] = VoteState(
+        direction: voteInfo.direction,
+        uri: voteInfo.voteUri,
+        rkey: voteInfo.rkey,
+        deleted: false,
+      );
+
+      // Clear any stale score adjustments for this post
+      // The server score already includes this vote
+      _scoreAdjustments.remove(postUri);
+    }
+
+    if (kDebugMode) {
+      debugPrint('📊 Initialized ${votes.length} vote states');
+    }
+
+    // Notify once after loading all votes
+    notifyListeners();
+  }
+
   /// Clear all vote state (e.g., on sign out)
   void clear() {
     _votes.clear();
     _pendingRequests.clear();
+    _scoreAdjustments.clear();
     notifyListeners();
   }
 }
@@ -224,7 +324,7 @@ class VoteState {
 
   /// Record key (rkey) of the vote - needed for deletion
   /// This is the last segment of the AT-URI (e.g., "3kby..." from
-  /// "at://did:plc:xyz/social.coves.interaction.vote/3kby...")
+  /// "at://did:plc:xyz/social.coves.feed.vote/3kby...")
   final String? rkey;
 
   /// Whether the vote has been deleted
