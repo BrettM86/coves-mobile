@@ -9,6 +9,7 @@ import '../errors/token_revoked_error.dart';
 import '../oauth/client_auth.dart' show ClientAuthMethod;
 import '../oauth/oauth_server_agent.dart';
 import '../oauth/oauth_server_factory.dart';
+import '../platform/flutter_key.dart';
 import '../runtime/runtime.dart';
 import '../util.dart';
 import 'oauth_session.dart';
@@ -171,16 +172,18 @@ class SessionGetter extends CachedGetter<AtprotoDid, Session> {
                          ? ClientAuthMethod.fromJson(authMethodValue)
                          : (authMethodValue as String?) ?? 'legacy';
 
-                 // Generate new DPoP key for revocation
-                 // (stored key is serialized and can't be directly used)
-                 final dpopKeyAlgs = ['ES256', 'RS256'];
-                 final newDpopKey = await runtime.generateKey(dpopKeyAlgs);
+                 // Restore DPoP key from session for revocation
+                 // CRITICAL FIX: Use the stored key instead of generating a new one
+                 // This ensures DPoP proofs match the token binding
+                 final dpopKey = FlutterKey.fromJwk(
+                   session.dpopKey as Map<String, dynamic>,
+                 );
 
                  // If the token data cannot be stored, let's revoke it
                  final server = await serverFactory.fromIssuer(
                    session.tokenSet.iss,
                    authMethod,
-                   newDpopKey,
+                   dpopKey,
                  );
                  await server.revoke(
                    session.tokenSet.refreshToken ??
@@ -230,7 +233,6 @@ class SessionGetter extends CachedGetter<AtprotoDid, Session> {
       // access (which, normally, should not happen if a proper runtime lock
       // was provided).
 
-      final dpopKey = storedSession.dpopKey;
       // authMethod can be a Map (serialized ClientAuthMethod) or String ('legacy')
       final authMethodValue = storedSession.authMethod;
       final authMethod =
@@ -258,19 +260,26 @@ class SessionGetter extends CachedGetter<AtprotoDid, Session> {
       // always possible. If no lock implementation is provided, we will use
       // the store to check if a concurrent refresh occurred.
 
-      // TODO: Key Persistence Workaround
-      // The storedSession.dpopKey is a Map<String, dynamic> (serialized JWK),
-      // but OAuthServerFactory.fromIssuer() expects a Key object.
-      // Until Key serialization is implemented (see runtime_implementation.dart),
-      // we generate a new DPoP key for each session refresh.
-      // This works but means tokens are bound to new keys, requiring refresh.
-      final dpopKeyAlgs = ['ES256', 'RS256']; // Supported DPoP algorithms
-      final newDpopKey = await _runtime.generateKey(dpopKeyAlgs);
+      // Restore dpopKey from stored private JWK with error handling
+      // CRITICAL FIX: Use the stored key instead of generating a new one
+      // This ensures DPoP proofs match the token binding during refresh
+      final FlutterKey dpopKey;
+      try {
+        dpopKey = FlutterKey.fromJwk(
+          storedSession.dpopKey as Map<String, dynamic>,
+        );
+      } catch (e) {
+        // If key is corrupted, the session is unusable - force re-authentication
+        throw TokenRefreshError(
+          sub,
+          'Corrupted DPoP key in stored session: $e. Re-authentication required.',
+        );
+      }
 
       final server = await _serverFactory.fromIssuer(
         tokenSet.iss,
         authMethod,
-        newDpopKey,
+        dpopKey,
       );
 
       // Because refresh tokens can only be used once, we must not use the
@@ -288,8 +297,10 @@ class SessionGetter extends CachedGetter<AtprotoDid, Session> {
           throw TokenRefreshError(sub, 'Token set sub mismatch');
         }
 
+        // CRITICAL FIX: Preserve the stored DPoP key (full private JWK)
+        // This ensures the same key is used across token refreshes
         return Session(
-          dpopKey: newDpopKey.bareJwk ?? {},
+          dpopKey: storedSession.dpopKey,
           tokenSet: newTokenSet,
           authMethod: server.authMethod.toJson(),
         );
