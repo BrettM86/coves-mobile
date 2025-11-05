@@ -12,29 +12,21 @@ import 'dart:typed_data';
 /// - createJwt() method for signing
 /// - verifyJwt() method for verification
 ///
-/// ## TODO: Key Serialization
+/// ## Key Serialization (IMPLEMENTED)
 ///
-/// This class needs serialization support to persist DPoP keys in session storage:
+/// DPoP keys are fully serialized and persisted in session storage via:
 ///
-/// 1. Add `Map<String, dynamic> toJson()` method:
-///    - Should serialize the full JWK (including private key components)
-///    - Must be secure - never log or expose
-///    - Used when storing sessions
+/// 1. FlutterKey.toJson() / FlutterKey.privateJwk:
+///    - Serializes the full JWK including private key components
+///    - Used when storing sessions to secure storage
 ///
-/// 2. Add `static Key fromJson(Map<String, dynamic> json)` factory:
-///    - Should reconstruct a Key from serialized JWK
-///    - Must validate the JWK structure
+/// 2. FlutterKey.fromJwk(Map<String, dynamic> jwk):
+///    - Reconstructs a Key from serialized JWK
+///    - Validates JWK structure and throws on corruption
 ///    - Used when restoring sessions from storage
 ///
-/// ## Current Workaround
-///
-/// Without serialization, DPoP keys are regenerated on each app restart.
-/// This works but has drawbacks:
-/// - Tokens from previous keys become invalid (require refresh)
-/// - Server-side DPoP nonce cache misses
-/// - Slightly slower session restoration
-///
-/// This is acceptable for now but should be fixed before production.
+/// This ensures DPoP keys persist across app restarts, maintaining
+/// token binding consistency and avoiding unnecessary token refreshes.
 abstract class Key {
   /// Create a signed JWT with the given header and payload.
   Future<String> createJwt(

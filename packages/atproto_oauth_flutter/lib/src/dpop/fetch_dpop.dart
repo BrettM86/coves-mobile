@@ -195,6 +195,85 @@ Interceptor createDpopInterceptor(DpopFetchWrapperOptions options) {
           print('   No nonce in response');
         }
 
+        // Check for nonce errors in successful responses (when validateStatus: true)
+        // This handles the case where Dio returns 401 as a successful response
+        if (nextNonce != null && await _isUseDpopNonceError(response, options.isAuthServer)) {
+          final isTokenEndpoint =
+              uri.path.contains('/token') || uri.path.endsWith('/token');
+
+          if (kDebugMode) {
+            print('⚠️ DPoP nonce error in response (status ${response.statusCode})');
+            print('   Is token endpoint: $isTokenEndpoint');
+          }
+
+          if (isTokenEndpoint) {
+            // Don't retry token endpoint - just pass through with nonce cached
+            if (kDebugMode) {
+              print('   NOT retrying token endpoint (nonce cached for next attempt)');
+            }
+            handler.next(response);
+            return;
+          }
+
+          // For non-token endpoints, retry is safe
+          if (kDebugMode) {
+            print('🔄 Retrying request with fresh nonce');
+          }
+
+          try {
+            final authHeader =
+                response.requestOptions.headers['Authorization'] as String?;
+            final String? ath;
+            if (authHeader != null && authHeader.startsWith('DPoP ')) {
+              ath = await options.sha256(authHeader.substring(5));
+            } else {
+              ath = null;
+            }
+
+            final htm = response.requestOptions.method;
+            final htu = _buildHtu(uri.toString());
+
+            final nextProof = await _buildProof(
+              options.key,
+              alg,
+              htm,
+              htu,
+              nextNonce,
+              ath,
+            );
+
+            // Clone request options and update DPoP header
+            // Note: We preserve validateStatus to match original request behavior
+            final retryOptions = Options(
+              method: response.requestOptions.method,
+              headers: {...response.requestOptions.headers, 'DPoP': nextProof},
+              validateStatus: response.requestOptions.validateStatus,
+            );
+
+            // DESIGN NOTE: We create a fresh Dio instance for retry to avoid
+            // re-triggering this interceptor (which would cause infinite loops).
+            // This means base options (timeouts, etc.) are not preserved, but
+            // this is acceptable for DPoP nonce retry scenarios which should be fast.
+            // If this becomes an issue, we could inject a Dio factory function.
+            final dio = Dio();
+            final retryResponse = await dio.requestUri(
+              uri,
+              options: retryOptions,
+              data: response.requestOptions.data,
+            );
+
+            handler.resolve(retryResponse);
+            return;
+          } catch (retryError) {
+            if (kDebugMode) {
+              print('❌ Retry failed: $retryError');
+            }
+            // If retry fails, return the original response
+            handler.next(response);
+            return;
+          }
+        }
+
         handler.next(response);
       } catch (e) {
         handler.reject(
@@ -306,18 +385,23 @@ Interceptor createDpopInterceptor(DpopFetchWrapperOptions options) {
             );
 
             // Clone request options and update DPoP header
+            // Note: We preserve validateStatus to match original request behavior
             final retryOptions = Options(
               method: response.requestOptions.method,
               headers: {...response.requestOptions.headers, 'DPoP': nextProof},
+              validateStatus: response.requestOptions.validateStatus,
             );
 
-            // Retry the request
+            // DESIGN NOTE: We create a fresh Dio instance for retry to avoid
+            // re-triggering this interceptor (which would cause infinite loops).
+            // This means base options (timeouts, etc.) are not preserved, but
+            // this is acceptable for DPoP nonce retry scenarios which should be fast.
+            // If this becomes an issue, we could inject a Dio factory function.
             final dio = Dio();
-            final retryResponse = await dio.request(
-              response.requestOptions.path,
+            final retryResponse = await dio.requestUri(
+              uri,
               options: retryOptions,
               data: response.requestOptions.data,
-              queryParameters: response.requestOptions.queryParameters,
             );
 
             handler.resolve(retryResponse);
@@ -427,7 +511,7 @@ Future<String> _buildProof(
 
 /// Checks if a response indicates a "use_dpop_nonce" error.
 ///
-/// There are two error formats depending on server type:
+/// There are multiple error formats depending on server implementation:
 ///
 /// 1. Resource Server (RFC 6750): 401 with WWW-Authenticate header
 ///    WWW-Authenticate: DPoP error="use_dpop_nonce"
@@ -435,38 +519,40 @@ Future<String> _buildProof(
 /// 2. Authorization Server: 400 with JSON body
 ///    {"error": "use_dpop_nonce"}
 ///
+/// 3. Resource Server (JSON variant): 401 with JSON body
+///    {"error": "use_dpop_nonce"}
+///
 /// See:
 /// - https://datatracker.ietf.org/doc/html/rfc9449#name-resource-server-provided-no
 /// - https://datatracker.ietf.org/doc/html/rfc9449#name-authorization-server-provid
 Future<bool> _isUseDpopNonceError(Response response, bool? isAuthServer) async {
-  // Check resource server error format (401 + WWW-Authenticate)
-  if (isAuthServer == null || isAuthServer == false) {
-    if (response.statusCode == 401) {
-      final wwwAuth = response.headers.value('www-authenticate');
-      if (wwwAuth != null && wwwAuth.startsWith('DPoP')) {
-        return wwwAuth.contains('error="use_dpop_nonce"');
+  // Check WWW-Authenticate header format (401 + header)
+  if (response.statusCode == 401) {
+    final wwwAuth = response.headers.value('www-authenticate');
+    if (wwwAuth != null && wwwAuth.startsWith('DPoP')) {
+      if (wwwAuth.contains('error="use_dpop_nonce"')) {
+        return true;
       }
     }
   }
 
-  // Check authorization server error format (400 + JSON error)
-  if (isAuthServer == null || isAuthServer == true) {
-    if (response.statusCode == 400) {
-      try {
-        final data = response.data;
-        if (data is Map<String, dynamic>) {
-          return data['error'] == 'use_dpop_nonce';
-        } else if (data is String) {
-          // Try to parse as JSON
-          final json = jsonDecode(data);
-          if (json is Map<String, dynamic>) {
-            return json['error'] == 'use_dpop_nonce';
-          }
+  // Check JSON body format (400 or 401 + JSON)
+  // Some servers use 401 + JSON instead of WWW-Authenticate header
+  if (response.statusCode == 400 || response.statusCode == 401) {
+    try {
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        return data['error'] == 'use_dpop_nonce';
+      } else if (data is String) {
+        // Try to parse as JSON
+        final json = jsonDecode(data);
+        if (json is Map<String, dynamic>) {
+          return json['error'] == 'use_dpop_nonce';
         }
-      } catch (_) {
-        // Invalid JSON or response too large, not a use_dpop_nonce error
-        return false;
       }
+    } catch (_) {
+      // Invalid JSON or response too large, not a use_dpop_nonce error
+      return false;
     }
   }
 
