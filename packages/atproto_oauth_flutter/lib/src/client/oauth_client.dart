@@ -476,11 +476,7 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
     final dpopKeyJwk = (dpopKey as dynamic).privateJwk ?? dpopKey.bareJwk ?? {};
 
     if (kDebugMode) {
-      print('🔑 Storing DPoP key:');
-      print('   Has privateJwk: ${(dpopKey as dynamic).privateJwk != null}');
-      print('   Has bareJwk: ${dpopKey.bareJwk != null}');
-      print('   Stored JWK has "d" (private): ${dpopKeyJwk.containsKey('d')}');
-      print('   Stored JWK keys: ${dpopKeyJwk.keys.toList()}');
+      print('🔑 Storing DPoP key for authorization flow');
     }
 
     await _stateStore.set(
@@ -659,9 +655,6 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
       }
 
       // Create OAuth server agent
-      // TODO: Implement proper Key reconstruction from stored bareJwk
-      // For now, we regenerate the key with the same algorithms
-      // This works but is not ideal - we should restore the exact same key
       final authMethod =
           stateData.authMethod != null
               ? ClientAuthMethod.fromJson(
@@ -670,23 +663,20 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
               : const ClientAuthMethod.none(); // Legacy fallback
 
       // Restore dpopKey from stored private JWK
-      // Import FlutterKey to access fromJwk factory
-      if (kDebugMode) {
-        print('🔓 Restoring DPoP key:');
-        print(
-          '   Stored JWK has "d" (private): ${(stateData.dpopKey as Map).containsKey('d')}',
+      // Restore DPoP key with error handling for corrupted JWK data
+      final FlutterKey dpopKey;
+      try {
+        dpopKey = FlutterKey.fromJwk(
+          stateData.dpopKey as Map<String, dynamic>,
         );
-        print(
-          '   Stored JWK keys: ${(stateData.dpopKey as Map).keys.toList()}',
+        if (kDebugMode) {
+          print('🔓 DPoP key restored successfully for token exchange');
+        }
+      } catch (e) {
+        throw Exception(
+          'Failed to restore DPoP key from stored state: $e. '
+          'The stored key may be corrupted. Please try authenticating again.',
         );
-      }
-
-      final dpopKey = FlutterKey.fromJwk(
-        stateData.dpopKey as Map<String, dynamic>,
-      );
-
-      if (kDebugMode) {
-        print('   ✅ DPoP key restored successfully');
       }
 
       final server = await serverFactory.fromIssuer(
@@ -839,9 +829,25 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
               )
               : const ClientAuthMethod.none(); // Legacy
 
-      // TODO: Implement proper Key reconstruction from stored bareJwk
-      // For now, we regenerate the key
-      final dpopKey = await runtime.generateKey([fallbackAlg]);
+      // Restore dpopKey from stored private JWK with error handling
+      // CRITICAL FIX: Use the stored key instead of generating a new one
+      // This ensures DPoP proofs match the token binding
+      final FlutterKey dpopKey;
+      try {
+        dpopKey = FlutterKey.fromJwk(
+          session.dpopKey as Map<String, dynamic>,
+        );
+      } catch (e) {
+        // If key is corrupted, delete the session and force re-authentication
+        await _sessionGetter.delStored(
+          sub,
+          Exception('Corrupted DPoP key in stored session: $e'),
+        );
+        throw Exception(
+          'Failed to restore DPoP key for session. The stored key is corrupted. '
+          'Please authenticate again.',
+        );
+      }
 
       // Create server agent
       final server = await serverFactory.fromIssuer(
@@ -895,9 +901,23 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
               )
               : const ClientAuthMethod.none(); // Legacy
 
-      // TODO: Implement proper Key reconstruction from stored bareJwk
-      // For now, we regenerate the key
-      final dpopKey = await runtime.generateKey([fallbackAlg]);
+      // Restore dpopKey from stored private JWK with error handling
+      // CRITICAL FIX: Use the stored key instead of generating a new one
+      // This ensures DPoP proofs match the token binding
+      final FlutterKey dpopKey;
+      try {
+        dpopKey = FlutterKey.fromJwk(
+          session.dpopKey as Map<String, dynamic>,
+        );
+      } catch (e) {
+        // If key is corrupted, skip server-side revocation
+        // The finally block will still delete the local session
+        if (kDebugMode) {
+          print('⚠️  Cannot revoke on server: corrupted DPoP key ($e)');
+          print('   Local session will still be deleted');
+        }
+        return;
+      }
 
       final server = await serverFactory.fromIssuer(
         session.tokenSet.iss,
