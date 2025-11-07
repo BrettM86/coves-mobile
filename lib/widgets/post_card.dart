@@ -1,18 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
 import '../models/post.dart';
-import '../providers/auth_provider.dart';
-import '../providers/vote_provider.dart';
 import '../utils/date_time_utils.dart';
-import 'icons/animated_heart_icon.dart';
-import 'icons/reply_icon.dart';
-import 'icons/share_icon.dart';
-import 'sign_in_dialog.dart';
+import 'external_link_bar.dart';
+import 'post_card_actions.dart';
 
 /// Post card widget for displaying feed posts
 ///
@@ -48,25 +42,8 @@ class PostCard extends StatelessWidget {
             // Community and author info
             Row(
               children: [
-                // Community avatar placeholder
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Center(
-                    child: Text(
-                      post.post.community.name[0].toUpperCase(),
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
+                // Community avatar
+                _buildCommunityAvatar(post.post.community),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(
@@ -150,148 +127,61 @@ class PostCard extends StatelessWidget {
               ),
             ],
 
+            // External link (if present)
+            if (post.post.embed?.external != null) ...[
+              const SizedBox(height: 8),
+              ExternalLinkBar(embed: post.post.embed!.external!),
+            ],
+
             // Reduced spacing before action buttons
             const SizedBox(height: 4),
 
             // Action buttons row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                // Share button
-                InkWell(
-                  onTap: () {
-                    // TODO: Handle share interaction with backend
-                    if (kDebugMode) {
-                      debugPrint('Share button tapped for post');
-                    }
-                  },
-                  child: Padding(
-                    // Increased padding for better touch targets
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    child: ShareIcon(
-                      color: AppColors.textPrimary.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-
-                // Comment button
-                InkWell(
-                  onTap: () {
-                    // TODO: Navigate to post detail/comments screen
-                    if (kDebugMode) {
-                      debugPrint('Comment button tapped for post');
-                    }
-                  },
-                  child: Padding(
-                    // Increased padding for better touch targets
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ReplyIcon(
-                          color: AppColors.textPrimary.withValues(alpha: 0.6),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          DateTimeUtils.formatCount(
-                            post.post.stats.commentCount,
-                          ),
-                          style: TextStyle(
-                            color: AppColors.textPrimary.withValues(alpha: 0.6),
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-
-                // Heart button
-                Consumer<VoteProvider>(
-                  builder: (context, voteProvider, child) {
-                    final isLiked = voteProvider.isLiked(post.post.uri);
-                    final adjustedScore = voteProvider.getAdjustedScore(
-                      post.post.uri,
-                      post.post.stats.score,
-                    );
-
-                    return InkWell(
-                      onTap: () async {
-                        // Check authentication
-                        final authProvider = context.read<AuthProvider>();
-                        if (!authProvider.isAuthenticated) {
-                          // Show sign-in dialog
-                          final shouldSignIn = await SignInDialog.show(
-                            context,
-                            message: 'You need to sign in to like posts.',
-                          );
-
-                          if ((shouldSignIn ?? false) && context.mounted) {
-                            // TODO: Navigate to sign-in screen
-                            if (kDebugMode) {
-                              debugPrint('Navigate to sign-in screen');
-                            }
-                          }
-                          return;
-                        }
-
-                        // Light haptic feedback on both like and unlike
-                        await HapticFeedback.lightImpact();
-
-                        // Toggle vote with optimistic update
-                        try {
-                          await voteProvider.toggleVote(
-                            postUri: post.post.uri,
-                            postCid: post.post.cid,
-                          );
-                        } on Exception catch (e) {
-                          if (kDebugMode) {
-                            debugPrint('Failed to toggle vote: $e');
-                          }
-                          // TODO: Show error snackbar
-                        }
-                      },
-                      child: Padding(
-                        // Increased padding for better touch targets
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AnimatedHeartIcon(
-                              isLiked: isLiked,
-                              color: AppColors.textPrimary
-                                  .withValues(alpha: 0.6),
-                              likedColor: const Color(0xFFFF0033),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              DateTimeUtils.formatCount(adjustedScore),
-                              style: TextStyle(
-                                color: AppColors.textPrimary
-                                    .withValues(alpha: 0.6),
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
+            PostCardActions(post: post),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Builds the community avatar widget
+  Widget _buildCommunityAvatar(CommunityRef community) {
+    if (community.avatar != null && community.avatar!.isNotEmpty) {
+      // Show real community avatar
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: CachedNetworkImage(
+          imageUrl: community.avatar!,
+          width: 24,
+          height: 24,
+          fit: BoxFit.cover,
+          placeholder: (context, url) => _buildFallbackAvatar(community),
+          errorWidget: (context, url, error) => _buildFallbackAvatar(community),
+        ),
+      );
+    }
+
+    // Fallback to letter placeholder
+    return _buildFallbackAvatar(community);
+  }
+
+  /// Builds a fallback avatar with the first letter of community name
+  Widget _buildFallbackAvatar(CommunityRef community) {
+    return Container(
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Center(
+        child: Text(
+          community.name[0].toUpperCase(),
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );
