@@ -28,4 +28,7 @@ class AppColors {
 
   /// White color for primary text
   static const textPrimary = Colors.white;
+
+  /// Community name color - light blue/cyan
+  static const communityName = Color(0xFF7CB9E8);
 }

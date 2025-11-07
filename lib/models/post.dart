@@ -126,17 +126,24 @@ class AuthorView {
 }
 
 class CommunityRef {
-  CommunityRef({required this.did, required this.name, this.avatar});
+  CommunityRef({
+    required this.did,
+    required this.name,
+    this.handle,
+    this.avatar,
+  });
 
   factory CommunityRef.fromJson(Map<String, dynamic> json) {
     return CommunityRef(
       did: json['did'] as String,
       name: json['name'] as String,
+      handle: json['handle'] as String?,
       avatar: json['avatar'] as String?,
     );
   }
   final String did;
   final String name;
+  final String? handle;
   final String? avatar;
 }
 

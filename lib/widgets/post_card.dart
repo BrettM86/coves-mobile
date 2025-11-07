@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
 import '../models/post.dart';
+import '../utils/community_handle_utils.dart';
 import '../utils/date_time_utils.dart';
 import 'external_link_bar.dart';
 import 'post_card_actions.dart';
@@ -49,14 +50,9 @@ class PostCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'c/${post.post.community.name}',
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      // Community handle with styled parts
+                      _buildCommunityHandle(post.post.community),
+                      // Author handle
                       Text(
                         '@${post.post.author.handle}',
                         style: const TextStyle(
@@ -140,6 +136,39 @@ class PostCard extends StatelessWidget {
             PostCardActions(post: post),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Builds the community handle with styled parts (name + instance)
+  Widget _buildCommunityHandle(CommunityRef community) {
+    final displayHandle =
+        CommunityHandleUtils.formatHandleForDisplay(community.handle)!;
+
+    // Split the handle into community name and instance
+    // Format: !gaming@coves.social
+    final atIndex = displayHandle.indexOf('@');
+    final communityPart = displayHandle.substring(0, atIndex);
+    final instancePart = displayHandle.substring(atIndex);
+
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: communityPart,
+            style: const TextStyle(
+              color: AppColors.communityName,
+              fontSize: 14,
+            ),
+          ),
+          TextSpan(
+            text: instancePart,
+            style: TextStyle(
+              color: AppColors.textSecondary.withValues(alpha: 0.6),
+              fontSize: 14,
+            ),
+          ),
+        ],
       ),
     );
   }
