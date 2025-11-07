@@ -340,8 +340,7 @@ class OAuthSession {
           method: method,
           headers: headers,
           responseType: ResponseType.bytes, // Get raw bytes for compatibility
-          validateStatus: (status) =>
-              true, // Don't throw on any status code
+          validateStatus: (status) => true, // Don't throw on any status code
         ),
         data: body,
       );

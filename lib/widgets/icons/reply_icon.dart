@@ -34,9 +34,10 @@ class _ReplyIconPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill; // Always fill - paths are pre-stroked
+    final paint =
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.fill; // Always fill - paths are pre-stroked
 
     // Scale factor to fit 24x24 viewBox into widget size
     final scale = size.width / 24.0;

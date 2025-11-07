@@ -13,8 +13,8 @@ class VoteProvider with ChangeNotifier {
   VoteProvider({
     required VoteService voteService,
     required AuthProvider authProvider,
-  })  : _voteService = voteService,
-        _authProvider = authProvider {
+  }) : _voteService = voteService,
+       _authProvider = authProvider {
     // Listen to auth state changes and clear votes on sign-out
     _authProvider.addListener(_onAuthChanged);
   }
@@ -124,8 +124,8 @@ class VoteProvider with ChangeNotifier {
         newAdjustment += 1; // Remove downvote
       }
     } else if (currentState?.direction != null &&
-               currentState?.direction != direction &&
-               !(currentState?.deleted ?? false)) {
+        currentState?.direction != direction &&
+        !(currentState?.deleted ?? false)) {
       // Switching vote direction
       if (direction == 'up') {
         newAdjustment += 2; // Remove downvote (-1) and add upvote (+1)
@@ -153,10 +153,7 @@ class VoteProvider with ChangeNotifier {
       );
     } else {
       // Create or switch direction
-      _votes[postUri] = VoteState(
-        direction: direction,
-        deleted: false,
-      );
+      _votes[postUri] = VoteState(direction: direction, deleted: false);
     }
 
     // Apply score adjustment
@@ -179,10 +176,7 @@ class VoteProvider with ChangeNotifier {
       // Update with server response
       if (response.deleted) {
         // Vote was removed
-        _votes[postUri] = VoteState(
-          direction: direction,
-          deleted: true,
-        );
+        _votes[postUri] = VoteState(direction: direction, deleted: true);
       } else {
         // Vote was created or updated
         _votes[postUri] = VoteState(

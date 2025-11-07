@@ -7,9 +7,7 @@ void main() {
     testWidgets('should render with default size', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: false),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: false)),
         ),
       );
 
@@ -18,10 +16,12 @@ void main() {
 
       // Find the SizedBox that defines the size
       final sizedBox = tester.widget<SizedBox>(
-        find.descendant(
-          of: find.byType(AnimatedHeartIcon),
-          matching: find.byType(SizedBox),
-        ).first,
+        find
+            .descendant(
+              of: find.byType(AnimatedHeartIcon),
+              matching: find.byType(SizedBox),
+            )
+            .first,
       );
 
       // Default size should be 18
@@ -32,18 +32,18 @@ void main() {
     testWidgets('should render with custom size', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: false, size: 32),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: false, size: 32)),
         ),
       );
 
       // Find the SizedBox that defines the size
       final sizedBox = tester.widget<SizedBox>(
-        find.descendant(
-          of: find.byType(AnimatedHeartIcon),
-          matching: find.byType(SizedBox),
-        ).first,
+        find
+            .descendant(
+              of: find.byType(AnimatedHeartIcon),
+              matching: find.byType(SizedBox),
+            )
+            .first,
       );
 
       // Custom size should be 32
@@ -57,10 +57,7 @@ void main() {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
-            body: AnimatedHeartIcon(
-              isLiked: false,
-              color: customColor,
-            ),
+            body: AnimatedHeartIcon(isLiked: false, color: customColor),
           ),
         ),
       );
@@ -89,14 +86,13 @@ void main() {
       expect(find.byType(AnimatedHeartIcon), findsOneWidget);
     });
 
-    testWidgets('should start animation when isLiked changes to true',
-        (tester) async {
+    testWidgets('should start animation when isLiked changes to true', (
+      tester,
+    ) async {
       // Start with unliked state
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: false),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: false)),
         ),
       );
 
@@ -106,9 +102,7 @@ void main() {
       // Change to liked state
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: true),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: true)),
         ),
       );
 
@@ -120,14 +114,13 @@ void main() {
       expect(find.byType(AnimatedHeartIcon), findsOneWidget);
     });
 
-    testWidgets('should not animate when isLiked changes to false',
-        (tester) async {
+    testWidgets('should not animate when isLiked changes to false', (
+      tester,
+    ) async {
       // Start with liked state
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: true),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: true)),
         ),
       );
 
@@ -136,9 +129,7 @@ void main() {
       // Change to unliked state
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: false),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: false)),
         ),
       );
 
@@ -152,18 +143,14 @@ void main() {
       // Start with unliked state
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: false),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: false)),
         ),
       );
 
       // Change to liked state
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: true),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: true)),
         ),
       );
 
@@ -180,36 +167,28 @@ void main() {
       // Start with unliked state
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: false),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: false)),
         ),
       );
 
       // Rapidly toggle states
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: true),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: true)),
         ),
       );
       await tester.pump(const Duration(milliseconds: 50));
 
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: false),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: false)),
         ),
       );
       await tester.pump(const Duration(milliseconds: 50));
 
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: true),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: true)),
         ),
       );
       await tester.pump(const Duration(milliseconds: 50));
@@ -218,22 +197,19 @@ void main() {
       expect(find.byType(AnimatedHeartIcon), findsOneWidget);
     });
 
-    testWidgets('should use OverflowBox to allow animation overflow',
-        (tester) async {
+    testWidgets('should use OverflowBox to allow animation overflow', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: true),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: true)),
         ),
       );
 
       // Find the OverflowBox
       expect(find.byType(OverflowBox), findsOneWidget);
 
-      final overflowBox = tester.widget<OverflowBox>(
-        find.byType(OverflowBox),
-      );
+      final overflowBox = tester.widget<OverflowBox>(find.byType(OverflowBox));
 
       // OverflowBox should have larger max dimensions (2.5x the icon size)
       // to accommodate the 1.3x scale and particle burst
@@ -244,9 +220,7 @@ void main() {
     testWidgets('should render CustomPaint for heart icon', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: false),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: false)),
         ),
       );
 
@@ -254,14 +228,13 @@ void main() {
       expect(find.byType(CustomPaint), findsAtLeastNWidgets(1));
     });
 
-    testWidgets('should not animate on initial render when isLiked is true',
-        (tester) async {
+    testWidgets('should not animate on initial render when isLiked is true', (
+      tester,
+    ) async {
       // Render with isLiked=true initially
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: true),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: true)),
         ),
       );
 
@@ -275,19 +248,13 @@ void main() {
     testWidgets('should dispose controller properly', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AnimatedHeartIcon(isLiked: false),
-          ),
+          home: Scaffold(body: AnimatedHeartIcon(isLiked: false)),
         ),
       );
 
       // Remove the widget
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SizedBox.shrink(),
-          ),
-        ),
+        const MaterialApp(home: Scaffold(body: SizedBox.shrink())),
       );
 
       // Should dispose without error

@@ -60,9 +60,7 @@ void main() {
             headers: anyNamed('headers'),
             body: anyNamed('body'),
           ),
-        ).thenAnswer(
-          (_) async => http.Response(jsonEncode({}), 200),
-        );
+        ).thenAnswer((_) async => http.Response(jsonEncode({}), 200));
 
         // Test that vote is found via reflection (private method)
         // This is verified indirectly through createVote behavior
@@ -98,7 +96,8 @@ void main() {
                 'uri': 'at://did:plc:test/social.coves.feed.vote/abc1',
                 'value': {
                   'subject': {
-                    'uri': 'at://did:plc:author/social.coves.post.record/other1',
+                    'uri':
+                        'at://did:plc:author/social.coves.post.record/other1',
                     'cid': 'bafy001',
                   },
                   'direction': 'up',
@@ -118,7 +117,8 @@ void main() {
                 'uri': 'at://did:plc:test/social.coves.feed.vote/abc123',
                 'value': {
                   'subject': {
-                    'uri': 'at://did:plc:author/social.coves.post.record/target',
+                    'uri':
+                        'at://did:plc:author/social.coves.post.record/target',
                     'cid': 'bafy123',
                   },
                   'direction': 'up',
@@ -141,7 +141,9 @@ void main() {
 
         when(
           mockSession.fetchHandler(
-            argThat(allOf(contains('listRecords'), contains('cursor=cursor123'))),
+            argThat(
+              allOf(contains('listRecords'), contains('cursor=cursor123')),
+            ),
             method: 'GET',
           ),
         ).thenAnswer((_) async => secondPageResponse);
@@ -154,9 +156,7 @@ void main() {
             headers: anyNamed('headers'),
             body: anyNamed('body'),
           ),
-        ).thenAnswer(
-          (_) async => http.Response(jsonEncode({}), 200),
-        );
+        ).thenAnswer((_) async => http.Response(jsonEncode({}), 200));
 
         // Test that pagination works by creating vote that exists on page 2
         final response = await service.createVote(
@@ -178,7 +178,9 @@ void main() {
 
         verify(
           mockSession.fetchHandler(
-            argThat(allOf(contains('listRecords'), contains('cursor=cursor123'))),
+            argThat(
+              allOf(contains('listRecords'), contains('cursor=cursor123')),
+            ),
             method: 'GET',
           ),
         ).called(1);
@@ -262,7 +264,6 @@ void main() {
     });
 
     group('createVote', () {
-
       test('should create vote successfully', () async {
         // Create a real VoteService instance that we can test with
         // We'll use a minimal test to verify the VoteResponse parsing logic
@@ -298,10 +299,7 @@ void main() {
         final exception = ApiException.fromDioError(dioError);
 
         expect(exception, isA<NetworkException>());
-        expect(
-          exception.message,
-          contains('Connection failed'),
-        );
+        expect(exception.message, contains('Connection failed'));
       });
 
       test('should throw ApiException on Dio timeout', () {

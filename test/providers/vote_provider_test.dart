@@ -107,9 +107,7 @@ void main() {
             existingVoteRkey: anyNamed('existingVoteRkey'),
             existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
-        ).thenAnswer(
-          (_) async => const VoteResponse(deleted: true),
-        );
+        ).thenAnswer((_) async => const VoteResponse(deleted: true));
 
         // Toggle vote off
         final wasLiked = await voteProvider.toggleVote(
@@ -141,9 +139,7 @@ void main() {
             existingVoteRkey: anyNamed('existingVoteRkey'),
             existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
-        ).thenThrow(
-          ApiException('Network error', statusCode: 500),
-        );
+        ).thenThrow(ApiException('Network error', statusCode: 500));
 
         var notificationCount = 0;
         voteProvider.addListener(() {
@@ -188,9 +184,7 @@ void main() {
             existingVoteRkey: anyNamed('existingVoteRkey'),
             existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
-        ).thenThrow(
-          NetworkException('Connection failed'),
-        );
+        ).thenThrow(NetworkException('Connection failed'));
 
         // Try to toggle vote off
         expect(
@@ -217,17 +211,15 @@ void main() {
             existingVoteRkey: anyNamed('existingVoteRkey'),
             existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
-        ).thenAnswer(
-          (_) async {
-            await Future.delayed(const Duration(milliseconds: 100));
-            return const VoteResponse(
-              uri: 'at://did:plc:test/social.coves.feed.vote/456',
-              cid: 'bafy123',
-              rkey: '456',
-              deleted: false,
-            );
-          },
-        );
+        ).thenAnswer((_) async {
+          await Future.delayed(const Duration(milliseconds: 100));
+          return const VoteResponse(
+            uri: 'at://did:plc:test/social.coves.feed.vote/456',
+            cid: 'bafy123',
+            rkey: '456',
+            deleted: false,
+          );
+        });
 
         // Start first request
         final future1 = voteProvider.toggleVote(
@@ -322,9 +314,7 @@ void main() {
         expect(voteProvider.isLiked(testPostUri), true);
 
         // Then clear it
-        voteProvider.setInitialVoteState(
-          postUri: testPostUri,
-        );
+        voteProvider.setInitialVoteState(postUri: testPostUri);
 
         expect(voteProvider.isLiked(testPostUri), false);
         expect(voteProvider.getVoteState(testPostUri), null);
@@ -403,17 +393,15 @@ void main() {
             existingVoteRkey: anyNamed('existingVoteRkey'),
             existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
-        ).thenAnswer(
-          (_) async {
-            await Future.delayed(const Duration(milliseconds: 50));
-            return const VoteResponse(
-              uri: 'at://did:plc:test/social.coves.feed.vote/456',
-              cid: 'bafy123',
-              rkey: '456',
-              deleted: false,
-            );
-          },
-        );
+        ).thenAnswer((_) async {
+          await Future.delayed(const Duration(milliseconds: 50));
+          return const VoteResponse(
+            uri: 'at://did:plc:test/social.coves.feed.vote/456',
+            cid: 'bafy123',
+            rkey: '456',
+            deleted: false,
+          );
+        });
 
         expect(voteProvider.isPending(testPostUri), false);
 
@@ -496,9 +484,7 @@ void main() {
             existingVoteRkey: anyNamed('existingVoteRkey'),
             existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
-        ).thenAnswer(
-          (_) async => const VoteResponse(deleted: true),
-        );
+        ).thenAnswer((_) async => const VoteResponse(deleted: true));
 
         const serverScore = 10;
 
@@ -546,83 +532,87 @@ void main() {
         expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 9);
       });
 
-      test('should adjust score when switching from upvote to downvote',
-          () async {
-        // Set initial state with upvote
-        voteProvider.setInitialVoteState(
-          postUri: testPostUri,
-          voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
-        );
+      test(
+        'should adjust score when switching from upvote to downvote',
+        () async {
+          // Set initial state with upvote
+          voteProvider.setInitialVoteState(
+            postUri: testPostUri,
+            voteDirection: 'up',
+            voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
+          );
 
-        when(
-          mockVoteService.createVote(
-            postUri: anyNamed('postUri'),
-            postCid: anyNamed('postCid'),
-            direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
-          ),
-        ).thenAnswer(
-          (_) async => const VoteResponse(
-            uri: 'at://did:plc:test/social.coves.feed.vote/789',
-            cid: 'bafy789',
-            rkey: '789',
-            deleted: false,
-          ),
-        );
+          when(
+            mockVoteService.createVote(
+              postUri: anyNamed('postUri'),
+              postCid: anyNamed('postCid'),
+              direction: anyNamed('direction'),
+              existingVoteRkey: anyNamed('existingVoteRkey'),
+              existingVoteDirection: anyNamed('existingVoteDirection'),
+            ),
+          ).thenAnswer(
+            (_) async => const VoteResponse(
+              uri: 'at://did:plc:test/social.coves.feed.vote/789',
+              cid: 'bafy789',
+              rkey: '789',
+              deleted: false,
+            ),
+          );
 
-        const serverScore = 10;
+          const serverScore = 10;
 
-        // Switch to downvote
-        await voteProvider.toggleVote(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          direction: 'down',
-        );
+          // Switch to downvote
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+            direction: 'down',
+          );
 
-        // Should have -2 adjustment (remove +1, add -1)
-        expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 8);
-      });
+          // Should have -2 adjustment (remove +1, add -1)
+          expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 8);
+        },
+      );
 
-      test('should adjust score when switching from downvote to upvote',
-          () async {
-        // Set initial state with downvote
-        voteProvider.setInitialVoteState(
-          postUri: testPostUri,
-          voteDirection: 'down',
-          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
-        );
+      test(
+        'should adjust score when switching from downvote to upvote',
+        () async {
+          // Set initial state with downvote
+          voteProvider.setInitialVoteState(
+            postUri: testPostUri,
+            voteDirection: 'down',
+            voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
+          );
 
-        when(
-          mockVoteService.createVote(
-            postUri: anyNamed('postUri'),
-            postCid: anyNamed('postCid'),
-            direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
-          ),
-        ).thenAnswer(
-          (_) async => const VoteResponse(
-            uri: 'at://did:plc:test/social.coves.feed.vote/789',
-            cid: 'bafy789',
-            rkey: '789',
-            deleted: false,
-          ),
-        );
+          when(
+            mockVoteService.createVote(
+              postUri: anyNamed('postUri'),
+              postCid: anyNamed('postCid'),
+              direction: anyNamed('direction'),
+              existingVoteRkey: anyNamed('existingVoteRkey'),
+              existingVoteDirection: anyNamed('existingVoteDirection'),
+            ),
+          ).thenAnswer(
+            (_) async => const VoteResponse(
+              uri: 'at://did:plc:test/social.coves.feed.vote/789',
+              cid: 'bafy789',
+              rkey: '789',
+              deleted: false,
+            ),
+          );
 
-        const serverScore = 10;
+          const serverScore = 10;
 
-        // Switch to upvote
-        await voteProvider.toggleVote(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          direction: 'up',
-        );
+          // Switch to upvote
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+            direction: 'up',
+          );
 
-        // Should have +2 adjustment (remove -1, add +1)
-        expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 12);
-      });
+          // Should have +2 adjustment (remove -1, add +1)
+          expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 12);
+        },
+      );
 
       test('should rollback score adjustment on error', () async {
         const serverScore = 10;
@@ -635,9 +625,7 @@ void main() {
             existingVoteRkey: anyNamed('existingVoteRkey'),
             existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
-        ).thenThrow(
-          ApiException('Network error', statusCode: 500),
-        );
+        ).thenThrow(ApiException('Network error', statusCode: 500));
 
         // Try to vote (will fail)
         expect(

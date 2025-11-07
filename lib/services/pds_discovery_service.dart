@@ -16,7 +16,7 @@ import '../config/environment_config.dart';
 /// 4. Return the PDS URL for OAuth discovery
 class PDSDiscoveryService {
   PDSDiscoveryService({EnvironmentConfig? config})
-      : _config = config ?? EnvironmentConfig.current;
+    : _config = config ?? EnvironmentConfig.current;
 
   final Dio _dio = Dio();
   final EnvironmentConfig _config;

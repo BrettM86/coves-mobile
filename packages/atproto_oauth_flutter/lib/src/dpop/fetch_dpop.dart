@@ -197,19 +197,24 @@ Interceptor createDpopInterceptor(DpopFetchWrapperOptions options) {
 
         // Check for nonce errors in successful responses (when validateStatus: true)
         // This handles the case where Dio returns 401 as a successful response
-        if (nextNonce != null && await _isUseDpopNonceError(response, options.isAuthServer)) {
+        if (nextNonce != null &&
+            await _isUseDpopNonceError(response, options.isAuthServer)) {
           final isTokenEndpoint =
               uri.path.contains('/token') || uri.path.endsWith('/token');
 
           if (kDebugMode) {
-            print('⚠️ DPoP nonce error in response (status ${response.statusCode})');
+            print(
+              '⚠️ DPoP nonce error in response (status ${response.statusCode})',
+            );
             print('   Is token endpoint: $isTokenEndpoint');
           }
 
           if (isTokenEndpoint) {
             // Don't retry token endpoint - just pass through with nonce cached
             if (kDebugMode) {
-              print('   NOT retrying token endpoint (nonce cached for next attempt)');
+              print(
+                '   NOT retrying token endpoint (nonce cached for next attempt)',
+              );
             }
             handler.next(response);
             return;

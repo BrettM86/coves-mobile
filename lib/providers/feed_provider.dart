@@ -21,8 +21,8 @@ class FeedProvider with ChangeNotifier {
     CovesApiService? apiService,
     VoteProvider? voteProvider,
     VoteService? voteService,
-  })  : _voteProvider = voteProvider,
-        _voteService = voteService {
+  }) : _voteProvider = voteProvider,
+       _voteService = voteService {
     // Use injected service (for testing) or create new one (for production)
     // Pass token getter to API service for automatic fresh token retrieval
     _apiService =

@@ -41,17 +41,19 @@ void main() async {
       providers: [
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider(
-          create: (_) => VoteProvider(
-            voteService: voteService,
-            authProvider: authProvider,
-          ),
+          create:
+              (_) => VoteProvider(
+                voteService: voteService,
+                authProvider: authProvider,
+              ),
         ),
         ChangeNotifierProxyProvider2<AuthProvider, VoteProvider, FeedProvider>(
-          create: (context) => FeedProvider(
-            authProvider,
-            voteProvider: context.read<VoteProvider>(),
-            voteService: voteService,
-          ),
+          create:
+              (context) => FeedProvider(
+                authProvider,
+                voteProvider: context.read<VoteProvider>(),
+                voteService: voteService,
+              ),
           update: (context, auth, vote, previous) {
             // Reuse existing provider to maintain state across rebuilds
             return previous ??

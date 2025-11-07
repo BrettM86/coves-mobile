@@ -35,9 +35,9 @@ class VoteService {
     Future<OAuthSession?> Function()? sessionGetter,
     String? Function()? didGetter,
     String? Function()? pdsUrlGetter,
-  })  : _sessionGetter = sessionGetter,
-        _didGetter = didGetter,
-        _pdsUrlGetter = pdsUrlGetter;
+  }) : _sessionGetter = sessionGetter,
+       _didGetter = didGetter,
+       _pdsUrlGetter = pdsUrlGetter;
 
   final Future<OAuthSession?> Function()? _sessionGetter;
   final String? Function()? _didGetter;
@@ -72,9 +72,10 @@ class VoteService {
 
       // Paginate through all vote records
       do {
-        final url = cursor == null
-            ? '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=100'
-            : '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=100&cursor=$cursor';
+        final url =
+            cursor == null
+                ? '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=100'
+                : '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=100&cursor=$cursor';
 
         final response = await session.fetchHandler(url, method: 'GET');
 
@@ -212,10 +213,7 @@ class VoteService {
           if (kDebugMode) {
             debugPrint('   Same direction - deleting vote');
           }
-          await _deleteVote(
-            userDid: userDid,
-            rkey: existingVote.rkey,
-          );
+          await _deleteVote(userDid: userDid, rkey: existingVote.rkey);
           return const VoteResponse(deleted: true);
         }
 
@@ -223,10 +221,7 @@ class VoteService {
         if (kDebugMode) {
           debugPrint('   Different direction - switching vote');
         }
-        await _deleteVote(
-          userDid: userDid,
-          rkey: existingVote.rkey,
-        );
+        await _deleteVote(userDid: userDid, rkey: existingVote.rkey);
       }
 
       // Step 2: Create new vote
@@ -271,9 +266,10 @@ class VoteService {
 
       do {
         // Build URL with cursor if available
-        final url = cursor == null
-            ? '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=$pageSize&reverse=true'
-            : '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=$pageSize&reverse=true&cursor=$cursor';
+        final url =
+            cursor == null
+                ? '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=$pageSize&reverse=true'
+                : '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=$pageSize&reverse=true&cursor=$cursor';
 
         final response = await session.fetchHandler(url, method: 'GET');
 
@@ -349,10 +345,7 @@ class VoteService {
     // Build the vote record according to the lexicon
     final record = {
       r'$type': voteCollection,
-      'subject': {
-        'uri': postUri,
-        'cid': postCid,
-      },
+      'subject': {'uri': postUri, 'cid': postCid},
       'direction': direction,
       'createdAt': DateTime.now().toUtc().toIso8601String(),
     };
@@ -389,12 +382,7 @@ class VoteService {
     // Extract rkey from URI
     final rkey = uri.split('/').last;
 
-    return VoteResponse(
-      uri: uri,
-      cid: cid,
-      rkey: rkey,
-      deleted: false,
-    );
+    return VoteResponse(uri: uri, cid: cid, rkey: rkey, deleted: false);
   }
 
   /// Delete vote record from PDS
@@ -436,12 +424,7 @@ class VoteService {
 ///
 /// Response from createVote operation.
 class VoteResponse {
-  const VoteResponse({
-    this.uri,
-    this.cid,
-    this.rkey,
-    required this.deleted,
-  });
+  const VoteResponse({this.uri, this.cid, this.rkey, required this.deleted});
 
   /// AT-URI of the created vote record
   final String? uri;

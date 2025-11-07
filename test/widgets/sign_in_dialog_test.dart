@@ -39,11 +39,12 @@ void main() {
             body: Builder(
               builder: (context) {
                 return ElevatedButton(
-                  onPressed: () => SignInDialog.show(
-                    context,
-                    title: 'Custom Title',
-                    message: 'Custom message here',
-                  ),
+                  onPressed:
+                      () => SignInDialog.show(
+                        context,
+                        title: 'Custom Title',
+                        message: 'Custom message here',
+                      ),
                   child: const Text('Show Dialog'),
                 );
               },
@@ -212,9 +213,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Find the AlertDialog widget
-      final alertDialog = tester.widget<AlertDialog>(
-        find.byType(AlertDialog),
-      );
+      final alertDialog = tester.widget<AlertDialog>(find.byType(AlertDialog));
 
       // Verify background color is set
       expect(alertDialog.backgroundColor, isNotNull);

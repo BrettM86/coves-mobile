@@ -666,9 +666,7 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
       // Restore DPoP key with error handling for corrupted JWK data
       final FlutterKey dpopKey;
       try {
-        dpopKey = FlutterKey.fromJwk(
-          stateData.dpopKey as Map<String, dynamic>,
-        );
+        dpopKey = FlutterKey.fromJwk(stateData.dpopKey as Map<String, dynamic>);
         if (kDebugMode) {
           print('🔓 DPoP key restored successfully for token exchange');
         }
@@ -834,9 +832,7 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
       // This ensures DPoP proofs match the token binding
       final FlutterKey dpopKey;
       try {
-        dpopKey = FlutterKey.fromJwk(
-          session.dpopKey as Map<String, dynamic>,
-        );
+        dpopKey = FlutterKey.fromJwk(session.dpopKey as Map<String, dynamic>);
       } catch (e) {
         // If key is corrupted, delete the session and force re-authentication
         await _sessionGetter.delStored(
@@ -906,9 +902,7 @@ class OAuthClient extends CustomEventTarget<Map<String, dynamic>> {
       // This ensures DPoP proofs match the token binding
       final FlutterKey dpopKey;
       try {
-        dpopKey = FlutterKey.fromJwk(
-          session.dpopKey as Map<String, dynamic>,
-        );
+        dpopKey = FlutterKey.fromJwk(session.dpopKey as Map<String, dynamic>);
       } catch (e) {
         // If key is corrupted, skip server-side revocation
         // The finally block will still delete the local session

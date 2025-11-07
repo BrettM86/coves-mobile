@@ -33,14 +33,14 @@ class FakeAuthProvider extends AuthProvider {
 // Fake VoteProvider for testing
 class FakeVoteProvider extends VoteProvider {
   FakeVoteProvider()
-      : super(
-          voteService: VoteService(
-            sessionGetter: () async => null,
-            didGetter: () => null,
-            pdsUrlGetter: () => null,
-          ),
-          authProvider: FakeAuthProvider(),
-        );
+    : super(
+        voteService: VoteService(
+          sessionGetter: () async => null,
+          didGetter: () => null,
+          pdsUrlGetter: () => null,
+        ),
+        authProvider: FakeAuthProvider(),
+      );
 
   final Map<String, bool> _likes = {};
 
