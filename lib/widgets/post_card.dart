@@ -1,12 +1,15 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
 import '../models/post.dart';
+import '../services/streamable_service.dart';
 import '../utils/community_handle_utils.dart';
 import '../utils/date_time_utils.dart';
 import 'external_link_bar.dart';
+import 'fullscreen_video_player.dart';
 import 'post_card_actions.dart';
 
 /// Post card widget for displaying feed posts
@@ -98,7 +101,10 @@ class PostCard extends StatelessWidget {
 
             // Embed (link preview)
             if (post.post.embed?.external != null) ...[
-              _EmbedCard(embed: post.post.embed!.external!),
+              _EmbedCard(
+                embed: post.post.embed!.external!,
+                streamableService: context.read<StreamableService>(),
+              ),
               const SizedBox(height: 8),
             ],
 
@@ -220,26 +226,100 @@ class PostCard extends StatelessWidget {
 /// Embed card widget for displaying link previews
 ///
 /// Shows a thumbnail image for external embeds with loading and error states.
-class _EmbedCard extends StatelessWidget {
-  const _EmbedCard({required this.embed});
+/// For video embeds (Streamable), displays a play button overlay and opens
+/// a video player dialog when tapped.
+class _EmbedCard extends StatefulWidget {
+  const _EmbedCard({required this.embed, required this.streamableService});
 
   final ExternalEmbed embed;
+  final StreamableService streamableService;
+
+  @override
+  State<_EmbedCard> createState() => _EmbedCardState();
+}
+
+class _EmbedCardState extends State<_EmbedCard> {
+  bool _isLoadingVideo = false;
+
+  /// Checks if this embed is a video
+  bool get _isVideo {
+    final embedType = widget.embed.embedType;
+    return embedType == 'video' || embedType == 'video-stream';
+  }
+
+  /// Checks if this is a Streamable video
+  bool get _isStreamableVideo {
+    return _isVideo && widget.embed.provider?.toLowerCase() == 'streamable';
+  }
+
+  /// Shows the video player in fullscreen with swipe-to-dismiss
+  Future<void> _showVideoPlayer(BuildContext context) async {
+    // Capture context-dependent objects before async gap
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    setState(() {
+      _isLoadingVideo = true;
+    });
+
+    try {
+      // Fetch the MP4 URL from Streamable using the injected service
+      final videoUrl = await widget.streamableService.getVideoUrl(
+        widget.embed.uri,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (videoUrl == null) {
+        // Show error if we couldn't get the video URL
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to load video',
+              style: TextStyle(
+                color: AppColors.textPrimary.withValues(alpha: 0.9),
+              ),
+            ),
+            backgroundColor: AppColors.backgroundSecondary,
+          ),
+        );
+        return;
+      }
+
+      // Navigate to fullscreen video player
+      await navigator.push<void>(
+        MaterialPageRoute(
+          builder: (context) => FullscreenVideoPlayer(videoUrl: videoUrl),
+          fullscreenDialog: true,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingVideo = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     // Only show image if thumbnail exists
-    if (embed.thumb == null) {
+    if (widget.embed.thumb == null) {
       return const SizedBox.shrink();
     }
 
-    return Container(
+    // Build the thumbnail image
+    final thumbnailWidget = Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: CachedNetworkImage(
-        imageUrl: embed.thumb!,
+        imageUrl: widget.embed.thumb!,
         width: double.infinity,
         height: 180,
         fit: BoxFit.cover,
@@ -272,5 +352,40 @@ class _EmbedCard extends StatelessWidget {
         },
       ),
     );
+
+    // If this is a Streamable video, add play button overlay and tap handler
+    if (_isStreamableVideo) {
+      return GestureDetector(
+        onTap: _isLoadingVideo ? null : () => _showVideoPlayer(context),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            thumbnailWidget,
+            // Semi-transparent play button or loading indicator overlay
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.background.withValues(alpha: 0.7),
+                shape: BoxShape.circle,
+              ),
+              child:
+                  _isLoadingVideo
+                      ? const CircularProgressIndicator(
+                        color: AppColors.loadingIndicator,
+                      )
+                      : const Icon(
+                        Icons.play_arrow,
+                        color: AppColors.textPrimary,
+                        size: 48,
+                      ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // For non-video embeds, just return the thumbnail
+    return thumbnailWidget;
   }
 }
