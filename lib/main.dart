@@ -11,6 +11,7 @@ import 'providers/vote_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/main_shell_screen.dart';
 import 'screens/landing_screen.dart';
+import 'services/streamable_service.dart';
 import 'services/vote_service.dart';
 
 void main() async {
@@ -64,6 +65,8 @@ void main() async {
                 );
           },
         ),
+        // StreamableService for video embeds
+        Provider<StreamableService>(create: (_) => StreamableService()),
       ],
       child: const CovesApp(),
     ),

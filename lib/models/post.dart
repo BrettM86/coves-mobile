@@ -197,15 +197,32 @@ class ExternalEmbed {
     this.description,
     this.thumb,
     this.domain,
+    this.embedType,
+    this.provider,
+    this.images,
+    this.totalCount,
   });
 
   factory ExternalEmbed.fromJson(Map<String, dynamic> json) {
+    // Thumb is always a string URL (backend transforms blob refs before sending)
+
+    // Handle images array if present
+    List<Map<String, dynamic>>? imagesList;
+    if (json['images'] != null && json['images'] is List) {
+      imagesList =
+          (json['images'] as List).whereType<Map<String, dynamic>>().toList();
+    }
+
     return ExternalEmbed(
       uri: json['uri'] as String,
       title: json['title'] as String?,
       description: json['description'] as String?,
       thumb: json['thumb'] as String?,
       domain: json['domain'] as String?,
+      embedType: json['embedType'] as String?,
+      provider: json['provider'] as String?,
+      images: imagesList,
+      totalCount: json['totalCount'] as int?,
     );
   }
   final String uri;
@@ -213,6 +230,10 @@ class ExternalEmbed {
   final String? description;
   final String? thumb;
   final String? domain;
+  final String? embedType;
+  final String? provider;
+  final List<Map<String, dynamic>>? images;
+  final int? totalCount;
 }
 
 class PostFacet {
