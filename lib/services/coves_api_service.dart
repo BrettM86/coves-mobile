@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../config/oauth_config.dart';
+import '../models/comment.dart';
 import '../models/post.dart';
 import 'api_exceptions.dart';
 
@@ -15,16 +16,19 @@ import 'api_exceptions.dart';
 /// rotates tokens automatically (~1 hour expiry), and caching tokens would
 /// cause 401 errors after the first token expires.
 class CovesApiService {
-  CovesApiService({Future<String?> Function()? tokenGetter})
-    : _tokenGetter = tokenGetter {
-    _dio = Dio(
-      BaseOptions(
-        baseUrl: OAuthConfig.apiUrl,
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
-        headers: {'Content-Type': 'application/json'},
-      ),
-    );
+  CovesApiService({
+    Future<String?> Function()? tokenGetter,
+    Dio? dio,
+  }) : _tokenGetter = tokenGetter {
+    _dio = dio ??
+        Dio(
+          BaseOptions(
+            baseUrl: OAuthConfig.apiUrl,
+            connectTimeout: const Duration(seconds: 30),
+            receiveTimeout: const Duration(seconds: 30),
+            headers: {'Content-Type': 'application/json'},
+          ),
+        );
 
     // Add auth interceptor FIRST to add bearer token
     _dio.interceptors.add(
@@ -174,6 +178,64 @@ class CovesApiService {
       return TimelineResponse.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       _handleDioException(e, 'discover feed');
+    }
+  }
+
+  /// Get comments for a post (authenticated)
+  ///
+  /// Fetches threaded comments for a specific post.
+  /// Requires authentication.
+  ///
+  /// Parameters:
+  /// - [postUri]: Post URI (required)
+  /// - [sort]: 'hot', 'top', or 'new' (default: 'hot')
+  /// - [timeframe]: 'hour', 'day', 'week', 'month', 'year', 'all'
+  /// - [depth]: Maximum nesting depth for replies (default: 10)
+  /// - [limit]: Number of comments per page (default: 50, max: 100)
+  /// - [cursor]: Pagination cursor from previous response
+  Future<CommentsResponse> getComments({
+    required String postUri,
+    String sort = 'hot',
+    String? timeframe,
+    int depth = 10,
+    int limit = 50,
+    String? cursor,
+  }) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Fetching comments: postUri=$postUri, sort=$sort');
+      }
+
+      final queryParams = <String, dynamic>{
+        'post': postUri,
+        'sort': sort,
+        'depth': depth,
+        'limit': limit,
+      };
+
+      if (timeframe != null) {
+        queryParams['timeframe'] = timeframe;
+      }
+
+      if (cursor != null) {
+        queryParams['cursor'] = cursor;
+      }
+
+      final response = await _dio.get(
+        '/xrpc/social.coves.community.comment.getComments',
+        queryParameters: queryParams,
+      );
+
+      if (kDebugMode) {
+        debugPrint(
+          '✅ Comments fetched: '
+          '${response.data['comments']?.length ?? 0} comments',
+        );
+      }
+
+      return CommentsResponse.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      _handleDioException(e, 'comments');
     }
   }
 
