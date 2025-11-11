@@ -26,8 +26,8 @@ class AppColors {
   /// Loading indicator color - medium gray
   static const loadingIndicator = Color(0xFF484F58);
 
-  /// White color for primary text
-  static const textPrimary = Colors.white;
+  /// Off-white color for primary text
+  static const textPrimary = Color(0xFFe4e6e7);
 
   /// Community name color - light blue/cyan
   static const communityName = Color(0xFF7CB9E8);

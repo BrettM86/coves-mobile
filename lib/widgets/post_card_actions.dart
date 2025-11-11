@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
@@ -18,9 +19,14 @@ import 'sign_in_dialog.dart';
 /// Displays menu, share, comment, and like buttons with proper
 /// authentication handling and optimistic updates.
 class PostCardActions extends StatelessWidget {
-  const PostCardActions({required this.post, super.key});
+  const PostCardActions({
+    required this.post,
+    this.showCommentButton = true,
+    super.key,
+  });
 
   final FeedViewPost post;
+  final bool showCommentButton;
 
   @override
   Widget build(BuildContext context) {
@@ -85,43 +91,44 @@ class PostCardActions extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Comment button
-            Semantics(
-              button: true,
-              label:
-                  'View ${post.post.stats.commentCount} ${post.post.stats.commentCount == 1 ? "comment" : "comments"}',
-              child: InkWell(
-                onTap: () {
-                  // TODO: Navigate to post detail/comments screen
-                  if (kDebugMode) {
-                    debugPrint('Comment button tapped for post');
-                  }
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ReplyIcon(
-                        color: AppColors.textPrimary.withValues(alpha: 0.6),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        DateTimeUtils.formatCount(post.post.stats.commentCount),
-                        style: TextStyle(
+            // Comment button (hidden in detail view)
+            if (showCommentButton) ...[
+              Semantics(
+                button: true,
+                label:
+                    'View ${post.post.stats.commentCount} ${post.post.stats.commentCount == 1 ? "comment" : "comments"}',
+                child: InkWell(
+                  onTap: () {
+                    // Navigate to post detail screen (works for ALL post types)
+                    final encodedUri = Uri.encodeComponent(post.post.uri);
+                    context.push('/post/$encodedUri', extra: post);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ReplyIcon(
                           color: AppColors.textPrimary.withValues(alpha: 0.6),
-                          fontSize: 13,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 5),
+                        Text(
+                          DateTimeUtils.formatCount(post.post.stats.commentCount),
+                          style: TextStyle(
+                            color: AppColors.textPrimary.withValues(alpha: 0.6),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
+              const SizedBox(width: 8),
+            ],
 
             // Heart button
             Consumer<VoteProvider>(

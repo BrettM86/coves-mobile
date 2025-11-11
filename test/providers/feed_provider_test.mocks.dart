@@ -3,12 +3,13 @@
 // Do not manually edit this file.
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
-import 'dart:async' as _i4;
-import 'dart:ui' as _i5;
+import 'dart:async' as _i5;
+import 'dart:ui' as _i6;
 
+import 'package:coves_flutter/models/comment.dart' as _i3;
 import 'package:coves_flutter/models/post.dart' as _i2;
-import 'package:coves_flutter/providers/auth_provider.dart' as _i3;
-import 'package:coves_flutter/services/coves_api_service.dart' as _i6;
+import 'package:coves_flutter/providers/auth_provider.dart' as _i4;
+import 'package:coves_flutter/services/coves_api_service.dart' as _i7;
 import 'package:mockito/mockito.dart' as _i1;
 
 // ignore_for_file: type=lint
@@ -32,10 +33,16 @@ class _FakeTimelineResponse_0 extends _i1.SmartFake
     : super(parent, parentInvocation);
 }
 
+class _FakeCommentsResponse_1 extends _i1.SmartFake
+    implements _i3.CommentsResponse {
+  _FakeCommentsResponse_1(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
 /// A class which mocks [AuthProvider].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockAuthProvider extends _i1.Mock implements _i3.AuthProvider {
+class MockAuthProvider extends _i1.Mock implements _i4.AuthProvider {
   MockAuthProvider() {
     _i1.throwOnMissingStub(this);
   }
@@ -59,39 +66,39 @@ class MockAuthProvider extends _i1.Mock implements _i3.AuthProvider {
           as bool);
 
   @override
-  _i4.Future<String?> getAccessToken() =>
+  _i5.Future<String?> getAccessToken() =>
       (super.noSuchMethod(
             Invocation.method(#getAccessToken, []),
-            returnValue: _i4.Future<String?>.value(),
+            returnValue: _i5.Future<String?>.value(),
           )
-          as _i4.Future<String?>);
+          as _i5.Future<String?>);
 
   @override
-  _i4.Future<void> initialize() =>
+  _i5.Future<void> initialize() =>
       (super.noSuchMethod(
             Invocation.method(#initialize, []),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
           )
-          as _i4.Future<void>);
+          as _i5.Future<void>);
 
   @override
-  _i4.Future<void> signIn(String? handle) =>
+  _i5.Future<void> signIn(String? handle) =>
       (super.noSuchMethod(
             Invocation.method(#signIn, [handle]),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
           )
-          as _i4.Future<void>);
+          as _i5.Future<void>);
 
   @override
-  _i4.Future<void> signOut() =>
+  _i5.Future<void> signOut() =>
       (super.noSuchMethod(
             Invocation.method(#signOut, []),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
           )
-          as _i4.Future<void>);
+          as _i5.Future<void>);
 
   @override
   void clearError() => super.noSuchMethod(
@@ -106,13 +113,13 @@ class MockAuthProvider extends _i1.Mock implements _i3.AuthProvider {
   );
 
   @override
-  void addListener(_i5.VoidCallback? listener) => super.noSuchMethod(
+  void addListener(_i6.VoidCallback? listener) => super.noSuchMethod(
     Invocation.method(#addListener, [listener]),
     returnValueForMissingStub: null,
   );
 
   @override
-  void removeListener(_i5.VoidCallback? listener) => super.noSuchMethod(
+  void removeListener(_i6.VoidCallback? listener) => super.noSuchMethod(
     Invocation.method(#removeListener, [listener]),
     returnValueForMissingStub: null,
   );
@@ -127,13 +134,13 @@ class MockAuthProvider extends _i1.Mock implements _i3.AuthProvider {
 /// A class which mocks [CovesApiService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
+class MockCovesApiService extends _i1.Mock implements _i7.CovesApiService {
   MockCovesApiService() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i4.Future<_i2.TimelineResponse> getTimeline({
+  _i5.Future<_i2.TimelineResponse> getTimeline({
     String? sort = 'hot',
     String? timeframe,
     int? limit = 15,
@@ -146,7 +153,7 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
               #limit: limit,
               #cursor: cursor,
             }),
-            returnValue: _i4.Future<_i2.TimelineResponse>.value(
+            returnValue: _i5.Future<_i2.TimelineResponse>.value(
               _FakeTimelineResponse_0(
                 this,
                 Invocation.method(#getTimeline, [], {
@@ -158,10 +165,10 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
               ),
             ),
           )
-          as _i4.Future<_i2.TimelineResponse>);
+          as _i5.Future<_i2.TimelineResponse>);
 
   @override
-  _i4.Future<_i2.TimelineResponse> getDiscover({
+  _i5.Future<_i2.TimelineResponse> getDiscover({
     String? sort = 'hot',
     String? timeframe,
     int? limit = 15,
@@ -174,7 +181,7 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
               #limit: limit,
               #cursor: cursor,
             }),
-            returnValue: _i4.Future<_i2.TimelineResponse>.value(
+            returnValue: _i5.Future<_i2.TimelineResponse>.value(
               _FakeTimelineResponse_0(
                 this,
                 Invocation.method(#getDiscover, [], {
@@ -186,7 +193,41 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
               ),
             ),
           )
-          as _i4.Future<_i2.TimelineResponse>);
+          as _i5.Future<_i2.TimelineResponse>);
+
+  @override
+  _i5.Future<_i3.CommentsResponse> getComments({
+    required String? postUri,
+    String? sort = 'hot',
+    String? timeframe,
+    int? depth = 10,
+    int? limit = 50,
+    String? cursor,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#getComments, [], {
+              #postUri: postUri,
+              #sort: sort,
+              #timeframe: timeframe,
+              #depth: depth,
+              #limit: limit,
+              #cursor: cursor,
+            }),
+            returnValue: _i5.Future<_i3.CommentsResponse>.value(
+              _FakeCommentsResponse_1(
+                this,
+                Invocation.method(#getComments, [], {
+                  #postUri: postUri,
+                  #sort: sort,
+                  #timeframe: timeframe,
+                  #depth: depth,
+                  #limit: limit,
+                  #cursor: cursor,
+                }),
+              ),
+            ),
+          )
+          as _i5.Future<_i3.CommentsResponse>);
 
   @override
   void dispose() => super.noSuchMethod(
