@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
@@ -25,10 +26,63 @@ import 'post_card_actions.dart';
 /// - Periodic updates of time strings
 /// - Deterministic testing without DateTime.now()
 class PostCard extends StatelessWidget {
-  const PostCard({required this.post, this.currentTime, super.key});
+  const PostCard({
+    required this.post,
+    this.currentTime,
+    this.showCommentButton = true,
+    this.disableNavigation = false,
+    super.key,
+  });
 
   final FeedViewPost post;
   final DateTime? currentTime;
+  final bool showCommentButton;
+  final bool disableNavigation;
+
+  /// Check if this post should be clickable
+  /// Only text posts (no embeds or non-video/link embeds) are clickable
+  bool get _isClickable {
+    // If navigation is explicitly disabled (e.g., on detail screen), not clickable
+    if (disableNavigation) {
+      return false;
+    }
+
+    final embed = post.post.embed;
+
+    // If no embed, it's a text-only post - clickable
+    if (embed == null) {
+      return true;
+    }
+
+    // If embed exists, check if it's a video or link type
+    final external = embed.external;
+    if (external == null) {
+      return true; // No external embed, clickable
+    }
+
+    final embedType = external.embedType;
+
+    // Video and video-stream posts should NOT be clickable (they have their own tap handling)
+    if (embedType == 'video' || embedType == 'video-stream') {
+      return false;
+    }
+
+    // Link embeds should NOT be clickable (they have their own link handling)
+    if (embedType == 'link') {
+      return false;
+    }
+
+    // All other types are clickable
+    return true;
+  }
+
+  void _navigateToDetail(BuildContext context) {
+    // Navigate to post detail screen
+    // Use URI-encoded version of the post URI for the URL path
+    // Pass the full post object via extras
+    final encodedUri = Uri.encodeComponent(post.post.uri);
+    context.push('/post/$encodedUri', extra: post);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,53 +135,106 @@ class PostCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
 
-            // Post title
-            if (post.post.title != null) ...[
-              Text(
-                post.post.title!,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ],
+            // Wrap content in InkWell if clickable (text-only posts)
+            if (_isClickable)
+              InkWell(
+                onTap: () => _navigateToDetail(context),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Post title
+                    if (post.post.title != null) ...[
+                      Text(
+                        post.post.title!,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
 
-            // Spacing after title (only if we have content below)
-            if (post.post.title != null &&
-                (post.post.embed?.external != null ||
-                    post.post.text.isNotEmpty))
-              const SizedBox(height: 8),
+                    // Spacing after title (only if we have text)
+                    if (post.post.title != null && post.post.text.isNotEmpty)
+                      const SizedBox(height: 8),
 
-            // Embed (link preview)
-            if (post.post.embed?.external != null) ...[
-              _EmbedCard(
-                embed: post.post.embed!.external!,
-                streamableService: context.read<StreamableService>(),
-              ),
-              const SizedBox(height: 8),
-            ],
+                    // Post text body preview
+                    if (post.post.text.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.backgroundSecondary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          post.post.text,
+                          style: TextStyle(
+                            color: AppColors.textPrimary.withValues(alpha: 0.7),
+                            fontSize: 13,
+                            height: 1.4,
+                          ),
+                          maxLines: 5,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              )
+            else
+              // Non-clickable content (video/link posts)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Post title
+                  if (post.post.title != null) ...[
+                    Text(
+                      post.post.title!,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
 
-            // Post text body preview
-            if (post.post.text.isNotEmpty) ...[
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.backgroundSecondary,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  post.post.text,
-                  style: TextStyle(
-                    color: AppColors.textPrimary.withValues(alpha: 0.7),
-                    fontSize: 13,
-                    height: 1.4,
-                  ),
-                  maxLines: 5,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                  // Spacing after title (only if we have content below)
+                  if (post.post.title != null &&
+                      (post.post.embed?.external != null ||
+                          post.post.text.isNotEmpty))
+                    const SizedBox(height: 8),
+
+                  // Embed (link preview)
+                  if (post.post.embed?.external != null) ...[
+                    _EmbedCard(
+                      embed: post.post.embed!.external!,
+                      streamableService: context.read<StreamableService>(),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
+                  // Post text body preview
+                  if (post.post.text.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.backgroundSecondary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        post.post.text,
+                        style: TextStyle(
+                          color: AppColors.textPrimary.withValues(alpha: 0.7),
+                          fontSize: 13,
+                          height: 1.4,
+                        ),
+                        maxLines: 5,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ],
 
             // External link (if present)
             if (post.post.embed?.external != null) ...[
@@ -139,7 +246,10 @@ class PostCard extends StatelessWidget {
             const SizedBox(height: 4),
 
             // Action buttons row
-            PostCardActions(post: post),
+            PostCardActions(
+              post: post,
+              showCommentButton: showCommentButton,
+            ),
           ],
         ),
       ),

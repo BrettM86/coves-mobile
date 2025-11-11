@@ -5,14 +5,18 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'config/oauth_config.dart';
+import 'models/post.dart';
 import 'providers/auth_provider.dart';
+import 'providers/comments_provider.dart';
 import 'providers/feed_provider.dart';
 import 'providers/vote_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/main_shell_screen.dart';
+import 'screens/home/post_detail_screen.dart';
 import 'screens/landing_screen.dart';
 import 'services/streamable_service.dart';
 import 'services/vote_service.dart';
+import 'widgets/loading_error_states.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,6 +69,24 @@ void main() async {
                 );
           },
         ),
+        ChangeNotifierProxyProvider2<AuthProvider, VoteProvider,
+            CommentsProvider>(
+          create:
+              (context) => CommentsProvider(
+                authProvider,
+                voteProvider: context.read<VoteProvider>(),
+                voteService: voteService,
+              ),
+          update: (context, auth, vote, previous) {
+            // Reuse existing provider to maintain state across rebuilds
+            return previous ??
+                CommentsProvider(
+                  auth,
+                  voteProvider: vote,
+                  voteService: voteService,
+                );
+          },
+        ),
         // StreamableService for video embeds
         Provider<StreamableService>(create: (_) => StreamableService()),
       ],
@@ -90,6 +112,7 @@ class CovesApp extends StatelessWidget {
         useMaterial3: true,
       ),
       routerConfig: _createRouter(authProvider),
+      restorationScopeId: 'app',
       debugShowCheckedModeBanner: false,
     );
   }
@@ -104,6 +127,32 @@ GoRouter _createRouter(AuthProvider authProvider) {
       GoRoute(
         path: '/feed',
         builder: (context, state) => const MainShellScreen(),
+      ),
+      GoRoute(
+        path: '/post/:postUri',
+        builder: (context, state) {
+          // Extract post from state.extra
+          final post = state.extra as FeedViewPost?;
+
+          // If no post provided via extra, show user-friendly error
+          if (post == null) {
+            if (kDebugMode) {
+              print('⚠️ PostDetailScreen: No post provided in route extras');
+            }
+            // Show not found screen with option to go back
+            return NotFoundError(
+              title: 'Post Not Found',
+              message:
+                  'This post could not be loaded. It may have been deleted or the link is invalid.',
+              onBackPressed: () {
+                // Navigate back to feed
+                context.go('/feed');
+              },
+            );
+          }
+
+          return PostDetailScreen(post: post);
+        },
       ),
     ],
     refreshListenable: authProvider,
