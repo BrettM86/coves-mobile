@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/icons/bluesky_icons.dart';
 import 'create_post_screen.dart';
 import 'feed_screen.dart';
 import 'notifications_screen.dart';
@@ -45,11 +46,11 @@ class _MainShellScreenState extends State<MainShellScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildNavItem(0, Icons.home, 'Home'),
-                _buildNavItem(1, Icons.search, 'Search'),
-                _buildNavItem(2, Icons.add_box_outlined, 'Create'),
-                _buildNavItem(3, Icons.notifications_outlined, 'Notifications'),
-                _buildNavItem(4, Icons.person_outline, 'Me'),
+                _buildNavItem(0, 'home', 'Home'),
+                _buildNavItem(1, 'search', 'Search'),
+                _buildNavItem(2, 'plus', 'Create'),
+                _buildNavItem(3, 'bell', 'Notifications'),
+                _buildNavItem(4, 'person', 'Me'),
               ],
             ),
           ),
@@ -58,19 +59,43 @@ class _MainShellScreenState extends State<MainShellScreen> {
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
+  Widget _buildNavItem(int index, String iconName, String label) {
     final isSelected = _selectedIndex == index;
     final color =
         isSelected
             ? const Color(0xFFFF6B35)
             : const Color(0xFFB6C2D2).withValues(alpha: 0.6);
 
+    // Use filled variant when selected, outline when not
+    Widget icon;
+    switch (iconName) {
+      case 'home':
+        icon = BlueSkyIcon.homeSimple(color: color);
+        break;
+      case 'search':
+        icon = BlueSkyIcon.search(color: color);
+        break;
+      case 'plus':
+        icon = BlueSkyIcon.plus(color: color);
+        break;
+      case 'bell':
+        icon = isSelected
+            ? BlueSkyIcon.bellFilled(color: color)
+            : BlueSkyIcon.bellOutline(color: color);
+        break;
+      case 'person':
+        icon = BlueSkyIcon.personSimple(color: color);
+        break;
+      default:
+        icon = BlueSkyIcon.homeOutline(color: color);
+    }
+
     return Expanded(
       child: InkWell(
         onTap: () => _onItemTapped(index),
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
-        child: Icon(icon, size: 28, color: color),
+        child: icon,
       ),
     );
   }
