@@ -31,6 +31,8 @@ class PostCard extends StatelessWidget {
     this.currentTime,
     this.showCommentButton = true,
     this.disableNavigation = false,
+    this.showActions = true,
+    this.showHeader = true,
     super.key,
   });
 
@@ -38,6 +40,8 @@ class PostCard extends StatelessWidget {
   final DateTime? currentTime;
   final bool showCommentButton;
   final bool disableNavigation;
+  final bool showActions;
+  final bool showHeader;
 
   /// Check if this post should be clickable
   /// Only text posts (no embeds or non-video/link embeds) are clickable
@@ -87,53 +91,58 @@ class PostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: const BoxDecoration(
+      margin: EdgeInsets.only(bottom: showHeader ? 8 : 0),
+      decoration: BoxDecoration(
         color: AppColors.background,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+        border:
+            showHeader
+                ? const Border(bottom: BorderSide(color: AppColors.border))
+                : null,
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 1),
+        padding: EdgeInsets.fromLTRB(16, showHeader ? 4 : 12, 16, 1),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Community and author info
-            Row(
-              children: [
-                // Community avatar
-                _buildCommunityAvatar(post.post.community),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Community handle with styled parts
-                      _buildCommunityHandle(post.post.community),
-                      // Author handle
-                      Text(
-                        '@${post.post.author.handle}',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
+            if (showHeader) ...[
+              Row(
+                children: [
+                  // Community avatar
+                  _buildCommunityAvatar(post.post.community),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Community handle with styled parts
+                        _buildCommunityHandle(post.post.community),
+                        // Author handle
+                        Text(
+                          '@${post.post.author.handle}',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                // Time ago
-                Text(
-                  DateTimeUtils.formatTimeAgo(
-                    post.post.createdAt,
-                    currentTime: currentTime,
+                  // Time ago
+                  Text(
+                    DateTimeUtils.formatTimeAgo(
+                      post.post.createdAt,
+                      currentTime: currentTime,
+                    ),
+                    style: TextStyle(
+                      color: AppColors.textPrimary.withValues(alpha: 0.5),
+                      fontSize: 14,
+                    ),
                   ),
-                  style: TextStyle(
-                    color: AppColors.textPrimary.withValues(alpha: 0.5),
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
 
             // Wrap content in InkWell if clickable (text-only posts)
             if (_isClickable)
@@ -243,13 +252,11 @@ class PostCard extends StatelessWidget {
             ],
 
             // Reduced spacing before action buttons
-            const SizedBox(height: 4),
+            if (showActions) const SizedBox(height: 4),
 
             // Action buttons row
-            PostCardActions(
-              post: post,
-              showCommentButton: showCommentButton,
-            ),
+            if (showActions)
+              PostCardActions(post: post, showCommentButton: showCommentButton),
           ],
         ),
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/primary_button.dart';
 
@@ -128,7 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(
-                          color: Color(0xFFFF6B35),
+                          color: AppColors.primary,
                           width: 2,
                         ),
                       ),
@@ -208,7 +209,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: const Text(
                         'What is a handle?',
                         style: TextStyle(
-                          color: Color(0xFFFF6B35),
+                          color: AppColors.primary,
                           decoration: TextDecoration.underline,
                         ),
                       ),

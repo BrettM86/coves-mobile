@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/primary_button.dart';
 
@@ -27,7 +28,7 @@ class ProfileScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.person, size: 64, color: Color(0xFFFF6B35)),
+              const Icon(Icons.person, size: 64, color: AppColors.primary),
               const SizedBox(height: 24),
               Text(
                 isAuthenticated ? 'Your Profile' : 'Profile',

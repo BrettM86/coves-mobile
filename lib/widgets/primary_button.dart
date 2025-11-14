@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../constants/app_colors.dart';
+
 enum ButtonVariant { solid, outline, tertiary }
 
 class PrimaryButton extends StatelessWidget {
@@ -36,7 +38,7 @@ class PrimaryButton extends StatelessWidget {
           elevation: variant == ButtonVariant.solid ? 8 : 0,
           shadowColor:
               variant == ButtonVariant.solid
-                  ? const Color(0xFFD84315).withValues(alpha: 0.4)
+                  ? AppColors.primary.withValues(alpha: 0.4)
                   : Colors.transparent,
           padding: const EdgeInsets.symmetric(vertical: 12),
         ),
@@ -57,7 +59,7 @@ class PrimaryButton extends StatelessWidget {
   Color _getBackgroundColor() {
     switch (variant) {
       case ButtonVariant.solid:
-        return const Color(0xFFFF6B35);
+        return AppColors.primary;
       case ButtonVariant.outline:
         return const Color(0xFF5A6B7F).withValues(alpha: 0.1);
       case ButtonVariant.tertiary:
@@ -86,7 +88,7 @@ class PrimaryButton extends StatelessWidget {
   Color _getOverlayColor() {
     switch (variant) {
       case ButtonVariant.solid:
-        return const Color(0xFFD84315).withValues(alpha: 0.2);
+        return AppColors.primary.withValues(alpha: 0.2);
       case ButtonVariant.outline:
         return const Color(0xFF5A6B7F).withValues(alpha: 0.15);
       case ButtonVariant.tertiary:
