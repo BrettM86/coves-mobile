@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../constants/app_colors.dart';
+
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
 
@@ -22,7 +24,7 @@ class NotificationsScreen extends StatelessWidget {
               Icon(
                 Icons.notifications_outlined,
                 size: 64,
-                color: Color(0xFFFF6B35),
+                color: AppColors.primary,
               ),
               SizedBox(height: 24),
               Text(

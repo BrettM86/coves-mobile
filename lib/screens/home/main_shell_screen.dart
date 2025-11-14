@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../constants/app_colors.dart';
 import '../../widgets/icons/bluesky_icons.dart';
 import 'create_post_screen.dart';
 import 'feed_screen.dart';
@@ -63,7 +64,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
     final isSelected = _selectedIndex == index;
     final color =
         isSelected
-            ? const Color(0xFFFF6B35)
+            ? AppColors.primary
             : const Color(0xFFB6C2D2).withValues(alpha: 0.6);
 
     // Use filled variant when selected, outline when not

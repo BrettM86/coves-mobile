@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../constants/app_colors.dart';
+
 class CreatePostScreen extends StatelessWidget {
   const CreatePostScreen({super.key});
 
@@ -22,7 +24,7 @@ class CreatePostScreen extends StatelessWidget {
               Icon(
                 Icons.add_circle_outline,
                 size: 64,
-                color: Color(0xFFFF6B35),
+                color: AppColors.primary,
               ),
               SizedBox(height: 24),
               Text(
