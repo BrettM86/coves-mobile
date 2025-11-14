@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'config/oauth_config.dart';
+import 'constants/app_colors.dart';
 import 'models/post.dart';
 import 'providers/auth_provider.dart';
 import 'providers/comments_provider.dart';
@@ -106,7 +107,7 @@ class CovesApp extends StatelessWidget {
       title: 'Coves',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFF6B35),
+          seedColor: AppColors.primary,
           brightness: Brightness.dark,
         ),
         useMaterial3: true,
