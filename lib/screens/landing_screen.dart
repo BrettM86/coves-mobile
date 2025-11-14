@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/logo.dart';
 import '../widgets/primary_button.dart';
@@ -17,17 +18,19 @@ class LandingScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Logo
-                const CovesLogo(useColorVersion: true),
+                // Lil Dude character
+                SvgPicture.asset(
+                  'assets/logo/lil_dude.svg',
+                  width: 120,
+                  height: 120,
+                ),
+                const SizedBox(height: 16),
 
-                // App Name
-                const Text(
-                  'Coves',
-                  style: TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                // Coves bubble text
+                SvgPicture.asset(
+                  'assets/logo/coves_bubble.svg',
+                  width: 180,
+                  height: 60,
                 ),
 
                 const SizedBox(height: 48),
@@ -36,7 +39,12 @@ class LandingScreen extends StatelessWidget {
                 PrimaryButton(
                   title: 'Create account',
                   onPressed: () {
-                    context.go('/login');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Account registration coming soon!'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
                   },
                 ),
 

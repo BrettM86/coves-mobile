@@ -46,6 +46,7 @@ dependencies:
   cached_network_image: ^3.4.1
   url_launcher: ^6.3.1
   video_player: ^2.8.7  # Pinned for stability
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:
@@ -90,8 +91,8 @@ flutter:
 
   # Assets
   assets:
-    - assets/logo/coves-shark.svg
-    - assets/logo/coves-shark-color.svg
+    - assets/logo/coves_bubble.svg
+    - assets/logo/lil_dude.svg
     - assets/icons/
 
   # An image asset can refer to one or more resolution-specific "variants", see
