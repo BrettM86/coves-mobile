@@ -47,7 +47,7 @@ class FakeVoteProvider extends VoteProvider {
   @override
   bool isLiked(String postUri) => _likes[postUri] ?? false;
 
-  void setLiked(String postUri, bool value) {
+  void setLiked(String postUri, {required bool value}) {
     _likes[postUri] = value;
     notifyListeners();
   }

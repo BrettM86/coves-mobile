@@ -322,15 +322,15 @@ void main() {
 
       test('should not notify listeners when setting initial state', () {
         var notificationCount = 0;
-        voteProvider.addListener(() {
-          notificationCount++;
-        });
-
-        voteProvider.setInitialVoteState(
-          postUri: testPostUri,
-          voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
-        );
+        voteProvider
+          ..addListener(() {
+            notificationCount++;
+          })
+          ..setInitialVoteState(
+            postUri: testPostUri,
+            voteDirection: 'up',
+            voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
+          );
 
         // Should NOT notify listeners (silent initialization)
         expect(notificationCount, 0);
@@ -343,16 +343,17 @@ void main() {
         const post2 = 'at://did:plc:test/social.coves.post.record/2';
 
         // Set up multiple votes
-        voteProvider.setInitialVoteState(
-          postUri: post1,
-          voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.feed.vote/1',
-        );
-        voteProvider.setInitialVoteState(
-          postUri: post2,
-          voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.feed.vote/2',
-        );
+        voteProvider
+          ..setInitialVoteState(
+            postUri: post1,
+            voteDirection: 'up',
+            voteUri: 'at://did:plc:test/social.coves.feed.vote/1',
+          )
+          ..setInitialVoteState(
+            postUri: post2,
+            voteDirection: 'up',
+            voteUri: 'at://did:plc:test/social.coves.feed.vote/2',
+          );
 
         expect(voteProvider.isLiked(post1), true);
         expect(voteProvider.isLiked(post2), true);
@@ -369,11 +370,11 @@ void main() {
 
       test('should notify listeners when cleared', () {
         var notificationCount = 0;
-        voteProvider.addListener(() {
-          notificationCount++;
-        });
-
-        voteProvider.clear();
+        voteProvider
+          ..addListener(() {
+            notificationCount++;
+          })
+          ..clear();
 
         expect(notificationCount, 1);
       });
@@ -606,7 +607,6 @@ void main() {
           await voteProvider.toggleVote(
             postUri: testPostUri,
             postCid: testPostCid,
-            direction: 'up',
           );
 
           // Should have +2 adjustment (remove -1, add +1)
@@ -647,14 +647,13 @@ void main() {
         const testPostUri2 = 'at://did:plc:test/social.coves.post.record/2';
 
         // Manually set some adjustments (simulating votes)
-        voteProvider.setInitialVoteState(
-          postUri: testPostUri1,
-          voteDirection: 'up',
-          voteUri: 'at://did:plc:test/social.coves.feed.vote/1',
-        );
-
-        // Clear all
-        voteProvider.clear();
+        voteProvider
+          ..setInitialVoteState(
+            postUri: testPostUri1,
+            voteDirection: 'up',
+            voteUri: 'at://did:plc:test/social.coves.feed.vote/1',
+          )
+          ..clear();
 
         // Adjustments should be cleared (back to 0)
         expect(voteProvider.getAdjustedScore(testPostUri1, 10), 10);
@@ -679,7 +678,8 @@ void main() {
         when(mockAuthProvider.isAuthenticated).thenReturn(false);
 
         // Trigger the auth listener by calling it directly
-        // (In real app, this would be triggered by AuthProvider.notifyListeners)
+        // (In real app, this would be triggered by
+        // AuthProvider.notifyListeners)
         voteProvider.clear();
 
         // Votes should be cleared

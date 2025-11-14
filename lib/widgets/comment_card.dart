@@ -41,21 +41,18 @@ class CommentCard extends StatelessWidget {
     final threadingLineCount = depth + 1;
     // Calculate left padding: (6px per line) + 14px base padding
     final leftPadding = (threadingLineCount * 6.0) + 14.0;
-    // Border should start after the threading lines (add 2px to clear the stroke width)
+    // Border should start after the threading lines (add 2px to clear
+    // the stroke width)
     final borderLeftOffset = (threadingLineCount * 6.0) + 2.0;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-      ),
+      decoration: const BoxDecoration(color: AppColors.background),
       child: Stack(
         children: [
           // Threading indicators - vertical lines showing nesting ancestry
           Positioned.fill(
             child: CustomPaint(
-              painter: _CommentDepthPainter(
-                depth: threadingLineCount,
-              ),
+              painter: _CommentDepthPainter(depth: threadingLineCount),
             ),
           ),
           // Bottom border (starts after threading lines, not overlapping them)
@@ -63,10 +60,7 @@ class CommentCard extends StatelessWidget {
             left: borderLeftOffset,
             right: 0,
             bottom: 0,
-            child: Container(
-              height: 1,
-              color: AppColors.border,
-            ),
+            child: Container(height: 1, color: AppColors.border),
           ),
           // Comment content with depth-based left padding
           Padding(
@@ -74,51 +68,53 @@ class CommentCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-            // Author info row
-            Row(
-              children: [
-                // Author avatar
-                _buildAuthorAvatar(comment.author),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Author handle
-                      Text(
-                        '@${comment.author.handle}',
-                        style: TextStyle(
-                          color: AppColors.textPrimary.withValues(alpha: 0.5),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
+                // Author info row
+                Row(
+                  children: [
+                    // Author avatar
+                    _buildAuthorAvatar(comment.author),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Author handle
+                          Text(
+                            '@${comment.author.handle}',
+                            style: TextStyle(
+                              color: AppColors.textPrimary.withValues(
+                                alpha: 0.5,
+                              ),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    // Time ago
+                    Text(
+                      DateTimeUtils.formatTimeAgo(
+                        comment.createdAt,
+                        currentTime: currentTime,
+                      ),
+                      style: TextStyle(
+                        color: AppColors.textPrimary.withValues(alpha: 0.5),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
-                // Time ago
-                Text(
-                  DateTimeUtils.formatTimeAgo(
-                    comment.createdAt,
-                    currentTime: currentTime,
-                  ),
-                  style: TextStyle(
-                    color: AppColors.textPrimary.withValues(alpha: 0.5),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
+                const SizedBox(height: 8),
 
-            // Comment content
-            if (comment.content.isNotEmpty) ...[
-              _buildCommentContent(comment),
-              const SizedBox(height: 8),
-            ],
+                // Comment content
+                if (comment.content.isNotEmpty) ...[
+                  _buildCommentContent(comment),
+                  const SizedBox(height: 8),
+                ],
 
-            // Action buttons (just vote for now)
-            _buildActionButtons(context),
+                // Action buttons (just vote for now)
+                _buildActionButtons(context),
               ],
             ),
           ),
@@ -202,11 +198,12 @@ class CommentCard extends StatelessWidget {
             // Heart vote button
             Semantics(
               button: true,
-              label: isLiked
-                  ? 'Unlike comment, $adjustedScore '
-                      '${adjustedScore == 1 ? "like" : "likes"}'
-                  : 'Like comment, $adjustedScore '
-                      '${adjustedScore == 1 ? "like" : "likes"}',
+              label:
+                  isLiked
+                      ? 'Unlike comment, $adjustedScore '
+                          '${adjustedScore == 1 ? "like" : "likes"}'
+                      : 'Like comment, $adjustedScore '
+                          '${adjustedScore == 1 ? "like" : "likes"}',
               child: InkWell(
                 onTap: () async {
                   // Check authentication
@@ -279,11 +276,9 @@ class CommentCard extends StatelessWidget {
 
 /// Custom painter for drawing comment depth indicator lines
 class _CommentDepthPainter extends CustomPainter {
-  final int depth;
 
-  _CommentDepthPainter({
-    required this.depth,
-  });
+  _CommentDepthPainter({required this.depth});
+  final int depth;
 
   // Color palette for threading indicators (cycles through 6 colors)
   static final List<Color> _threadingColors = [
@@ -297,14 +292,17 @@ class _CommentDepthPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
+    final paint =
+        Paint()
+          ..strokeWidth = 2.0
+          ..style = PaintingStyle.stroke;
 
     // Draw vertical line for each depth level with different colors
-    for (int i = 0; i < depth; i++) {
+    for (var i = 0; i < depth; i++) {
       // Cycle through colors based on depth level
-      paint.color = _threadingColors[i % _threadingColors.length].withValues(alpha: 0.5);
+      paint.color = _threadingColors[i % _threadingColors.length].withValues(
+        alpha: 0.5,
+      );
 
       final xPosition = (i + 1) * 6.0;
       canvas.drawLine(

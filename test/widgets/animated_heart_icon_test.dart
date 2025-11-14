@@ -64,8 +64,8 @@ void main() {
 
       // Widget should render with custom color
       expect(find.byType(AnimatedHeartIcon), findsOneWidget);
-      // Note: We can't easily verify the color without accessing the CustomPainter,
-      // but we can verify the widget accepts the parameter
+      // Note: We can't easily verify the color without accessing the
+      // CustomPainter, but we can verify the widget accepts the parameter
     });
 
     testWidgets('should use custom liked color when provided', (tester) async {

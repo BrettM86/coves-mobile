@@ -95,7 +95,8 @@ class CommentsHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    '$commentCount ${commentCount == 1 ? 'Comment' : 'Comments'}',
+                    '$commentCount '
+                    '${commentCount == 1 ? 'Comment' : 'Comments'}',
                     style: const TextStyle(
                       fontSize: 15,
                       color: AppColors.textSecondary,
@@ -110,37 +111,38 @@ class CommentsHeader extends StatelessWidget {
                   ),
                 ],
               ),
-              itemBuilder: (context) => [
-                for (var i = 0; i < _sortOptions.length; i++)
-                  PopupMenuItem<String>(
-                    value: _sortOptions[i],
-                    child: Row(
-                      children: [
-                        Icon(
-                          _getSortIcon(_sortOptions[i]),
-                          color: AppColors.textPrimary,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _sortLabels[i],
-                            style: const TextStyle(
+              itemBuilder:
+                  (context) => [
+                    for (var i = 0; i < _sortOptions.length; i++)
+                      PopupMenuItem<String>(
+                        value: _sortOptions[i],
+                        child: Row(
+                          children: [
+                            Icon(
+                              _getSortIcon(_sortOptions[i]),
                               color: AppColors.textPrimary,
-                              fontWeight: FontWeight.normal,
+                              size: 18,
                             ),
-                          ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _sortLabels[i],
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                              ),
+                            ),
+                            if (currentSort == _sortOptions[i])
+                              const Icon(
+                                Icons.check,
+                                color: AppColors.primary,
+                                size: 20,
+                              ),
+                          ],
                         ),
-                        if (currentSort == _sortOptions[i])
-                          const Icon(
-                            Icons.check,
-                            color: AppColors.primary,
-                            size: 20,
-                          ),
-                      ],
-                    ),
-                  ),
-              ],
+                      ),
+                  ],
             ),
           ),
         ],

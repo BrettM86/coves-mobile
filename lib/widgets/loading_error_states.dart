@@ -35,11 +35,7 @@ class FullScreenError extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.error_outline,
-              size: 64,
-              color: AppColors.primary,
-            ),
+            const Icon(Icons.error_outline, size: 64, color: AppColors.primary),
             const SizedBox(height: 16),
             Text(
               title,
@@ -82,9 +78,7 @@ class InlineLoading extends StatelessWidget {
     return const Center(
       child: Padding(
         padding: EdgeInsets.all(16),
-        child: CircularProgressIndicator(
-          color: AppColors.primary,
-        ),
+        child: CircularProgressIndicator(color: AppColors.primary),
       ),
     );
   }
@@ -92,11 +86,7 @@ class InlineLoading extends StatelessWidget {
 
 /// Inline error state with retry button (for pagination)
 class InlineError extends StatelessWidget {
-  const InlineError({
-    required this.message,
-    required this.onRetry,
-    super.key,
-  });
+  const InlineError({required this.message, required this.onRetry, super.key});
 
   final String message;
   final VoidCallback onRetry;
@@ -113,11 +103,7 @@ class InlineError extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(
-            Icons.error_outline,
-            color: AppColors.primary,
-            size: 32,
-          ),
+          const Icon(Icons.error_outline, color: AppColors.primary, size: 32),
           const SizedBox(height: 8),
           Text(
             message,
@@ -130,9 +116,7 @@ class InlineError extends StatelessWidget {
           const SizedBox(height: 12),
           TextButton(
             onPressed: onRetry,
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.primary,
-            ),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
             child: const Text('Retry'),
           ),
         ],
@@ -173,11 +157,7 @@ class NotFoundError extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.search_off,
-                size: 64,
-                color: AppColors.primary,
-              ),
+              const Icon(Icons.search_off, size: 64, color: AppColors.primary),
               const SizedBox(height: 16),
               Text(
                 title,

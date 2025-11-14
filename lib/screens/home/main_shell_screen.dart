@@ -80,9 +80,10 @@ class _MainShellScreenState extends State<MainShellScreen> {
         icon = BlueSkyIcon.plus(color: color);
         break;
       case 'bell':
-        icon = isSelected
-            ? BlueSkyIcon.bellFilled(color: color)
-            : BlueSkyIcon.bellOutline(color: color);
+        icon =
+            isSelected
+                ? BlueSkyIcon.bellFilled(color: color)
+                : BlueSkyIcon.bellOutline(color: color);
         break;
       case 'person':
         icon = BlueSkyIcon.personSimple(color: color);

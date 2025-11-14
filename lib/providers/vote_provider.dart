@@ -113,7 +113,7 @@ class VoteProvider with ChangeNotifier {
     final currentState = previousState;
 
     // Calculate score adjustment for optimistic update
-    int newAdjustment = previousAdjustment;
+    var newAdjustment = previousAdjustment;
 
     if (currentState?.direction == direction &&
         !(currentState?.deleted ?? false)) {

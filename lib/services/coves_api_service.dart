@@ -16,11 +16,10 @@ import 'api_exceptions.dart';
 /// rotates tokens automatically (~1 hour expiry), and caching tokens would
 /// cause 401 errors after the first token expires.
 class CovesApiService {
-  CovesApiService({
-    Future<String?> Function()? tokenGetter,
-    Dio? dio,
-  }) : _tokenGetter = tokenGetter {
-    _dio = dio ??
+  CovesApiService({Future<String?> Function()? tokenGetter, Dio? dio})
+    : _tokenGetter = tokenGetter {
+    _dio =
+        dio ??
         Dio(
           BaseOptions(
             baseUrl: OAuthConfig.apiUrl,

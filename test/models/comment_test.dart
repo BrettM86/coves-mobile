@@ -15,19 +15,9 @@ void main() {
               'content': 'Test comment',
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
-              'author': {
-                'did': 'did:plc:author',
-                'handle': 'test.user',
-              },
-              'post': {
-                'uri': 'at://did:plc:test/post/123',
-                'cid': 'post-cid',
-              },
-              'stats': {
-                'upvotes': 10,
-                'downvotes': 2,
-                'score': 8,
-              },
+              'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+              'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+              'stats': {'upvotes': 10, 'downvotes': 2, 'score': 8},
             },
             'hasMore': false,
           },
@@ -79,19 +69,9 @@ void main() {
               'content': 'Test',
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
-              'author': {
-                'did': 'did:plc:author',
-                'handle': 'test.user',
-              },
-              'post': {
-                'uri': 'at://did:plc:test/post/123',
-                'cid': 'post-cid',
-              },
-              'stats': {
-                'upvotes': 0,
-                'downvotes': 0,
-                'score': 0,
-              },
+              'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+              'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+              'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
             },
             'hasMore': false,
           },
@@ -114,19 +94,9 @@ void main() {
           'content': 'Test comment',
           'createdAt': '2025-01-01T12:00:00Z',
           'indexedAt': '2025-01-01T12:00:00Z',
-          'author': {
-            'did': 'did:plc:author',
-            'handle': 'test.user',
-          },
-          'post': {
-            'uri': 'at://did:plc:test/post/123',
-            'cid': 'post-cid',
-          },
-          'stats': {
-            'upvotes': 10,
-            'downvotes': 2,
-            'score': 8,
-          },
+          'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+          'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+          'stats': {'upvotes': 10, 'downvotes': 2, 'score': 8},
         },
         'hasMore': true,
       };
@@ -146,19 +116,9 @@ void main() {
           'content': 'Parent comment',
           'createdAt': '2025-01-01T12:00:00Z',
           'indexedAt': '2025-01-01T12:00:00Z',
-          'author': {
-            'did': 'did:plc:author',
-            'handle': 'test.user',
-          },
-          'post': {
-            'uri': 'at://did:plc:test/post/123',
-            'cid': 'post-cid',
-          },
-          'stats': {
-            'upvotes': 5,
-            'downvotes': 1,
-            'score': 4,
-          },
+          'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+          'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+          'stats': {'upvotes': 5, 'downvotes': 1, 'score': 4},
         },
         'replies': [
           {
@@ -168,23 +128,10 @@ void main() {
               'content': 'Reply comment',
               'createdAt': '2025-01-01T13:00:00Z',
               'indexedAt': '2025-01-01T13:00:00Z',
-              'author': {
-                'did': 'did:plc:author2',
-                'handle': 'test.user2',
-              },
-              'post': {
-                'uri': 'at://did:plc:test/post/123',
-                'cid': 'post-cid',
-              },
-              'parent': {
-                'uri': 'at://did:plc:test/comment/1',
-                'cid': 'cid1',
-              },
-              'stats': {
-                'upvotes': 3,
-                'downvotes': 0,
-                'score': 3,
-              },
+              'author': {'did': 'did:plc:author2', 'handle': 'test.user2'},
+              'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+              'parent': {'uri': 'at://did:plc:test/comment/1', 'cid': 'cid1'},
+              'stats': {'upvotes': 3, 'downvotes': 0, 'score': 3},
             },
             'hasMore': false,
           },
@@ -209,19 +156,9 @@ void main() {
           'content': 'Test',
           'createdAt': '2025-01-01T12:00:00Z',
           'indexedAt': '2025-01-01T12:00:00Z',
-          'author': {
-            'did': 'did:plc:author',
-            'handle': 'test.user',
-          },
-          'post': {
-            'uri': 'at://did:plc:test/post/123',
-            'cid': 'post-cid',
-          },
-          'stats': {
-            'upvotes': 0,
-            'downvotes': 0,
-            'score': 0,
-          },
+          'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+          'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+          'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
         },
       };
 
@@ -256,26 +193,14 @@ void main() {
           'handle': 'test.user',
           'displayName': 'Test User',
         },
-        'post': {
-          'uri': 'at://did:plc:test/post/123',
-          'cid': 'post-cid',
-        },
+        'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
         'parent': {
           'uri': 'at://did:plc:test/comment/parent',
           'cid': 'parent-cid',
         },
-        'stats': {
-          'upvotes': 10,
-          'downvotes': 2,
-          'score': 8,
-        },
-        'viewer': {
-          'vote': 'upvote',
-        },
-        'embed': {
-          'type': 'social.coves.embed.external',
-          'data': {},
-        },
+        'stats': {'upvotes': 10, 'downvotes': 2, 'score': 8},
+        'viewer': {'vote': 'upvote'},
+        'embed': {'type': 'social.coves.embed.external', 'data': {}},
       };
 
       final comment = CommentView.fromJson(json);
@@ -304,19 +229,9 @@ void main() {
         'content': 'Test',
         'createdAt': '2025-01-01T12:00:00Z',
         'indexedAt': '2025-01-01T12:00:00Z',
-        'author': {
-          'did': 'did:plc:author',
-          'handle': 'test.user',
-        },
-        'post': {
-          'uri': 'at://did:plc:test/post/123',
-          'cid': 'post-cid',
-        },
-        'stats': {
-          'upvotes': 0,
-          'downvotes': 0,
-          'score': 0,
-        },
+        'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+        'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+        'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
       };
 
       final comment = CommentView.fromJson(json);
@@ -337,20 +252,10 @@ void main() {
         'contentFacets': null,
         'createdAt': '2025-01-01T12:00:00Z',
         'indexedAt': '2025-01-01T12:00:00Z',
-        'author': {
-          'did': 'did:plc:author',
-          'handle': 'test.user',
-        },
-        'post': {
-          'uri': 'at://did:plc:test/post/123',
-          'cid': 'post-cid',
-        },
+        'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+        'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
         'parent': null,
-        'stats': {
-          'upvotes': 0,
-          'downvotes': 0,
-          'score': 0,
-        },
+        'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
         'viewer': null,
         'embed': null,
       };
@@ -370,19 +275,9 @@ void main() {
         'content': 'Test',
         'createdAt': '2025-01-15T14:30:45.123Z',
         'indexedAt': '2025-01-15T14:30:50.456Z',
-        'author': {
-          'did': 'did:plc:author',
-          'handle': 'test.user',
-        },
-        'post': {
-          'uri': 'at://did:plc:test/post/123',
-          'cid': 'post-cid',
-        },
-        'stats': {
-          'upvotes': 0,
-          'downvotes': 0,
-          'score': 0,
-        },
+        'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+        'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+        'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
       };
 
       final comment = CommentView.fromJson(json);
@@ -398,10 +293,7 @@ void main() {
 
   group('CommentRef', () {
     test('should parse valid JSON', () {
-      final json = {
-        'uri': 'at://did:plc:test/comment/1',
-        'cid': 'cid1',
-      };
+      final json = {'uri': 'at://did:plc:test/comment/1', 'cid': 'cid1'};
 
       final ref = CommentRef.fromJson(json);
 
@@ -412,11 +304,7 @@ void main() {
 
   group('CommentStats', () {
     test('should parse valid JSON with all fields', () {
-      final json = {
-        'upvotes': 15,
-        'downvotes': 3,
-        'score': 12,
-      };
+      final json = {'upvotes': 15, 'downvotes': 3, 'score': 12};
 
       final stats = CommentStats.fromJson(json);
 
@@ -436,11 +324,7 @@ void main() {
     });
 
     test('should handle null values with defaults', () {
-      final json = {
-        'upvotes': null,
-        'downvotes': null,
-        'score': null,
-      };
+      final json = {'upvotes': null, 'downvotes': null, 'score': null};
 
       final stats = CommentStats.fromJson(json);
 
@@ -450,11 +334,7 @@ void main() {
     });
 
     test('should parse mixed null and valid values', () {
-      final json = {
-        'upvotes': 10,
-        'downvotes': null,
-        'score': 8,
-      };
+      final json = {'upvotes': 10, 'downvotes': null, 'score': 8};
 
       final stats = CommentStats.fromJson(json);
 
@@ -466,9 +346,7 @@ void main() {
 
   group('CommentViewerState', () {
     test('should parse with vote', () {
-      final json = {
-        'vote': 'upvote',
-      };
+      final json = {'vote': 'upvote'};
 
       final viewer = CommentViewerState.fromJson(json);
 
@@ -476,9 +354,7 @@ void main() {
     });
 
     test('should parse with downvote', () {
-      final json = {
-        'vote': 'downvote',
-      };
+      final json = {'vote': 'downvote'};
 
       final viewer = CommentViewerState.fromJson(json);
 
@@ -486,9 +362,7 @@ void main() {
     });
 
     test('should parse with null vote', () {
-      final json = {
-        'vote': null,
-      };
+      final json = {'vote': null};
 
       final viewer = CommentViewerState.fromJson(json);
 
@@ -513,14 +387,8 @@ void main() {
           'content': 'Level 1',
           'createdAt': '2025-01-01T12:00:00Z',
           'indexedAt': '2025-01-01T12:00:00Z',
-          'author': {
-            'did': 'did:plc:author',
-            'handle': 'test.user',
-          },
-          'post': {
-            'uri': 'at://did:plc:test/post/123',
-            'cid': 'post-cid',
-          },
+          'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+          'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
           'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
         },
         'replies': [
@@ -531,14 +399,8 @@ void main() {
               'content': 'Level 2',
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
-              'author': {
-                'did': 'did:plc:author',
-                'handle': 'test.user',
-              },
-              'post': {
-                'uri': 'at://did:plc:test/post/123',
-                'cid': 'post-cid',
-              },
+              'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+              'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
               'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
             },
             'replies': [
@@ -549,10 +411,7 @@ void main() {
                   'content': 'Level 3',
                   'createdAt': '2025-01-01T12:00:00Z',
                   'indexedAt': '2025-01-01T12:00:00Z',
-                  'author': {
-                    'did': 'did:plc:author',
-                    'handle': 'test.user',
-                  },
+                  'author': {'did': 'did:plc:author', 'handle': 'test.user'},
                   'post': {
                     'uri': 'at://did:plc:test/post/123',
                     'cid': 'post-cid',
@@ -582,19 +441,9 @@ void main() {
         'content': '',
         'createdAt': '2025-01-01T12:00:00Z',
         'indexedAt': '2025-01-01T12:00:00Z',
-        'author': {
-          'did': 'did:plc:author',
-          'handle': 'test.user',
-        },
-        'post': {
-          'uri': 'at://did:plc:test/post/123',
-          'cid': 'post-cid',
-        },
-        'stats': {
-          'upvotes': 0,
-          'downvotes': 0,
-          'score': 0,
-        },
+        'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+        'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+        'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
       };
 
       final comment = CommentView.fromJson(json);
@@ -610,19 +459,9 @@ void main() {
         'content': longContent,
         'createdAt': '2025-01-01T12:00:00Z',
         'indexedAt': '2025-01-01T12:00:00Z',
-        'author': {
-          'did': 'did:plc:author',
-          'handle': 'test.user',
-        },
-        'post': {
-          'uri': 'at://did:plc:test/post/123',
-          'cid': 'post-cid',
-        },
-        'stats': {
-          'upvotes': 0,
-          'downvotes': 0,
-          'score': 0,
-        },
+        'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+        'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+        'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
       };
 
       final comment = CommentView.fromJson(json);
@@ -631,11 +470,7 @@ void main() {
     });
 
     test('should handle negative vote counts', () {
-      final json = {
-        'upvotes': 5,
-        'downvotes': 20,
-        'score': -15,
-      };
+      final json = {'upvotes': 5, 'downvotes': 20, 'score': -15};
 
       final stats = CommentStats.fromJson(json);
 

@@ -44,15 +44,8 @@ void main() {
                 'handle': 'user1.test',
                 'displayName': 'User One',
               },
-              'post': {
-                'uri': postUri,
-                'cid': 'post-cid',
-              },
-              'stats': {
-                'upvotes': 10,
-                'downvotes': 2,
-                'score': 8,
-              },
+              'post': {'uri': postUri, 'cid': 'post-cid'},
+              'stats': {'upvotes': 10, 'downvotes': 2, 'score': 8},
             },
             'hasMore': false,
           },
@@ -63,19 +56,9 @@ void main() {
               'content': 'Test comment 2',
               'createdAt': '2025-01-01T13:00:00Z',
               'indexedAt': '2025-01-01T13:00:00Z',
-              'author': {
-                'did': 'did:plc:author2',
-                'handle': 'user2.test',
-              },
-              'post': {
-                'uri': postUri,
-                'cid': 'post-cid',
-              },
-              'stats': {
-                'upvotes': 5,
-                'downvotes': 1,
-                'score': 4,
-              },
+              'author': {'did': 'did:plc:author2', 'handle': 'user2.test'},
+              'post': {'uri': postUri, 'cid': 'post-cid'},
+              'stats': {'upvotes': 5, 'downvotes': 1, 'score': 4},
             },
             'hasMore': false,
           },
@@ -168,19 +151,9 @@ void main() {
               'content': 'Newest comment',
               'createdAt': '2025-01-01T15:00:00Z',
               'indexedAt': '2025-01-01T15:00:00Z',
-              'author': {
-                'did': 'did:plc:author',
-                'handle': 'user.test',
-              },
-              'post': {
-                'uri': postUri,
-                'cid': 'post-cid',
-              },
-              'stats': {
-                'upvotes': 1,
-                'downvotes': 0,
-                'score': 1,
-              },
+              'author': {'did': 'did:plc:author', 'handle': 'user.test'},
+              'post': {'uri': postUri, 'cid': 'post-cid'},
+              'stats': {'upvotes': 1, 'downvotes': 0, 'score': 1},
             },
             'hasMore': false,
           },
@@ -252,19 +225,9 @@ void main() {
               'content': 'Paginated comment',
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
-              'author': {
-                'did': 'did:plc:author',
-                'handle': 'user.test',
-              },
-              'post': {
-                'uri': postUri,
-                'cid': 'post-cid',
-              },
-              'stats': {
-                'upvotes': 5,
-                'downvotes': 0,
-                'score': 5,
-              },
+              'author': {'did': 'did:plc:author', 'handle': 'user.test'},
+              'post': {'uri': postUri, 'cid': 'post-cid'},
+              'stats': {'upvotes': 5, 'downvotes': 0, 'score': 5},
             },
             'hasMore': false,
           },
@@ -376,7 +339,7 @@ void main() {
           408,
           DioException.connectionTimeout(
             timeout: const Duration(seconds: 30),
-            requestOptions: RequestOptions(path: ''),
+            requestOptions: RequestOptions(),
           ),
         ),
         queryParameters: {
@@ -402,7 +365,7 @@ void main() {
           503,
           DioException.connectionError(
             reason: 'Connection refused',
-            requestOptions: RequestOptions(path: ''),
+            requestOptions: RequestOptions(),
           ),
         ),
         queryParameters: {
@@ -452,19 +415,9 @@ void main() {
               'content': 'Test',
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
-              'author': {
-                'did': 'did:plc:author',
-                'handle': 'user.test',
-              },
-              'post': {
-                'uri': postUri,
-                'cid': 'post-cid',
-              },
-              'stats': {
-                'upvotes': 0,
-                'downvotes': 0,
-                'score': 0,
-              },
+              'author': {'did': 'did:plc:author', 'handle': 'user.test'},
+              'post': {'uri': postUri, 'cid': 'post-cid'},
+              'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
             },
             'hasMore': false,
           },
@@ -502,19 +455,9 @@ void main() {
               'content': 'Parent comment',
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
-              'author': {
-                'did': 'did:plc:author1',
-                'handle': 'user1.test',
-              },
-              'post': {
-                'uri': postUri,
-                'cid': 'post-cid',
-              },
-              'stats': {
-                'upvotes': 10,
-                'downvotes': 2,
-                'score': 8,
-              },
+              'author': {'did': 'did:plc:author1', 'handle': 'user1.test'},
+              'post': {'uri': postUri, 'cid': 'post-cid'},
+              'stats': {'upvotes': 10, 'downvotes': 2, 'score': 8},
             },
             'replies': [
               {
@@ -524,23 +467,13 @@ void main() {
                   'content': 'Reply comment',
                   'createdAt': '2025-01-01T13:00:00Z',
                   'indexedAt': '2025-01-01T13:00:00Z',
-                  'author': {
-                    'did': 'did:plc:author2',
-                    'handle': 'user2.test',
-                  },
-                  'post': {
-                    'uri': postUri,
-                    'cid': 'post-cid',
-                  },
+                  'author': {'did': 'did:plc:author2', 'handle': 'user2.test'},
+                  'post': {'uri': postUri, 'cid': 'post-cid'},
                   'parent': {
                     'uri': 'at://did:plc:test/comment/1',
                     'cid': 'cid1',
                   },
-                  'stats': {
-                    'upvotes': 5,
-                    'downvotes': 0,
-                    'score': 5,
-                  },
+                  'stats': {'upvotes': 5, 'downvotes': 0, 'score': 5},
                 },
                 'hasMore': false,
               },
@@ -584,22 +517,10 @@ void main() {
               'content': 'Voted comment',
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
-              'author': {
-                'did': 'did:plc:author',
-                'handle': 'user.test',
-              },
-              'post': {
-                'uri': postUri,
-                'cid': 'post-cid',
-              },
-              'stats': {
-                'upvotes': 10,
-                'downvotes': 0,
-                'score': 10,
-              },
-              'viewer': {
-                'vote': 'upvote',
-              },
+              'author': {'did': 'did:plc:author', 'handle': 'user.test'},
+              'post': {'uri': postUri, 'cid': 'post-cid'},
+              'stats': {'upvotes': 10, 'downvotes': 0, 'score': 10},
+              'viewer': {'vote': 'upvote'},
             },
             'hasMore': false,
           },

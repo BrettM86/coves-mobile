@@ -24,10 +24,11 @@ import 'api_exceptions.dart';
 /// - com.atproto.repo.listRecords (find existing votes)
 ///
 /// **DPoP Authentication**:
-/// atProto PDSs require DPoP (Demonstrating Proof of Possession) authentication.
+/// atProto PDSs require DPoP (Demonstrating Proof of Possession)
+/// authentication.
 /// Uses OAuthSession.fetchHandler which automatically handles:
-/// - Authorization: DPoP <access_token>
-/// - DPoP: <proof> (signed JWT proving key possession)
+/// - Authorization: DPoP `<access_token>`
+/// - DPoP: `<proof>` (signed JWT proving key possession)
 /// - Automatic token refresh on expiry
 /// - Nonce management for replay protection
 class VoteService {
@@ -53,7 +54,7 @@ class VoteService {
   /// loading the feed.
   ///
   /// Returns:
-  /// - Map<String, VoteInfo> where key is the post URI
+  /// - `Map<String, VoteInfo>` where key is the post URI
   /// - Empty map if not authenticated or no votes found
   Future<Map<String, VoteInfo>> getUserVotes() async {
     try {
@@ -77,7 +78,7 @@ class VoteService {
                 ? '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=100'
                 : '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=100&cursor=$cursor';
 
-        final response = await session.fetchHandler(url, method: 'GET');
+        final response = await session.fetchHandler(url);
 
         if (response.statusCode != 200) {
           if (kDebugMode) {
@@ -271,7 +272,7 @@ class VoteService {
                 ? '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=$pageSize&reverse=true'
                 : '/xrpc/com.atproto.repo.listRecords?repo=$userDid&collection=$voteCollection&limit=$pageSize&reverse=true&cursor=$cursor';
 
-        final response = await session.fetchHandler(url, method: 'GET');
+        final response = await session.fetchHandler(url);
 
         if (response.statusCode != 200) {
           if (kDebugMode) {

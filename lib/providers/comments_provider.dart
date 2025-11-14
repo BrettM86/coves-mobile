@@ -21,11 +21,12 @@ class CommentsProvider with ChangeNotifier {
     CovesApiService? apiService,
     VoteProvider? voteProvider,
     VoteService? voteService,
-  })  : _voteProvider = voteProvider,
-        _voteService = voteService {
+  }) : _voteProvider = voteProvider,
+       _voteService = voteService {
     // Use injected service (for testing) or create new one (for production)
     // Pass token getter to API service for automatic fresh token retrieval
-    _apiService = apiService ??
+    _apiService =
+        apiService ??
         CovesApiService(tokenGetter: _authProvider.getAccessToken);
 
     // Track initial auth state
@@ -144,7 +145,9 @@ class CommentsProvider with ChangeNotifier {
       if (refresh) {
         _pendingRefresh = true;
         if (kDebugMode) {
-          debugPrint('⏳ Load in progress - scheduled refresh for after completion');
+          debugPrint(
+            '⏳ Load in progress - scheduled refresh for after completion',
+          );
         }
       }
       return;

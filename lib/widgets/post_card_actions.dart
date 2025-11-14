@@ -11,7 +11,6 @@ import '../providers/auth_provider.dart';
 import '../providers/vote_provider.dart';
 import '../utils/date_time_utils.dart';
 import 'icons/animated_heart_icon.dart';
-import 'icons/reply_icon.dart';
 import 'icons/share_icon.dart';
 import 'sign_in_dialog.dart';
 
@@ -97,39 +96,52 @@ class PostCardActions extends StatelessWidget {
           children: [
             // Comment button (hidden in detail view)
             if (showCommentButton) ...[
-              Semantics(
-                button: true,
-                label:
-                    'View ${post.post.stats.commentCount} ${post.post.stats.commentCount == 1 ? "comment" : "comments"}',
-                child: InkWell(
-                  onTap: () {
-                    // Navigate to post detail screen (works for ALL post types)
-                    final encodedUri = Uri.encodeComponent(post.post.uri);
-                    context.push('/post/$encodedUri', extra: post);
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ReplyIcon(
-                          color: AppColors.textPrimary.withValues(alpha: 0.6),
+              Builder(
+                builder: (context) {
+                  final count = post.post.stats.commentCount;
+                  final commentText = count == 1 ? 'comment' : 'comments';
+                  return Semantics(
+                    button: true,
+                    label: 'View $count $commentText',
+                    child: InkWell(
+                      onTap: () {
+                        // Navigate to post detail screen (ALL post types)
+                        final encodedUri = Uri.encodeComponent(post.post.uri);
+                        context.push('/post/$encodedUri', extra: post);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
                         ),
-                        const SizedBox(width: 5),
-                        Text(
-                          DateTimeUtils.formatCount(post.post.stats.commentCount),
-                          style: TextStyle(
-                            color: AppColors.textPrimary.withValues(alpha: 0.6),
-                            fontSize: 13,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline,
+                              size: 20,
+                              color:
+                                  AppColors.textPrimary.withValues(
+                                    alpha: 0.6,
+                                  ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              DateTimeUtils.formatCount(count),
+                              style: TextStyle(
+                                color:
+                                    AppColors.textPrimary.withValues(
+                                      alpha: 0.6,
+                                    ),
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
               const SizedBox(width: 8),
             ],
@@ -147,8 +159,10 @@ class PostCardActions extends StatelessWidget {
                   button: true,
                   label:
                       isLiked
-                          ? 'Unlike post, $adjustedScore ${adjustedScore == 1 ? "like" : "likes"}'
-                          : 'Like post, $adjustedScore ${adjustedScore == 1 ? "like" : "likes"}',
+                          ? 'Unlike post, $adjustedScore '
+                              '${adjustedScore == 1 ? "like" : "likes"}'
+                          : 'Like post, $adjustedScore '
+                              '${adjustedScore == 1 ? "like" : "likes"}',
                   child: InkWell(
                     onTap: () async {
                       // Check authentication

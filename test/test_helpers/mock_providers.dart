@@ -19,7 +19,7 @@ class MockAuthProvider extends ChangeNotifier {
   String? get handle => _handle;
   OAuthSession? get session => _session;
 
-  void setAuthenticated(bool value, {String? did}) {
+  void setAuthenticated({required bool value, String? did}) {
     _isAuthenticated = value;
     _did = did ?? 'did:plc:testuser';
     notifyListeners();
@@ -87,17 +87,11 @@ class MockVoteProvider extends ChangeNotifier {
 
     if (currentlyLiked) {
       // Removing vote
-      _votes[postUri] = VoteState(
-        direction: direction,
-        deleted: true,
-      );
+      _votes[postUri] = VoteState(direction: direction, deleted: true);
       _scoreAdjustments[postUri] = (_scoreAdjustments[postUri] ?? 0) - 1;
     } else {
       // Adding vote
-      _votes[postUri] = VoteState(
-        direction: direction,
-        deleted: false,
-      );
+      _votes[postUri] = VoteState(direction: direction, deleted: false);
       _scoreAdjustments[postUri] = (_scoreAdjustments[postUri] ?? 0) + 1;
     }
 
@@ -105,15 +99,9 @@ class MockVoteProvider extends ChangeNotifier {
     return !currentlyLiked;
   }
 
-  void setVoteState({
-    required String postUri,
-    required bool liked,
-  }) {
+  void setVoteState({required String postUri, required bool liked}) {
     if (liked) {
-      _votes[postUri] = const VoteState(
-        direction: 'up',
-        deleted: false,
-      );
+      _votes[postUri] = const VoteState(direction: 'up', deleted: false);
     } else {
       _votes.remove(postUri);
     }

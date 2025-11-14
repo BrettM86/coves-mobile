@@ -8,10 +8,7 @@ import '../constants/app_colors.dart';
 /// Always visible at the bottom of the video, positioned above
 /// the Android navigation bar using SafeArea.
 class MinimalVideoControls extends StatefulWidget {
-  const MinimalVideoControls({
-    required this.controller,
-    super.key,
-  });
+  const MinimalVideoControls({required this.controller, super.key});
 
   final VideoPlayerController controller;
 
@@ -98,10 +95,8 @@ class _MinimalVideoControlsState extends State<MinimalVideoControls> {
           SliderTheme(
             data: SliderThemeData(
               trackHeight: 3,
-              thumbShape:
-                  const RoundSliderThumbShape(enabledThumbRadius: 6),
-              overlayShape:
-                  const RoundSliderOverlayShape(overlayRadius: 12),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
               activeTrackColor: AppColors.primary,
               inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
               thumbColor: AppColors.primary,
@@ -122,10 +117,7 @@ class _MinimalVideoControlsState extends State<MinimalVideoControls> {
               children: [
                 Text(
                   _formatDuration(position),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
                 ),
                 Text(
                   _formatDuration(duration),

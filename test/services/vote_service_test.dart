@@ -48,7 +48,6 @@ void main() {
         when(
           mockSession.fetchHandler(
             argThat(contains('listRecords')),
-            method: 'GET',
           ),
         ).thenAnswer((_) async => firstPageResponse);
 
@@ -67,7 +66,6 @@ void main() {
         final response = await service.createVote(
           postUri: 'at://did:plc:author/social.coves.post.record/post1',
           postCid: 'bafy123',
-          direction: 'up',
         );
 
         // Should return deleted=true because existing vote with same direction
@@ -75,7 +73,6 @@ void main() {
         verify(
           mockSession.fetchHandler(
             argThat(contains('listRecords')),
-            method: 'GET',
           ),
         ).called(1);
       });
@@ -135,7 +132,6 @@ void main() {
         when(
           mockSession.fetchHandler(
             argThat(allOf(contains('listRecords'), isNot(contains('cursor')))),
-            method: 'GET',
           ),
         ).thenAnswer((_) async => firstPageResponse);
 
@@ -144,7 +140,6 @@ void main() {
             argThat(
               allOf(contains('listRecords'), contains('cursor=cursor123')),
             ),
-            method: 'GET',
           ),
         ).thenAnswer((_) async => secondPageResponse);
 
@@ -162,7 +157,6 @@ void main() {
         final response = await service.createVote(
           postUri: 'at://did:plc:author/social.coves.post.record/target',
           postCid: 'bafy123',
-          direction: 'up',
         );
 
         // Should return deleted=true because existing vote was found on page 2
@@ -172,7 +166,6 @@ void main() {
         verify(
           mockSession.fetchHandler(
             argThat(allOf(contains('listRecords'), isNot(contains('cursor')))),
-            method: 'GET',
           ),
         ).called(1);
 
@@ -181,7 +174,6 @@ void main() {
             argThat(
               allOf(contains('listRecords'), contains('cursor=cursor123')),
             ),
-            method: 'GET',
           ),
         ).called(1);
       });
@@ -217,7 +209,6 @@ void main() {
         when(
           mockSession.fetchHandler(
             argThat(contains('listRecords')),
-            method: 'GET',
           ),
         ).thenAnswer((_) async => response);
 
@@ -243,7 +234,6 @@ void main() {
         final voteResponse = await service.createVote(
           postUri: 'at://did:plc:author/social.coves.post.record/newpost',
           postCid: 'bafy123',
-          direction: 'up',
         );
 
         // Should create new vote

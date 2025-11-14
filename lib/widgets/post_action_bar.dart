@@ -7,7 +7,8 @@ import 'icons/animated_heart_icon.dart';
 
 /// Post Action Bar
 ///
-/// Bottom bar with comment input and action buttons (vote, save, comment count).
+/// Bottom bar with comment input and action buttons (vote, save,
+/// comment count).
 /// Displays:
 /// - Comment input field
 /// - Heart icon with vote count
@@ -34,13 +35,10 @@ class PostActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.background,
         border: Border(
-          top: BorderSide(
-            color: AppColors.backgroundSecondary,
-            width: 1,
-          ),
+          top: BorderSide(color: AppColors.backgroundSecondary),
         ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

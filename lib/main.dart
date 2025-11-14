@@ -70,8 +70,11 @@ void main() async {
                 );
           },
         ),
-        ChangeNotifierProxyProvider2<AuthProvider, VoteProvider,
-            CommentsProvider>(
+        ChangeNotifierProxyProvider2<
+          AuthProvider,
+          VoteProvider,
+          CommentsProvider
+        >(
           create:
               (context) => CommentsProvider(
                 authProvider,
@@ -144,7 +147,8 @@ GoRouter _createRouter(AuthProvider authProvider) {
             return NotFoundError(
               title: 'Post Not Found',
               message:
-                  'This post could not be loaded. It may have been deleted or the link is invalid.',
+                  'This post could not be loaded. It may have been '
+                  'deleted or the link is invalid.',
               onBackPressed: () {
                 // Navigate back to feed
                 context.go('/feed');

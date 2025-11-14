@@ -204,7 +204,8 @@ class ExternalEmbed {
   });
 
   factory ExternalEmbed.fromJson(Map<String, dynamic> json) {
-    // Thumb is always a string URL (backend transforms blob refs before sending)
+    // Thumb is always a string URL (backend transforms blob refs
+    // before sending)
 
     // Handle images array if present
     List<Map<String, dynamic>>? imagesList;

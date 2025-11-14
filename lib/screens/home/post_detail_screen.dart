@@ -302,11 +302,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               return;
             }
 
+            // Capture messenger before async operations
+            final messenger = ScaffoldMessenger.of(context);
+
             // Light haptic feedback on both like and unlike
             await HapticFeedback.lightImpact();
-
-            // Toggle vote
-            final messenger = ScaffoldMessenger.of(context);
             try {
               await voteProvider.toggleVote(
                 postUri: widget.post.post.uri,
@@ -397,8 +397,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       if (index == 0) {
                         return Column(
                           children: [
-                            // Reuse PostCard (hide comment button in detail view)
-                            // Use ValueListenableBuilder to only rebuild when time changes
+                            // Reuse PostCard (hide comment button in
+                            // detail view)
+                            // Use ValueListenableBuilder to only rebuild
+                            // when time changes
                             _PostHeader(
                               post: widget.post,
                               currentTimeNotifier:

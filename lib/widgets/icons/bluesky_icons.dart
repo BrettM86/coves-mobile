@@ -4,9 +4,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 /// Bluesky-style navigation icons using SVG assets
 /// These icons match the design from Bluesky's social-app
 class BlueSkyIcon extends StatelessWidget {
-  final String iconName;
-  final double size;
-  final Color color;
 
   const BlueSkyIcon({
     required this.iconName,
@@ -14,6 +11,9 @@ class BlueSkyIcon extends StatelessWidget {
     required this.color,
     super.key,
   });
+  final String iconName;
+  final double size;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {

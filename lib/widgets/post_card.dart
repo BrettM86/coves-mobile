@@ -44,9 +44,11 @@ class PostCard extends StatelessWidget {
   final bool showHeader;
 
   /// Check if this post should be clickable
-  /// Only text posts (no embeds or non-video/link embeds) are clickable
+  /// Only text posts (no embeds or non-video/link embeds) are
+  /// clickable
   bool get _isClickable {
-    // If navigation is explicitly disabled (e.g., on detail screen), not clickable
+    // If navigation is explicitly disabled (e.g., on detail screen),
+    // not clickable
     if (disableNavigation) {
       return false;
     }
@@ -66,7 +68,8 @@ class PostCard extends StatelessWidget {
 
     final embedType = external.embedType;
 
-    // Video and video-stream posts should NOT be clickable (they have their own tap handling)
+    // Video and video-stream posts should NOT be clickable (they have
+    // their own tap handling)
     if (embedType == 'video' || embedType == 'video-stream') {
       return false;
     }

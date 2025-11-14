@@ -31,8 +31,9 @@ void main() {
 
       // Default: user is authenticated
       when(mockAuthProvider.isAuthenticated).thenReturn(true);
-      when(mockAuthProvider.getAccessToken())
-          .thenAnswer((_) async => 'test-token');
+      when(
+        mockAuthProvider.getAccessToken(),
+      ).thenAnswer((_) async => 'test-token');
 
       commentsProvider = CommentsProvider(
         mockAuthProvider,
@@ -72,8 +73,9 @@ void main() {
           ),
         ).thenAnswer((_) async => mockResponse);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -90,7 +92,6 @@ void main() {
         final mockResponse = CommentsResponse(
           post: {},
           comments: [],
-          cursor: null,
         );
 
         when(
@@ -104,8 +105,9 @@ void main() {
           ),
         ).thenAnswer((_) async => mockResponse);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -180,8 +182,9 @@ void main() {
           ),
         ).thenAnswer((_) async => firstResponse);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -210,7 +213,6 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
-          refresh: false,
         );
 
         expect(commentsProvider.comments.length, 2);
@@ -237,8 +239,9 @@ void main() {
           ),
         ).thenAnswer((_) async => firstResponse);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -294,8 +297,9 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -324,8 +328,9 @@ void main() {
           ),
         ).thenAnswer((_) async => firstResponse);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -335,11 +340,11 @@ void main() {
         expect(commentsProvider.comments.length, 1);
 
         // Load different post
-        const differentPostUri = 'at://did:plc:test/social.coves.post.record/456';
+        const differentPostUri =
+            'at://did:plc:test/social.coves.post.record/456';
         final secondResponse = CommentsResponse(
           post: {},
           comments: [_createMockThreadComment('comment2')],
-          cursor: null,
         );
 
         when(
@@ -384,8 +389,9 @@ void main() {
           return response;
         });
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         // Start first load
         final firstFuture = commentsProvider.loadComments(
@@ -420,7 +426,6 @@ void main() {
         final mockResponse = CommentsResponse(
           post: {},
           comments: mockComments,
-          cursor: null,
         );
 
         when(
@@ -442,7 +447,9 @@ void main() {
           ),
         };
 
-        when(mockVoteService.getUserVotes()).thenAnswer((_) async => mockUserVotes);
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => mockUserVotes);
         when(mockVoteProvider.loadInitialVotes(any)).thenReturn(null);
 
         await commentsProvider.loadComments(
@@ -460,7 +467,6 @@ void main() {
         final mockResponse = CommentsResponse(
           post: {},
           comments: [_createMockThreadComment('comment1')],
-          cursor: null,
         );
 
         when(
@@ -489,7 +495,6 @@ void main() {
         final mockResponse = CommentsResponse(
           post: {},
           comments: mockComments,
-          cursor: null,
         );
 
         when(
@@ -503,8 +508,9 @@ void main() {
           ),
         ).thenAnswer((_) async => mockResponse);
 
-        when(mockVoteService.getUserVotes())
-            .thenThrow(Exception('Vote service error'));
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenThrow(Exception('Vote service error'));
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -525,13 +531,11 @@ void main() {
         final initialResponse = CommentsResponse(
           post: {},
           comments: [_createMockThreadComment('comment1')],
-          cursor: null,
         );
 
         when(
           mockApiService.getComments(
             postUri: anyNamed('postUri'),
-            sort: 'hot',
             timeframe: anyNamed('timeframe'),
             depth: anyNamed('depth'),
             limit: anyNamed('limit'),
@@ -539,8 +543,9 @@ void main() {
           ),
         ).thenAnswer((_) async => initialResponse);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -556,7 +561,6 @@ void main() {
             _createMockThreadComment('comment2'),
             _createMockThreadComment('comment3'),
           ],
-          cursor: null,
         );
 
         when(
@@ -569,10 +573,7 @@ void main() {
           ),
         ).thenAnswer((_) async => newSortResponse);
 
-        commentsProvider.setSortOption('new');
-
-        // Wait for async load to complete
-        await Future.delayed(const Duration(milliseconds: 100));
+        await commentsProvider.setSortOption('new');
 
         expect(commentsProvider.sort, 'new');
         verify(
@@ -590,7 +591,6 @@ void main() {
         final response = CommentsResponse(
           post: {},
           comments: [_createMockThreadComment('comment1')],
-          cursor: null,
         );
 
         when(
@@ -604,8 +604,9 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -613,15 +614,12 @@ void main() {
         );
 
         // Try to set same sort option
-        commentsProvider.setSortOption('hot');
-
-        await Future.delayed(const Duration(milliseconds: 100));
+        await commentsProvider.setSortOption('hot');
 
         // Should only have been called once (initial load)
         verify(
           mockApiService.getComments(
             postUri: anyNamed('postUri'),
-            sort: 'hot',
             timeframe: anyNamed('timeframe'),
             depth: anyNamed('depth'),
             limit: anyNamed('limit'),
@@ -652,8 +650,9 @@ void main() {
           ),
         ).thenAnswer((_) async => initialResponse);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -669,7 +668,6 @@ void main() {
             _createMockThreadComment('comment2'),
             _createMockThreadComment('comment3'),
           ],
-          cursor: null,
         );
 
         when(
@@ -725,8 +723,9 @@ void main() {
           ),
         ).thenAnswer((_) async => initialResponse);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -739,7 +738,6 @@ void main() {
         final moreResponse = CommentsResponse(
           post: {},
           comments: [_createMockThreadComment('comment2')],
-          cursor: null,
         );
 
         when(
@@ -763,7 +761,6 @@ void main() {
         final response = CommentsResponse(
           post: {},
           comments: [_createMockThreadComment('comment1')],
-          cursor: null,
         );
 
         when(
@@ -777,8 +774,9 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -846,7 +844,6 @@ void main() {
         final successResponse = CommentsResponse(
           post: {},
           comments: [_createMockThreadComment('comment1')],
-          cursor: null,
         );
 
         when(
@@ -860,8 +857,9 @@ void main() {
           ),
         ).thenAnswer((_) async => successResponse);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.retry();
 
@@ -877,7 +875,6 @@ void main() {
         final response = CommentsResponse(
           post: {},
           comments: [_createMockThreadComment('comment1')],
-          cursor: null,
         );
 
         when(
@@ -891,8 +888,9 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -915,7 +913,6 @@ void main() {
         final response = CommentsResponse(
           post: {},
           comments: [_createMockThreadComment('comment1')],
-          cursor: null,
         );
 
         when(
@@ -929,8 +926,9 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         expect(commentsProvider.currentTimeNotifier.value, null);
 
@@ -946,7 +944,6 @@ void main() {
         final response = CommentsResponse(
           post: {},
           comments: [_createMockThreadComment('comment1')],
-          cursor: null,
         );
 
         when(
@@ -960,8 +957,9 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: 'at://did:plc:test/social.coves.post.record/123',
@@ -988,7 +986,6 @@ void main() {
         final response = CommentsResponse(
           post: {},
           comments: [_createMockThreadComment('comment1')],
-          cursor: null,
         );
 
         when(
@@ -1002,8 +999,9 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: 'at://did:plc:test/social.coves.post.record/123',
@@ -1017,7 +1015,6 @@ void main() {
         final response = CommentsResponse(
           post: {},
           comments: [_createMockThreadComment('comment1')],
-          cursor: null,
         );
 
         when(
@@ -1034,8 +1031,9 @@ void main() {
           return response;
         });
 
-        when(mockVoteService.getUserVotes())
-            .thenAnswer((_) async => <String, VoteInfo>{});
+        when(
+          mockVoteService.getUserVotes(),
+        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         final loadFuture = commentsProvider.loadComments(
           postUri: 'at://did:plc:test/social.coves.post.record/123',
@@ -1072,11 +1070,7 @@ ThreadViewComment _createMockThreadComment(String uri) {
         uri: 'at://did:plc:test/social.coves.post.record/123',
         cid: 'post-cid',
       ),
-      stats: CommentStats(
-        score: 10,
-        upvotes: 12,
-        downvotes: 2,
-      ),
+      stats: CommentStats(score: 10, upvotes: 12, downvotes: 2),
     ),
   );
 }

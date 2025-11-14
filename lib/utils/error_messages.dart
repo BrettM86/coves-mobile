@@ -1,4 +1,5 @@
-/// Utility class for transforming technical error messages into user-friendly ones
+/// Utility class for transforming technical error messages into
+/// user-friendly ones
 class ErrorMessages {
   /// Transform technical error messages into user-friendly ones
   static String getUserFriendly(String error) {

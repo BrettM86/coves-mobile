@@ -6,11 +6,7 @@
 import 'post.dart';
 
 class CommentsResponse {
-  CommentsResponse({
-    required this.post,
-    this.cursor,
-    required this.comments,
-  });
+  CommentsResponse({required this.post, this.cursor, required this.comments});
 
   factory CommentsResponse.fromJson(Map<String, dynamic> json) {
     // Handle null comments array from backend
@@ -53,14 +49,16 @@ class ThreadViewComment {
   factory ThreadViewComment.fromJson(Map<String, dynamic> json) {
     return ThreadViewComment(
       comment: CommentView.fromJson(json['comment'] as Map<String, dynamic>),
-      replies: json['replies'] != null
-          ? (json['replies'] as List<dynamic>)
-              .map(
-                (item) =>
-                    ThreadViewComment.fromJson(item as Map<String, dynamic>),
-              )
-              .toList()
-          : null,
+      replies:
+          json['replies'] != null
+              ? (json['replies'] as List<dynamic>)
+                  .map(
+                    (item) => ThreadViewComment.fromJson(
+                      item as Map<String, dynamic>,
+                    ),
+                  )
+                  .toList()
+              : null,
       hasMore: json['hasMore'] as bool? ?? false,
     );
   }
@@ -91,22 +89,27 @@ class CommentView {
       uri: json['uri'] as String,
       cid: json['cid'] as String,
       content: json['content'] as String,
-      contentFacets: json['contentFacets'] != null
-          ? (json['contentFacets'] as List<dynamic>)
-              .map((f) => PostFacet.fromJson(f as Map<String, dynamic>))
-              .toList()
-          : null,
+      contentFacets:
+          json['contentFacets'] != null
+              ? (json['contentFacets'] as List<dynamic>)
+                  .map((f) => PostFacet.fromJson(f as Map<String, dynamic>))
+                  .toList()
+              : null,
       createdAt: DateTime.parse(json['createdAt'] as String),
       indexedAt: DateTime.parse(json['indexedAt'] as String),
       author: AuthorView.fromJson(json['author'] as Map<String, dynamic>),
       post: CommentRef.fromJson(json['post'] as Map<String, dynamic>),
-      parent: json['parent'] != null
-          ? CommentRef.fromJson(json['parent'] as Map<String, dynamic>)
-          : null,
+      parent:
+          json['parent'] != null
+              ? CommentRef.fromJson(json['parent'] as Map<String, dynamic>)
+              : null,
       stats: CommentStats.fromJson(json['stats'] as Map<String, dynamic>),
-      viewer: json['viewer'] != null
-          ? CommentViewerState.fromJson(json['viewer'] as Map<String, dynamic>)
-          : null,
+      viewer:
+          json['viewer'] != null
+              ? CommentViewerState.fromJson(
+                json['viewer'] as Map<String, dynamic>,
+              )
+              : null,
       embed: json['embed'],
     );
   }
@@ -126,16 +129,10 @@ class CommentView {
 }
 
 class CommentRef {
-  CommentRef({
-    required this.uri,
-    required this.cid,
-  });
+  CommentRef({required this.uri, required this.cid});
 
   factory CommentRef.fromJson(Map<String, dynamic> json) {
-    return CommentRef(
-      uri: json['uri'] as String,
-      cid: json['cid'] as String,
-    );
+    return CommentRef(uri: json['uri'] as String, cid: json['cid'] as String);
   }
 
   final String uri;
@@ -143,11 +140,7 @@ class CommentRef {
 }
 
 class CommentStats {
-  CommentStats({
-    this.upvotes = 0,
-    this.downvotes = 0,
-    this.score = 0,
-  });
+  CommentStats({this.upvotes = 0, this.downvotes = 0, this.score = 0});
 
   factory CommentStats.fromJson(Map<String, dynamic> json) {
     return CommentStats(
@@ -163,14 +156,10 @@ class CommentStats {
 }
 
 class CommentViewerState {
-  CommentViewerState({
-    this.vote,
-  });
+  CommentViewerState({this.vote});
 
   factory CommentViewerState.fromJson(Map<String, dynamic> json) {
-    return CommentViewerState(
-      vote: json['vote'] as String?,
-    );
+    return CommentViewerState(vote: json['vote'] as String?);
   }
 
   final String? vote;
