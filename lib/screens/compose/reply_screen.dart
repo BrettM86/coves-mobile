@@ -1,0 +1,543 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+
+import '../../constants/app_colors.dart';
+import '../../models/comment.dart';
+import '../../models/post.dart';
+import '../../providers/comments_provider.dart';
+import '../../widgets/comment_thread.dart';
+import '../../widgets/post_card.dart';
+
+/// Reply Screen
+///
+/// Full-screen reply interface inspired by Thunder's natural scrolling
+/// approach:
+/// - Scrollable content area (post/comment preview + text input)
+/// - Fixed bottom action bar with keyboard-aware margin
+/// - "Cancel" button in app bar (left)
+/// - "Reply" button in app bar (right, pill-shaped, enabled when text
+///   present)
+///
+/// Key Features:
+/// - Natural scrolling without fixed split ratios
+/// - Thunder-style keyboard handling with manual margin
+/// - Post/comment context visible while composing
+/// - Text selection and copy/paste enabled
+class ReplyScreen extends StatefulWidget {
+  const ReplyScreen({
+    this.post,
+    this.comment,
+    required this.onSubmit,
+    super.key,
+  }) : assert(
+         (post != null) != (comment != null),
+         'Must provide exactly one: post or comment',
+       );
+
+  /// Post being replied to (mutually exclusive with comment)
+  final FeedViewPost? post;
+
+  /// Comment being replied to (mutually exclusive with post)
+  final ThreadViewComment? comment;
+
+  /// Callback when user submits reply
+  final Future<void> Function(String content) onSubmit;
+
+  @override
+  State<ReplyScreen> createState() => _ReplyScreenState();
+}
+
+class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
+  final TextEditingController _textController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
+  bool _hasText = false;
+  bool _isKeyboardOpening = false;
+  bool _isSubmitting = false;
+  double _lastKeyboardHeight = 0;
+  Timer? _bannerDismissTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _textController.addListener(_onTextChanged);
+    _focusNode.addListener(_onFocusChanged);
+
+    // Autofocus with delay (Thunder approach - let screen render first)
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        _isKeyboardOpening = true;
+        _focusNode.requestFocus();
+      }
+    });
+  }
+
+  void _onFocusChanged() {
+    // When text field gains focus, scroll to bottom as keyboard opens
+    if (_focusNode.hasFocus) {
+      _isKeyboardOpening = true;
+    }
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    final keyboardHeight = View.of(context).viewInsets.bottom;
+
+    // Detect keyboard closing and unfocus text field
+    if (_lastKeyboardHeight > 0 && keyboardHeight == 0) {
+      // Keyboard just closed - unfocus the text field
+      if (_focusNode.hasFocus) {
+        _focusNode.unfocus();
+      }
+    }
+
+    _lastKeyboardHeight = keyboardHeight;
+
+    // Scroll to bottom as keyboard opens
+    if (_isKeyboardOpening && _scrollController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scrollController.hasClients) {
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+
+          // Stop auto-scrolling after keyboard animation completes
+          if (keyboardHeight > 100) {
+            // Keyboard is substantially open, stop tracking after a delay
+            Future.delayed(const Duration(milliseconds: 500), () {
+              _isKeyboardOpening = false;
+            });
+          }
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _bannerDismissTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _textController.dispose();
+    _focusNode.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onTextChanged() {
+    final hasText = _textController.text.trim().isNotEmpty;
+    if (hasText != _hasText) {
+      setState(() {
+        _hasText = hasText;
+      });
+    }
+  }
+
+  Future<void> _handleSubmit() async {
+    final content = _textController.text.trim();
+    if (content.isEmpty) {
+      return;
+    }
+
+    // Add haptic feedback before submission
+    await HapticFeedback.lightImpact();
+
+    // Set loading state
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await widget.onSubmit(content);
+      // Pop screen after successful submission
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } on Exception catch (e) {
+      // Show error if submission fails
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit: $e'),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        // Reset loading state on error
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  void _showComingSoonBanner(String feature) {
+    // Cancel any existing timer to prevent multiple banners
+    _bannerDismissTimer?.cancel();
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        content: Text('$feature coming soon!'),
+        backgroundColor: AppColors.primary,
+        leading: const Icon(Icons.info_outline, color: AppColors.textPrimary),
+        actions: [
+          TextButton(
+            onPressed: messenger.hideCurrentMaterialBanner,
+            child: const Text(
+              'Dismiss',
+              style: TextStyle(color: AppColors.textPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    // Auto-hide after 2 seconds with cancelable timer
+    _bannerDismissTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        messenger.hideCurrentMaterialBanner();
+      }
+    });
+  }
+
+  void _handleMentionTap() {
+    _showComingSoonBanner('Mention feature');
+  }
+
+  void _handleImageTap() {
+    _showComingSoonBanner('Image upload');
+  }
+
+  void _handleCancel() {
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        // Dismiss keyboard when tapping outside
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        resizeToAvoidBottomInset: false, // Thunder approach
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          surfaceTintColor: Colors.transparent,
+          foregroundColor: AppColors.textPrimary,
+          elevation: 0,
+          automaticallyImplyLeading: false,
+          leading: TextButton(
+            onPressed: _handleCancel,
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
+            ),
+          ),
+          leadingWidth: 80,
+        ),
+        body: Column(
+          children: [
+            // Scrollable content area (Thunder style)
+            Expanded(
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  children: [
+                    // Post or comment preview
+                    _buildContext(),
+
+                    const SizedBox(height: 8),
+
+                    // Divider between post and text input
+                    Container(height: 1, color: AppColors.border),
+
+                    // Text input - no background box, types directly into
+                    // main area
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: TextField(
+                        controller: _textController,
+                        focusNode: _focusNode,
+                        maxLines: null,
+                        minLines: 8,
+                        keyboardType: TextInputType.multiline,
+                        textCapitalization: TextCapitalization.sentences,
+                        textInputAction: TextInputAction.newline,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 16,
+                          height: 1.4,
+                        ),
+                        decoration: const InputDecoration(
+                          hintText: 'Say something...',
+                          hintStyle: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 16,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Divider - simple straight line like posts and comments
+            Container(height: 1, color: AppColors.border),
+
+            _ReplyToolbar(
+              hasText: _hasText,
+              isSubmitting: _isSubmitting,
+              onImageTap: _handleImageTap,
+              onMentionTap: _handleMentionTap,
+              onSubmit: _handleSubmit,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build context area (post or comment chain)
+  Widget _buildContext() {
+    // Wrap in RepaintBoundary to isolate from keyboard animation rebuilds
+    return RepaintBoundary(
+      child: _ContextPreview(post: widget.post, comment: widget.comment),
+    );
+  }
+}
+
+/// Isolated context preview that doesn't rebuild on keyboard changes
+class _ContextPreview extends StatelessWidget {
+  const _ContextPreview({this.post, this.comment});
+
+  final FeedViewPost? post;
+  final ThreadViewComment? comment;
+
+  @override
+  Widget build(BuildContext context) {
+    if (post != null) {
+      // Show full post card - Consumer only rebuilds THIS widget, not parents
+      return Consumer<CommentsProvider>(
+        builder: (context, commentsProvider, child) {
+          return PostCard(
+            post: post!,
+            currentTime: commentsProvider.currentTimeNotifier.value,
+            showCommentButton: false,
+            disableNavigation: true,
+            showActions: false,
+            showBorder: false,
+          );
+        },
+      );
+    } else if (comment != null) {
+      // Show comment thread/chain
+      return Consumer<CommentsProvider>(
+        builder: (context, commentsProvider, child) {
+          return CommentThread(
+            thread: comment!,
+            currentTime: commentsProvider.currentTimeNotifier.value,
+            maxDepth: 6,
+          );
+        },
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+}
+
+class _ReplyToolbar extends StatefulWidget {
+  const _ReplyToolbar({
+    required this.hasText,
+    required this.isSubmitting,
+    required this.onMentionTap,
+    required this.onImageTap,
+    required this.onSubmit,
+  });
+
+  final bool hasText;
+  final bool isSubmitting;
+  final VoidCallback onMentionTap;
+  final VoidCallback onImageTap;
+  final VoidCallback onSubmit;
+
+  @override
+  State<_ReplyToolbar> createState() => _ReplyToolbarState();
+}
+
+class _ReplyToolbarState extends State<_ReplyToolbar>
+    with WidgetsBindingObserver {
+  final ValueNotifier<double> _keyboardMarginNotifier = ValueNotifier(0);
+  final ValueNotifier<double> _safeAreaBottomNotifier = ValueNotifier(0);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updateMargins();
+  }
+
+  @override
+  void dispose() {
+    _keyboardMarginNotifier.dispose();
+    _safeAreaBottomNotifier.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    _updateMargins();
+  }
+
+  void _updateMargins() {
+    if (!mounted) {
+      return;
+    }
+    final view = View.of(context);
+    final devicePixelRatio = view.devicePixelRatio;
+    final keyboardInset = view.viewInsets.bottom / devicePixelRatio;
+    final viewPaddingBottom = view.viewPadding.bottom / devicePixelRatio;
+    final safeAreaBottom =
+        math.max(0, viewPaddingBottom - keyboardInset).toDouble();
+
+    // Smooth tracking: Follow keyboard height in real-time (Bluesky/Thunder approach)
+    _keyboardMarginNotifier.value = keyboardInset;
+    _safeAreaBottomNotifier.value = safeAreaBottom;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ValueListenableBuilder<double>(
+          valueListenable: _keyboardMarginNotifier,
+          builder: (context, margin, child) {
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 100),
+              curve: Curves.easeOut,
+              margin: EdgeInsets.only(bottom: margin),
+              color: AppColors.backgroundSecondary,
+              padding: const EdgeInsets.only(
+                left: 8,
+                right: 8,
+                top: 4,
+                bottom: 4,
+              ),
+              child: child,
+            );
+          },
+          child: Row(
+            children: [
+              Semantics(
+                button: true,
+                label: 'Mention user',
+                child: GestureDetector(
+                  onTap: widget.onMentionTap,
+                  child: const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Icon(
+                      Icons.alternate_email_rounded,
+                      size: 24,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Semantics(
+                button: true,
+                label: 'Add image',
+                child: GestureDetector(
+                  onTap: widget.onImageTap,
+                  child: const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Icon(
+                      Icons.image_outlined,
+                      size: 24,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Semantics(
+                button: true,
+                label: 'Send comment',
+                child: GestureDetector(
+                  onTap:
+                      (widget.hasText && !widget.isSubmitting)
+                          ? widget.onSubmit
+                          : null,
+                  child: Container(
+                    height: 32,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color:
+                          (widget.hasText && !widget.isSubmitting)
+                              ? AppColors.primary
+                              : AppColors.textSecondary.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (widget.isSubmitting)
+                          const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                AppColors.textPrimary,
+                              ),
+                            ),
+                          )
+                        else
+                          const Text(
+                            'Send',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.normal,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        ValueListenableBuilder<double>(
+          valueListenable: _safeAreaBottomNotifier,
+          builder: (context, safeAreaBottom, child) {
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 100),
+              curve: Curves.easeOut,
+              height: safeAreaBottom,
+              color: AppColors.backgroundSecondary,
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
