@@ -18,6 +18,7 @@ import '../../widgets/icons/share_icon.dart';
 import '../../widgets/loading_error_states.dart';
 import '../../widgets/post_action_bar.dart';
 import '../../widgets/post_card.dart';
+import '../compose/reply_screen.dart';
 
 /// Post Detail Screen
 ///
@@ -243,7 +244,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     await Share.share('$title\n\n$postUri', subject: title);
   }
 
-  /// Build bottom action bar with comment input and buttons
+  /// Build bottom action bar with vote, save, and comment actions
   Widget _buildActionBar() {
     return Consumer<VoteProvider>(
       builder: (context, voteProvider, child) {
@@ -280,15 +281,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         return PostActionBar(
           post: displayPost,
           isVoted: isVoted,
-          onCommentTap: () {
-            // TODO: Open comment composer
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Comment composer coming soon!'),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          },
+          onCommentTap: _openCommentComposer,
           onVoteTap: () async {
             // Check authentication
             final authProvider = context.read<AuthProvider>();
@@ -334,6 +327,42 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           },
         );
       },
+    );
+  }
+
+  /// Open the reply screen for composing a comment
+  void _openCommentComposer() {
+    // Check authentication
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sign in to comment'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // Navigate to reply screen with full post context
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder:
+            (context) =>
+                ReplyScreen(post: widget.post, onSubmit: _handleCommentSubmit),
+      ),
+    );
+  }
+
+  /// Handle comment submission
+  Future<void> _handleCommentSubmit(String content) async {
+    // TODO: Implement comment creation via atProto
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Comment submitted: $content'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
     );
   }
 
@@ -478,6 +507,7 @@ class _PostHeader extends StatelessWidget {
           disableNavigation: true,
           showActions: false,
           showHeader: false,
+          showBorder: false,
         );
       },
     );

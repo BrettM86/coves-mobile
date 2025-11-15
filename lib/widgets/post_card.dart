@@ -33,6 +33,7 @@ class PostCard extends StatelessWidget {
     this.disableNavigation = false,
     this.showActions = true,
     this.showHeader = true,
+    this.showBorder = true,
     super.key,
   });
 
@@ -42,6 +43,7 @@ class PostCard extends StatelessWidget {
   final bool disableNavigation;
   final bool showActions;
   final bool showHeader;
+  final bool showBorder;
 
   /// Check if this post should be clickable
   /// Only text posts (no embeds or non-video/link embeds) are
@@ -98,7 +100,7 @@ class PostCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.background,
         border:
-            showHeader
+            showBorder
                 ? const Border(bottom: BorderSide(color: AppColors.border))
                 : null,
       ),
