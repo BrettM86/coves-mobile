@@ -336,6 +336,13 @@ class _ContextPreview extends StatelessWidget {
             disableNavigation: true,
             showActions: false,
             showBorder: false,
+            showFullText: true,
+            showAuthorFooter: true,
+            textFontSize: 16,
+            textLineHeight: 1.6,
+            embedHeight: 280,
+            titleFontSize: 20,
+            titleFontWeight: FontWeight.w600,
           );
         },
       );
