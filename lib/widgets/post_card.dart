@@ -34,6 +34,13 @@ class PostCard extends StatelessWidget {
     this.showActions = true,
     this.showHeader = true,
     this.showBorder = true,
+    this.showFullText = false,
+    this.showAuthorFooter = false,
+    this.textFontSize = 13,
+    this.textLineHeight = 1.4,
+    this.embedHeight = 180,
+    this.titleFontSize = 16,
+    this.titleFontWeight = FontWeight.w400,
     super.key,
   });
 
@@ -44,46 +51,13 @@ class PostCard extends StatelessWidget {
   final bool showActions;
   final bool showHeader;
   final bool showBorder;
-
-  /// Check if this post should be clickable
-  /// Only text posts (no embeds or non-video/link embeds) are
-  /// clickable
-  bool get _isClickable {
-    // If navigation is explicitly disabled (e.g., on detail screen),
-    // not clickable
-    if (disableNavigation) {
-      return false;
-    }
-
-    final embed = post.post.embed;
-
-    // If no embed, it's a text-only post - clickable
-    if (embed == null) {
-      return true;
-    }
-
-    // If embed exists, check if it's a video or link type
-    final external = embed.external;
-    if (external == null) {
-      return true; // No external embed, clickable
-    }
-
-    final embedType = external.embedType;
-
-    // Video and video-stream posts should NOT be clickable (they have
-    // their own tap handling)
-    if (embedType == 'video' || embedType == 'video-stream') {
-      return false;
-    }
-
-    // Link embeds should NOT be clickable (they have their own link handling)
-    if (embedType == 'link') {
-      return false;
-    }
-
-    // All other types are clickable
-    return true;
-  }
+  final bool showFullText;
+  final bool showAuthorFooter;
+  final double textFontSize;
+  final double textLineHeight;
+  final double embedHeight;
+  final double titleFontSize;
+  final FontWeight titleFontWeight;
 
   void _navigateToDetail(BuildContext context) {
     // Navigate to post detail screen
@@ -149,106 +123,86 @@ class PostCard extends StatelessWidget {
               const SizedBox(height: 8),
             ],
 
-            // Wrap content in InkWell if clickable (text-only posts)
-            if (_isClickable)
-              InkWell(
-                onTap: () => _navigateToDetail(context),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Post title
-                    if (post.post.title != null) ...[
-                      Text(
-                        post.post.title!,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ],
+            // Post content - title and text are clickable, embed handles
+            // its own taps
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Author info (shown in detail view, above title)
+                if (showAuthorFooter) _buildAuthorFooter(),
 
-                    // Spacing after title (only if we have text)
-                    if (post.post.title != null && post.post.text.isNotEmpty)
-                      const SizedBox(height: 8),
-
-                    // Post text body preview
-                    if (post.post.text.isNotEmpty) ...[
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.backgroundSecondary,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          post.post.text,
-                          style: TextStyle(
-                            color: AppColors.textPrimary.withValues(alpha: 0.7),
-                            fontSize: 13,
-                            height: 1.4,
+                // Title and text wrapped in InkWell for navigation
+                if (!disableNavigation &&
+                    (post.post.title != null || post.post.text.isNotEmpty))
+                  InkWell(
+                    onTap: () => _navigateToDetail(context),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Post title
+                        if (post.post.title != null) ...[
+                          Text(
+                            post.post.title!,
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: titleFontSize,
+                              fontWeight: titleFontWeight,
+                              height: 1.3,
+                            ),
                           ),
-                          maxLines: 5,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              )
-            else
-              // Non-clickable content (video/link posts)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Post title
+                        ],
+
+                        // Spacing after title
+                        if (post.post.title != null &&
+                            (post.post.embed?.external != null ||
+                                post.post.text.isNotEmpty))
+                          const SizedBox(height: 8),
+                      ],
+                    ),
+                  )
+                else
+                  // Title when navigation is disabled
                   if (post.post.title != null) ...[
                     Text(
                       post.post.title!,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w400,
+                        fontSize: titleFontSize,
+                        fontWeight: titleFontWeight,
+                        height: 1.3,
                       ),
                     ),
+                    if (post.post.embed?.external != null ||
+                        post.post.text.isNotEmpty)
+                      const SizedBox(height: 8),
                   ],
 
-                  // Spacing after title (only if we have content below)
-                  if (post.post.title != null &&
-                      (post.post.embed?.external != null ||
-                          post.post.text.isNotEmpty))
-                    const SizedBox(height: 8),
-
-                  // Embed (link preview)
-                  if (post.post.embed?.external != null) ...[
-                    _EmbedCard(
-                      embed: post.post.embed!.external!,
-                      streamableService: context.read<StreamableService>(),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-
-                  // Post text body preview
-                  if (post.post.text.isNotEmpty) ...[
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.backgroundSecondary,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        post.post.text,
-                        style: TextStyle(
-                          color: AppColors.textPrimary.withValues(alpha: 0.7),
-                          fontSize: 13,
-                          height: 1.4,
-                        ),
-                        maxLines: 5,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+                // Embed (handles its own taps - not wrapped in InkWell)
+                if (post.post.embed?.external != null) ...[
+                  _EmbedCard(
+                    embed: post.post.embed!.external!,
+                    streamableService: context.read<StreamableService>(),
+                    height: embedHeight,
+                    onImageTap:
+                        disableNavigation
+                            ? null
+                            : () => _navigateToDetail(context),
+                  ),
+                  const SizedBox(height: 8),
                 ],
-              ),
+
+                // Post text (clickable for navigation)
+                if (post.post.text.isNotEmpty) ...[
+                  if (!disableNavigation)
+                    InkWell(
+                      onTap: () => _navigateToDetail(context),
+                      child: _buildTextContent(),
+                    )
+                  else
+                    _buildTextContent(),
+                ],
+              ],
+            ),
 
             // External link (if present)
             if (post.post.embed?.external != null) ...[
@@ -266,6 +220,43 @@ class PostCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Builds the text content with appropriate styling
+  Widget _buildTextContent() {
+    if (showFullText) {
+      // Detail view: no container, better readability
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Text(
+          post.post.text,
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: textFontSize,
+            height: textLineHeight,
+          ),
+        ),
+      );
+    } else {
+      // Feed view: compact preview with container
+      return Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: AppColors.backgroundSecondary,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          post.post.text,
+          style: TextStyle(
+            color: AppColors.textPrimary.withValues(alpha: 0.85),
+            fontSize: textFontSize,
+            height: textLineHeight,
+          ),
+          maxLines: 5,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
   }
 
   /// Builds the community handle with styled parts (name + instance)
@@ -343,6 +334,88 @@ class PostCard extends StatelessWidget {
       ),
     );
   }
+
+  /// Builds author footer with avatar, handle, and timestamp
+  Widget _buildAuthorFooter() {
+    final author = post.post.author;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: Row(
+        children: [
+          // Author avatar (circular, small)
+          if (author.avatar != null && author.avatar!.isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: CachedNetworkImage(
+                imageUrl: author.avatar!,
+                width: 24,
+                height: 24,
+                fit: BoxFit.cover,
+                placeholder:
+                    (context, url) => _buildAuthorFallbackAvatar(author),
+                errorWidget:
+                    (context, url, error) => _buildAuthorFallbackAvatar(author),
+              ),
+            )
+          else
+            _buildAuthorFallbackAvatar(author),
+          const SizedBox(width: 8),
+
+          // Author handle
+          Text(
+            '@${author.handle}',
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+
+          const SizedBox(width: 8),
+
+          // Timestamp
+          Text(
+            DateTimeUtils.formatTimeAgo(
+              post.post.createdAt,
+              currentTime: currentTime,
+            ),
+            style: TextStyle(
+              color: AppColors.textSecondary.withValues(alpha: 0.7),
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds a fallback avatar for the author
+  Widget _buildAuthorFallbackAvatar(AuthorView author) {
+    final firstLetter =
+        (author.displayName ?? author.handle).isNotEmpty
+            ? (author.displayName ?? author.handle)[0]
+            : '?';
+    return Container(
+      width: 24,
+      height: 24,
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Center(
+        child: Text(
+          firstLetter.toUpperCase(),
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Embed card widget for displaying link previews
@@ -351,10 +424,17 @@ class PostCard extends StatelessWidget {
 /// For video embeds (Streamable), displays a play button overlay and opens
 /// a video player dialog when tapped.
 class _EmbedCard extends StatefulWidget {
-  const _EmbedCard({required this.embed, required this.streamableService});
+  const _EmbedCard({
+    required this.embed,
+    required this.streamableService,
+    this.height = 180,
+    this.onImageTap,
+  });
 
   final ExternalEmbed embed;
   final StreamableService streamableService;
+  final double height;
+  final VoidCallback? onImageTap;
 
   @override
   State<_EmbedCard> createState() => _EmbedCardState();
@@ -443,12 +523,12 @@ class _EmbedCardState extends State<_EmbedCard> {
       child: CachedNetworkImage(
         imageUrl: widget.embed.thumb!,
         width: double.infinity,
-        height: 180,
+        height: widget.height,
         fit: BoxFit.cover,
         placeholder:
             (context, url) => Container(
               width: double.infinity,
-              height: 180,
+              height: widget.height,
               color: AppColors.background,
               child: const Center(
                 child: CircularProgressIndicator(
@@ -463,7 +543,7 @@ class _EmbedCardState extends State<_EmbedCard> {
           }
           return Container(
             width: double.infinity,
-            height: 180,
+            height: widget.height,
             color: AppColors.background,
             child: const Icon(
               Icons.broken_image,
@@ -507,7 +587,16 @@ class _EmbedCardState extends State<_EmbedCard> {
       );
     }
 
-    // For non-video embeds, just return the thumbnail
+    // For non-video embeds (images, link previews), make them tappable
+    // to navigate to post detail
+    if (widget.onImageTap != null) {
+      return GestureDetector(
+        onTap: widget.onImageTap,
+        child: thumbnailWidget,
+      );
+    }
+
+    // No tap handler provided, just return the thumbnail
     return thumbnailWidget;
   }
 }
