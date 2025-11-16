@@ -44,6 +44,7 @@ class PostDetailScreen extends StatefulWidget {
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _commentsHeaderKey = GlobalKey();
 
   // Current sort option
   String _currentSort = 'hot';
@@ -281,7 +282,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         return PostActionBar(
           post: displayPost,
           isVoted: isVoted,
-          onCommentTap: _openCommentComposer,
+          onCommentInputTap: _openCommentComposer,
+          onCommentCountTap: _scrollToComments,
           onVoteTap: () async {
             // Check authentication
             final authProvider = context.read<AuthProvider>();
@@ -328,6 +330,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         );
       },
     );
+  }
+
+  /// Scroll to the comments section
+  void _scrollToComments() {
+    final context = _commentsHeaderKey.currentContext;
+    if (context != null) {
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   /// Open the reply screen for composing a comment
@@ -435,8 +449,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               currentTimeNotifier:
                                   commentsProvider.currentTimeNotifier,
                             ),
+
+                            // Visual divider before comments section
+                            Container(
+                              margin: const EdgeInsets.symmetric(vertical: 16),
+                              height: 1,
+                              color: AppColors.border,
+                            ),
+
                             // Comments header with sort dropdown
                             CommentsHeader(
+                              key: _commentsHeaderKey,
                               commentCount: comments.length,
                               currentSort: _currentSort,
                               onSortChanged: _onSortChanged,
@@ -508,6 +531,13 @@ class _PostHeader extends StatelessWidget {
           showActions: false,
           showHeader: false,
           showBorder: false,
+          showFullText: true,
+          showAuthorFooter: true,
+          textFontSize: 16,
+          textLineHeight: 1.6,
+          embedHeight: 280,
+          titleFontSize: 20,
+          titleFontWeight: FontWeight.w600,
         );
       },
     );
