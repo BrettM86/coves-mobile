@@ -10,14 +10,16 @@ import 'icons/animated_heart_icon.dart';
 /// Bottom bar with comment input and action buttons (vote, save,
 /// comment count).
 /// Displays:
-/// - Comment input field
+/// - Comment input field (opens composer when tapped)
 /// - Heart icon with vote count
 /// - Star icon with save count
-/// - Comment bubble icon with comment count
+/// - Comment bubble icon with comment count (scrolls to comments when tapped)
 class PostActionBar extends StatelessWidget {
   const PostActionBar({
     required this.post,
     this.onCommentTap,
+    this.onCommentInputTap,
+    this.onCommentCountTap,
     this.onVoteTap,
     this.onSaveTap,
     this.isVoted = false,
@@ -26,7 +28,17 @@ class PostActionBar extends StatelessWidget {
   });
 
   final FeedViewPost post;
+
+  /// Deprecated: Use onCommentInputTap and onCommentCountTap instead
   final VoidCallback? onCommentTap;
+
+  /// Callback when comment input field is tapped (typically opens composer)
+  final VoidCallback? onCommentInputTap;
+
+  /// Callback when comment count button is tapped (typically scrolls to
+  /// comments)
+  final VoidCallback? onCommentCountTap;
+
   final VoidCallback? onVoteTap;
   final VoidCallback? onSaveTap;
   final bool isVoted;
@@ -49,7 +61,7 @@ class PostActionBar extends StatelessWidget {
             // Comment input field
             Expanded(
               child: GestureDetector(
-                onTap: onCommentTap,
+                onTap: onCommentInputTap ?? onCommentTap,
                 child: Container(
                   height: 40,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -121,7 +133,7 @@ class PostActionBar extends StatelessWidget {
             _ActionButton(
               icon: Icons.chat_bubble_outline,
               count: post.post.stats.commentCount,
-              onTap: onCommentTap,
+              onTap: onCommentCountTap ?? onCommentTap,
             ),
           ],
         ),
