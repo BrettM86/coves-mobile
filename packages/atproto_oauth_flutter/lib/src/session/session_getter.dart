@@ -404,7 +404,7 @@ class SessionGetter extends CachedGetter<AtprotoDid, Session> {
         // Make sure, even if there is no signal in the options, that the
         // request will be cancelled after at most 30 seconds.
         final timeoutToken = CancellationToken();
-        Timer(Duration(seconds: 30), () => timeoutToken.cancel());
+        final timeoutTimer = Timer(Duration(seconds: 30), () => timeoutToken.cancel());
 
         final combinedSignal =
             options?.signal != null
@@ -421,6 +421,7 @@ class SessionGetter extends CachedGetter<AtprotoDid, Session> {
             ),
           );
         } finally {
+          timeoutTimer.cancel(); // Cancel timer before disposing token
           combinedSignal.dispose();
           timeoutToken.dispose();
         }

@@ -166,7 +166,11 @@ class CancellationToken {
 
     _isCancelled = true;
     _reason = reason ?? Exception('Operation was cancelled');
-    _controller.add(null);
+
+    // Only add to stream if not already closed
+    if (!_controller.isClosed) {
+      _controller.add(null);
+    }
   }
 
   /// Throw an exception if the operation has been cancelled.
