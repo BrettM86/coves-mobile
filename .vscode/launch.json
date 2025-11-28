@@ -1,0 +1,59 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Dev (Local Server)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "args": [
+        "--flavor",
+        "dev",
+        "--dart-define=FLUTTER_FLAVOR=dev"
+      ]
+    },
+    {
+      "name": "Dev (Local Server) - Release",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release",
+      "args": [
+        "--flavor",
+        "dev",
+        "--dart-define=FLUTTER_FLAVOR=dev"
+      ]
+    },
+    {
+      "name": "Prod (Production Server)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "args": [
+        "--flavor",
+        "prod",
+        "--dart-define=FLUTTER_FLAVOR=prod"
+      ]
+    },
+    {
+      "name": "Prod (Production Server) - Release",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release",
+      "args": [
+        "--flavor",
+        "prod",
+        "--dart-define=FLUTTER_FLAVOR=prod"
+      ]
+    },
+    {
+      "name": "Legacy: Local (no flavor)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "args": [
+        "--dart-define=ENVIRONMENT=local"
+      ]
+    }
+  ],
+  "compounds": []
+}

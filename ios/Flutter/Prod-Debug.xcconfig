@@ -1,0 +1,8 @@
+#include "Generated.xcconfig"
+#include "Debug.xcconfig"
+
+// Prod flavor configuration
+PRODUCT_BUNDLE_IDENTIFIER=social.coves
+PRODUCT_NAME=Coves
+DISPLAY_NAME=Coves
+FLUTTER_FLAVOR=prod

@@ -73,9 +73,9 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/logo/app-icon.png"
+  image_path: "assets/logo/lil_dude_padded.png"
   adaptive_icon_background: "#0B0F14"  # Your app's dark background color
-  adaptive_icon_foreground: "assets/logo/app-icon-foreground.png"  # Smaller version with padding
+  adaptive_icon_foreground: "assets/logo/lil_dude_padded.png"  # Lil dude with safe zone padding
   remove_alpha_ios: true  # Required for App Store submission
 
 # For information on the generic Dart part of this file, see the

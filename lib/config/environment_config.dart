@@ -1,10 +1,13 @@
 /// Environment Configuration for Coves Mobile
 ///
 /// Supports multiple environments:
-/// - Production: Real Bluesky infrastructure
-/// - Local: Local PDS + PLC for development/testing
+/// - Production: Real Bluesky infrastructure (prod flavor)
+/// - Local: Local PDS + PLC for development/testing (dev flavor)
 ///
-/// Set via ENVIRONMENT environment variable or flutter run --dart-define
+/// Environment is determined by (in priority order):
+/// 1. --dart-define=ENVIRONMENT=local/production (explicit override)
+/// 2. Flutter flavor (dev -> local, prod -> production)
+/// 3. Default: production
 enum Environment { production, local }
 
 class EnvironmentConfig {
@@ -20,10 +23,10 @@ class EnvironmentConfig {
   final String plcDirectoryUrl;
 
   /// Production configuration (default)
-  /// Uses real Bluesky infrastructure
+  /// Uses Coves production server with public atproto infrastructure
   static const production = EnvironmentConfig(
     environment: Environment.production,
-    apiUrl: 'https://coves.social', // TODO: Update when production is live
+    apiUrl: 'https://coves.social',
     handleResolverUrl:
         'https://bsky.social/xrpc/com.atproto.identity.resolveHandle',
     plcDirectoryUrl: 'https://plc.directory',
@@ -46,21 +49,51 @@ class EnvironmentConfig {
     plcDirectoryUrl: 'http://localhost:3002',
   );
 
-  /// Get current environment based on build configuration
-  static EnvironmentConfig get current {
-    // Read from --dart-define=ENVIRONMENT=local
-    const envString = String.fromEnvironment(
-      'ENVIRONMENT',
-      defaultValue: 'production',
-    );
+  /// Flutter flavor passed via --flavor flag
+  /// This is set automatically by Flutter build system
+  static const String _flavor = String.fromEnvironment('FLUTTER_FLAVOR');
 
-    switch (envString) {
-      case 'local':
+  /// Explicit environment override via --dart-define=ENVIRONMENT=local
+  static const String _envOverride = String.fromEnvironment('ENVIRONMENT');
+
+  /// Get current environment based on build configuration
+  ///
+  /// Priority:
+  /// 1. Explicit --dart-define=ENVIRONMENT=local/production
+  /// 2. Flavor: dev -> local, prod -> production
+  /// 3. Default: production
+  static EnvironmentConfig get current {
+    // Priority 1: Explicit environment override
+    if (_envOverride.isNotEmpty) {
+      switch (_envOverride) {
+        case 'local':
+          return local;
+        case 'production':
+          return production;
+      }
+    }
+
+    // Priority 2: Flavor-based environment
+    switch (_flavor) {
+      case 'dev':
         return local;
-      case 'production':
-      default:
+      case 'prod':
         return production;
     }
+
+    // Default: production
+    return production;
+  }
+
+  /// Get the current flavor name for display purposes
+  static String get flavorName {
+    if (_flavor.isNotEmpty) {
+      return _flavor;
+    }
+    if (_envOverride == 'local') {
+      return 'dev';
+    }
+    return 'prod';
   }
 
   bool get isProduction => environment == Environment.production;
