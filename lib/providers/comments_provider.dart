@@ -24,10 +24,15 @@ class CommentsProvider with ChangeNotifier {
   }) : _voteProvider = voteProvider,
        _voteService = voteService {
     // Use injected service (for testing) or create new one (for production)
-    // Pass token getter to API service for automatic fresh token retrieval
+    // Pass token getter, refresh handler, and sign out handler to API service
+    // for automatic fresh token retrieval and automatic token refresh on 401
     _apiService =
         apiService ??
-        CovesApiService(tokenGetter: _authProvider.getAccessToken);
+        CovesApiService(
+          tokenGetter: _authProvider.getAccessToken,
+          tokenRefresher: _authProvider.refreshToken,
+          signOutHandler: _authProvider.signOut,
+        );
 
     // Track initial auth state
     _wasAuthenticated = _authProvider.isAuthenticated;

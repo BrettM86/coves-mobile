@@ -108,14 +108,16 @@ class MockAuthProvider extends _i1.Mock implements _i5.AuthProvider {
           as _i6.Future<void>);
 
   @override
-  void clearError() => super.noSuchMethod(
-    Invocation.method(#clearError, []),
-    returnValueForMissingStub: null,
-  );
+  _i6.Future<bool> refreshToken() =>
+      (super.noSuchMethod(
+            Invocation.method(#refreshToken, []),
+            returnValue: _i6.Future<bool>.value(false),
+          )
+          as _i6.Future<bool>);
 
   @override
-  void dispose() => super.noSuchMethod(
-    Invocation.method(#dispose, []),
+  void clearError() => super.noSuchMethod(
+    Invocation.method(#clearError, []),
     returnValueForMissingStub: null,
   );
 
@@ -128,6 +130,12 @@ class MockAuthProvider extends _i1.Mock implements _i5.AuthProvider {
   @override
   void removeListener(_i7.VoidCallback? listener) => super.noSuchMethod(
     Invocation.method(#removeListener, [listener]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void dispose() => super.noSuchMethod(
+    Invocation.method(#dispose, []),
     returnValueForMissingStub: null,
   );
 

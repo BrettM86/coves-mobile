@@ -49,9 +49,7 @@ class PostActionBar extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.background,
-        border: Border(
-          top: BorderSide(color: AppColors.backgroundSecondary),
-        ),
+        border: Border(top: BorderSide(color: AppColors.backgroundSecondary)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: SafeArea(

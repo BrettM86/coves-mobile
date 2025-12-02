@@ -37,7 +37,6 @@ class FakeVoteProvider extends VoteProvider {
         voteService: VoteService(
           sessionGetter: () async => null,
           didGetter: () => null,
-          pdsUrlGetter: () => null,
         ),
         authProvider: FakeAuthProvider(),
       );
@@ -286,6 +285,7 @@ void main() {
           community: CommunityRef(
             did: 'did:plc:community',
             name: 'test-community',
+            handle: 'test-community.community.coves.social',
           ),
           createdAt: DateTime.now(),
           indexedAt: DateTime.now(),
@@ -315,7 +315,8 @@ void main() {
 
       await tester.pumpWidget(createTestWidget());
 
-      expect(find.text('c/test-community'), findsOneWidget);
+      // Check for community handle parts (displayed as !test-community@coves.social)
+      expect(find.textContaining('!test-community'), findsOneWidget);
       expect(find.text('@test.user'), findsOneWidget);
     });
 
@@ -338,7 +339,9 @@ void main() {
 
       // Verify post card exists (which contains Semantics wrapper)
       expect(find.text('Accessible Post'), findsOneWidget);
-      expect(find.text('c/test-community'), findsOneWidget);
+      // Check for community handle parts (displayed as !test-community@coves.social)
+      expect(find.textContaining('!test-community'), findsOneWidget);
+      expect(find.textContaining('@coves.social'), findsOneWidget);
     });
 
     testWidgets('should properly dispose scroll controller', (tester) async {
@@ -366,7 +369,11 @@ FeedViewPost _createMockPost(String title) {
         handle: 'test.user',
         displayName: 'Test User',
       ),
-      community: CommunityRef(did: 'did:plc:community', name: 'test-community'),
+      community: CommunityRef(
+        did: 'did:plc:community',
+        name: 'test-community',
+        handle: 'test-community.community.coves.social',
+      ),
       createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
       indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
       text: 'Test body',

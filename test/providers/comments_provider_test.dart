@@ -89,10 +89,7 @@ void main() {
       });
 
       test('should handle empty comments response', () async {
-        final mockResponse = CommentsResponse(
-          post: {},
-          comments: [],
-        );
+        final mockResponse = CommentsResponse(post: {}, comments: []);
 
         when(
           mockApiService.getComments(
@@ -211,9 +208,7 @@ void main() {
           ),
         ).thenAnswer((_) async => secondResponse);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-        );
+        await commentsProvider.loadComments(postUri: testPostUri);
 
         expect(commentsProvider.comments.length, 2);
         expect(commentsProvider.comments[0].comment.uri, 'comment1');
@@ -399,15 +394,17 @@ void main() {
           refresh: true,
         );
 
-        // Try to load again while still loading
+        // Try to load again while still loading - should schedule a refresh
         await commentsProvider.loadComments(
           postUri: testPostUri,
           refresh: true,
         );
 
         await firstFuture;
+        // Wait a bit for the pending refresh to execute
+        await Future.delayed(const Duration(milliseconds: 200));
 
-        // Should only have called API once
+        // Should have called API twice - once for initial load, once for pending refresh
         verify(
           mockApiService.getComments(
             postUri: anyNamed('postUri'),
@@ -417,16 +414,13 @@ void main() {
             limit: anyNamed('limit'),
             cursor: anyNamed('cursor'),
           ),
-        ).called(1);
+        ).called(2);
       });
 
       test('should load vote state when authenticated', () async {
         final mockComments = [_createMockThreadComment('comment1')];
 
-        final mockResponse = CommentsResponse(
-          post: {},
-          comments: mockComments,
-        );
+        final mockResponse = CommentsResponse(post: {}, comments: mockComments);
 
         when(
           mockApiService.getComments(
@@ -492,10 +486,7 @@ void main() {
       test('should continue loading comments if vote loading fails', () async {
         final mockComments = [_createMockThreadComment('comment1')];
 
-        final mockResponse = CommentsResponse(
-          post: {},
-          comments: mockComments,
-        );
+        final mockResponse = CommentsResponse(post: {}, comments: mockComments);
 
         when(
           mockApiService.getComments(

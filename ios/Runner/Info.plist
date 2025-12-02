@@ -54,7 +54,7 @@
 			<string>social.coves.oauth</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>dev.workers.brettmay0212.lingering-darkness-50a6</string>
+				<string>social.coves</string>
 			</array>
 		</dict>
 	</array>

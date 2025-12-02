@@ -1,4 +1,5 @@
 import 'package:coves_flutter/models/comment.dart';
+import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -352,7 +353,7 @@ void main() {
 
       expect(
         () => apiService.getComments(postUri: postUri),
-        throwsA(isA<DioException>()),
+        throwsA(isA<NetworkException>()),
       );
     });
 
@@ -378,7 +379,7 @@ void main() {
 
       expect(
         () => apiService.getComments(postUri: postUri),
-        throwsA(isA<DioException>()),
+        throwsA(isA<NetworkException>()),
       );
     });
 
@@ -398,7 +399,7 @@ void main() {
 
       expect(
         () => apiService.getComments(postUri: postUri),
-        throwsA(isA<Exception>()),
+        throwsA(isA<ApiException>()),
       );
     });
 
@@ -437,7 +438,7 @@ void main() {
 
       expect(
         () => apiService.getComments(postUri: postUri),
-        throwsA(isA<Exception>()),
+        throwsA(isA<ApiException>()),
       );
     });
 

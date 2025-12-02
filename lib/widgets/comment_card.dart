@@ -276,7 +276,6 @@ class CommentCard extends StatelessWidget {
 
 /// Custom painter for drawing comment depth indicator lines
 class _CommentDepthPainter extends CustomPainter {
-
   _CommentDepthPainter({required this.depth});
   final int depth;
 
