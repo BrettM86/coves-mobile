@@ -34,12 +34,14 @@ void main() async {
   final authProvider = AuthProvider();
   await authProvider.initialize();
 
-  // Initialize vote service with auth callbacks for direct PDS writes
-  // Uses DPoP authentication (not Bearer tokens!)
+  // Initialize vote service with auth callbacks
+  // Votes go through the Coves backend (which proxies to PDS with DPoP)
+  // Includes token refresh and sign-out handlers for automatic 401 recovery
   final voteService = VoteService(
     sessionGetter: () async => authProvider.session,
     didGetter: () => authProvider.did,
-    pdsUrlGetter: authProvider.getPdsUrl,
+    tokenRefresher: authProvider.refreshToken,
+    signOutHandler: authProvider.signOut,
   );
 
   runApp(
