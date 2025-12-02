@@ -1,4 +1,4 @@
-import 'package:atproto_oauth_flutter/atproto_oauth_flutter.dart';
+import 'package:coves_flutter/models/coves_session.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter/foundation.dart';
@@ -10,14 +10,14 @@ class MockAuthProvider extends ChangeNotifier {
   String? _error;
   String? _did;
   String? _handle;
-  OAuthSession? _session;
+  CovesSession? _session;
 
   bool get isAuthenticated => _isAuthenticated;
   bool get isLoading => _isLoading;
   String? get error => _error;
   String? get did => _did;
   String? get handle => _handle;
-  OAuthSession? get session => _session;
+  CovesSession? get session => _session;
 
   void setAuthenticated({required bool value, String? did}) {
     _isAuthenticated = value;
@@ -46,10 +46,6 @@ class MockAuthProvider extends ChangeNotifier {
 
   Future<String?> getAccessToken() async {
     return _isAuthenticated ? 'mock_access_token' : null;
-  }
-
-  String? getPdsUrl() {
-    return _isAuthenticated ? 'https://mock.pds.host' : null;
   }
 
   void clearError() {
