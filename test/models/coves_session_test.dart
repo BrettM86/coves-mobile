@@ -233,10 +233,7 @@ void main() {
         'session_id': 'sess456',
       };
 
-      expect(
-        () => CovesSession.fromJson(json),
-        throwsA(isA<TypeError>()),
-      );
+      expect(() => CovesSession.fromJson(json), throwsA(isA<TypeError>()));
     });
 
     test('should throw when did has wrong type', () {
@@ -246,10 +243,7 @@ void main() {
         'session_id': 'sess456',
       };
 
-      expect(
-        () => CovesSession.fromJson(json),
-        throwsA(isA<TypeError>()),
-      );
+      expect(() => CovesSession.fromJson(json), throwsA(isA<TypeError>()));
     });
 
     test('should throw when session_id has wrong type', () {
@@ -259,46 +253,25 @@ void main() {
         'session_id': 123, // Should be String
       };
 
-      expect(
-        () => CovesSession.fromJson(json),
-        throwsA(isA<TypeError>()),
-      );
+      expect(() => CovesSession.fromJson(json), throwsA(isA<TypeError>()));
     });
 
     test('should throw when token field is missing', () {
-      final json = {
-        'did': 'did:plc:test123',
-        'session_id': 'sess456',
-      };
+      final json = {'did': 'did:plc:test123', 'session_id': 'sess456'};
 
-      expect(
-        () => CovesSession.fromJson(json),
-        throwsA(isA<TypeError>()),
-      );
+      expect(() => CovesSession.fromJson(json), throwsA(isA<TypeError>()));
     });
 
     test('should throw when did field is missing', () {
-      final json = {
-        'token': 'abc123',
-        'session_id': 'sess456',
-      };
+      final json = {'token': 'abc123', 'session_id': 'sess456'};
 
-      expect(
-        () => CovesSession.fromJson(json),
-        throwsA(isA<TypeError>()),
-      );
+      expect(() => CovesSession.fromJson(json), throwsA(isA<TypeError>()));
     });
 
     test('should throw when session_id field is missing', () {
-      final json = {
-        'token': 'abc123',
-        'did': 'did:plc:test123',
-      };
+      final json = {'token': 'abc123', 'did': 'did:plc:test123'};
 
-      expect(
-        () => CovesSession.fromJson(json),
-        throwsA(isA<TypeError>()),
-      );
+      expect(() => CovesSession.fromJson(json), throwsA(isA<TypeError>()));
     });
 
     test('should handle extra fields in JSON', () {
@@ -793,7 +766,10 @@ void main() {
       final stringRep = session.toString();
 
       expect(stringRep, isNot(contains('Bearer')));
-      expect(stringRep, isNot(contains('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9')));
+      expect(
+        stringRep,
+        isNot(contains('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9')),
+      );
     });
   });
 }

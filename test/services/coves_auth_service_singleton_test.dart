@@ -34,12 +34,21 @@ void main() {
       final instance3 = CovesAuthService();
 
       // Assert - All should be the exact same instance
-      expect(identical(instance1, instance2), isTrue,
-          reason: 'instance1 and instance2 should be identical');
-      expect(identical(instance2, instance3), isTrue,
-          reason: 'instance2 and instance3 should be identical');
-      expect(identical(instance1, instance3), isTrue,
-          reason: 'instance1 and instance3 should be identical');
+      expect(
+        identical(instance1, instance2),
+        isTrue,
+        reason: 'instance1 and instance2 should be identical',
+      );
+      expect(
+        identical(instance2, instance3),
+        isTrue,
+        reason: 'instance2 and instance3 should be identical',
+      );
+      expect(
+        identical(instance1, instance3),
+        isTrue,
+        reason: 'instance1 and instance3 should be identical',
+      );
     });
 
     test('should share in-memory session across singleton instances', () async {
@@ -47,15 +56,17 @@ void main() {
       final instance1 = CovesAuthService(dio: mockDio, storage: mockStorage);
 
       // Mock storage to return a valid session
-      const sessionJson = '{'
+      const sessionJson =
+          '{'
           '"token": "test-token", '
           '"did": "did:plc:test123", '
           '"session_id": "session-123", '
           '"handle": "alice.bsky.social"'
           '}';
 
-      when(mockStorage.read(key: storageKey))
-          .thenAnswer((_) async => sessionJson);
+      when(
+        mockStorage.read(key: storageKey),
+      ).thenAnswer((_) async => sessionJson);
 
       // Act - Restore session using first instance
       await instance1.restoreSession();
@@ -77,24 +88,28 @@ void main() {
       final instance1 = CovesAuthService(dio: mockDio, storage: mockStorage);
 
       // Mock storage to return a valid session
-      const sessionJson = '{'
+      const sessionJson =
+          '{'
           '"token": "old-token", '
           '"did": "did:plc:test123", '
           '"session_id": "session-123", '
           '"handle": "alice.bsky.social"'
           '}';
 
-      when(mockStorage.read(key: storageKey))
-          .thenAnswer((_) async => sessionJson);
+      when(
+        mockStorage.read(key: storageKey),
+      ).thenAnswer((_) async => sessionJson);
 
       await instance1.restoreSession();
 
       // Mock refresh with delay
       const newToken = 'refreshed-token';
-      when(mockDio.post<Map<String, dynamic>>(
-        '/oauth/refresh',
-        data: anyNamed('data'),
-      )).thenAnswer((_) async {
+      when(
+        mockDio.post<Map<String, dynamic>>(
+          '/oauth/refresh',
+          data: anyNamed('data'),
+        ),
+      ).thenAnswer((_) async {
         await Future.delayed(const Duration(milliseconds: 100));
         return Response(
           requestOptions: RequestOptions(path: '/oauth/refresh'),
@@ -103,8 +118,9 @@ void main() {
         );
       });
 
-      when(mockStorage.write(key: storageKey, value: anyNamed('value')))
-          .thenAnswer((_) async => {});
+      when(
+        mockStorage.write(key: storageKey, value: anyNamed('value')),
+      ).thenAnswer((_) async => {});
 
       // Act - Start refresh from first instance
       final refreshFuture1 = instance1.refreshToken();
@@ -121,10 +137,12 @@ void main() {
       expect(results[1].token, newToken);
 
       // Verify only one API call was made (mutex protected)
-      verify(mockDio.post<Map<String, dynamic>>(
-        '/oauth/refresh',
-        data: anyNamed('data'),
-      )).called(1);
+      verify(
+        mockDio.post<Map<String, dynamic>>(
+          '/oauth/refresh',
+          data: anyNamed('data'),
+        ),
+      ).called(1);
     });
 
     test('resetInstance() should clear the singleton', () {
@@ -148,7 +166,10 @@ void main() {
 
     test('createTestInstance() should bypass singleton', () {
       // Arrange
-      final singletonInstance = CovesAuthService(dio: mockDio, storage: mockStorage);
+      final singletonInstance = CovesAuthService(
+        dio: mockDio,
+        storage: mockStorage,
+      );
 
       // Act - Create a test instance with different dependencies
       final mockDio2 = MockDio();
@@ -159,45 +180,59 @@ void main() {
       );
 
       // Assert - Test instance should be different from singleton
-      expect(identical(singletonInstance, testInstance), isFalse,
-          reason: 'Test instance should not be the singleton');
+      expect(
+        identical(singletonInstance, testInstance),
+        isFalse,
+        reason: 'Test instance should not be the singleton',
+      );
 
       // Test instance should not affect singleton
       final singletonCheck = CovesAuthService();
-      expect(identical(singletonInstance, singletonCheck), isTrue,
-          reason: 'Singleton should remain unchanged');
+      expect(
+        identical(singletonInstance, singletonCheck),
+        isTrue,
+        reason: 'Singleton should remain unchanged',
+      );
     });
 
-    test('should avoid state loss when service is requested from multiple entry points', () async {
-      // Arrange
-      final authProvider = CovesAuthService(dio: mockDio, storage: mockStorage);
+    test(
+      'should avoid state loss when service is requested from multiple entry points',
+      () async {
+        // Arrange
+        final authProvider = CovesAuthService(
+          dio: mockDio,
+          storage: mockStorage,
+        );
 
-      const sessionJson = '{'
-          '"token": "test-token", '
-          '"did": "did:plc:test123", '
-          '"session_id": "session-123"'
-          '}';
+        const sessionJson =
+            '{'
+            '"token": "test-token", '
+            '"did": "did:plc:test123", '
+            '"session_id": "session-123"'
+            '}';
 
-      when(mockStorage.read(key: storageKey))
-          .thenAnswer((_) async => sessionJson);
+        when(
+          mockStorage.read(key: storageKey),
+        ).thenAnswer((_) async => sessionJson);
 
-      // Act - Simulate different parts of the app requesting the service
-      await authProvider.restoreSession();
+        // Act - Simulate different parts of the app requesting the service
+        await authProvider.restoreSession();
 
-      final apiService = CovesAuthService();
-      final voteService = CovesAuthService();
-      final feedService = CovesAuthService();
+        final apiService = CovesAuthService();
+        final voteService = CovesAuthService();
+        final feedService = CovesAuthService();
 
-      // Assert - All should have access to the same session state
-      expect(apiService.isAuthenticated, isTrue);
-      expect(voteService.isAuthenticated, isTrue);
-      expect(feedService.isAuthenticated, isTrue);
-      expect(apiService.getToken(), 'test-token');
-      expect(voteService.getToken(), 'test-token');
-      expect(feedService.getToken(), 'test-token');
+        // Assert - All should have access to the same session state
+        expect(apiService.isAuthenticated, isTrue);
+        expect(voteService.isAuthenticated, isTrue);
+        expect(feedService.isAuthenticated, isTrue);
+        expect(apiService.getToken(), 'test-token');
+        expect(voteService.getToken(), 'test-token');
+        expect(feedService.getToken(), 'test-token');
 
-      // Storage should only be read once
-      verify(mockStorage.read(key: storageKey)).called(1);
-    });
+        // Storage should only be read once
+        verify(mockStorage.read(key: storageKey)).called(1);
+      },
+    );
   });
 }

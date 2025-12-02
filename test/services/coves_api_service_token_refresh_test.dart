@@ -60,8 +60,7 @@ void main() {
       apiService.dispose();
     });
 
-    test('should call token refresher on 401 response but only retry once',
-        () async {
+    test('should call token refresher on 401 response but only retry once', () async {
       // This test verifies the interceptor detects 401, calls the refresher,
       // and only retries ONCE to prevent infinite loops (even if retry returns 401).
 
@@ -138,92 +137,100 @@ void main() {
       expect(signOutCallCount, 1);
     });
 
-    test('should NOT retry refresh endpoint on 401 (avoid infinite loop)',
-        () async {
-      // This test verifies that the interceptor checks for /oauth/refresh
-      // in the path to avoid infinite loops. Due to limitations with mocking
-      // complex request/response cycles, we test this by verifying the
-      // signOutHandler gets called when refresh fails.
+    test(
+      'should NOT retry refresh endpoint on 401 (avoid infinite loop)',
+      () async {
+        // This test verifies that the interceptor checks for /oauth/refresh
+        // in the path to avoid infinite loops. Due to limitations with mocking
+        // complex request/response cycles, we test this by verifying the
+        // signOutHandler gets called when refresh fails.
 
-      // Set refresh to fail (simulates refresh endpoint returning 401)
-      shouldRefreshSucceed = false;
+        // Set refresh to fail (simulates refresh endpoint returning 401)
+        shouldRefreshSucceed = false;
 
-      const postUri = 'at://did:plc:test/social.coves.post.record/123';
+        const postUri = 'at://did:plc:test/social.coves.post.record/123';
 
-      dioAdapter.onGet(
-        '/xrpc/social.coves.community.comment.getComments',
-        (server) => server.reply(401, {
-          'error': 'Unauthorized',
-          'message': 'Token expired',
-        }),
-        queryParameters: {
-          'post': postUri,
-          'sort': 'hot',
-          'depth': 10,
-          'limit': 50,
-        },
-      );
+        dioAdapter.onGet(
+          '/xrpc/social.coves.community.comment.getComments',
+          (server) => server.reply(401, {
+            'error': 'Unauthorized',
+            'message': 'Token expired',
+          }),
+          queryParameters: {
+            'post': postUri,
+            'sort': 'hot',
+            'depth': 10,
+            'limit': 50,
+          },
+        );
 
-      // Make the request and expect it to fail
-      expect(
-        () => apiService.getComments(postUri: postUri),
-        throwsA(isA<Exception>()),
-      );
+        // Make the request and expect it to fail
+        expect(
+          () => apiService.getComments(postUri: postUri),
+          throwsA(isA<Exception>()),
+        );
 
-      // Wait for async operations to complete
-      await Future.delayed(const Duration(milliseconds: 100));
+        // Wait for async operations to complete
+        await Future.delayed(const Duration(milliseconds: 100));
 
-      // Verify user was signed out (no infinite loop)
-      expect(signOutCallCount, 1);
-    });
+        // Verify user was signed out (no infinite loop)
+        expect(signOutCallCount, 1);
+      },
+    );
 
-    test('should sign out user if token refresh throws exception', () async {
-      // Skipped: causes retry loops with http_mock_adapter after disposal
-      // The core functionality is tested by the "should sign out user if token
-      // refresh fails" test above.
-    }, skip: 'Causes retry issues with http_mock_adapter');
+    test(
+      'should sign out user if token refresh throws exception',
+      () async {
+        // Skipped: causes retry loops with http_mock_adapter after disposal
+        // The core functionality is tested by the "should sign out user if token
+        // refresh fails" test above.
+      },
+      skip: 'Causes retry issues with http_mock_adapter',
+    );
 
-    test('should handle 401 gracefully when no refresher is provided',
-        () async {
-      // Create API service without refresh capability
-      final apiServiceNoRefresh = CovesApiService(
-        dio: dio,
-        tokenGetter: mockTokenGetter,
-        // No tokenRefresher provided
-        // No signOutHandler provided
-      );
+    test(
+      'should handle 401 gracefully when no refresher is provided',
+      () async {
+        // Create API service without refresh capability
+        final apiServiceNoRefresh = CovesApiService(
+          dio: dio,
+          tokenGetter: mockTokenGetter,
+          // No tokenRefresher provided
+          // No signOutHandler provided
+        );
 
-      const postUri = 'at://did:plc:test/social.coves.post.record/123';
+        const postUri = 'at://did:plc:test/social.coves.post.record/123';
 
-      // Request returns 401
-      dioAdapter.onGet(
-        '/xrpc/social.coves.community.comment.getComments',
-        (server) => server.reply(401, {
-          'error': 'Unauthorized',
-          'message': 'Token expired',
-        }),
-        queryParameters: {
-          'post': postUri,
-          'sort': 'hot',
-          'depth': 10,
-          'limit': 50,
-        },
-      );
+        // Request returns 401
+        dioAdapter.onGet(
+          '/xrpc/social.coves.community.comment.getComments',
+          (server) => server.reply(401, {
+            'error': 'Unauthorized',
+            'message': 'Token expired',
+          }),
+          queryParameters: {
+            'post': postUri,
+            'sort': 'hot',
+            'depth': 10,
+            'limit': 50,
+          },
+        );
 
-      // Make the request and expect it to fail with AuthenticationException
-      expect(
-        () => apiServiceNoRefresh.getComments(postUri: postUri),
-        throwsA(isA<Exception>()),
-      );
+        // Make the request and expect it to fail with AuthenticationException
+        expect(
+          () => apiServiceNoRefresh.getComments(postUri: postUri),
+          throwsA(isA<Exception>()),
+        );
 
-      // Verify refresh was NOT called (no refresher provided)
-      expect(tokenRefreshCallCount, 0);
+        // Verify refresh was NOT called (no refresher provided)
+        expect(tokenRefreshCallCount, 0);
 
-      // Verify sign-out was NOT called (no handler provided)
-      expect(signOutCallCount, 0);
+        // Verify sign-out was NOT called (no handler provided)
+        expect(signOutCallCount, 0);
 
-      apiServiceNoRefresh.dispose();
-    });
+        apiServiceNoRefresh.dispose();
+      },
+    );
 
     // Skipped: http_mock_adapter cannot handle stateful request/response cycles
 

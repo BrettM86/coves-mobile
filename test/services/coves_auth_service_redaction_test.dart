@@ -52,21 +52,23 @@ void main() {
       );
     });
 
-    test('should preserve non-sensitive parameters (DID, handle, session_id)',
-        () {
-      const testUrl =
-          'social.coves:/callback?token=sealed_token_abc123&did=did:plc:test123&session_id=sess-456&handle=alice.bsky.social';
+    test(
+      'should preserve non-sensitive parameters (DID, handle, session_id)',
+      () {
+        const testUrl =
+            'social.coves:/callback?token=sealed_token_abc123&did=did:plc:test123&session_id=sess-456&handle=alice.bsky.social';
 
-      final redacted = testUrl.replaceAllMapped(
-        RegExp(r'token=([^&\s]+)'),
-        (match) => 'token=[REDACTED]',
-      );
+        final redacted = testUrl.replaceAllMapped(
+          RegExp(r'token=([^&\s]+)'),
+          (match) => 'token=[REDACTED]',
+        );
 
-      expect(redacted, contains('did=did:plc:test123'));
-      expect(redacted, contains('session_id=sess-456'));
-      expect(redacted, contains('handle=alice.bsky.social'));
-      expect(redacted, isNot(contains('sealed_token_abc123')));
-    });
+        expect(redacted, contains('did=did:plc:test123'));
+        expect(redacted, contains('session_id=sess-456'));
+        expect(redacted, contains('handle=alice.bsky.social'));
+        expect(redacted, isNot(contains('sealed_token_abc123')));
+      },
+    );
 
     test('should handle token as first parameter', () {
       const testUrl =
@@ -77,18 +79,25 @@ void main() {
         (match) => 'token=[REDACTED]',
       );
 
-      expect(redacted, 'social.coves:/callback?token=[REDACTED]&did=did:plc:test');
+      expect(
+        redacted,
+        'social.coves:/callback?token=[REDACTED]&did=did:plc:test',
+      );
     });
 
     test('should handle token as last parameter', () {
-      const testUrl = 'social.coves:/callback?did=did:plc:test&token=last_token';
+      const testUrl =
+          'social.coves:/callback?did=did:plc:test&token=last_token';
 
       final redacted = testUrl.replaceAllMapped(
         RegExp(r'token=([^&\s]+)'),
         (match) => 'token=[REDACTED]',
       );
 
-      expect(redacted, 'social.coves:/callback?did=did:plc:test&token=[REDACTED]');
+      expect(
+        redacted,
+        'social.coves:/callback?did=did:plc:test&token=[REDACTED]',
+      );
     });
 
     test('should handle token as only parameter', () {
@@ -111,26 +120,34 @@ void main() {
         (match) => 'token=[REDACTED]',
       );
 
-      expect(redacted, 'social.coves:/callback?token=[REDACTED]&did=did:plc:test');
+      expect(
+        redacted,
+        'social.coves:/callback?token=[REDACTED]&did=did:plc:test',
+      );
       expect(redacted, isNot(contains('encoded%2Btoken%3D123')));
     });
 
     test('should handle long token values', () {
       const longToken =
           'very_long_sealed_token_with_many_characters_1234567890abcdef';
-      final testUrl = 'social.coves:/callback?token=$longToken&did=did:plc:test';
+      final testUrl =
+          'social.coves:/callback?token=$longToken&did=did:plc:test';
 
       final redacted = testUrl.replaceAllMapped(
         RegExp(r'token=([^&\s]+)'),
         (match) => 'token=[REDACTED]',
       );
 
-      expect(redacted, 'social.coves:/callback?token=[REDACTED]&did=did:plc:test');
+      expect(
+        redacted,
+        'social.coves:/callback?token=[REDACTED]&did=did:plc:test',
+      );
       expect(redacted, isNot(contains(longToken)));
     });
 
     test('should handle URL without token parameter', () {
-      const testUrl = 'social.coves:/callback?did=did:plc:test&handle=alice.bsky.social';
+      const testUrl =
+          'social.coves:/callback?did=did:plc:test&handle=alice.bsky.social';
 
       final redacted = testUrl.replaceAllMapped(
         RegExp(r'token=([^&\s]+)'),

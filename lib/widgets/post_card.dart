@@ -161,21 +161,21 @@ class PostCard extends StatelessWidget {
                     ),
                   )
                 else
-                  // Title when navigation is disabled
-                  if (post.post.title != null) ...[
-                    Text(
-                      post.post.title!,
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: titleFontSize,
-                        fontWeight: titleFontWeight,
-                        height: 1.3,
-                      ),
+                // Title when navigation is disabled
+                if (post.post.title != null) ...[
+                  Text(
+                    post.post.title!,
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: titleFontSize,
+                      fontWeight: titleFontWeight,
+                      height: 1.3,
                     ),
-                    if (post.post.embed?.external != null ||
-                        post.post.text.isNotEmpty)
-                      const SizedBox(height: 8),
-                  ],
+                  ),
+                  if (post.post.embed?.external != null ||
+                      post.post.text.isNotEmpty)
+                    const SizedBox(height: 8),
+                ],
 
                 // Embed (handles its own taps - not wrapped in InkWell)
                 if (post.post.embed?.external != null) ...[
@@ -590,10 +590,7 @@ class _EmbedCardState extends State<_EmbedCard> {
     // For non-video embeds (images, link previews), make them tappable
     // to navigate to post detail
     if (widget.onImageTap != null) {
-      return GestureDetector(
-        onTap: widget.onImageTap,
-        child: thumbnailWidget,
-      );
+      return GestureDetector(onTap: widget.onImageTap, child: thumbnailWidget);
     }
 
     // No tap handler provided, just return the thumbnail

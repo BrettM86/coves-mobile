@@ -90,10 +90,7 @@ void main() {
           'message': 'Token expired',
         }),
         data: {
-          'subject': {
-            'uri': postUri,
-            'cid': postCid,
-          },
+          'subject': {'uri': postUri, 'cid': postCid},
           'direction': 'up',
         },
       );
@@ -136,10 +133,7 @@ void main() {
           'message': 'Token expired',
         }),
         data: {
-          'subject': {
-            'uri': postUri,
-            'cid': postCid,
-          },
+          'subject': {'uri': postUri, 'cid': postCid},
           'direction': 'up',
         },
       );
@@ -164,59 +158,60 @@ void main() {
       expect(signOutCallCount, 1);
     });
 
-    test('should handle 401 gracefully when no refresher is provided',
-        () async {
-      // Create a NEW dio instance to avoid sharing interceptors
-      final dioNoRefresh = Dio(BaseOptions(baseUrl: 'https://api.test.coves.social'));
-      final dioAdapterNoRefresh = DioAdapter(dio: dioNoRefresh);
+    test(
+      'should handle 401 gracefully when no refresher is provided',
+      () async {
+        // Create a NEW dio instance to avoid sharing interceptors
+        final dioNoRefresh = Dio(
+          BaseOptions(baseUrl: 'https://api.test.coves.social'),
+        );
+        final dioAdapterNoRefresh = DioAdapter(dio: dioNoRefresh);
 
-      // Create vote service without refresh capability
-      final voteServiceNoRefresh = VoteService(
-        dio: dioNoRefresh,
-        sessionGetter: mockSessionGetter,
-        didGetter: mockDidGetter,
-        // No tokenRefresher provided
-        // No signOutHandler provided
-      );
+        // Create vote service without refresh capability
+        final voteServiceNoRefresh = VoteService(
+          dio: dioNoRefresh,
+          sessionGetter: mockSessionGetter,
+          didGetter: mockDidGetter,
+          // No tokenRefresher provided
+          // No signOutHandler provided
+        );
 
-      const postUri = 'at://did:plc:test/social.coves.post.record/123';
-      const postCid = 'bafy123';
+        const postUri = 'at://did:plc:test/social.coves.post.record/123';
+        const postCid = 'bafy123';
 
-      // Request returns 401
-      dioAdapterNoRefresh.onPost(
-        '/xrpc/social.coves.feed.vote.create',
-        (server) => server.reply(401, {
-          'error': 'Unauthorized',
-          'message': 'Token expired',
-        }),
-        data: {
-          'subject': {
-            'uri': postUri,
-            'cid': postCid,
+        // Request returns 401
+        dioAdapterNoRefresh.onPost(
+          '/xrpc/social.coves.feed.vote.create',
+          (server) => server.reply(401, {
+            'error': 'Unauthorized',
+            'message': 'Token expired',
+          }),
+          data: {
+            'subject': {'uri': postUri, 'cid': postCid},
+            'direction': 'up',
           },
-          'direction': 'up',
-        },
-      );
+        );
 
-      // Make the request and expect it to fail
-      expect(
-        () => voteServiceNoRefresh.createVote(
-          postUri: postUri,
-          postCid: postCid,
-          direction: 'up',
-        ),
-        throwsA(isA<Exception>()),
-      );
+        // Make the request and expect it to fail
+        expect(
+          () => voteServiceNoRefresh.createVote(
+            postUri: postUri,
+            postCid: postCid,
+            direction: 'up',
+          ),
+          throwsA(isA<Exception>()),
+        );
 
-      // Wait for async operations
-      await Future.delayed(const Duration(milliseconds: 100));
+        // Wait for async operations
+        await Future.delayed(const Duration(milliseconds: 100));
 
-      // Verify refresh was NOT called (no refresher provided)
-      expect(tokenRefreshCallCount, 0);
+        // Verify refresh was NOT called (no refresher provided)
+        expect(tokenRefreshCallCount, 0);
 
-      // Verify sign-out was NOT called (no handler provided)
-      expect(signOutCallCount, 0);
-    });
+        // Verify sign-out was NOT called (no handler provided)
+        expect(signOutCallCount, 0);
+      },
+    );
 
     test('should handle non-401 errors normally without refresh', () async {
       const postUri = 'at://did:plc:test/social.coves.post.record/123';
@@ -230,10 +225,7 @@ void main() {
           'message': 'Database connection failed',
         }),
         data: {
-          'subject': {
-            'uri': postUri,
-            'cid': postCid,
-          },
+          'subject': {'uri': postUri, 'cid': postCid},
           'direction': 'up',
         },
       );
@@ -268,9 +260,7 @@ void main() {
           'error': 'Unauthorized',
           'message': 'Token expired',
         }),
-        data: {
-          'rkey': rkey,
-        },
+        data: {'rkey': rkey},
       );
 
       // Create vote with existing vote (will trigger delete)
@@ -338,10 +328,7 @@ void main() {
           'cid': 'bafy456',
         }),
         data: {
-          'subject': {
-            'uri': postUri,
-            'cid': postCid,
-          },
+          'subject': {'uri': postUri, 'cid': postCid},
           'direction': 'up',
         },
       );
@@ -364,9 +351,7 @@ void main() {
       dioAdapter.onPost(
         '/xrpc/social.coves.feed.vote.delete',
         (server) => server.reply(200, {}),
-        data: {
-          'rkey': 'xyz',
-        },
+        data: {'rkey': 'xyz'},
       );
 
       // Make second request (delete vote)

@@ -26,9 +26,9 @@ class CovesApiService {
     Future<bool> Function()? tokenRefresher,
     Future<void> Function()? signOutHandler,
     Dio? dio,
-  })  : _tokenGetter = tokenGetter,
-        _tokenRefresher = tokenRefresher,
-        _signOutHandler = signOutHandler {
+  }) : _tokenGetter = tokenGetter,
+       _tokenRefresher = tokenRefresher,
+       _signOutHandler = signOutHandler {
     _dio =
         dio ??
         Dio(
@@ -78,8 +78,9 @@ class CovesApiService {
             }
 
             // Don't retry the refresh endpoint itself (avoid infinite loop)
-            final isRefreshEndpoint =
-                error.requestOptions.path.contains('/oauth/refresh');
+            final isRefreshEndpoint = error.requestOptions.path.contains(
+              '/oauth/refresh',
+            );
             if (isRefreshEndpoint) {
               if (kDebugMode) {
                 debugPrint(
@@ -160,7 +161,8 @@ class CovesApiService {
               }
               // Only sign out if we haven't already (avoid double sign-out)
               // Check if this is a DioException from a retried request
-              final isRetriedRequest = e is DioException &&
+              final isRetriedRequest =
+                  e is DioException &&
                   e.response?.statusCode == 401 &&
                   e.requestOptions.extra['retried'] == true;
 
@@ -352,10 +354,7 @@ class CovesApiService {
       if (kDebugMode) {
         debugPrint('❌ Error parsing comments response: $e');
       }
-      throw ApiException(
-        'Failed to parse server response',
-        originalError: e,
-      );
+      throw ApiException('Failed to parse server response', originalError: e);
     }
   }
 

@@ -120,19 +120,17 @@ class PostCardActions extends StatelessWidget {
                             Icon(
                               Icons.chat_bubble_outline,
                               size: 20,
-                              color:
-                                  AppColors.textPrimary.withValues(
-                                    alpha: 0.6,
-                                  ),
+                              color: AppColors.textPrimary.withValues(
+                                alpha: 0.6,
+                              ),
                             ),
                             const SizedBox(width: 5),
                             Text(
                               DateTimeUtils.formatCount(count),
                               style: TextStyle(
-                                color:
-                                    AppColors.textPrimary.withValues(
-                                      alpha: 0.6,
-                                    ),
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.6,
+                                ),
                                 fontSize: 13,
                               ),
                             ),

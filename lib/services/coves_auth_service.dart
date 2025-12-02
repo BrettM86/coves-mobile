@@ -26,24 +26,20 @@ import '../models/coves_session.dart';
 /// 4. Call /oauth/refresh when needed
 /// 5. Call /oauth/logout to sign out
 class CovesAuthService {
-  factory CovesAuthService({
-    Dio? dio,
-    FlutterSecureStorage? storage,
-  }) {
+  factory CovesAuthService({Dio? dio, FlutterSecureStorage? storage}) {
     _instance ??= CovesAuthService._internal(dio: dio, storage: storage);
     return _instance!;
   }
 
-  CovesAuthService._internal({
-    Dio? dio,
-    FlutterSecureStorage? storage,
-  }) : _storage = storage ??
-            const FlutterSecureStorage(
-              aOptions: AndroidOptions(encryptedSharedPreferences: true),
-              iOptions: IOSOptions(
-                accessibility: KeychainAccessibility.first_unlock,
-              ),
-            ) {
+  CovesAuthService._internal({Dio? dio, FlutterSecureStorage? storage})
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            aOptions: AndroidOptions(encryptedSharedPreferences: true),
+            iOptions: IOSOptions(
+              accessibility: KeychainAccessibility.first_unlock,
+            ),
+          ) {
     // Initialize Dio if provided, otherwise it will be initialized in initialize()
     if (dio != null) {
       _dio = dio;
@@ -341,9 +337,7 @@ class CovesAuthService {
           await _dio.post<void>(
             '/oauth/logout',
             options: Options(
-              headers: {
-                'Authorization': 'Bearer ${_session!.token}',
-              },
+              headers: {'Authorization': 'Bearer ${_session!.token}'},
             ),
           );
 
@@ -520,10 +514,7 @@ class CovesAuthService {
 
   /// Save session to secure storage
   Future<void> _saveSession(CovesSession session) async {
-    await _storage.write(
-      key: _storageKey,
-      value: session.toJsonString(),
-    );
+    await _storage.write(key: _storageKey, value: session.toJsonString());
   }
 
   /// Clear session from secure storage

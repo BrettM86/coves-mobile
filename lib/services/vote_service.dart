@@ -35,7 +35,8 @@ class VoteService {
        _didGetter = didGetter,
        _tokenRefresher = tokenRefresher,
        _signOutHandler = signOutHandler {
-    _dio = dio ??
+    _dio =
+        dio ??
         Dio(
           BaseOptions(
             baseUrl: EnvironmentConfig.current.apiUrl,
@@ -70,7 +71,9 @@ class VoteService {
           // Handle 401 errors with automatic token refresh
           if (error.response?.statusCode == 401 && _tokenRefresher != null) {
             if (kDebugMode) {
-              debugPrint('🔄 VoteService: 401 detected, attempting token refresh...');
+              debugPrint(
+                '🔄 VoteService: 401 detected, attempting token refresh...',
+              );
             }
 
             // Check if we already retried this request (prevent infinite loop)
@@ -94,7 +97,9 @@ class VoteService {
 
               if (refreshSucceeded) {
                 if (kDebugMode) {
-                  debugPrint('✅ VoteService: Token refresh successful, retrying request');
+                  debugPrint(
+                    '✅ VoteService: Token refresh successful, retrying request',
+                  );
                 }
 
                 // Get the new session
@@ -128,7 +133,9 @@ class VoteService {
 
               // Refresh failed, sign out the user
               if (kDebugMode) {
-                debugPrint('❌ VoteService: Token refresh failed, signing out user');
+                debugPrint(
+                  '❌ VoteService: Token refresh failed, signing out user',
+                );
               }
               if (_signOutHandler != null) {
                 await _signOutHandler();
@@ -139,7 +146,8 @@ class VoteService {
               }
               // Only sign out if we haven't already (avoid double sign-out)
               // Check if this is a DioException from a retried request
-              final isRetriedRequest = e is DioException &&
+              final isRetriedRequest =
+                  e is DioException &&
                   e.response?.statusCode == 401 &&
                   e.requestOptions.extra['retried'] == true;
 
@@ -258,10 +266,7 @@ class VoteService {
 
       if (isToggleOff) {
         // Delete existing vote
-        return _deleteVote(
-          session: session,
-          rkey: existingVoteRkey,
-        );
+        return _deleteVote(session: session, rkey: existingVoteRkey);
       }
 
       // If switching direction, delete old vote first
@@ -277,10 +282,7 @@ class VoteService {
       final response = await _dio.post<Map<String, dynamic>>(
         '/xrpc/social.coves.feed.vote.create',
         data: {
-          'subject': {
-            'uri': postUri,
-            'cid': postCid,
-          },
+          'subject': {'uri': postUri, 'cid': postCid},
           'direction': direction,
         },
       );
@@ -338,9 +340,7 @@ class VoteService {
       // Note: Authorization header is added by the interceptor
       await _dio.post<void>(
         '/xrpc/social.coves.feed.vote.delete',
-        data: {
-          'rkey': rkey,
-        },
+        data: {'rkey': rkey},
       );
 
       if (kDebugMode) {

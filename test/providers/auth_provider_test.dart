@@ -152,8 +152,9 @@ void main() {
         await authProvider.signIn('alice.bsky.social');
 
         // Sign out with error
-        when(mockAuthService.signOut())
-            .thenThrow(Exception('Revocation failed'));
+        when(
+          mockAuthService.signOut(),
+        ).thenThrow(Exception('Revocation failed'));
 
         await authProvider.signOut();
 

@@ -70,8 +70,9 @@ void main() {
       );
 
       // Mock storage read for the environment-specific key
-      when(mockStorage.read(key: storageKey))
-          .thenAnswer((_) async => session.toJsonString());
+      when(
+        mockStorage.read(key: storageKey),
+      ).thenAnswer((_) async => session.toJsonString());
 
       // Act - Restore session
       final result = await authService.restoreSession();
@@ -100,36 +101,42 @@ void main() {
         handle: 'alice.bsky.social',
       );
 
-      when(mockStorage.read(key: storageKey))
-          .thenAnswer((_) async => session.toJsonString());
+      when(
+        mockStorage.read(key: storageKey),
+      ).thenAnswer((_) async => session.toJsonString());
       await authService.restoreSession();
 
       // Mock successful refresh
       const newToken = 'new-refreshed-token';
-      when(mockDio.post<Map<String, dynamic>>(
-        '/oauth/refresh',
-        data: anyNamed('data'),
-      )).thenAnswer((_) async => Response(
-            requestOptions: RequestOptions(path: '/oauth/refresh'),
-            statusCode: 200,
-            data: {
-              'sealed_token': newToken,
-              'access_token': 'some-access-token'
-            },
-          ));
+      when(
+        mockDio.post<Map<String, dynamic>>(
+          '/oauth/refresh',
+          data: anyNamed('data'),
+        ),
+      ).thenAnswer(
+        (_) async => Response(
+          requestOptions: RequestOptions(path: '/oauth/refresh'),
+          statusCode: 200,
+          data: {'sealed_token': newToken, 'access_token': 'some-access-token'},
+        ),
+      );
 
-      when(mockStorage.write(key: storageKey, value: anyNamed('value')))
-          .thenAnswer((_) async => {});
+      when(
+        mockStorage.write(key: storageKey, value: anyNamed('value')),
+      ).thenAnswer((_) async => {});
 
       // Act - Refresh token (which saves the updated session)
       await authService.refreshToken();
 
       // Assert - Verify environment-specific key was used for saving
-      verify(mockStorage.write(key: storageKey, value: anyNamed('value')))
-          .called(1);
+      verify(
+        mockStorage.write(key: storageKey, value: anyNamed('value')),
+      ).called(1);
 
       // Verify the generic key was never used
-      verifyNever(mockStorage.write(key: 'coves_session', value: anyNamed('value')));
+      verifyNever(
+        mockStorage.write(key: 'coves_session', value: anyNamed('value')),
+      );
     });
 
     test('should delete sessions using environment-specific keys', () async {
@@ -144,18 +151,20 @@ void main() {
         sessionId: 'session-123',
       );
 
-      when(mockStorage.read(key: storageKey))
-          .thenAnswer((_) async => session.toJsonString());
+      when(
+        mockStorage.read(key: storageKey),
+      ).thenAnswer((_) async => session.toJsonString());
       await authService.restoreSession();
 
       // Mock logout
-      when(mockDio.post<void>(
-        '/oauth/logout',
-        options: anyNamed('options'),
-      )).thenAnswer((_) async => Response(
-            requestOptions: RequestOptions(path: '/oauth/logout'),
-            statusCode: 200,
-          ));
+      when(
+        mockDio.post<void>('/oauth/logout', options: anyNamed('options')),
+      ).thenAnswer(
+        (_) async => Response(
+          requestOptions: RequestOptions(path: '/oauth/logout'),
+          statusCode: 200,
+        ),
+      );
 
       when(mockStorage.delete(key: storageKey)).thenAnswer((_) async => {});
 

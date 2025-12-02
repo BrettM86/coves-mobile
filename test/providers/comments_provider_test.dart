@@ -89,10 +89,7 @@ void main() {
       });
 
       test('should handle empty comments response', () async {
-        final mockResponse = CommentsResponse(
-          post: {},
-          comments: [],
-        );
+        final mockResponse = CommentsResponse(post: {}, comments: []);
 
         when(
           mockApiService.getComments(
@@ -211,9 +208,7 @@ void main() {
           ),
         ).thenAnswer((_) async => secondResponse);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-        );
+        await commentsProvider.loadComments(postUri: testPostUri);
 
         expect(commentsProvider.comments.length, 2);
         expect(commentsProvider.comments[0].comment.uri, 'comment1');
@@ -425,10 +420,7 @@ void main() {
       test('should load vote state when authenticated', () async {
         final mockComments = [_createMockThreadComment('comment1')];
 
-        final mockResponse = CommentsResponse(
-          post: {},
-          comments: mockComments,
-        );
+        final mockResponse = CommentsResponse(post: {}, comments: mockComments);
 
         when(
           mockApiService.getComments(
@@ -494,10 +486,7 @@ void main() {
       test('should continue loading comments if vote loading fails', () async {
         final mockComments = [_createMockThreadComment('comment1')];
 
-        final mockResponse = CommentsResponse(
-          post: {},
-          comments: mockComments,
-        );
+        final mockResponse = CommentsResponse(post: {}, comments: mockComments);
 
         when(
           mockApiService.getComments(
