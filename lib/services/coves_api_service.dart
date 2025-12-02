@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import '../config/oauth_config.dart';
+import '../config/environment_config.dart';
 import '../models/comment.dart';
 import '../models/post.dart';
 import 'api_exceptions.dart';
@@ -15,14 +15,25 @@ import 'api_exceptions.dart';
 /// before each authenticated request. This is critical because atProto OAuth
 /// rotates tokens automatically (~1 hour expiry), and caching tokens would
 /// cause 401 errors after the first token expires.
+///
+/// Features automatic token refresh on 401 responses:
+/// - When a 401 is received, attempts to refresh the token
+/// - Retries the original request with the new token
+/// - If refresh fails, signs out the user
 class CovesApiService {
-  CovesApiService({Future<String?> Function()? tokenGetter, Dio? dio})
-    : _tokenGetter = tokenGetter {
+  CovesApiService({
+    Future<String?> Function()? tokenGetter,
+    Future<bool> Function()? tokenRefresher,
+    Future<void> Function()? signOutHandler,
+    Dio? dio,
+  })  : _tokenGetter = tokenGetter,
+        _tokenRefresher = tokenRefresher,
+        _signOutHandler = signOutHandler {
     _dio =
         dio ??
         Dio(
           BaseOptions(
-            baseUrl: OAuthConfig.apiUrl,
+            baseUrl: EnvironmentConfig.current.apiUrl,
             connectTimeout: const Duration(seconds: 30),
             receiveTimeout: const Duration(seconds: 30),
             headers: {'Content-Type': 'application/json'},
@@ -59,7 +70,107 @@ class CovesApiService {
           }
           return handler.next(options);
         },
-        onError: (error, handler) {
+        onError: (error, handler) async {
+          // Handle 401 errors with automatic token refresh
+          if (error.response?.statusCode == 401 && _tokenRefresher != null) {
+            if (kDebugMode) {
+              debugPrint('🔄 401 detected, attempting token refresh...');
+            }
+
+            // Don't retry the refresh endpoint itself (avoid infinite loop)
+            final isRefreshEndpoint =
+                error.requestOptions.path.contains('/oauth/refresh');
+            if (isRefreshEndpoint) {
+              if (kDebugMode) {
+                debugPrint(
+                  '⚠️ Refresh endpoint returned 401, signing out user',
+                );
+              }
+              // Refresh endpoint failed, sign out the user
+              if (_signOutHandler != null) {
+                await _signOutHandler();
+              }
+              return handler.next(error);
+            }
+
+            // Check if we already retried this request (prevent infinite loop)
+            if (error.requestOptions.extra['retried'] == true) {
+              if (kDebugMode) {
+                debugPrint(
+                  '⚠️ Request already retried after token refresh, '
+                  'signing out user',
+                );
+              }
+              // Already retried once, don't retry again
+              if (_signOutHandler != null) {
+                await _signOutHandler();
+              }
+              return handler.next(error);
+            }
+
+            try {
+              // Attempt to refresh the token
+              final refreshSucceeded = await _tokenRefresher();
+
+              if (refreshSucceeded) {
+                if (kDebugMode) {
+                  debugPrint('✅ Token refresh successful, retrying request');
+                }
+
+                // Get the new token
+                final newToken =
+                    _tokenGetter != null ? await _tokenGetter() : null;
+
+                if (newToken != null) {
+                  // Mark this request as retried to prevent infinite loops
+                  error.requestOptions.extra['retried'] = true;
+
+                  // Update the Authorization header with the new token
+                  error.requestOptions.headers['Authorization'] =
+                      'Bearer $newToken';
+
+                  // Retry the original request with the new token
+                  try {
+                    final response = await _dio.fetch(error.requestOptions);
+                    return handler.resolve(response);
+                  } on DioException catch (retryError) {
+                    // If retry failed with 401 and already retried, we already
+                    // signed out in the retry limit check above, so just pass
+                    // the error through without signing out again
+                    if (retryError.response?.statusCode == 401 &&
+                        retryError.requestOptions.extra['retried'] == true) {
+                      return handler.next(retryError);
+                    }
+                    // For other errors during retry, rethrow to outer catch
+                    rethrow;
+                  }
+                }
+              }
+
+              // Refresh failed, sign out the user
+              if (kDebugMode) {
+                debugPrint('❌ Token refresh failed, signing out user');
+              }
+              if (_signOutHandler != null) {
+                await _signOutHandler();
+              }
+            } catch (e) {
+              if (kDebugMode) {
+                debugPrint('❌ Error during token refresh: $e');
+              }
+              // Only sign out if we haven't already (avoid double sign-out)
+              // Check if this is a DioException from a retried request
+              final isRetriedRequest = e is DioException &&
+                  e.response?.statusCode == 401 &&
+                  e.requestOptions.extra['retried'] == true;
+
+              if (!isRetriedRequest && _signOutHandler != null) {
+                await _signOutHandler();
+              }
+            }
+          }
+
+          // Log the error for debugging
           if (kDebugMode) {
             debugPrint('❌ API Error: ${error.message}');
             if (error.response != null) {
@@ -86,6 +197,8 @@ class CovesApiService {
   }
   late final Dio _dio;
   final Future<String?> Function()? _tokenGetter;
+  final Future<bool> Function()? _tokenRefresher;
+  final Future<void> Function()? _signOutHandler;
 
   /// Get timeline feed (authenticated, personalized)
   ///
@@ -235,6 +348,14 @@ class CovesApiService {
       return CommentsResponse.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       _handleDioException(e, 'comments');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error parsing comments response: $e');
+      }
+      throw ApiException(
+        'Failed to parse server response',
+        originalError: e,
+      );
     }
   }
 
