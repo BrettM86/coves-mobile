@@ -3,14 +3,11 @@
 // Do not manually edit this file.
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
-import 'dart:async' as _i6;
+import 'dart:async' as _i4;
 
-import 'package:atproto_oauth_flutter/atproto_oauth_flutter.dart' as _i2;
-import 'package:atproto_oauth_flutter/src/oauth/oauth_server_agent.dart' as _i3;
-import 'package:coves_flutter/services/oauth_service.dart' as _i5;
-import 'package:http/http.dart' as _i4;
+import 'package:coves_flutter/models/coves_session.dart' as _i2;
+import 'package:coves_flutter/services/coves_auth_service.dart' as _i3;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:mockito/src/dummies.dart' as _i7;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -27,192 +24,70 @@ import 'package:mockito/src/dummies.dart' as _i7;
 // ignore_for_file: subtype_of_sealed_class
 // ignore_for_file: invalid_use_of_internal_member
 
-class _FakeOAuthSession_0 extends _i1.SmartFake implements _i2.OAuthSession {
-  _FakeOAuthSession_0(Object parent, Invocation parentInvocation)
+class _FakeCovesSession_0 extends _i1.SmartFake implements _i2.CovesSession {
+  _FakeCovesSession_0(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeOAuthServerAgent_1 extends _i1.SmartFake
-    implements _i3.OAuthServerAgent {
-  _FakeOAuthServerAgent_1(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
-}
-
-class _FakeSessionGetterInterface_2 extends _i1.SmartFake
-    implements _i2.SessionGetterInterface {
-  _FakeSessionGetterInterface_2(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
-}
-
-class _FakeTokenInfo_3 extends _i1.SmartFake implements _i2.TokenInfo {
-  _FakeTokenInfo_3(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
-}
-
-class _FakeResponse_4 extends _i1.SmartFake implements _i4.Response {
-  _FakeResponse_4(Object parent, Invocation parentInvocation)
-    : super(parent, parentInvocation);
-}
-
-/// A class which mocks [OAuthService].
+/// A class which mocks [CovesAuthService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockOAuthService extends _i1.Mock implements _i5.OAuthService {
-  MockOAuthService() {
+class MockCovesAuthService extends _i1.Mock implements _i3.CovesAuthService {
+  MockCovesAuthService() {
     _i1.throwOnMissingStub(this);
   }
 
   @override
-  _i6.Future<void> initialize() =>
+  bool get isAuthenticated =>
+      (super.noSuchMethod(
+            Invocation.getter(#isAuthenticated),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  _i4.Future<void> initialize() =>
       (super.noSuchMethod(
             Invocation.method(#initialize, []),
-            returnValue: _i6.Future<void>.value(),
-            returnValueForMissingStub: _i6.Future<void>.value(),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
           )
-          as _i6.Future<void>);
+          as _i4.Future<void>);
 
   @override
-  _i6.Future<_i2.OAuthSession> signIn(String? input) =>
+  _i4.Future<_i2.CovesSession> signIn(String? handle) =>
       (super.noSuchMethod(
-            Invocation.method(#signIn, [input]),
-            returnValue: _i6.Future<_i2.OAuthSession>.value(
-              _FakeOAuthSession_0(this, Invocation.method(#signIn, [input])),
+            Invocation.method(#signIn, [handle]),
+            returnValue: _i4.Future<_i2.CovesSession>.value(
+              _FakeCovesSession_0(this, Invocation.method(#signIn, [handle])),
             ),
           )
-          as _i6.Future<_i2.OAuthSession>);
+          as _i4.Future<_i2.CovesSession>);
 
   @override
-  _i6.Future<_i2.OAuthSession?> restoreSession(
-    String? did, {
-    String? refresh = 'auto',
-  }) =>
+  _i4.Future<_i2.CovesSession?> restoreSession() =>
       (super.noSuchMethod(
-            Invocation.method(#restoreSession, [did], {#refresh: refresh}),
-            returnValue: _i6.Future<_i2.OAuthSession?>.value(),
+            Invocation.method(#restoreSession, []),
+            returnValue: _i4.Future<_i2.CovesSession?>.value(),
           )
-          as _i6.Future<_i2.OAuthSession?>);
+          as _i4.Future<_i2.CovesSession?>);
 
   @override
-  _i6.Future<void> signOut(String? did) =>
+  _i4.Future<_i2.CovesSession> refreshToken() =>
       (super.noSuchMethod(
-            Invocation.method(#signOut, [did]),
-            returnValue: _i6.Future<void>.value(),
-            returnValueForMissingStub: _i6.Future<void>.value(),
-          )
-          as _i6.Future<void>);
-
-  @override
-  void dispose() => super.noSuchMethod(
-    Invocation.method(#dispose, []),
-    returnValueForMissingStub: null,
-  );
-}
-
-/// A class which mocks [OAuthSession].
-///
-/// See the documentation for Mockito's code generation for more information.
-class MockOAuthSession extends _i1.Mock implements _i2.OAuthSession {
-  MockOAuthSession() {
-    _i1.throwOnMissingStub(this);
-  }
-
-  @override
-  _i3.OAuthServerAgent get server =>
-      (super.noSuchMethod(
-            Invocation.getter(#server),
-            returnValue: _FakeOAuthServerAgent_1(
-              this,
-              Invocation.getter(#server),
+            Invocation.method(#refreshToken, []),
+            returnValue: _i4.Future<_i2.CovesSession>.value(
+              _FakeCovesSession_0(this, Invocation.method(#refreshToken, [])),
             ),
           )
-          as _i3.OAuthServerAgent);
+          as _i4.Future<_i2.CovesSession>);
 
   @override
-  String get sub =>
-      (super.noSuchMethod(
-            Invocation.getter(#sub),
-            returnValue: _i7.dummyValue<String>(this, Invocation.getter(#sub)),
-          )
-          as String);
-
-  @override
-  _i2.SessionGetterInterface get sessionGetter =>
-      (super.noSuchMethod(
-            Invocation.getter(#sessionGetter),
-            returnValue: _FakeSessionGetterInterface_2(
-              this,
-              Invocation.getter(#sessionGetter),
-            ),
-          )
-          as _i2.SessionGetterInterface);
-
-  @override
-  String get did =>
-      (super.noSuchMethod(
-            Invocation.getter(#did),
-            returnValue: _i7.dummyValue<String>(this, Invocation.getter(#did)),
-          )
-          as String);
-
-  @override
-  Map<String, dynamic> get serverMetadata =>
-      (super.noSuchMethod(
-            Invocation.getter(#serverMetadata),
-            returnValue: <String, dynamic>{},
-          )
-          as Map<String, dynamic>);
-
-  @override
-  _i6.Future<_i2.TokenInfo> getTokenInfo([dynamic refresh = 'auto']) =>
-      (super.noSuchMethod(
-            Invocation.method(#getTokenInfo, [refresh]),
-            returnValue: _i6.Future<_i2.TokenInfo>.value(
-              _FakeTokenInfo_3(
-                this,
-                Invocation.method(#getTokenInfo, [refresh]),
-              ),
-            ),
-          )
-          as _i6.Future<_i2.TokenInfo>);
-
-  @override
-  _i6.Future<void> signOut() =>
+  _i4.Future<void> signOut() =>
       (super.noSuchMethod(
             Invocation.method(#signOut, []),
-            returnValue: _i6.Future<void>.value(),
-            returnValueForMissingStub: _i6.Future<void>.value(),
+            returnValue: _i4.Future<void>.value(),
+            returnValueForMissingStub: _i4.Future<void>.value(),
           )
-          as _i6.Future<void>);
-
-  @override
-  _i6.Future<_i4.Response> fetchHandler(
-    String? pathname, {
-    String? method = 'GET',
-    Map<String, String>? headers,
-    dynamic body,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(
-              #fetchHandler,
-              [pathname],
-              {#method: method, #headers: headers, #body: body},
-            ),
-            returnValue: _i6.Future<_i4.Response>.value(
-              _FakeResponse_4(
-                this,
-                Invocation.method(
-                  #fetchHandler,
-                  [pathname],
-                  {#method: method, #headers: headers, #body: body},
-                ),
-              ),
-            ),
-          )
-          as _i6.Future<_i4.Response>);
-
-  @override
-  void dispose() => super.noSuchMethod(
-    Invocation.method(#dispose, []),
-    returnValueForMissingStub: null,
-  );
+          as _i4.Future<void>);
 }

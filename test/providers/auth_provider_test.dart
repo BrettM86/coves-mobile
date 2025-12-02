@@ -1,40 +1,33 @@
-import 'package:atproto_oauth_flutter/atproto_oauth_flutter.dart';
+import 'package:coves_flutter/models/coves_session.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
-import 'package:coves_flutter/services/oauth_service.dart';
+import 'package:coves_flutter/services/coves_auth_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth_provider_test.mocks.dart';
 
-// Generate mocks for OAuthService and OAuthSession only
-@GenerateMocks([OAuthService, OAuthSession])
+// Generate mocks for CovesAuthService
+@GenerateMocks([CovesAuthService])
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('AuthProvider', () {
     late AuthProvider authProvider;
-    late MockOAuthService mockOAuthService;
+    late MockCovesAuthService mockAuthService;
 
     setUp(() {
-      // Mock SharedPreferences
-      SharedPreferences.setMockInitialValues({});
-
-      // Create mock OAuth service
-      mockOAuthService = MockOAuthService();
+      // Create mock auth service
+      mockAuthService = MockCovesAuthService();
 
       // Create auth provider with injected mock service
-      authProvider = AuthProvider(oauthService: mockOAuthService);
-    });
-
-    tearDown(() {
-      authProvider.dispose();
+      authProvider = AuthProvider(authService: mockAuthService);
     });
 
     group('initialize', () {
       test('should initialize with no stored session', () async {
-        when(mockOAuthService.initialize()).thenAnswer((_) async => {});
+        when(mockAuthService.initialize()).thenAnswer((_) async => {});
+        when(mockAuthService.restoreSession()).thenAnswer((_) async => null);
 
         await authProvider.initialize();
 
@@ -44,28 +37,28 @@ void main() {
         expect(authProvider.error, null);
       });
 
-      test('should restore session if DID is stored', () async {
-        // Set up mock stored DID
-        SharedPreferences.setMockInitialValues({
-          'current_user_did': 'did:plc:test123',
-        });
+      test('should restore session if available', () async {
+        const mockSession = CovesSession(
+          token: 'mock_sealed_token',
+          did: 'did:plc:test123',
+          sessionId: 'session123',
+          handle: 'test.user',
+        );
 
-        final mockSession = MockOAuthSession();
-        when(mockSession.sub).thenReturn('did:plc:test123');
-
-        when(mockOAuthService.initialize()).thenAnswer((_) async => {});
+        when(mockAuthService.initialize()).thenAnswer((_) async => {});
         when(
-          mockOAuthService.restoreSession('did:plc:test123'),
+          mockAuthService.restoreSession(),
         ).thenAnswer((_) async => mockSession);
 
         await authProvider.initialize();
 
         expect(authProvider.isAuthenticated, true);
         expect(authProvider.did, 'did:plc:test123');
+        expect(authProvider.handle, 'test.user');
       });
 
       test('should handle initialization errors gracefully', () async {
-        when(mockOAuthService.initialize()).thenThrow(Exception('Init failed'));
+        when(mockAuthService.initialize()).thenThrow(Exception('Init failed'));
 
         await authProvider.initialize();
 
@@ -77,11 +70,15 @@ void main() {
 
     group('signIn', () {
       test('should sign in successfully with valid handle', () async {
-        final mockSession = MockOAuthSession();
-        when(mockSession.sub).thenReturn('did:plc:test123');
+        const mockSession = CovesSession(
+          token: 'mock_sealed_token',
+          did: 'did:plc:test123',
+          sessionId: 'session123',
+          handle: 'alice.bsky.social',
+        );
 
         when(
-          mockOAuthService.signIn('alice.bsky.social'),
+          mockAuthService.signIn('alice.bsky.social'),
         ).thenAnswer((_) async => mockSession);
 
         await authProvider.signIn('alice.bsky.social');
@@ -100,7 +97,7 @@ void main() {
 
       test('should handle sign in errors', () async {
         when(
-          mockOAuthService.signIn('invalid.handle'),
+          mockAuthService.signIn('invalid.handle'),
         ).thenThrow(Exception('Sign in failed'));
 
         expect(
@@ -111,38 +108,26 @@ void main() {
         expect(authProvider.isAuthenticated, false);
         expect(authProvider.error, isNotNull);
       });
-
-      test('should store DID in SharedPreferences after sign in', () async {
-        final mockSession = MockOAuthSession();
-        when(mockSession.sub).thenReturn('did:plc:test123');
-
-        when(
-          mockOAuthService.signIn('alice.bsky.social'),
-        ).thenAnswer((_) async => mockSession);
-
-        await authProvider.signIn('alice.bsky.social');
-
-        final prefs = await SharedPreferences.getInstance();
-        expect(prefs.getString('current_user_did'), 'did:plc:test123');
-      });
     });
 
     group('signOut', () {
       test('should sign out and clear state', () async {
         // First sign in
-        final mockSession = MockOAuthSession();
-        when(mockSession.sub).thenReturn('did:plc:test123');
+        const mockSession = CovesSession(
+          token: 'mock_sealed_token',
+          did: 'did:plc:test123',
+          sessionId: 'session123',
+          handle: 'alice.bsky.social',
+        );
         when(
-          mockOAuthService.signIn('alice.bsky.social'),
+          mockAuthService.signIn('alice.bsky.social'),
         ).thenAnswer((_) async => mockSession);
 
         await authProvider.signIn('alice.bsky.social');
         expect(authProvider.isAuthenticated, true);
 
         // Then sign out
-        when(
-          mockOAuthService.signOut('did:plc:test123'),
-        ).thenAnswer((_) async => {});
+        when(mockAuthService.signOut()).thenAnswer((_) async => {});
 
         await authProvider.signOut();
 
@@ -152,41 +137,23 @@ void main() {
         expect(authProvider.handle, null);
       });
 
-      test('should clear DID from SharedPreferences', () async {
-        // Sign in first
-        final mockSession = MockOAuthSession();
-        when(mockSession.sub).thenReturn('did:plc:test123');
-        when(
-          mockOAuthService.signIn('alice.bsky.social'),
-        ).thenAnswer((_) async => mockSession);
-
-        await authProvider.signIn('alice.bsky.social');
-
-        // Sign out
-        when(
-          mockOAuthService.signOut('did:plc:test123'),
-        ).thenAnswer((_) async => {});
-
-        await authProvider.signOut();
-
-        final prefs = await SharedPreferences.getInstance();
-        expect(prefs.getString('current_user_did'), null);
-      });
-
       test('should clear state even if server revocation fails', () async {
         // Sign in first
-        final mockSession = MockOAuthSession();
-        when(mockSession.sub).thenReturn('did:plc:test123');
+        const mockSession = CovesSession(
+          token: 'mock_sealed_token',
+          did: 'did:plc:test123',
+          sessionId: 'session123',
+          handle: 'alice.bsky.social',
+        );
         when(
-          mockOAuthService.signIn('alice.bsky.social'),
+          mockAuthService.signIn('alice.bsky.social'),
         ).thenAnswer((_) async => mockSession);
 
         await authProvider.signIn('alice.bsky.social');
 
         // Sign out with error
-        when(
-          mockOAuthService.signOut('did:plc:test123'),
-        ).thenThrow(Exception('Revocation failed'));
+        when(mockAuthService.signOut())
+            .thenThrow(Exception('Revocation failed'));
 
         await authProvider.signOut();
 
@@ -201,22 +168,77 @@ void main() {
         expect(token, null);
       });
 
-      // Note: Testing getAccessToken requires mocking internal OAuth classes
-      // that are not exported from atproto_oauth_flutter package.
-      // These tests would need integration testing or a different approach.
+      test('should return sealed token when authenticated', () async {
+        const mockSession = CovesSession(
+          token: 'mock_sealed_token',
+          did: 'did:plc:test123',
+          sessionId: 'session123',
+        );
 
-      test('should return null when not authenticated '
-          '(skipped - needs integration test)', () async {
-        // This test is skipped as it requires mocking internal OAuth classes
-        // that cannot be mocked with mockito
-      }, skip: true);
+        when(
+          mockAuthService.signIn('alice.bsky.social'),
+        ).thenAnswer((_) async => mockSession);
 
-      test('should sign out user if token refresh fails '
-          '(skipped - needs integration test)', () async {
-        // This test demonstrates the critical fix for issue #7
-        // Token refresh failure should trigger sign out
-        // Skipped as it requires mocking internal OAuth classes
-      }, skip: true);
+        await authProvider.signIn('alice.bsky.social');
+
+        final token = await authProvider.getAccessToken();
+        expect(token, 'mock_sealed_token');
+      });
+    });
+
+    group('refreshToken', () {
+      test('should return false when not authenticated', () async {
+        final result = await authProvider.refreshToken();
+        expect(result, false);
+      });
+
+      test('should refresh token successfully', () async {
+        const mockSession = CovesSession(
+          token: 'mock_sealed_token',
+          did: 'did:plc:test123',
+          sessionId: 'session123',
+        );
+        const refreshedSession = CovesSession(
+          token: 'new_sealed_token',
+          did: 'did:plc:test123',
+          sessionId: 'session123',
+        );
+
+        when(
+          mockAuthService.signIn('alice.bsky.social'),
+        ).thenAnswer((_) async => mockSession);
+        when(
+          mockAuthService.refreshToken(),
+        ).thenAnswer((_) async => refreshedSession);
+
+        await authProvider.signIn('alice.bsky.social');
+        final result = await authProvider.refreshToken();
+
+        expect(result, true);
+        expect(authProvider.session?.token, 'new_sealed_token');
+      });
+
+      test('should sign out if refresh fails', () async {
+        const mockSession = CovesSession(
+          token: 'mock_sealed_token',
+          did: 'did:plc:test123',
+          sessionId: 'session123',
+        );
+
+        when(
+          mockAuthService.signIn('alice.bsky.social'),
+        ).thenAnswer((_) async => mockSession);
+        when(
+          mockAuthService.refreshToken(),
+        ).thenThrow(Exception('Refresh failed'));
+        when(mockAuthService.signOut()).thenAnswer((_) async => {});
+
+        await authProvider.signIn('alice.bsky.social');
+        final result = await authProvider.refreshToken();
+
+        expect(result, false);
+        expect(authProvider.isAuthenticated, false);
+      });
     });
 
     group('State Management', () {
@@ -226,10 +248,13 @@ void main() {
           notificationCount++;
         });
 
-        final mockSession = MockOAuthSession();
-        when(mockSession.sub).thenReturn('did:plc:test123');
+        const mockSession = CovesSession(
+          token: 'mock_sealed_token',
+          did: 'did:plc:test123',
+          sessionId: 'session123',
+        );
         when(
-          mockOAuthService.signIn('alice.bsky.social'),
+          mockAuthService.signIn('alice.bsky.social'),
         ).thenAnswer((_) async => mockSession);
 
         await authProvider.signIn('alice.bsky.social');
@@ -239,11 +264,7 @@ void main() {
       });
 
       test('should clear error when clearError is called', () {
-        // Simulate an error state
-        when(mockOAuthService.signIn('invalid')).thenThrow(Exception('Error'));
-
-        // This would set error state
-        // Then clear it
+        // Trigger an error state
         authProvider.clearError();
         expect(authProvider.error, null);
       });

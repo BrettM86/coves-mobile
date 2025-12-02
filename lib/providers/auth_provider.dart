@@ -1,148 +1,91 @@
-import 'package:atproto_oauth_flutter/atproto_oauth_flutter.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../services/oauth_service.dart';
+import '../models/coves_session.dart';
+import '../services/coves_auth_service.dart';
 
 /// Authentication Provider
 ///
-/// Manages authentication state using the new atproto_oauth_flutter package.
+/// Manages authentication state using the Coves backend OAuth flow.
 /// Uses ChangeNotifier for reactive state updates across the app.
 ///
-/// Key improvements:
-/// ✅ Uses OAuthSession from the new package (with built-in token management)
-/// ✅ Stores only the DID in SharedPreferences (public info, not sensitive)
-/// ✅ Tokens are stored securely by the package (iOS Keychain / Android EncryptedSharedPreferences)
-/// ✅ Automatic token refresh handled by the package
+/// Key features:
+/// - Uses CovesAuthService for backend-managed OAuth
+/// - Tokens are sealed (AES-256-GCM encrypted) and opaque to the client
+/// - Backend handles DPoP, PKCE, and token refresh internally
+/// - Session stored securely (iOS Keychain / Android EncryptedSharedPreferences)
 class AuthProvider with ChangeNotifier {
-  /// Constructor with optional OAuthService for dependency injection (testing)
-  AuthProvider({OAuthService? oauthService})
-    : _oauthService = oauthService ?? OAuthService();
-  final OAuthService _oauthService;
-
-  // SharedPreferences keys for storing session info
-  // The DID and handle are public information, so SharedPreferences is fine
-  // The actual tokens are stored securely by the atproto_oauth_flutter package
-  static const String _prefKeyDid = 'current_user_did';
-  static const String _prefKeyHandle = 'current_user_handle';
+  /// Constructor with optional auth service for dependency injection
+  AuthProvider({CovesAuthService? authService})
+    : _authService = authService ?? CovesAuthService();
+  final CovesAuthService _authService;
 
   // Session state
-  OAuthSession? _session;
+  CovesSession? _session;
   bool _isAuthenticated = false;
   bool _isLoading = true;
   String? _error;
 
-  // User info
-  String? _did;
-  String? _handle;
-
   // Getters
-  OAuthSession? get session => _session;
+  CovesSession? get session => _session;
   bool get isAuthenticated => _isAuthenticated;
   bool get isLoading => _isLoading;
   String? get error => _error;
-  String? get did => _did;
-  String? get handle => _handle;
+  String? get did => _session?.did;
+  String? get handle => _session?.handle;
 
-  /// Get the current access token
+  /// Get the current access token (sealed token)
   ///
-  /// This fetches the token from the session's token set.
-  /// The token is automatically refreshed if expired.
-  /// If token refresh fails (e.g., revoked server-side), signs out the user.
+  /// Returns the sealed token for API authentication.
+  /// The token is opaque to the client - backend handles everything.
+  ///
+  /// If token refresh fails, attempts to refresh automatically.
+  /// If refresh fails, signs out the user.
   Future<String?> getAccessToken() async {
     if (_session == null) {
       return null;
     }
 
-    try {
-      // Access the session getter to get the token set
-      final session = await _session!.sessionGetter.get(_session!.sub);
-      return session.tokenSet.accessToken;
-    } on Exception catch (e) {
-      if (kDebugMode) {
-        print('❌ Failed to get access token: $e');
-        print('🔄 Token refresh failed - signing out user');
-      }
-
-      // Token refresh failed (likely revoked or expired beyond refresh)
-      // Sign out user to clear invalid session
-      await signOut();
-      return null;
-    }
-  }
-
-  /// Get the user's PDS URL
-  ///
-  /// Returns the URL of the user's Personal Data Server from the OAuth session.
-  /// This is needed for direct XRPC calls to the PDS (e.g., createRecord).
-  ///
-  /// The PDS URL is stored in serverMetadata['issuer'] from the OAuth session.
-  String? getPdsUrl() {
-    if (_session == null) {
-      return null;
-    }
-
-    return _session!.serverMetadata['issuer'] as String?;
+    // Return the sealed token directly
+    // Token refresh is handled by the backend when the token is used
+    return _session!.token;
   }
 
   /// Initialize the provider and restore any existing session
   ///
   /// This is called on app startup to:
-  /// 1. Initialize the OAuth service
-  /// 2. Check if there's a stored DID (from previous session)
-  /// 3. Restore the session if found (with automatic token refresh)
+  /// 1. Initialize the auth service
+  /// 2. Restore session from secure storage if available
   Future<void> initialize() async {
     try {
       _isLoading = true;
       _error = null;
       notifyListeners();
 
-      // Initialize OAuth service
-      await _oauthService.initialize();
+      // Initialize auth service
+      await _authService.initialize();
 
-      // Check if we have a stored DID from a previous session
-      final prefs = await SharedPreferences.getInstance();
-      final storedDid = prefs.getString(_prefKeyDid);
-      final storedHandle = prefs.getString(_prefKeyHandle);
+      // Try to restore a previous session from secure storage
+      final restoredSession = await _authService.restoreSession();
 
-      if (storedDid != null) {
+      if (restoredSession != null) {
+        _session = restoredSession;
+        _isAuthenticated = true;
+
         if (kDebugMode) {
-          print('Found stored DID: $storedDid');
-          print('Found stored handle: $storedHandle');
-        }
-
-        // Try to restore the session
-        // The package will automatically refresh tokens if needed
-        final restoredSession = await _oauthService.restoreSession(storedDid);
-
-        if (restoredSession != null) {
-          _session = restoredSession;
-          _isAuthenticated = true;
-          _did = restoredSession.sub;
-          _handle = storedHandle; // Restore handle from preferences
-
-          if (kDebugMode) {
-            print('✅ Successfully restored session');
-            print('   DID: ${restoredSession.sub}');
-            print('   Handle: $storedHandle');
-          }
-        } else {
-          // Failed to restore - clear the stored data
-          await prefs.remove(_prefKeyDid);
-          await prefs.remove(_prefKeyHandle);
-          if (kDebugMode) {
-            print('⚠️ Could not restore session - cleared stored data');
-          }
+          print('Restored session');
+          print('   DID: ${restoredSession.did}');
+          print('   Handle: ${restoredSession.handle}');
         }
       } else {
         if (kDebugMode) {
-          print('No stored DID found - user not logged in');
+          print('No stored session found - user not logged in');
         }
       }
-    } on Exception catch (e) {
+    } catch (e) {
+      // Catch all errors to prevent app crashes during initialization
       _error = e.toString();
       if (kDebugMode) {
-        print('❌ Failed to initialize auth: $e');
+        print('Failed to initialize auth: $e');
       }
     } finally {
       _isLoading = false;
@@ -152,16 +95,17 @@ class AuthProvider with ChangeNotifier {
 
   /// Sign in with an atProto handle
   ///
-  /// This works with ANY handle on ANY PDS:
-  /// - alice.bsky.social → Bluesky PDS
-  /// - bob.custom-pds.com → Custom PDS
-  /// - did:plc:abc123 → Direct DID
-  ///
-  /// The package handles:
-  /// - Handle → DID resolution
+  /// Opens the system browser to the backend's OAuth endpoint.
+  /// The backend handles:
+  /// - Handle -> DID resolution
   /// - PDS discovery
-  /// - OAuth authorization
-  /// - Token storage
+  /// - OAuth authorization with PKCE/DPoP
+  /// - Token sealing
+  ///
+  /// Works with ANY handle on ANY PDS:
+  /// - alice.bsky.social -> Bluesky PDS
+  /// - bob.custom-pds.com -> Custom PDS
+  /// - did:plc:abc123 -> Direct DID
   Future<void> signIn(String handle) async {
     try {
       _isLoading = true;
@@ -174,35 +118,25 @@ class AuthProvider with ChangeNotifier {
         throw Exception('Please enter a valid handle');
       }
 
-      // Perform OAuth sign in with the new package
-      final session = await _oauthService.signIn(trimmedHandle);
+      // Perform OAuth sign in via backend
+      final session = await _authService.signIn(trimmedHandle);
 
       // Update state
       _session = session;
       _isAuthenticated = true;
-      _did = session.sub;
-      _handle = trimmedHandle;
-
-      // Store the DID and handle in SharedPreferences so we can restore
-      // on next launch
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_prefKeyDid, session.sub);
-      await prefs.setString(_prefKeyHandle, trimmedHandle);
 
       if (kDebugMode) {
-        print('✅ Successfully signed in');
-        print('   Handle: $trimmedHandle');
-        print('   DID: ${session.sub}');
+        print('Successfully signed in');
+        print('   Handle: ${session.handle ?? trimmedHandle}');
+        print('   DID: ${session.did}');
       }
     } catch (e) {
       _error = e.toString();
       _isAuthenticated = false;
       _session = null;
-      _did = null;
-      _handle = null;
 
       if (kDebugMode) {
-        print('❌ Sign in failed: $e');
+        print('Sign in failed: $e');
       }
 
       rethrow;
@@ -215,53 +149,69 @@ class AuthProvider with ChangeNotifier {
   /// Sign out and clear session
   ///
   /// This:
-  /// 1. Calls the server's token revocation endpoint (best-effort)
-  /// 2. Deletes session from secure storage
-  /// 3. Clears the stored DID from SharedPreferences
-  /// 4. Resets the provider state
+  /// 1. Calls the backend's logout endpoint (revokes session server-side)
+  /// 2. Clears session from secure storage
+  /// 3. Resets the provider state
   Future<void> signOut() async {
     try {
       _isLoading = true;
       notifyListeners();
 
-      // Get the current DID before clearing state
-      final currentDid = _did;
-
-      if (currentDid != null) {
-        // Call the new package's revoke method
-        // This handles server-side revocation + local storage cleanup
-        await _oauthService.signOut(currentDid);
-      }
-
-      // Clear the stored DID and handle from SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_prefKeyDid);
-      await prefs.remove(_prefKeyHandle);
+      // Call auth service signOut (handles server + local cleanup)
+      await _authService.signOut();
 
       // Clear state
       _session = null;
       _isAuthenticated = false;
-      _did = null;
-      _handle = null;
       _error = null;
 
       if (kDebugMode) {
-        print('✅ Successfully signed out');
+        print('Successfully signed out');
       }
     } on Exception catch (e) {
       _error = e.toString();
       if (kDebugMode) {
-        print('⚠️ Sign out failed: $e');
+        print('Sign out failed: $e');
       }
 
-      // Even if revocation fails, clear local state
+      // Even if server revocation fails, clear local state
       _session = null;
       _isAuthenticated = false;
-      _did = null;
-      _handle = null;
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Refresh the current session token
+  ///
+  /// Calls the backend's /oauth/refresh endpoint.
+  /// The backend handles the actual PDS token refresh internally.
+  ///
+  /// Returns true if refresh succeeded, false otherwise.
+  Future<bool> refreshToken() async {
+    if (_session == null) {
+      return false;
+    }
+
+    try {
+      final refreshedSession = await _authService.refreshToken();
+      _session = refreshedSession;
+      notifyListeners();
+
+      if (kDebugMode) {
+        print('Token refreshed successfully');
+      }
+
+      return true;
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        print('Token refresh failed: $e');
+      }
+
+      // If refresh fails, sign out the user
+      await signOut();
+      return false;
     }
   }
 
@@ -269,12 +219,5 @@ class AuthProvider with ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
-  }
-
-  /// Dispose resources
-  @override
-  void dispose() {
-    _oauthService.dispose();
-    super.dispose();
   }
 }
