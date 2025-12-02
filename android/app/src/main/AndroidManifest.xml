@@ -9,7 +9,6 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
@@ -30,7 +29,7 @@
         </activity>
 
         <!-- flutter_web_auth_2 CallbackActivity for OAuth callbacks -->
-        <!-- This MUST be a separate activity to prevent go_router interference -->
+        <!-- Uses private-use URI scheme per atproto spec (RFC 8252) -->
         <activity
             android:name="com.linusu.flutter_web_auth_2.CallbackActivity"
             android:exported="true">
@@ -38,9 +37,7 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-
-                <!-- OAuth callback URL scheme -->
-                <data android:scheme="dev.workers.brettmay0212.lingering-darkness-50a6"/>
+                <data android:scheme="social.coves"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
