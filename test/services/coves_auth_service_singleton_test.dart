@@ -148,6 +148,7 @@ void main() {
     test('resetInstance() should clear the singleton', () {
       // Arrange
       final instance1 = CovesAuthService(dio: mockDio, storage: mockStorage);
+      expect(instance1, isNotNull); // Verify initial singleton exists
 
       // Act
       CovesAuthService.resetInstance();

@@ -1,32 +1,15 @@
 import 'package:coves_flutter/models/coves_session.dart';
 import 'package:coves_flutter/services/coves_auth_service.dart';
-import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
-
-import 'coves_auth_service_test.mocks.dart';
 
 /// Tests for sensitive data redaction in CovesAuthService
 ///
 /// Verifies that sensitive parameters (tokens) are properly redacted
 /// from debug logs while preserving useful debugging information.
-@GenerateMocks([Dio, FlutterSecureStorage])
 void main() {
-  late CovesAuthService service;
-  late MockDio mockDio;
-  late MockFlutterSecureStorage mockStorage;
-
   setUp(() {
-    mockDio = MockDio();
-    mockStorage = MockFlutterSecureStorage();
-
-    // Create a test instance
-    service = CovesAuthService.createTestInstance(
-      dio: mockDio,
-      storage: mockStorage,
-    );
+    // Reset singleton state before each test
+    CovesAuthService.resetInstance();
   });
 
   tearDown(() {
