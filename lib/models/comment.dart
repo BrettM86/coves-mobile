@@ -156,11 +156,18 @@ class CommentStats {
 }
 
 class CommentViewerState {
-  CommentViewerState({this.vote});
+  CommentViewerState({this.vote, this.voteUri});
 
   factory CommentViewerState.fromJson(Map<String, dynamic> json) {
-    return CommentViewerState(vote: json['vote'] as String?);
+    return CommentViewerState(
+      vote: json['vote'] as String?,
+      voteUri: json['voteUri'] as String?,
+    );
   }
 
+  /// Vote direction: "up", "down", or null if not voted
   final String? vote;
+
+  /// AT-URI of the vote record (if backend provides it)
+  final String? voteUri;
 }

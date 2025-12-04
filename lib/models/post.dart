@@ -47,6 +47,41 @@ class FeedViewPost {
   final FeedReason? reason;
 }
 
+class ViewerState {
+  ViewerState({
+    this.vote,
+    this.voteUri,
+    this.saved = false,
+    this.savedUri,
+    this.tags,
+  });
+
+  factory ViewerState.fromJson(Map<String, dynamic> json) {
+    return ViewerState(
+      vote: json['vote'] as String?,
+      voteUri: json['voteUri'] as String?,
+      saved: json['saved'] as bool? ?? false,
+      savedUri: json['savedUri'] as String?,
+      tags: (json['tags'] as List<dynamic>?)?.cast<String>(),
+    );
+  }
+
+  /// Vote direction: "up", "down", or null if not voted
+  final String? vote;
+
+  /// AT-URI of the vote record
+  final String? voteUri;
+
+  /// Whether the post is saved/bookmarked
+  final bool saved;
+
+  /// AT-URI of the saved record
+  final String? savedUri;
+
+  /// User-applied tags
+  final List<String>? tags;
+}
+
 class PostView {
   PostView({
     required this.uri,
@@ -61,6 +96,7 @@ class PostView {
     required this.stats,
     this.embed,
     this.facets,
+    this.viewer,
   });
 
   factory PostView.fromJson(Map<String, dynamic> json) {
@@ -87,6 +123,10 @@ class PostView {
                   .map((f) => PostFacet.fromJson(f as Map<String, dynamic>))
                   .toList()
               : null,
+      viewer:
+          json['viewer'] != null
+              ? ViewerState.fromJson(json['viewer'] as Map<String, dynamic>)
+              : null,
     );
   }
   final String uri;
@@ -101,6 +141,7 @@ class PostView {
   final PostStats stats;
   final PostEmbed? embed;
   final List<PostFacet>? facets;
+  final ViewerState? viewer;
 }
 
 class AuthorView {
