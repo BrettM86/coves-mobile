@@ -60,7 +60,6 @@ void main() async {
               (context) => FeedProvider(
                 authProvider,
                 voteProvider: context.read<VoteProvider>(),
-                voteService: voteService,
               ),
           update: (context, auth, vote, previous) {
             // Reuse existing provider to maintain state across rebuilds
@@ -68,7 +67,6 @@ void main() async {
                 FeedProvider(
                   auth,
                   voteProvider: vote,
-                  voteService: voteService,
                 );
           },
         ),
@@ -81,7 +79,6 @@ void main() async {
               (context) => CommentsProvider(
                 authProvider,
                 voteProvider: context.read<VoteProvider>(),
-                voteService: voteService,
               ),
           update: (context, auth, vote, previous) {
             // Reuse existing provider to maintain state across rebuilds
@@ -89,7 +86,6 @@ void main() async {
                 CommentsProvider(
                   auth,
                   voteProvider: vote,
-                  voteService: voteService,
                 );
           },
         ),
