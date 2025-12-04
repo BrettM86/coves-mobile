@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../services/api_exceptions.dart';
-import '../services/vote_service.dart' show VoteService, VoteInfo;
+import '../services/vote_service.dart' show VoteService;
 import 'auth_provider.dart';
 
 /// Vote Provider
@@ -164,13 +164,11 @@ class VoteProvider with ChangeNotifier {
     _pendingRequests[postUri] = true;
 
     try {
-      // Make API call - pass existing vote info to avoid O(n) PDS lookup
+      // Make API call
       final response = await _voteService.createVote(
         postUri: postUri,
         postCid: postCid,
         direction: direction,
-        existingVoteRkey: currentState?.rkey,
-        existingVoteDirection: currentState?.direction,
       );
 
       // Update with server response
@@ -231,63 +229,24 @@ class VoteProvider with ChangeNotifier {
     String? voteUri,
   }) {
     if (voteDirection != null) {
-      // Extract rkey from vote URI if available
-      // URI format: at://did:plc:xyz/social.coves.feed.vote/3kby...
-      String? rkey;
-      if (voteUri != null) {
-        final parts = voteUri.split('/');
-        if (parts.isNotEmpty) {
-          rkey = parts.last;
-        }
-      }
-
       _votes[postUri] = VoteState(
         direction: voteDirection,
         uri: voteUri,
-        rkey: rkey,
+        rkey: VoteState.extractRkeyFromUri(voteUri),
         deleted: false,
       );
     } else {
       _votes.remove(postUri);
     }
+
+    // IMPORTANT: Clear any stale score adjustment for this post.
+    // When we receive fresh data from the server (via feed/comments refresh),
+    // the server's score already reflects the actual vote state. Any local
+    // delta from a previous optimistic update is now stale and would cause
+    // double-counting (e.g., server score already includes +1, plus our +1).
+    _scoreAdjustments.remove(postUri);
+
     // Don't notify listeners - this is just initial state
-  }
-
-  /// Load initial vote states from a map of votes
-  ///
-  /// This is used to bulk-load vote state after querying the user's PDS.
-  /// Typically called after loading feed posts to fill in which posts
-  /// the user has voted on.
-  ///
-  /// IMPORTANT: This clears score adjustments since the server score
-  /// already reflects the loaded votes. If we kept stale adjustments,
-  /// we'd double-count votes (server score + our adjustment).
-  ///
-  /// Parameters:
-  /// - [votes]: Map of post URI -> vote info from VoteService.getUserVotes()
-  void loadInitialVotes(Map<String, VoteInfo> votes) {
-    for (final entry in votes.entries) {
-      final postUri = entry.key;
-      final voteInfo = entry.value;
-
-      _votes[postUri] = VoteState(
-        direction: voteInfo.direction,
-        uri: voteInfo.voteUri,
-        rkey: voteInfo.rkey,
-        deleted: false,
-      );
-
-      // Clear any stale score adjustments for this post
-      // The server score already includes this vote
-      _scoreAdjustments.remove(postUri);
-    }
-
-    if (kDebugMode) {
-      debugPrint('📊 Initialized ${votes.length} vote states');
-    }
-
-    // Notify once after loading all votes
-    notifyListeners();
   }
 
   /// Clear all vote state (e.g., on sign out)
@@ -323,4 +282,14 @@ class VoteState {
 
   /// Whether the vote has been deleted
   final bool deleted;
+
+  /// Extract rkey (record key) from an AT-URI
+  ///
+  /// AT-URI format: at://did:plc:xyz/social.coves.feed.vote/3kby...
+  /// Returns the last segment (rkey) or null if URI is null/invalid.
+  static String? extractRkeyFromUri(String? uri) {
+    if (uri == null) return null;
+    final parts = uri.split('/');
+    return parts.isNotEmpty ? parts.last : null;
+  }
 }

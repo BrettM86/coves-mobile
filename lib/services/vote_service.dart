@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../config/environment_config.dart';
 import '../models/coves_session.dart';
+import '../providers/vote_provider.dart' show VoteState;
 import 'api_exceptions.dart';
 
 /// Vote Service
@@ -19,11 +20,10 @@ import 'api_exceptions.dart';
 /// 1. Unseals the token to get the actual access/refresh tokens
 /// 2. Uses stored DPoP keys to sign requests
 /// 3. Writes to the user's PDS on their behalf
+/// 4. Handles toggle logic (creating, deleting, or switching vote direction)
 ///
-/// TODO: Backend vote endpoints need to be implemented:
-/// - POST /xrpc/social.coves.feed.vote.create
-/// - POST /xrpc/social.coves.feed.vote.delete
-/// - GET /xrpc/social.coves.feed.vote.list (or included in feed response)
+/// **Backend Endpoints**:
+/// - POST /xrpc/social.coves.feed.vote.create - Creates, toggles, or switches votes
 class VoteService {
   VoteService({
     Future<CovesSession?> Function()? sessionGetter,
@@ -180,58 +180,20 @@ class VoteService {
   /// Collection name for vote records
   static const String voteCollection = 'social.coves.feed.vote';
 
-  /// Get all votes for the current user
-  ///
-  /// TODO: This needs a backend endpoint to list user's votes.
-  /// For now, returns empty map - votes will be fetched with feed data.
-  ///
-  /// Returns:
-  /// - `Map<String, VoteInfo>` where key is the post URI
-  /// - Empty map if not authenticated or no votes found
-  Future<Map<String, VoteInfo>> getUserVotes() async {
-    try {
-      final userDid = _didGetter?.call();
-      if (userDid == null || userDid.isEmpty) {
-        return {};
-      }
-
-      final session = await _sessionGetter?.call();
-      if (session == null) {
-        return {};
-      }
-
-      // TODO: Implement backend endpoint for listing user votes
-      // For now, vote state should come from feed responses
-      if (kDebugMode) {
-        debugPrint(
-          '⚠️ getUserVotes: Backend endpoint not yet implemented. '
-          'Vote state should come from feed responses.',
-        );
-      }
-
-      return {};
-    } on Exception catch (e) {
-      if (kDebugMode) {
-        debugPrint('⚠️ Failed to load user votes: $e');
-      }
-      return {};
-    }
-  }
-
   /// Create or toggle vote
   ///
-  /// Sends vote request to the Coves backend, which proxies to the user's PDS.
+  /// Sends vote request to the Coves backend, which handles toggle logic.
+  /// The backend will create a vote if none exists, or toggle it off if
+  /// voting the same direction again.
   ///
   /// Parameters:
   /// - [postUri]: AT-URI of the post
   /// - [postCid]: Content ID of the post (for strong reference)
   /// - [direction]: Vote direction - "up" for like/upvote, "down" for downvote
-  /// - [existingVoteRkey]: Optional rkey from cached state
-  /// - [existingVoteDirection]: Optional direction from cached state
   ///
   /// Returns:
-  /// - VoteResponse with uri/cid/rkey if created
-  /// - VoteResponse with deleted=true if toggled off
+  /// - VoteResponse with uri/cid/rkey if vote was created
+  /// - VoteResponse with deleted=true if vote was toggled off (empty uri/cid)
   ///
   /// Throws:
   /// - ApiException for API errors
@@ -239,8 +201,6 @@ class VoteService {
     required String postUri,
     required String postCid,
     String direction = 'up',
-    String? existingVoteRkey,
-    String? existingVoteDirection,
   }) async {
     try {
       final userDid = _didGetter?.call();
@@ -260,24 +220,7 @@ class VoteService {
         debugPrint('   Direction: $direction');
       }
 
-      // Determine if this is a toggle (delete) or create
-      final isToggleOff =
-          existingVoteRkey != null && existingVoteDirection == direction;
-
-      if (isToggleOff) {
-        // Delete existing vote
-        return _deleteVote(session: session, rkey: existingVoteRkey);
-      }
-
-      // If switching direction, delete old vote first
-      if (existingVoteRkey != null && existingVoteDirection != null) {
-        if (kDebugMode) {
-          debugPrint('   Switching vote direction - deleting old vote first');
-        }
-        await _deleteVote(session: session, rkey: existingVoteRkey);
-      }
-
-      // Create new vote via backend
+      // Send vote request to backend
       // Note: Authorization header is added by the interceptor
       final response = await _dio.post<Map<String, dynamic>>(
         '/xrpc/social.coves.feed.vote.create',
@@ -295,12 +238,16 @@ class VoteService {
       final uri = data['uri'] as String?;
       final cid = data['cid'] as String?;
 
-      if (uri == null || cid == null) {
-        throw ApiException('Invalid response from server - missing uri or cid');
+      // If uri/cid are empty, the backend toggled off an existing vote
+      if (uri == null || uri.isEmpty || cid == null || cid.isEmpty) {
+        if (kDebugMode) {
+          debugPrint('✅ Vote toggled off (deleted)');
+        }
+        return const VoteResponse(deleted: true);
       }
 
-      // Extract rkey from URI
-      final rkey = uri.split('/').last;
+      // Extract rkey from URI using shared utility
+      final rkey = VoteState.extractRkeyFromUri(uri);
 
       if (kDebugMode) {
         debugPrint('✅ Vote created: $uri');
@@ -330,36 +277,6 @@ class VoteService {
       throw ApiException('Failed to create vote: $e');
     }
   }
-
-  /// Delete vote via backend
-  Future<VoteResponse> _deleteVote({
-    required CovesSession session,
-    required String rkey,
-  }) async {
-    try {
-      // Note: Authorization header is added by the interceptor
-      await _dio.post<void>(
-        '/xrpc/social.coves.feed.vote.delete',
-        data: {'rkey': rkey},
-      );
-
-      if (kDebugMode) {
-        debugPrint('✅ Vote deleted');
-      }
-
-      return const VoteResponse(deleted: true);
-    } on DioException catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Delete vote failed: ${e.message}');
-      }
-
-      throw ApiException(
-        'Failed to delete vote: ${e.message}',
-        statusCode: e.response?.statusCode,
-        originalError: e,
-      );
-    }
-  }
 }
 
 /// Vote Response
@@ -379,37 +296,4 @@ class VoteResponse {
 
   /// Whether the vote was deleted (toggled off)
   final bool deleted;
-}
-
-/// Existing Vote
-///
-/// Represents a vote that already exists on the PDS.
-class ExistingVote {
-  const ExistingVote({required this.direction, required this.rkey});
-
-  /// Vote direction ("up" or "down")
-  final String direction;
-
-  /// Record key for deletion
-  final String rkey;
-}
-
-/// Vote Info
-///
-/// Information about a user's vote on a post, returned from getUserVotes().
-class VoteInfo {
-  const VoteInfo({
-    required this.direction,
-    required this.voteUri,
-    required this.rkey,
-  });
-
-  /// Vote direction ("up" or "down")
-  final String direction;
-
-  /// AT-URI of the vote record
-  final String voteUri;
-
-  /// Record key (rkey) - last segment of URI
-  final String rkey;
 }
