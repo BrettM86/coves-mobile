@@ -46,8 +46,6 @@ void main() {
             postUri: anyNamed('postUri'),
             postCid: anyNamed('postCid'),
             direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenAnswer(
           (_) async => const VoteResponse(
@@ -104,8 +102,6 @@ void main() {
             postUri: anyNamed('postUri'),
             postCid: anyNamed('postCid'),
             direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenAnswer((_) async => const VoteResponse(deleted: true));
 
@@ -136,8 +132,6 @@ void main() {
             postUri: anyNamed('postUri'),
             postCid: anyNamed('postCid'),
             direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenThrow(ApiException('Network error', statusCode: 500));
 
@@ -181,8 +175,6 @@ void main() {
             postUri: anyNamed('postUri'),
             postCid: anyNamed('postCid'),
             direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenThrow(NetworkException('Connection failed'));
 
@@ -208,8 +200,6 @@ void main() {
             postUri: anyNamed('postUri'),
             postCid: anyNamed('postCid'),
             direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenAnswer((_) async {
           await Future.delayed(const Duration(milliseconds: 100));
@@ -246,8 +236,6 @@ void main() {
             postUri: anyNamed('postUri'),
             postCid: anyNamed('postCid'),
             direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).called(1);
       });
@@ -258,8 +246,6 @@ void main() {
             postUri: anyNamed('postUri'),
             postCid: anyNamed('postCid'),
             direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenAnswer(
           (_) async => const VoteResponse(
@@ -303,6 +289,46 @@ void main() {
         expect(voteState?.deleted, false);
       });
 
+      test('should set initial vote state with "down" direction', () {
+        voteProvider.setInitialVoteState(
+          postUri: testPostUri,
+          voteDirection: 'down',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
+        );
+
+        // Should not be "liked" (isLiked checks for 'up' direction)
+        expect(voteProvider.isLiked(testPostUri), false);
+
+        final voteState = voteProvider.getVoteState(testPostUri);
+        expect(voteState?.direction, 'down');
+        expect(voteState?.uri, 'at://did:plc:test/social.coves.feed.vote/456');
+        expect(voteState?.deleted, false);
+      });
+
+      test('should extract rkey from voteUri', () {
+        voteProvider.setInitialVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/3kbyxyz123',
+        );
+
+        final voteState = voteProvider.getVoteState(testPostUri);
+        expect(voteState?.rkey, '3kbyxyz123');
+      });
+
+      test('should handle voteUri being null', () {
+        voteProvider.setInitialVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+        );
+
+        final voteState = voteProvider.getVoteState(testPostUri);
+        expect(voteState?.direction, 'up');
+        expect(voteState?.uri, null);
+        expect(voteState?.rkey, null);
+        expect(voteState?.deleted, false);
+      });
+
       test('should remove vote state when voteDirection is null', () {
         // First set a vote
         voteProvider.setInitialVoteState(
@@ -320,6 +346,72 @@ void main() {
         expect(voteProvider.getVoteState(testPostUri), null);
       });
 
+      test('should clear stale vote state when refreshing with null vote', () {
+        // Simulate initial state from previous session
+        voteProvider.setInitialVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
+        );
+
+        expect(voteProvider.isLiked(testPostUri), true);
+
+        // Simulate refresh where server returns viewer.vote = null
+        // (user removed vote on another device)
+        voteProvider.setInitialVoteState(
+          postUri: testPostUri,
+          voteDirection: null,
+        );
+
+        // Vote should be cleared
+        expect(voteProvider.isLiked(testPostUri), false);
+        expect(voteProvider.getVoteState(testPostUri), null);
+      });
+
+      test('should clear stale score adjustment on refresh', () async {
+        // Simulate optimistic upvote that created a +1 adjustment
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+          ),
+        ).thenAnswer(
+          (_) async => const VoteResponse(
+            uri: 'at://did:plc:test/social.coves.feed.vote/456',
+            cid: 'bafy123',
+            rkey: '456',
+            deleted: false,
+          ),
+        );
+
+        // Create vote - this sets _scoreAdjustments[testPostUri] = +1
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: 'bafy2bzacepostcid123',
+        );
+
+        // Verify adjustment exists
+        const serverScore = 10;
+        expect(voteProvider.getAdjustedScore(testPostUri, serverScore), 11);
+
+        // Now simulate a feed refresh - server returns fresh score (11)
+        // which already includes the vote. The adjustment should be cleared.
+        voteProvider.setInitialVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
+        );
+
+        // After refresh, adjustment should be cleared (server score is truth)
+        // If we pass the NEW server score (11), we should get 11, not 12
+        const freshServerScore = 11;
+        expect(
+          voteProvider.getAdjustedScore(testPostUri, freshServerScore),
+          11,
+        );
+      });
+
       test('should not notify listeners when setting initial state', () {
         var notificationCount = 0;
         voteProvider
@@ -334,6 +426,34 @@ void main() {
 
         // Should NOT notify listeners (silent initialization)
         expect(notificationCount, 0);
+      });
+    });
+
+    group('VoteState.extractRkeyFromUri', () {
+      test('should extract rkey from valid AT-URI', () {
+        expect(
+          VoteState.extractRkeyFromUri(
+            'at://did:plc:test/social.coves.feed.vote/3kbyxyz123',
+          ),
+          '3kbyxyz123',
+        );
+      });
+
+      test('should return null for null uri', () {
+        expect(VoteState.extractRkeyFromUri(null), null);
+      });
+
+      test('should handle URI with no path segments', () {
+        expect(VoteState.extractRkeyFromUri(''), '');
+      });
+
+      test('should handle complex rkey values', () {
+        expect(
+          VoteState.extractRkeyFromUri(
+            'at://did:plc:abc123xyz/social.coves.feed.vote/3lbp7kw2abc',
+          ),
+          '3lbp7kw2abc',
+        );
       });
     });
 
@@ -391,8 +511,6 @@ void main() {
             postUri: anyNamed('postUri'),
             postCid: anyNamed('postCid'),
             direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenAnswer((_) async {
           await Future.delayed(const Duration(milliseconds: 50));
@@ -441,8 +559,6 @@ void main() {
             postUri: anyNamed('postUri'),
             postCid: anyNamed('postCid'),
             direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenAnswer(
           (_) async => const VoteResponse(
@@ -482,8 +598,6 @@ void main() {
             postUri: anyNamed('postUri'),
             postCid: anyNamed('postCid'),
             direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenAnswer((_) async => const VoteResponse(deleted: true));
 
@@ -508,8 +622,6 @@ void main() {
             postUri: anyNamed('postUri'),
             postCid: anyNamed('postCid'),
             direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenAnswer(
           (_) async => const VoteResponse(
@@ -548,8 +660,6 @@ void main() {
               postUri: anyNamed('postUri'),
               postCid: anyNamed('postCid'),
               direction: anyNamed('direction'),
-              existingVoteRkey: anyNamed('existingVoteRkey'),
-              existingVoteDirection: anyNamed('existingVoteDirection'),
             ),
           ).thenAnswer(
             (_) async => const VoteResponse(
@@ -589,8 +699,6 @@ void main() {
               postUri: anyNamed('postUri'),
               postCid: anyNamed('postCid'),
               direction: anyNamed('direction'),
-              existingVoteRkey: anyNamed('existingVoteRkey'),
-              existingVoteDirection: anyNamed('existingVoteDirection'),
             ),
           ).thenAnswer(
             (_) async => const VoteResponse(
@@ -622,8 +730,6 @@ void main() {
             postUri: anyNamed('postUri'),
             postCid: anyNamed('postCid'),
             direction: anyNamed('direction'),
-            existingVoteRkey: anyNamed('existingVoteRkey'),
-            existingVoteDirection: anyNamed('existingVoteDirection'),
           ),
         ).thenThrow(ApiException('Network error', statusCode: 500));
 

@@ -8,6 +8,7 @@ import 'dart:async' as _i4;
 import 'package:coves_flutter/models/coves_session.dart' as _i2;
 import 'package:coves_flutter/services/coves_auth_service.dart' as _i3;
 import 'package:mockito/mockito.dart' as _i1;
+import 'package:mockito/src/dummies.dart' as _i5;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -90,4 +91,15 @@ class MockCovesAuthService extends _i1.Mock implements _i3.CovesAuthService {
             returnValueForMissingStub: _i4.Future<void>.value(),
           )
           as _i4.Future<void>);
+
+  @override
+  String validateAndNormalizeHandle(String? handle) =>
+      (super.noSuchMethod(
+            Invocation.method(#validateAndNormalizeHandle, [handle]),
+            returnValue: _i5.dummyValue<String>(
+              this,
+              Invocation.method(#validateAndNormalizeHandle, [handle]),
+            ),
+          )
+          as String);
 }

@@ -1,6 +1,5 @@
 import 'package:coves_flutter/models/coves_session.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
-import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter/foundation.dart';
 
 /// Mock AuthProvider for testing
@@ -104,21 +103,31 @@ class MockVoteProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void loadInitialVotes(Map<String, VoteInfo> votes) {
-    for (final entry in votes.entries) {
-      final postUri = entry.key;
-      final voteInfo = entry.value;
+  void setInitialVoteState({
+    required String postUri,
+    String? voteDirection,
+    String? voteUri,
+  }) {
+    if (voteDirection != null) {
+      String? rkey;
+      if (voteUri != null) {
+        final parts = voteUri.split('/');
+        if (parts.isNotEmpty) {
+          rkey = parts.last;
+        }
+      }
 
       _votes[postUri] = VoteState(
-        direction: voteInfo.direction,
-        uri: voteInfo.voteUri,
-        rkey: voteInfo.rkey,
+        direction: voteDirection,
+        uri: voteUri,
+        rkey: rkey,
         deleted: false,
       );
 
       _scoreAdjustments.remove(postUri);
+    } else {
+      _votes.remove(postUri);
     }
-    notifyListeners();
   }
 
   void clear() {

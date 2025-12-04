@@ -30,29 +30,6 @@ void main() {
       });
     });
 
-    group('ExistingVote', () {
-      test('should store direction and rkey', () {
-        const vote = ExistingVote(direction: 'up', rkey: 'abc123');
-
-        expect(vote.direction, 'up');
-        expect(vote.rkey, 'abc123');
-      });
-    });
-
-    group('VoteInfo', () {
-      test('should store vote info', () {
-        const info = VoteInfo(
-          direction: 'up',
-          voteUri: 'at://did:plc:test/social.coves.feed.vote/123',
-          rkey: '123',
-        );
-
-        expect(info.direction, 'up');
-        expect(info.voteUri, 'at://did:plc:test/social.coves.feed.vote/123');
-        expect(info.rkey, '123');
-      });
-    });
-
     group('API Exception handling', () {
       test('should throw ApiException on Dio network error', () {
         final dioError = DioException(

@@ -9,6 +9,7 @@ import 'dart:ui' as _i6;
 import 'package:coves_flutter/models/comment.dart' as _i3;
 import 'package:coves_flutter/models/post.dart' as _i2;
 import 'package:coves_flutter/providers/auth_provider.dart' as _i4;
+import 'package:coves_flutter/providers/vote_provider.dart' as _i8;
 import 'package:coves_flutter/services/coves_api_service.dart' as _i7;
 import 'package:mockito/mockito.dart' as _i1;
 
@@ -240,6 +241,109 @@ class MockCovesApiService extends _i1.Mock implements _i7.CovesApiService {
   @override
   void dispose() => super.noSuchMethod(
     Invocation.method(#dispose, []),
+    returnValueForMissingStub: null,
+  );
+}
+
+/// A class which mocks [VoteProvider].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockVoteProvider extends _i1.Mock implements _i8.VoteProvider {
+  MockVoteProvider() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  bool get hasListeners =>
+      (super.noSuchMethod(Invocation.getter(#hasListeners), returnValue: false)
+          as bool);
+
+  @override
+  void dispose() => super.noSuchMethod(
+    Invocation.method(#dispose, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  _i8.VoteState? getVoteState(String? postUri) =>
+      (super.noSuchMethod(Invocation.method(#getVoteState, [postUri]))
+          as _i8.VoteState?);
+
+  @override
+  bool isLiked(String? postUri) =>
+      (super.noSuchMethod(
+            Invocation.method(#isLiked, [postUri]),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  bool isPending(String? postUri) =>
+      (super.noSuchMethod(
+            Invocation.method(#isPending, [postUri]),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  int getAdjustedScore(String? postUri, int? serverScore) =>
+      (super.noSuchMethod(
+            Invocation.method(#getAdjustedScore, [postUri, serverScore]),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  _i5.Future<bool> toggleVote({
+    required String? postUri,
+    required String? postCid,
+    String? direction = 'up',
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#toggleVote, [], {
+              #postUri: postUri,
+              #postCid: postCid,
+              #direction: direction,
+            }),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+
+  @override
+  void setInitialVoteState({
+    required String? postUri,
+    String? voteDirection,
+    String? voteUri,
+  }) => super.noSuchMethod(
+    Invocation.method(#setInitialVoteState, [], {
+      #postUri: postUri,
+      #voteDirection: voteDirection,
+      #voteUri: voteUri,
+    }),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void clear() => super.noSuchMethod(
+    Invocation.method(#clear, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void addListener(_i6.VoidCallback? listener) => super.noSuchMethod(
+    Invocation.method(#addListener, [listener]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void removeListener(_i6.VoidCallback? listener) => super.noSuchMethod(
+    Invocation.method(#removeListener, [listener]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void notifyListeners() => super.noSuchMethod(
+    Invocation.method(#notifyListeners, []),
     returnValueForMissingStub: null,
   );
 }

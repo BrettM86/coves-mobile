@@ -4,7 +4,6 @@ import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/comments_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
-import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
@@ -12,7 +11,7 @@ import 'package:mockito/mockito.dart';
 import 'comments_provider_test.mocks.dart';
 
 // Generate mocks for dependencies
-@GenerateMocks([AuthProvider, CovesApiService, VoteProvider, VoteService])
+@GenerateMocks([AuthProvider, CovesApiService, VoteProvider])
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -21,13 +20,11 @@ void main() {
     late MockAuthProvider mockAuthProvider;
     late MockCovesApiService mockApiService;
     late MockVoteProvider mockVoteProvider;
-    late MockVoteService mockVoteService;
 
     setUp(() {
       mockAuthProvider = MockAuthProvider();
       mockApiService = MockCovesApiService();
       mockVoteProvider = MockVoteProvider();
-      mockVoteService = MockVoteService();
 
       // Default: user is authenticated
       when(mockAuthProvider.isAuthenticated).thenReturn(true);
@@ -39,7 +36,6 @@ void main() {
         mockAuthProvider,
         apiService: mockApiService,
         voteProvider: mockVoteProvider,
-        voteService: mockVoteService,
       );
     });
 
@@ -73,10 +69,6 @@ void main() {
           ),
         ).thenAnswer((_) async => mockResponse);
 
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
-
         await commentsProvider.loadComments(
           postUri: testPostUri,
           refresh: true,
@@ -101,10 +93,6 @@ void main() {
             cursor: anyNamed('cursor'),
           ),
         ).thenAnswer((_) async => mockResponse);
-
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -179,10 +167,6 @@ void main() {
           ),
         ).thenAnswer((_) async => firstResponse);
 
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
-
         await commentsProvider.loadComments(
           postUri: testPostUri,
           refresh: true,
@@ -233,10 +217,6 @@ void main() {
             cursor: anyNamed('cursor'),
           ),
         ).thenAnswer((_) async => firstResponse);
-
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -292,10 +272,6 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
-
         await commentsProvider.loadComments(
           postUri: testPostUri,
           refresh: true,
@@ -322,10 +298,6 @@ void main() {
             cursor: anyNamed('cursor'),
           ),
         ).thenAnswer((_) async => firstResponse);
-
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -384,10 +356,6 @@ void main() {
           return response;
         });
 
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
-
         // Start first load
         final firstFuture = commentsProvider.loadComments(
           postUri: testPostUri,
@@ -417,45 +385,38 @@ void main() {
         ).called(2);
       });
 
-      test('should load vote state when authenticated', () async {
-        final mockComments = [_createMockThreadComment('comment1')];
+      test(
+        'should initialize vote state from viewer data when authenticated',
+        () async {
+          final mockComments = [_createMockThreadComment('comment1')];
 
-        final mockResponse = CommentsResponse(post: {}, comments: mockComments);
+          final mockResponse = CommentsResponse(
+            post: {},
+            comments: mockComments,
+          );
 
-        when(
-          mockApiService.getComments(
-            postUri: anyNamed('postUri'),
-            sort: anyNamed('sort'),
-            timeframe: anyNamed('timeframe'),
-            depth: anyNamed('depth'),
-            limit: anyNamed('limit'),
-            cursor: anyNamed('cursor'),
-          ),
-        ).thenAnswer((_) async => mockResponse);
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: anyNamed('cursor'),
+            ),
+          ).thenAnswer((_) async => mockResponse);
 
-        final mockUserVotes = <String, VoteInfo>{
-          'comment1': const VoteInfo(
-            voteUri: 'at://did:plc:test/social.coves.feed.vote/123',
-            direction: 'up',
-            rkey: '123',
-          ),
-        };
+          await commentsProvider.loadComments(
+            postUri: testPostUri,
+            refresh: true,
+          );
 
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => mockUserVotes);
-        when(mockVoteProvider.loadInitialVotes(any)).thenReturn(null);
+          expect(commentsProvider.comments.length, 1);
+          expect(commentsProvider.error, null);
+        },
+      );
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          refresh: true,
-        );
-
-        verify(mockVoteService.getUserVotes()).called(1);
-        verify(mockVoteProvider.loadInitialVotes(mockUserVotes)).called(1);
-      });
-
-      test('should not load vote state when not authenticated', () async {
+      test('should not initialize vote state when not authenticated', () async {
         when(mockAuthProvider.isAuthenticated).thenReturn(false);
 
         final mockResponse = CommentsResponse(
@@ -479,36 +440,6 @@ void main() {
           refresh: true,
         );
 
-        verifyNever(mockVoteService.getUserVotes());
-        verifyNever(mockVoteProvider.loadInitialVotes(any));
-      });
-
-      test('should continue loading comments if vote loading fails', () async {
-        final mockComments = [_createMockThreadComment('comment1')];
-
-        final mockResponse = CommentsResponse(post: {}, comments: mockComments);
-
-        when(
-          mockApiService.getComments(
-            postUri: anyNamed('postUri'),
-            sort: anyNamed('sort'),
-            timeframe: anyNamed('timeframe'),
-            depth: anyNamed('depth'),
-            limit: anyNamed('limit'),
-            cursor: anyNamed('cursor'),
-          ),
-        ).thenAnswer((_) async => mockResponse);
-
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenThrow(Exception('Vote service error'));
-
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          refresh: true,
-        );
-
-        // Comments should still be loaded despite vote error
         expect(commentsProvider.comments.length, 1);
         expect(commentsProvider.error, null);
       });
@@ -533,10 +464,6 @@ void main() {
             cursor: anyNamed('cursor'),
           ),
         ).thenAnswer((_) async => initialResponse);
-
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -595,10 +522,6 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
-
         await commentsProvider.loadComments(
           postUri: testPostUri,
           refresh: true,
@@ -640,10 +563,6 @@ void main() {
             cursor: anyNamed('cursor'),
           ),
         ).thenAnswer((_) async => initialResponse);
-
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -714,10 +633,6 @@ void main() {
           ),
         ).thenAnswer((_) async => initialResponse);
 
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
-
         await commentsProvider.loadComments(
           postUri: testPostUri,
           refresh: true,
@@ -764,10 +679,6 @@ void main() {
             cursor: anyNamed('cursor'),
           ),
         ).thenAnswer((_) async => response);
-
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -848,10 +759,6 @@ void main() {
           ),
         ).thenAnswer((_) async => successResponse);
 
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
-
         await commentsProvider.retry();
 
         expect(commentsProvider.error, null);
@@ -878,10 +785,6 @@ void main() {
             cursor: anyNamed('cursor'),
           ),
         ).thenAnswer((_) async => response);
-
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
@@ -917,10 +820,6 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
-
         expect(commentsProvider.currentTimeNotifier.value, null);
 
         await commentsProvider.loadComments(
@@ -947,10 +846,6 @@ void main() {
             cursor: anyNamed('cursor'),
           ),
         ).thenAnswer((_) async => response);
-
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
 
         await commentsProvider.loadComments(
           postUri: 'at://did:plc:test/social.coves.post.record/123',
@@ -990,10 +885,6 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
-
         await commentsProvider.loadComments(
           postUri: 'at://did:plc:test/social.coves.post.record/123',
           refresh: true,
@@ -1022,10 +913,6 @@ void main() {
           return response;
         });
 
-        when(
-          mockVoteService.getUserVotes(),
-        ).thenAnswer((_) async => <String, VoteInfo>{});
-
         final loadFuture = commentsProvider.loadComments(
           postUri: 'at://did:plc:test/social.coves.post.record/123',
           refresh: true,
@@ -1039,6 +926,329 @@ void main() {
         // Should not be loading anymore
         expect(commentsProvider.isLoading, false);
       });
+    });
+
+    group('Vote state initialization from viewer data', () {
+      const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
+
+      test('should initialize vote state when viewer.vote is "up"', () async {
+        final response = CommentsResponse(
+          post: {},
+          comments: [
+            _createMockThreadCommentWithViewer(
+              uri: 'comment1',
+              vote: 'up',
+              voteUri: 'at://did:plc:test/social.coves.feed.vote/vote1',
+            ),
+          ],
+        );
+
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+          ),
+        ).thenAnswer((_) async => response);
+
+        await commentsProvider.loadComments(
+          postUri: testPostUri,
+          refresh: true,
+        );
+
+        verify(
+          mockVoteProvider.setInitialVoteState(
+            postUri: 'comment1',
+            voteDirection: 'up',
+            voteUri: 'at://did:plc:test/social.coves.feed.vote/vote1',
+          ),
+        ).called(1);
+      });
+
+      test('should initialize vote state when viewer.vote is "down"', () async {
+        final response = CommentsResponse(
+          post: {},
+          comments: [
+            _createMockThreadCommentWithViewer(
+              uri: 'comment1',
+              vote: 'down',
+              voteUri: 'at://did:plc:test/social.coves.feed.vote/vote1',
+            ),
+          ],
+        );
+
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+          ),
+        ).thenAnswer((_) async => response);
+
+        await commentsProvider.loadComments(
+          postUri: testPostUri,
+          refresh: true,
+        );
+
+        verify(
+          mockVoteProvider.setInitialVoteState(
+            postUri: 'comment1',
+            voteDirection: 'down',
+            voteUri: 'at://did:plc:test/social.coves.feed.vote/vote1',
+          ),
+        ).called(1);
+      });
+
+      test(
+        'should clear stale vote state when viewer.vote is null on refresh',
+        () async {
+          final response = CommentsResponse(
+            post: {},
+            comments: [
+              _createMockThreadCommentWithViewer(
+                uri: 'comment1',
+                vote: null,
+                voteUri: null,
+              ),
+            ],
+          );
+
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: anyNamed('cursor'),
+            ),
+          ).thenAnswer((_) async => response);
+
+          await commentsProvider.loadComments(
+            postUri: testPostUri,
+            refresh: true,
+          );
+
+          // Should call setInitialVoteState with null to clear stale state
+          verify(
+            mockVoteProvider.setInitialVoteState(
+              postUri: 'comment1',
+              voteDirection: null,
+              voteUri: null,
+            ),
+          ).called(1);
+        },
+      );
+
+      test(
+        'should initialize vote state recursively for nested replies',
+        () async {
+          final response = CommentsResponse(
+            post: {},
+            comments: [
+              _createMockThreadCommentWithViewer(
+                uri: 'parent-comment',
+                vote: 'up',
+                voteUri: 'at://did:plc:test/social.coves.feed.vote/vote-parent',
+                replies: [
+                  _createMockThreadCommentWithViewer(
+                    uri: 'reply-comment',
+                    vote: 'down',
+                    voteUri:
+                        'at://did:plc:test/social.coves.feed.vote/vote-reply',
+                  ),
+                ],
+              ),
+            ],
+          );
+
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: anyNamed('cursor'),
+            ),
+          ).thenAnswer((_) async => response);
+
+          await commentsProvider.loadComments(
+            postUri: testPostUri,
+            refresh: true,
+          );
+
+          // Should initialize vote state for both parent and reply
+          verify(
+            mockVoteProvider.setInitialVoteState(
+              postUri: 'parent-comment',
+              voteDirection: 'up',
+              voteUri: 'at://did:plc:test/social.coves.feed.vote/vote-parent',
+            ),
+          ).called(1);
+
+          verify(
+            mockVoteProvider.setInitialVoteState(
+              postUri: 'reply-comment',
+              voteDirection: 'down',
+              voteUri: 'at://did:plc:test/social.coves.feed.vote/vote-reply',
+            ),
+          ).called(1);
+        },
+      );
+
+      test('should initialize vote state for deeply nested replies', () async {
+        final response = CommentsResponse(
+          post: {},
+          comments: [
+            _createMockThreadCommentWithViewer(
+              uri: 'level-0',
+              vote: 'up',
+              voteUri: 'at://did:plc:test/social.coves.feed.vote/vote-0',
+              replies: [
+                _createMockThreadCommentWithViewer(
+                  uri: 'level-1',
+                  vote: 'up',
+                  voteUri: 'at://did:plc:test/social.coves.feed.vote/vote-1',
+                  replies: [
+                    _createMockThreadCommentWithViewer(
+                      uri: 'level-2',
+                      vote: 'down',
+                      voteUri:
+                          'at://did:plc:test/social.coves.feed.vote/vote-2',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        );
+
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+          ),
+        ).thenAnswer((_) async => response);
+
+        await commentsProvider.loadComments(
+          postUri: testPostUri,
+          refresh: true,
+        );
+
+        // Should initialize vote state for all 3 levels
+        verify(
+          mockVoteProvider.setInitialVoteState(
+            postUri: anyNamed('postUri'),
+            voteDirection: anyNamed('voteDirection'),
+            voteUri: anyNamed('voteUri'),
+          ),
+        ).called(3);
+      });
+
+      test(
+        'should only initialize vote state for new comments on pagination',
+        () async {
+          // First page: comment1 with upvote
+          final page1Response = CommentsResponse(
+            post: {},
+            comments: [
+              _createMockThreadCommentWithViewer(
+                uri: 'comment1',
+                vote: 'up',
+                voteUri: 'at://did:plc:test/social.coves.feed.vote/vote1',
+              ),
+            ],
+            cursor: 'cursor1',
+          );
+
+          // Second page: comment2 with downvote
+          final page2Response = CommentsResponse(
+            post: {},
+            comments: [
+              _createMockThreadCommentWithViewer(
+                uri: 'comment2',
+                vote: 'down',
+                voteUri: 'at://did:plc:test/social.coves.feed.vote/vote2',
+              ),
+            ],
+          );
+
+          // First call returns page 1
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: null,
+            ),
+          ).thenAnswer((_) async => page1Response);
+
+          // Second call (with cursor) returns page 2
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: 'cursor1',
+            ),
+          ).thenAnswer((_) async => page2Response);
+
+          // Load first page (refresh)
+          await commentsProvider.loadComments(
+            postUri: testPostUri,
+            refresh: true,
+          );
+
+          // Verify comment1 vote initialized
+          verify(
+            mockVoteProvider.setInitialVoteState(
+              postUri: 'comment1',
+              voteDirection: 'up',
+              voteUri: 'at://did:plc:test/social.coves.feed.vote/vote1',
+            ),
+          ).called(1);
+
+          // Clear previous verifications
+          clearInteractions(mockVoteProvider);
+
+          // Load second page (pagination, not refresh)
+          await commentsProvider.loadMoreComments();
+
+          // Should ONLY initialize vote state for comment2 (new comments)
+          // NOT re-initialize comment1 (which would wipe optimistic votes)
+          verify(
+            mockVoteProvider.setInitialVoteState(
+              postUri: 'comment2',
+              voteDirection: 'down',
+              voteUri: 'at://did:plc:test/social.coves.feed.vote/vote2',
+            ),
+          ).called(1);
+
+          // Verify comment1 was NOT re-initialized during pagination
+          verifyNever(
+            mockVoteProvider.setInitialVoteState(
+              postUri: 'comment1',
+              voteDirection: anyNamed('voteDirection'),
+              voteUri: anyNamed('voteUri'),
+            ),
+          );
+        },
+      );
     });
   });
 }
@@ -1063,5 +1273,35 @@ ThreadViewComment _createMockThreadComment(String uri) {
       ),
       stats: CommentStats(score: 10, upvotes: 12, downvotes: 2),
     ),
+  );
+}
+
+// Helper function to create mock comments with viewer state and optional replies
+ThreadViewComment _createMockThreadCommentWithViewer({
+  required String uri,
+  String? vote,
+  String? voteUri,
+  List<ThreadViewComment>? replies,
+}) {
+  return ThreadViewComment(
+    comment: CommentView(
+      uri: uri,
+      cid: 'cid-$uri',
+      content: 'Test comment content',
+      createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
+      indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
+      author: AuthorView(
+        did: 'did:plc:author',
+        handle: 'test.user',
+        displayName: 'Test User',
+      ),
+      post: CommentRef(
+        uri: 'at://did:plc:test/social.coves.post.record/123',
+        cid: 'post-cid',
+      ),
+      stats: CommentStats(score: 10, upvotes: 12, downvotes: 2),
+      viewer: CommentViewerState(vote: vote, voteUri: voteUri),
+    ),
+    replies: replies,
   );
 }

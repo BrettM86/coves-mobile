@@ -250,40 +250,7 @@ void main() {
       expect(signOutCallCount, 0);
     });
 
-    test('should handle 401 on vote delete and retry', () async {
-      const rkey = 'abc123';
-
-      // Mock will always return 401
-      dioAdapter.onPost(
-        '/xrpc/social.coves.feed.vote.delete',
-        (server) => server.reply(401, {
-          'error': 'Unauthorized',
-          'message': 'Token expired',
-        }),
-        data: {'rkey': rkey},
-      );
-
-      // Create vote with existing vote (will trigger delete)
-      expect(
-        () => voteService.createVote(
-          postUri: 'at://did:plc:test/social.coves.post.record/123',
-          postCid: 'bafy123',
-          direction: 'up',
-          existingVoteRkey: rkey,
-          existingVoteDirection: 'up',
-        ),
-        throwsA(isA<Exception>()),
-      );
-
-      // Wait for async operations
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      // Verify token refresh was called
-      expect(tokenRefreshCallCount, 1);
-
-      // Verify user was signed out after retry failed
-      expect(signOutCallCount, 1);
-    });
+    // Note: delete method was removed - backend handles toggle via create endpoint
 
     test('should throw ApiException when session is null', () async {
       // Create service that returns null session
@@ -347,20 +314,25 @@ void main() {
         sessionId: 'session123',
       );
 
-      // Second request should use the new token
+      // Second request uses a different post
+      const postUri2 = 'at://did:plc:test/social.coves.post.record/456';
       dioAdapter.onPost(
-        '/xrpc/social.coves.feed.vote.delete',
-        (server) => server.reply(200, {}),
-        data: {'rkey': 'xyz'},
+        '/xrpc/social.coves.feed.vote.create',
+        (server) => server.reply(200, {
+          'uri': 'at://did:plc:test/social.coves.feed.vote/abc',
+          'cid': 'bafy789',
+        }),
+        data: {
+          'subject': {'uri': postUri2, 'cid': postCid},
+          'direction': 'up',
+        },
       );
 
-      // Make second request (delete vote)
+      // Make second request
       await voteService.createVote(
-        postUri: postUri,
+        postUri: postUri2,
         postCid: postCid,
         direction: 'up',
-        existingVoteRkey: 'xyz',
-        existingVoteDirection: 'up',
       );
 
       // Verify no refresh was needed (tokens were valid)
