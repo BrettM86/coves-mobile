@@ -20,6 +20,7 @@ import 'sign_in_dialog.dart';
 /// - Comment content (supports facets for links/mentions)
 /// - Heart vote button with optimistic updates via VoteProvider
 /// - Visual threading indicator based on nesting depth
+/// - Tap-to-reply functionality via [onTap] callback
 ///
 /// The [currentTime] parameter allows passing the current time for
 /// time-ago calculations, enabling periodic updates and testing.
@@ -28,12 +29,16 @@ class CommentCard extends StatelessWidget {
     required this.comment,
     this.depth = 0,
     this.currentTime,
+    this.onTap,
     super.key,
   });
 
   final CommentView comment;
   final int depth;
   final DateTime? currentTime;
+
+  /// Callback when the comment is tapped (for reply functionality)
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -45,80 +50,83 @@ class CommentCard extends StatelessWidget {
     // the stroke width)
     final borderLeftOffset = (threadingLineCount * 6.0) + 2.0;
 
-    return Container(
-      decoration: const BoxDecoration(color: AppColors.background),
-      child: Stack(
-        children: [
-          // Threading indicators - vertical lines showing nesting ancestry
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _CommentDepthPainter(depth: threadingLineCount),
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        decoration: const BoxDecoration(color: AppColors.background),
+        child: Stack(
+          children: [
+            // Threading indicators - vertical lines showing nesting ancestry
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _CommentDepthPainter(depth: threadingLineCount),
+              ),
             ),
-          ),
-          // Bottom border (starts after threading lines, not overlapping them)
-          Positioned(
-            left: borderLeftOffset,
-            right: 0,
-            bottom: 0,
-            child: Container(height: 1, color: AppColors.border),
-          ),
-          // Comment content with depth-based left padding
-          Padding(
-            padding: EdgeInsets.fromLTRB(leftPadding, 12, 16, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Author info row
-                Row(
-                  children: [
-                    // Author avatar
-                    _buildAuthorAvatar(comment.author),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Author handle
-                          Text(
-                            '@${comment.author.handle}',
-                            style: TextStyle(
-                              color: AppColors.textPrimary.withValues(
-                                alpha: 0.5,
+            // Bottom border (starts after threading lines, not overlapping them)
+            Positioned(
+              left: borderLeftOffset,
+              right: 0,
+              bottom: 0,
+              child: Container(height: 1, color: AppColors.border),
+            ),
+            // Comment content with depth-based left padding
+            Padding(
+              padding: EdgeInsets.fromLTRB(leftPadding, 12, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Author info row
+                  Row(
+                    children: [
+                      // Author avatar
+                      _buildAuthorAvatar(comment.author),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Author handle
+                            Text(
+                              '@${comment.author.handle}',
+                              style: TextStyle(
+                                color: AppColors.textPrimary.withValues(
+                                  alpha: 0.5,
+                                ),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
                               ),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    // Time ago
-                    Text(
-                      DateTimeUtils.formatTimeAgo(
-                        comment.createdAt,
-                        currentTime: currentTime,
+                      // Time ago
+                      Text(
+                        DateTimeUtils.formatTimeAgo(
+                          comment.createdAt,
+                          currentTime: currentTime,
+                        ),
+                        style: TextStyle(
+                          color: AppColors.textPrimary.withValues(alpha: 0.5),
+                          fontSize: 12,
+                        ),
                       ),
-                      style: TextStyle(
-                        color: AppColors.textPrimary.withValues(alpha: 0.5),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // Comment content
-                if (comment.content.isNotEmpty) ...[
-                  _buildCommentContent(comment),
+                    ],
+                  ),
                   const SizedBox(height: 8),
-                ],
 
-                // Action buttons (just vote for now)
-                _buildActionButtons(context),
-              ],
+                  // Comment content
+                  if (comment.content.isNotEmpty) ...[
+                    _buildCommentContent(comment),
+                    const SizedBox(height: 8),
+                  ],
+
+                  // Action buttons (just vote for now)
+                  _buildActionButtons(context),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

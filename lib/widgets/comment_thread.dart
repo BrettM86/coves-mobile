@@ -13,6 +13,7 @@ import 'comment_card.dart';
 /// - Indents nested replies visually
 /// - Limits nesting depth to prevent excessive indentation
 /// - Shows "Load more replies" button when hasMore is true
+/// - Supports tap-to-reply via [onCommentTap] callback
 ///
 /// The [maxDepth] parameter controls how deeply nested comments can be
 /// before they're rendered at the same level to prevent UI overflow.
@@ -23,6 +24,7 @@ class CommentThread extends StatelessWidget {
     this.maxDepth = 5,
     this.currentTime,
     this.onLoadMoreReplies,
+    this.onCommentTap,
     super.key,
   });
 
@@ -32,6 +34,9 @@ class CommentThread extends StatelessWidget {
   final DateTime? currentTime;
   final VoidCallback? onLoadMoreReplies;
 
+  /// Callback when a comment is tapped (for reply functionality)
+  final void Function(ThreadViewComment)? onCommentTap;
+
   @override
   Widget build(BuildContext context) {
     // Calculate effective depth (flatten after maxDepth)
@@ -40,11 +45,12 @@ class CommentThread extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Render the comment
+        // Render the comment with tap handler
         CommentCard(
           comment: thread.comment,
           depth: effectiveDepth,
           currentTime: currentTime,
+          onTap: onCommentTap != null ? () => onCommentTap!(thread) : null,
         ),
 
         // Render replies recursively
@@ -56,6 +62,7 @@ class CommentThread extends StatelessWidget {
               maxDepth: maxDepth,
               currentTime: currentTime,
               onLoadMoreReplies: onLoadMoreReplies,
+              onCommentTap: onCommentTap,
             ),
           ),
 
