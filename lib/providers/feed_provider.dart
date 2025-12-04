@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/post.dart';
 import '../services/coves_api_service.dart';
-import '../services/vote_service.dart';
 import 'auth_provider.dart';
 import 'vote_provider.dart';
 
@@ -20,9 +19,7 @@ class FeedProvider with ChangeNotifier {
     this._authProvider, {
     CovesApiService? apiService,
     VoteProvider? voteProvider,
-    VoteService? voteService,
-  }) : _voteProvider = voteProvider,
-       _voteService = voteService {
+  }) : _voteProvider = voteProvider {
     // Use injected service (for testing) or create new one (for production)
     // Pass token getter, refresh handler, and sign out handler to API service
     // for automatic fresh token retrieval and automatic token refresh on 401
@@ -68,7 +65,6 @@ class FeedProvider with ChangeNotifier {
   final AuthProvider _authProvider;
   late final CovesApiService _apiService;
   final VoteProvider? _voteProvider;
-  final VoteService? _voteService;
 
   // Track previous auth state to detect transitions
   bool _wasAuthenticated = false;
@@ -196,19 +192,18 @@ class FeedProvider with ChangeNotifier {
         debugPrint('✅ $feedName loaded: ${_posts.length} posts total');
       }
 
-      // Load initial vote state from PDS (only if authenticated)
-      if (_authProvider.isAuthenticated &&
-          _voteProvider != null &&
-          _voteService != null) {
-        try {
-          final userVotes = await _voteService.getUserVotes();
-          _voteProvider.loadInitialVotes(userVotes);
-        } on Exception catch (e) {
-          if (kDebugMode) {
-            debugPrint('⚠️  Failed to load vote state: $e');
-          }
-          // Don't fail the feed load if vote loading fails
-          // Keep silent per PR review discussion
+      // Initialize vote state from viewer data in feed response
+      // IMPORTANT: Call setInitialVoteState for ALL feed items, even when
+      // viewer.vote is null. This ensures that if a user removed their vote
+      // on another device, the local state is cleared on refresh.
+      if (_authProvider.isAuthenticated && _voteProvider != null) {
+        for (final feedItem in response.feed) {
+          final viewer = feedItem.post.viewer;
+          _voteProvider.setInitialVoteState(
+            postUri: feedItem.post.uri,
+            voteDirection: viewer?.vote,
+            voteUri: viewer?.voteUri,
+          );
         }
       }
     } on Exception catch (e) {
