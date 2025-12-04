@@ -97,3 +97,9 @@ class FederationException extends ApiException {
   FederationException(super.message, {super.originalError})
     : super(statusCode: null);
 }
+
+/// Validation error
+/// Client-side validation failure (empty content, exceeds limits, etc.)
+class ValidationException extends ApiException {
+  ValidationException(super.message) : super(statusCode: null);
+}
