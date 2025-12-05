@@ -74,6 +74,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   void _loadComments() {
     context.read<CommentsProvider>().loadComments(
       postUri: widget.post.post.uri,
+      postCid: widget.post.post.cid,
       refresh: true,
     );
   }
@@ -368,14 +369,95 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
-  /// Handle comment submission
+  /// Handle comment submission (reply to post)
   Future<void> _handleCommentSubmit(String content) async {
-    // TODO: Implement comment creation via atProto
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Comment submitted: $content'),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
+    final commentsProvider = context.read<CommentsProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      await commentsProvider.createComment(content: content);
+
+      if (mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Comment posted'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } on Exception catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to post comment: $e'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+      rethrow; // Let ReplyScreen know submission failed
+    }
+  }
+
+  /// Handle reply to a comment (nested reply)
+  Future<void> _handleCommentReply(
+    String content,
+    ThreadViewComment parentComment,
+  ) async {
+    final commentsProvider = context.read<CommentsProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      await commentsProvider.createComment(
+        content: content,
+        parentComment: parentComment,
+      );
+
+      if (mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Reply posted'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } on Exception catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to post reply: $e'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+      rethrow; // Let ReplyScreen know submission failed
+    }
+  }
+
+  /// Open reply screen for replying to a comment
+  void _openReplyToComment(ThreadViewComment comment) {
+    // Check authentication
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sign in to reply'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // Navigate to reply screen with comment context
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ReplyScreen(
+          comment: comment,
+          onSubmit: (content) => _handleCommentReply(content, comment),
+        ),
       ),
     );
   }
@@ -491,6 +573,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         comment: comment,
                         currentTimeNotifier:
                             commentsProvider.currentTimeNotifier,
+                        onCommentTap: _openReplyToComment,
                       );
                     },
                     childCount:
@@ -552,10 +635,12 @@ class _CommentItem extends StatelessWidget {
   const _CommentItem({
     required this.comment,
     required this.currentTimeNotifier,
+    this.onCommentTap,
   });
 
   final ThreadViewComment comment;
   final ValueNotifier<DateTime?> currentTimeNotifier;
+  final void Function(ThreadViewComment)? onCommentTap;
 
   @override
   Widget build(BuildContext context) {
@@ -566,6 +651,7 @@ class _CommentItem extends StatelessWidget {
           thread: comment,
           currentTime: currentTime,
           maxDepth: 6,
+          onCommentTap: onCommentTap,
         );
       },
     );

@@ -15,6 +15,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/home/main_shell_screen.dart';
 import 'screens/home/post_detail_screen.dart';
 import 'screens/landing_screen.dart';
+import 'services/comment_service.dart';
 import 'services/streamable_service.dart';
 import 'services/vote_service.dart';
 import 'widgets/loading_error_states.dart';
@@ -40,6 +41,14 @@ void main() async {
   final voteService = VoteService(
     sessionGetter: () async => authProvider.session,
     didGetter: () => authProvider.did,
+    tokenRefresher: authProvider.refreshToken,
+    signOutHandler: authProvider.signOut,
+  );
+
+  // Initialize comment service with auth callbacks
+  // Comments go through the Coves backend (which proxies to PDS with DPoP)
+  final commentService = CommentService(
+    sessionGetter: () async => authProvider.session,
     tokenRefresher: authProvider.refreshToken,
     signOutHandler: authProvider.signOut,
   );
@@ -79,6 +88,7 @@ void main() async {
               (context) => CommentsProvider(
                 authProvider,
                 voteProvider: context.read<VoteProvider>(),
+                commentService: commentService,
               ),
           update: (context, auth, vote, previous) {
             // Reuse existing provider to maintain state across rebuilds
@@ -86,6 +96,7 @@ void main() async {
                 CommentsProvider(
                   auth,
                   voteProvider: vote,
+                  commentService: commentService,
                 );
           },
         ),

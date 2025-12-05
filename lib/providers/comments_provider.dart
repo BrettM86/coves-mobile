@@ -1,7 +1,10 @@
 import 'dart:async' show Timer, unawaited;
 
+import 'package:characters/characters.dart';
 import 'package:flutter/foundation.dart';
 import '../models/comment.dart';
+import '../services/api_exceptions.dart';
+import '../services/comment_service.dart';
 import '../services/coves_api_service.dart';
 import 'auth_provider.dart';
 import 'vote_provider.dart';
@@ -19,7 +22,9 @@ class CommentsProvider with ChangeNotifier {
     this._authProvider, {
     CovesApiService? apiService,
     VoteProvider? voteProvider,
-  }) : _voteProvider = voteProvider {
+    CommentService? commentService,
+  }) : _voteProvider = voteProvider,
+       _commentService = commentService {
     // Use injected service (for testing) or create new one (for production)
     // Pass token getter, refresh handler, and sign out handler to API service
     // for automatic fresh token retrieval and automatic token refresh on 401
@@ -37,6 +42,10 @@ class CommentsProvider with ChangeNotifier {
     // Listen to auth state changes and clear comments on sign-out
     _authProvider.addListener(_onAuthChanged);
   }
+
+  /// Maximum comment length in characters (matches backend limit)
+  /// Note: This counts Unicode grapheme clusters, so emojis count correctly
+  static const int maxCommentLength = 10000;
 
   /// Handle authentication state changes
   ///
@@ -59,6 +68,7 @@ class CommentsProvider with ChangeNotifier {
   final AuthProvider _authProvider;
   late final CovesApiService _apiService;
   final VoteProvider? _voteProvider;
+  final CommentService? _commentService;
 
   // Track previous auth state to detect transitions
   bool _wasAuthenticated = false;
@@ -71,8 +81,9 @@ class CommentsProvider with ChangeNotifier {
   String? _cursor;
   bool _hasMore = true;
 
-  // Current post URI being viewed
+  // Current post being viewed
   String? _postUri;
+  String? _postCid;
 
   // Comment configuration
   String _sort = 'hot';
@@ -131,14 +142,21 @@ class CommentsProvider with ChangeNotifier {
   }
 
   /// Load comments for a specific post
+  ///
+  /// Parameters:
+  /// - [postUri]: AT-URI of the post
+  /// - [postCid]: CID of the post (needed for creating comments)
+  /// - [refresh]: Whether to refresh from the beginning
   Future<void> loadComments({
     required String postUri,
+    required String postCid,
     bool refresh = false,
   }) async {
     // If loading for a different post, reset state
     if (postUri != _postUri) {
       reset();
       _postUri = postUri;
+      _postCid = postCid;
     }
 
     // If already loading, schedule a refresh to happen after current load
@@ -225,7 +243,9 @@ class CommentsProvider with ChangeNotifier {
         _pendingRefresh = false;
         // Schedule refresh without awaiting to avoid blocking
         // This is intentional - we want the refresh to happen asynchronously
-        unawaited(loadComments(postUri: _postUri!, refresh: true));
+        unawaited(
+          loadComments(postUri: _postUri!, postCid: _postCid!, refresh: true),
+        );
       }
     }
   }
@@ -234,21 +254,21 @@ class CommentsProvider with ChangeNotifier {
   ///
   /// Reloads comments from the beginning for the current post.
   Future<void> refreshComments() async {
-    if (_postUri == null) {
+    if (_postUri == null || _postCid == null) {
       if (kDebugMode) {
         debugPrint('⚠️ Cannot refresh - no post loaded');
       }
       return;
     }
-    await loadComments(postUri: _postUri!, refresh: true);
+    await loadComments(postUri: _postUri!, postCid: _postCid!, refresh: true);
   }
 
   /// Load more comments (pagination)
   Future<void> loadMoreComments() async {
-    if (!_hasMore || _isLoadingMore || _postUri == null) {
+    if (!_hasMore || _isLoadingMore || _postUri == null || _postCid == null) {
       return;
     }
-    await loadComments(postUri: _postUri!);
+    await loadComments(postUri: _postUri!, postCid: _postCid!);
   }
 
   /// Change sort order
@@ -268,9 +288,13 @@ class CommentsProvider with ChangeNotifier {
     notifyListeners();
 
     // Reload comments with new sort
-    if (_postUri != null) {
+    if (_postUri != null && _postCid != null) {
       try {
-        await loadComments(postUri: _postUri!, refresh: true);
+        await loadComments(
+          postUri: _postUri!,
+          postCid: _postCid!,
+          refresh: true,
+        );
         return true;
       } on Exception catch (e) {
         // Revert to previous sort option on failure
@@ -333,6 +357,98 @@ class CommentsProvider with ChangeNotifier {
     }
   }
 
+  /// Create a comment on the current post or as a reply to another comment
+  ///
+  /// Parameters:
+  /// - [content]: The comment text content
+  /// - [parentComment]: Optional parent comment for nested replies.
+  ///   If null, this is a top-level reply to the post.
+  ///
+  /// The reply reference structure:
+  /// - Root: Always points to the original post (_postUri, _postCid)
+  /// - Parent: Points to the post (top-level) or the parent comment (nested)
+  ///
+  /// After successful creation, refreshes the comments list.
+  ///
+  /// Throws:
+  /// - ValidationException if content is empty or too long
+  /// - ApiException if CommentService is not available or no post is loaded
+  /// - ApiException for API errors
+  Future<void> createComment({
+    required String content,
+    ThreadViewComment? parentComment,
+  }) async {
+    // Validate content
+    final trimmedContent = content.trim();
+    if (trimmedContent.isEmpty) {
+      throw ValidationException('Comment cannot be empty');
+    }
+
+    // Use characters.length for proper Unicode/emoji counting
+    final charCount = trimmedContent.characters.length;
+    if (charCount > maxCommentLength) {
+      throw ValidationException(
+        'Comment too long ($charCount characters). '
+        'Maximum is $maxCommentLength characters.',
+      );
+    }
+
+    if (_commentService == null) {
+      throw ApiException('CommentService not available');
+    }
+
+    if (_postUri == null || _postCid == null) {
+      throw ApiException('No post loaded - cannot create comment');
+    }
+
+    // Root is always the original post
+    final rootUri = _postUri!;
+    final rootCid = _postCid!;
+
+    // Parent depends on whether this is a top-level or nested reply
+    final String parentUri;
+    final String parentCid;
+
+    if (parentComment != null) {
+      // Nested reply - parent is the comment being replied to
+      parentUri = parentComment.comment.uri;
+      parentCid = parentComment.comment.cid;
+    } else {
+      // Top-level reply - parent is the post
+      parentUri = rootUri;
+      parentCid = rootCid;
+    }
+
+    if (kDebugMode) {
+      debugPrint('💬 Creating comment');
+      debugPrint('   Root: $rootUri');
+      debugPrint('   Parent: $parentUri');
+      debugPrint('   Is nested: ${parentComment != null}');
+    }
+
+    try {
+      final response = await _commentService.createComment(
+        rootUri: rootUri,
+        rootCid: rootCid,
+        parentUri: parentUri,
+        parentCid: parentCid,
+        content: trimmedContent,
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Comment created: ${response.uri}');
+      }
+
+      // Refresh comments to show the new comment
+      await refreshComments();
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Failed to create comment: $e');
+      }
+      rethrow;
+    }
+  }
+
   /// Initialize vote state for a comment and its replies recursively
   ///
   /// Extracts viewer vote data from comment and initializes VoteProvider state.
@@ -356,8 +472,8 @@ class CommentsProvider with ChangeNotifier {
   /// Retry loading after error
   Future<void> retry() async {
     _error = null;
-    if (_postUri != null) {
-      await loadComments(postUri: _postUri!, refresh: true);
+    if (_postUri != null && _postCid != null) {
+      await loadComments(postUri: _postUri!, postCid: _postCid!, refresh: true);
     }
   }
 
@@ -376,6 +492,7 @@ class CommentsProvider with ChangeNotifier {
     _isLoading = false;
     _isLoadingMore = false;
     _postUri = null;
+    _postCid = null;
     _pendingRefresh = false;
     notifyListeners();
   }

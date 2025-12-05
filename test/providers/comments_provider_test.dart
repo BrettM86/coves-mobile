@@ -3,6 +3,8 @@ import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/comments_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
+import 'package:coves_flutter/services/api_exceptions.dart';
+import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
@@ -11,11 +13,14 @@ import 'package:mockito/mockito.dart';
 import 'comments_provider_test.mocks.dart';
 
 // Generate mocks for dependencies
-@GenerateMocks([AuthProvider, CovesApiService, VoteProvider])
+@GenerateMocks([AuthProvider, CovesApiService, VoteProvider, CommentService])
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('CommentsProvider', () {
+    const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
+    const testPostCid = 'test-post-cid';
+
     late CommentsProvider commentsProvider;
     late MockAuthProvider mockAuthProvider;
     late MockCovesApiService mockApiService;
@@ -44,8 +49,6 @@ void main() {
     });
 
     group('loadComments', () {
-      const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
-
       test('should load comments successfully', () async {
         final mockComments = [
           _createMockThreadComment('comment1'),
@@ -71,6 +74,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -96,6 +100,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -118,6 +123,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -141,6 +147,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -169,6 +176,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -192,7 +200,7 @@ void main() {
           ),
         ).thenAnswer((_) async => secondResponse);
 
-        await commentsProvider.loadComments(postUri: testPostUri);
+        await commentsProvider.loadComments(postUri: testPostUri, postCid: testPostCid);
 
         expect(commentsProvider.comments.length, 2);
         expect(commentsProvider.comments[0].comment.uri, 'comment1');
@@ -220,6 +228,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -247,6 +256,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -274,6 +284,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -301,6 +312,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -309,6 +321,7 @@ void main() {
         // Load different post
         const differentPostUri =
             'at://did:plc:test/social.coves.post.record/456';
+        const differentPostCid = 'different-post-cid';
         final secondResponse = CommentsResponse(
           post: {},
           comments: [_createMockThreadComment('comment2')],
@@ -327,6 +340,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: differentPostUri,
+          postCid: differentPostCid,
           refresh: true,
         );
 
@@ -359,12 +373,14 @@ void main() {
         // Start first load
         final firstFuture = commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
         // Try to load again while still loading - should schedule a refresh
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -408,6 +424,7 @@ void main() {
 
           await commentsProvider.loadComments(
             postUri: testPostUri,
+            postCid: testPostCid,
             refresh: true,
           );
 
@@ -437,6 +454,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -467,6 +485,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -524,6 +543,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -566,6 +586,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -635,6 +656,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -682,6 +704,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -737,6 +760,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -788,6 +812,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -823,7 +848,8 @@ void main() {
         expect(commentsProvider.currentTimeNotifier.value, null);
 
         await commentsProvider.loadComments(
-          postUri: 'at://did:plc:test/social.coves.post.record/123',
+          postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -848,7 +874,8 @@ void main() {
         ).thenAnswer((_) async => response);
 
         await commentsProvider.loadComments(
-          postUri: 'at://did:plc:test/social.coves.post.record/123',
+          postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -886,7 +913,8 @@ void main() {
         ).thenAnswer((_) async => response);
 
         await commentsProvider.loadComments(
-          postUri: 'at://did:plc:test/social.coves.post.record/123',
+          postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -914,7 +942,8 @@ void main() {
         });
 
         final loadFuture = commentsProvider.loadComments(
-          postUri: 'at://did:plc:test/social.coves.post.record/123',
+          postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -956,6 +985,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -993,6 +1023,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -1032,6 +1063,7 @@ void main() {
 
           await commentsProvider.loadComments(
             postUri: testPostUri,
+            postCid: testPostCid,
             refresh: true,
           );
 
@@ -1081,6 +1113,7 @@ void main() {
 
           await commentsProvider.loadComments(
             postUri: testPostUri,
+            postCid: testPostCid,
             refresh: true,
           );
 
@@ -1143,6 +1176,7 @@ void main() {
 
         await commentsProvider.loadComments(
           postUri: testPostUri,
+          postCid: testPostCid,
           refresh: true,
         );
 
@@ -1211,6 +1245,7 @@ void main() {
           // Load first page (refresh)
           await commentsProvider.loadComments(
             postUri: testPostUri,
+            postCid: testPostCid,
             refresh: true,
           );
 
@@ -1249,6 +1284,410 @@ void main() {
           );
         },
       );
+    });
+
+    group('createComment', () {
+      late MockCommentService mockCommentService;
+      late CommentsProvider providerWithCommentService;
+
+      setUp(() {
+        mockCommentService = MockCommentService();
+
+        // Setup mock API service for loadComments
+        final mockResponse = CommentsResponse(
+          post: {},
+          comments: [_createMockThreadComment('comment1')],
+        );
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+          ),
+        ).thenAnswer((_) async => mockResponse);
+
+        providerWithCommentService = CommentsProvider(
+          mockAuthProvider,
+          apiService: mockApiService,
+          voteProvider: mockVoteProvider,
+          commentService: mockCommentService,
+        );
+      });
+
+      tearDown(() {
+        providerWithCommentService.dispose();
+      });
+
+      test('should throw ValidationException for empty content', () async {
+        // First load comments to set up post context
+        await providerWithCommentService.loadComments(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          refresh: true,
+        );
+
+        expect(
+          () => providerWithCommentService.createComment(content: ''),
+          throwsA(
+            isA<ValidationException>().having(
+              (e) => e.message,
+              'message',
+              contains('empty'),
+            ),
+          ),
+        );
+      });
+
+      test('should throw ValidationException for whitespace-only content', () async {
+        await providerWithCommentService.loadComments(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          refresh: true,
+        );
+
+        expect(
+          () => providerWithCommentService.createComment(content: '   \n\t  '),
+          throwsA(isA<ValidationException>()),
+        );
+      });
+
+      test('should throw ValidationException for content exceeding limit', () async {
+        await providerWithCommentService.loadComments(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          refresh: true,
+        );
+
+        // Create a string longer than 10000 characters
+        final longContent = 'a' * 10001;
+
+        expect(
+          () => providerWithCommentService.createComment(content: longContent),
+          throwsA(
+            isA<ValidationException>().having(
+              (e) => e.message,
+              'message',
+              contains('too long'),
+            ),
+          ),
+        );
+      });
+
+      test('should count emoji correctly in character limit', () async {
+        await providerWithCommentService.loadComments(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          refresh: true,
+        );
+
+        // Each emoji should count as 1 character, not 2-4 bytes
+        // 9999 'a' chars + 1 emoji = 10000 chars (should pass)
+        final contentAtLimit = '${'a' * 9999}😀';
+
+        when(
+          mockCommentService.createComment(
+            rootUri: anyNamed('rootUri'),
+            rootCid: anyNamed('rootCid'),
+            parentUri: anyNamed('parentUri'),
+            parentCid: anyNamed('parentCid'),
+            content: anyNamed('content'),
+          ),
+        ).thenAnswer(
+          (_) async => const CreateCommentResponse(
+            uri: 'at://did:plc:test/comment/abc',
+            cid: 'cid123',
+          ),
+        );
+
+        // This should NOT throw
+        await providerWithCommentService.createComment(content: contentAtLimit);
+
+        verify(
+          mockCommentService.createComment(
+            rootUri: testPostUri,
+            rootCid: testPostCid,
+            parentUri: testPostUri,
+            parentCid: testPostCid,
+            content: contentAtLimit,
+          ),
+        ).called(1);
+      });
+
+      test('should throw ApiException when no post loaded', () async {
+        // Don't call loadComments first - no post context
+
+        expect(
+          () => providerWithCommentService.createComment(
+            content: 'Test comment',
+          ),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.message,
+              'message',
+              contains('No post loaded'),
+            ),
+          ),
+        );
+      });
+
+      test('should throw ApiException when no CommentService', () async {
+        // Create provider without CommentService
+        final providerWithoutService = CommentsProvider(
+          mockAuthProvider,
+          apiService: mockApiService,
+          voteProvider: mockVoteProvider,
+        );
+
+        await providerWithoutService.loadComments(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          refresh: true,
+        );
+
+        expect(
+          () => providerWithoutService.createComment(content: 'Test comment'),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.message,
+              'message',
+              contains('CommentService not available'),
+            ),
+          ),
+        );
+
+        providerWithoutService.dispose();
+      });
+
+      test('should create top-level comment (reply to post)', () async {
+        await providerWithCommentService.loadComments(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          refresh: true,
+        );
+
+        when(
+          mockCommentService.createComment(
+            rootUri: anyNamed('rootUri'),
+            rootCid: anyNamed('rootCid'),
+            parentUri: anyNamed('parentUri'),
+            parentCid: anyNamed('parentCid'),
+            content: anyNamed('content'),
+          ),
+        ).thenAnswer(
+          (_) async => const CreateCommentResponse(
+            uri: 'at://did:plc:test/comment/abc',
+            cid: 'cid123',
+          ),
+        );
+
+        await providerWithCommentService.createComment(
+          content: 'This is a test comment',
+        );
+
+        // Verify the comment service was called with correct parameters
+        // Root and parent should both be the post for top-level comments
+        verify(
+          mockCommentService.createComment(
+            rootUri: testPostUri,
+            rootCid: testPostCid,
+            parentUri: testPostUri,
+            parentCid: testPostCid,
+            content: 'This is a test comment',
+          ),
+        ).called(1);
+      });
+
+      test('should create nested comment (reply to comment)', () async {
+        await providerWithCommentService.loadComments(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          refresh: true,
+        );
+
+        when(
+          mockCommentService.createComment(
+            rootUri: anyNamed('rootUri'),
+            rootCid: anyNamed('rootCid'),
+            parentUri: anyNamed('parentUri'),
+            parentCid: anyNamed('parentCid'),
+            content: anyNamed('content'),
+          ),
+        ).thenAnswer(
+          (_) async => const CreateCommentResponse(
+            uri: 'at://did:plc:test/comment/reply1',
+            cid: 'cidReply',
+          ),
+        );
+
+        // Create a parent comment to reply to
+        final parentComment = _createMockThreadComment('parent-comment');
+
+        await providerWithCommentService.createComment(
+          content: 'This is a nested reply',
+          parentComment: parentComment,
+        );
+
+        // Root should still be the post, but parent should be the comment
+        verify(
+          mockCommentService.createComment(
+            rootUri: testPostUri,
+            rootCid: testPostCid,
+            parentUri: 'parent-comment',
+            parentCid: 'cid-parent-comment',
+            content: 'This is a nested reply',
+          ),
+        ).called(1);
+      });
+
+      test('should trim content before sending', () async {
+        await providerWithCommentService.loadComments(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          refresh: true,
+        );
+
+        when(
+          mockCommentService.createComment(
+            rootUri: anyNamed('rootUri'),
+            rootCid: anyNamed('rootCid'),
+            parentUri: anyNamed('parentUri'),
+            parentCid: anyNamed('parentCid'),
+            content: anyNamed('content'),
+          ),
+        ).thenAnswer(
+          (_) async => const CreateCommentResponse(
+            uri: 'at://did:plc:test/comment/abc',
+            cid: 'cid123',
+          ),
+        );
+
+        await providerWithCommentService.createComment(
+          content: '  Hello world!  ',
+        );
+
+        // Verify trimmed content was sent
+        verify(
+          mockCommentService.createComment(
+            rootUri: anyNamed('rootUri'),
+            rootCid: anyNamed('rootCid'),
+            parentUri: anyNamed('parentUri'),
+            parentCid: anyNamed('parentCid'),
+            content: 'Hello world!',
+          ),
+        ).called(1);
+      });
+
+      test('should refresh comments after successful creation', () async {
+        await providerWithCommentService.loadComments(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          refresh: true,
+        );
+
+        when(
+          mockCommentService.createComment(
+            rootUri: anyNamed('rootUri'),
+            rootCid: anyNamed('rootCid'),
+            parentUri: anyNamed('parentUri'),
+            parentCid: anyNamed('parentCid'),
+            content: anyNamed('content'),
+          ),
+        ).thenAnswer(
+          (_) async => const CreateCommentResponse(
+            uri: 'at://did:plc:test/comment/abc',
+            cid: 'cid123',
+          ),
+        );
+
+        await providerWithCommentService.createComment(
+          content: 'Test comment',
+        );
+
+        // Should have called getComments twice - once for initial load,
+        // once for refresh after comment creation
+        verify(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+          ),
+        ).called(2);
+      });
+
+      test('should rethrow exception from CommentService', () async {
+        await providerWithCommentService.loadComments(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          refresh: true,
+        );
+
+        when(
+          mockCommentService.createComment(
+            rootUri: anyNamed('rootUri'),
+            rootCid: anyNamed('rootCid'),
+            parentUri: anyNamed('parentUri'),
+            parentCid: anyNamed('parentCid'),
+            content: anyNamed('content'),
+          ),
+        ).thenThrow(ApiException('Network error'));
+
+        expect(
+          () => providerWithCommentService.createComment(
+            content: 'Test comment',
+          ),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.message,
+              'message',
+              contains('Network error'),
+            ),
+          ),
+        );
+      });
+
+      test('should accept content at exactly max length', () async {
+        await providerWithCommentService.loadComments(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          refresh: true,
+        );
+
+        final contentAtLimit = 'a' * CommentsProvider.maxCommentLength;
+
+        when(
+          mockCommentService.createComment(
+            rootUri: anyNamed('rootUri'),
+            rootCid: anyNamed('rootCid'),
+            parentUri: anyNamed('parentUri'),
+            parentCid: anyNamed('parentCid'),
+            content: anyNamed('content'),
+          ),
+        ).thenAnswer(
+          (_) async => const CreateCommentResponse(
+            uri: 'at://did:plc:test/comment/abc',
+            cid: 'cid123',
+          ),
+        );
+
+        // Should not throw
+        await providerWithCommentService.createComment(content: contentAtLimit);
+
+        verify(
+          mockCommentService.createComment(
+            rootUri: anyNamed('rootUri'),
+            rootCid: anyNamed('rootCid'),
+            parentUri: anyNamed('parentUri'),
+            parentCid: anyNamed('parentCid'),
+            content: contentAtLimit,
+          ),
+        ).called(1);
+      });
     });
   });
 }
