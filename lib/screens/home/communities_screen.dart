@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../../constants/app_colors.dart';
 
-class SearchScreen extends StatelessWidget {
-  const SearchScreen({super.key});
+class CommunitiesScreen extends StatelessWidget {
+  const CommunitiesScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F14),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0B0F14),
+        backgroundColor: AppColors.background,
         foregroundColor: Colors.white,
-        title: const Text('Search'),
+        title: const Text('Communities'),
         automaticallyImplyLeading: false,
       ),
       body: const Center(
@@ -21,10 +21,14 @@ class SearchScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.search, size: 64, color: AppColors.primary),
+              Icon(
+                Icons.workspaces_outlined,
+                size: 64,
+                color: AppColors.primary,
+              ),
               SizedBox(height: 24),
               Text(
-                'Search',
+                'Communities',
                 style: TextStyle(
                   fontSize: 28,
                   color: Colors.white,
@@ -33,7 +37,7 @@ class SearchScreen extends StatelessWidget {
               ),
               SizedBox(height: 16),
               Text(
-                'Search communities and conversations',
+                'Discover and join communities',
                 style: TextStyle(fontSize: 16, color: Color(0xFFB6C2D2)),
                 textAlign: TextAlign.center,
               ),

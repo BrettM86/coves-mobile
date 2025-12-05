@@ -6,6 +6,15 @@ import '../services/coves_api_service.dart';
 import 'auth_provider.dart';
 import 'vote_provider.dart';
 
+/// Feed types available in the app
+enum FeedType {
+  /// All posts across the network
+  discover,
+
+  /// Posts from subscribed communities (authenticated only)
+  forYou,
+}
+
 /// Feed Provider
 ///
 /// Manages feed state and fetching logic.
@@ -53,6 +62,8 @@ class FeedProvider with ChangeNotifier {
       if (kDebugMode) {
         debugPrint('🔒 User signed out - clearing feed');
       }
+      // Reset feed type to Discover since For You requires auth
+      _feedType = FeedType.discover;
       reset();
       // Automatically load the public discover feed
       loadFeed(refresh: true);
@@ -80,6 +91,7 @@ class FeedProvider with ChangeNotifier {
   // Feed configuration
   String _sort = 'hot';
   String? _timeframe;
+  FeedType _feedType = FeedType.discover;
 
   // Time update mechanism for periodic UI refreshes
   Timer? _timeUpdateTimer;
@@ -94,6 +106,10 @@ class FeedProvider with ChangeNotifier {
   String get sort => _sort;
   String? get timeframe => _timeframe;
   DateTime? get currentTime => _currentTime;
+  FeedType get feedType => _feedType;
+
+  /// Check if For You feed is available (requires authentication)
+  bool get isForYouAvailable => _authProvider.isAuthenticated;
 
   /// Start periodic time updates for "time ago" strings
   ///
@@ -130,14 +146,13 @@ class FeedProvider with ChangeNotifier {
     }
   }
 
-  /// Load feed based on authentication state (business logic
-  /// encapsulation)
+  /// Load feed based on current feed type
   ///
   /// This method encapsulates the business logic of deciding which feed
-  /// to fetch. Previously this logic was in the UI layer (FeedScreen),
-  /// violating clean architecture.
+  /// to fetch based on the selected feed type.
   Future<void> loadFeed({bool refresh = false}) async {
-    if (_authProvider.isAuthenticated) {
+    // For You requires authentication - fall back to Discover if not
+    if (_feedType == FeedType.forYou && _authProvider.isAuthenticated) {
       await fetchTimeline(refresh: refresh);
     } else {
       await fetchDiscover(refresh: refresh);
@@ -147,6 +162,28 @@ class FeedProvider with ChangeNotifier {
     if (_posts.isNotEmpty && _timeUpdateTimer == null) {
       startTimeUpdates();
     }
+  }
+
+  /// Switch feed type and reload
+  Future<void> setFeedType(FeedType type) async {
+    if (_feedType == type) {
+      return;
+    }
+
+    // For You requires authentication
+    if (type == FeedType.forYou && !_authProvider.isAuthenticated) {
+      return;
+    }
+
+    _feedType = type;
+    // Reset pagination state but keep posts visible until new feed loads
+    _cursor = null;
+    _hasMore = true;
+    _error = null;
+    notifyListeners();
+
+    // Load new feed - old posts stay visible until new ones arrive
+    await loadFeed(refresh: true);
   }
 
   /// Common feed fetching logic (DRY principle - eliminates code

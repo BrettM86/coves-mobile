@@ -5,10 +5,20 @@ import '../../constants/app_colors.dart';
 import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/feed_provider.dart';
+import '../../widgets/icons/bluesky_icons.dart';
 import '../../widgets/post_card.dart';
 
+/// Header layout constants
+const double _kHeaderHeight = 44;
+const double _kTabUnderlineWidth = 28;
+const double _kTabUnderlineHeight = 3;
+const double _kHeaderContentPadding = _kHeaderHeight;
+
 class FeedScreen extends StatefulWidget {
-  const FeedScreen({super.key});
+  const FeedScreen({super.key, this.onSearchTap});
+
+  /// Callback when search icon is tapped (to switch to communities tab)
+  final VoidCallback? onSearchTap;
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
@@ -63,6 +73,9 @@ class _FeedScreenState extends State<FeedScreen> {
     );
     final isLoading = context.select<FeedProvider, bool>((p) => p.isLoading);
     final error = context.select<FeedProvider, String?>((p) => p.error);
+    final feedType = context.select<FeedProvider, FeedType>(
+      (p) => p.feedType,
+    );
 
     // IMPORTANT: This relies on FeedProvider creating new list instances
     // (_posts = [..._posts, ...response.feed]) rather than mutating in-place.
@@ -80,23 +93,156 @@ class _FeedScreenState extends State<FeedScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        foregroundColor: AppColors.textPrimary,
-        title: Text(isAuthenticated ? 'Feed' : 'Explore'),
-        automaticallyImplyLeading: false,
-      ),
       body: SafeArea(
-        child: _buildBody(
-          isLoading: isLoading,
-          error: error,
-          posts: posts,
-          isLoadingMore: isLoadingMore,
-          isAuthenticated: isAuthenticated,
-          currentTime: currentTime,
+        child: Stack(
+          children: [
+            // Feed content (behind header)
+            _buildBody(
+              isLoading: isLoading,
+              error: error,
+              posts: posts,
+              isLoadingMore: isLoadingMore,
+              isAuthenticated: isAuthenticated,
+              currentTime: currentTime,
+            ),
+            // Transparent header overlay
+            _buildHeader(
+              feedType: feedType,
+              isAuthenticated: isAuthenticated,
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Widget _buildHeader({
+    required FeedType feedType,
+    required bool isAuthenticated,
+  }) {
+    return Container(
+      height: _kHeaderHeight,
+      decoration: BoxDecoration(
+        // Gradient fade from solid to transparent
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.background,
+            AppColors.background.withValues(alpha: 0.8),
+            AppColors.background.withValues(alpha: 0),
+          ],
+          stops: const [0.0, 0.6, 1.0],
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          // Feed type tabs in the center
+          Expanded(
+            child: _buildFeedTypeTabs(
+              feedType: feedType,
+              isAuthenticated: isAuthenticated,
+            ),
+          ),
+          // Search/Communities icon on the right
+          if (widget.onSearchTap != null)
+            Semantics(
+              label: 'Navigate to Communities',
+              button: true,
+              child: InkWell(
+                onTap: widget.onSearchTap,
+                borderRadius: BorderRadius.circular(20),
+                splashColor: AppColors.primary.withValues(alpha: 0.2),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: BlueSkyIcon.search(color: AppColors.textPrimary),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeedTypeTabs({
+    required FeedType feedType,
+    required bool isAuthenticated,
+  }) {
+    // If not authenticated, only show Discover
+    if (!isAuthenticated) {
+      return Center(
+        child: _buildFeedTypeTab(
+          label: 'Discover',
+          isActive: true,
+          onTap: null,
+        ),
+      );
+    }
+
+    // Authenticated: show both tabs side by side (TikTok style)
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _buildFeedTypeTab(
+          label: 'Discover',
+          isActive: feedType == FeedType.discover,
+          onTap: () => _switchToFeedType(FeedType.discover),
+        ),
+        const SizedBox(width: 24),
+        _buildFeedTypeTab(
+          label: 'For You',
+          isActive: feedType == FeedType.forYou,
+          onTap: () => _switchToFeedType(FeedType.forYou),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeedTypeTab({
+    required String label,
+    required bool isActive,
+    required VoidCallback? onTap,
+  }) {
+    return Semantics(
+      label: '$label feed${isActive ? ', selected' : ''}',
+      button: true,
+      selected: isActive,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary.withValues(alpha: 0.6),
+                fontSize: 16,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+              ),
+            ),
+            const SizedBox(height: 2),
+            // Underline indicator (TikTok style)
+            Container(
+              width: _kTabUnderlineWidth,
+              height: _kTabUnderlineHeight,
+              decoration: BoxDecoration(
+                color: isActive ? AppColors.textPrimary : Colors.transparent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _switchToFeedType(FeedType type) {
+    Provider.of<FeedProvider>(context, listen: false).setFeedType(type);
   }
 
   Widget _buildBody({
@@ -205,6 +351,8 @@ class _FeedScreenState extends State<FeedScreen> {
       color: AppColors.primary,
       child: ListView.builder(
         controller: _scrollController,
+        // Add top padding so content isn't hidden behind transparent header
+        padding: const EdgeInsets.only(top: _kHeaderContentPadding),
         // Add extra item for loading indicator or pagination error
         itemCount: posts.length + (isLoadingMore || error != null ? 1 : 0),
         itemBuilder: (context, index) {

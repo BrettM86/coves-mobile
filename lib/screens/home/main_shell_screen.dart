@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../constants/app_colors.dart';
 import '../../widgets/icons/bluesky_icons.dart';
+import 'communities_screen.dart';
 import 'create_post_screen.dart';
 import 'feed_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
-import 'search_screen.dart';
 
 class MainShellScreen extends StatefulWidget {
   const MainShellScreen({super.key});
@@ -18,24 +18,31 @@ class MainShellScreen extends StatefulWidget {
 class _MainShellScreenState extends State<MainShellScreen> {
   int _selectedIndex = 0;
 
-  static const List<Widget> _screens = [
-    FeedScreen(),
-    SearchScreen(),
-    CreatePostScreen(),
-    NotificationsScreen(),
-    ProfileScreen(),
-  ];
-
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
   }
 
+  void _onCommunitiesTap() {
+    setState(() {
+      _selectedIndex = 1; // Switch to communities tab
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_selectedIndex],
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: [
+          FeedScreen(onSearchTap: _onCommunitiesTap),
+          const CommunitiesScreen(),
+          const CreatePostScreen(),
+          const NotificationsScreen(),
+          const ProfileScreen(),
+        ],
+      ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: Color(0xFF0B0F14),
@@ -48,7 +55,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildNavItem(0, 'home', 'Home'),
-                _buildNavItem(1, 'search', 'Search'),
+                _buildNavItem(1, 'communities', 'Communities'),
                 _buildNavItem(2, 'plus', 'Create'),
                 _buildNavItem(3, 'bell', 'Notifications'),
                 _buildNavItem(4, 'person', 'Me'),
@@ -73,8 +80,12 @@ class _MainShellScreenState extends State<MainShellScreen> {
       case 'home':
         icon = BlueSkyIcon.homeSimple(color: color);
         break;
-      case 'search':
-        icon = BlueSkyIcon.search(color: color);
+      case 'communities':
+        icon = Icon(
+          isSelected ? Icons.workspaces : Icons.workspaces_outlined,
+          color: color,
+          size: 24,
+        );
         break;
       case 'plus':
         icon = BlueSkyIcon.plus(color: color);
