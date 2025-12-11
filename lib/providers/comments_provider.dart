@@ -81,6 +81,9 @@ class CommentsProvider with ChangeNotifier {
   String? _cursor;
   bool _hasMore = true;
 
+  // Collapsed thread state - stores URIs of collapsed comments
+  final Set<String> _collapsedComments = {};
+
   // Current post being viewed
   String? _postUri;
   String? _postCid;
@@ -105,6 +108,23 @@ class CommentsProvider with ChangeNotifier {
   String get sort => _sort;
   String? get timeframe => _timeframe;
   ValueNotifier<DateTime?> get currentTimeNotifier => _currentTimeNotifier;
+  Set<String> get collapsedComments => _collapsedComments;
+
+  /// Toggle collapsed state for a comment thread
+  ///
+  /// When collapsed, the comment's replies are hidden from view.
+  /// Long-pressing the same comment again will expand the thread.
+  void toggleCollapsed(String uri) {
+    if (_collapsedComments.contains(uri)) {
+      _collapsedComments.remove(uri);
+    } else {
+      _collapsedComments.add(uri);
+    }
+    notifyListeners();
+  }
+
+  /// Check if a specific comment is collapsed
+  bool isCollapsed(String uri) => _collapsedComments.contains(uri);
 
   /// Start periodic time updates for "time ago" strings
   ///
@@ -494,6 +514,7 @@ class CommentsProvider with ChangeNotifier {
     _postUri = null;
     _postCid = null;
     _pendingRefresh = false;
+    _collapsedComments.clear();
     notifyListeners();
   }
 

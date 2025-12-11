@@ -574,6 +574,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         currentTimeNotifier:
                             commentsProvider.currentTimeNotifier,
                         onCommentTap: _openReplyToComment,
+                        collapsedComments: commentsProvider.collapsedComments,
+                        onCollapseToggle: commentsProvider.toggleCollapsed,
                       );
                     },
                     childCount:
@@ -636,11 +638,15 @@ class _CommentItem extends StatelessWidget {
     required this.comment,
     required this.currentTimeNotifier,
     this.onCommentTap,
+    this.collapsedComments = const {},
+    this.onCollapseToggle,
   });
 
   final ThreadViewComment comment;
   final ValueNotifier<DateTime?> currentTimeNotifier;
   final void Function(ThreadViewComment)? onCommentTap;
+  final Set<String> collapsedComments;
+  final void Function(String uri)? onCollapseToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -652,6 +658,8 @@ class _CommentItem extends StatelessWidget {
           currentTime: currentTime,
           maxDepth: 6,
           onCommentTap: onCommentTap,
+          collapsedComments: collapsedComments,
+          onCollapseToggle: onCollapseToggle,
         );
       },
     );

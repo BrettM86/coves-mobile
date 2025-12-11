@@ -14,9 +14,13 @@ import 'comment_card.dart';
 /// - Limits nesting depth to prevent excessive indentation
 /// - Shows "Load more replies" button when hasMore is true
 /// - Supports tap-to-reply via [onCommentTap] callback
+/// - Supports long-press to collapse threads via [onCollapseToggle] callback
 ///
 /// The [maxDepth] parameter controls how deeply nested comments can be
 /// before they're rendered at the same level to prevent UI overflow.
+///
+/// When a comment is collapsed (via [collapsedComments]), its replies are
+/// hidden with a smooth animation and a badge shows the hidden count.
 class CommentThread extends StatelessWidget {
   const CommentThread({
     required this.thread,
@@ -25,6 +29,8 @@ class CommentThread extends StatelessWidget {
     this.currentTime,
     this.onLoadMoreReplies,
     this.onCommentTap,
+    this.collapsedComments = const {},
+    this.onCollapseToggle,
     super.key,
   });
 
@@ -37,37 +43,94 @@ class CommentThread extends StatelessWidget {
   /// Callback when a comment is tapped (for reply functionality)
   final void Function(ThreadViewComment)? onCommentTap;
 
+  /// Set of collapsed comment URIs
+  final Set<String> collapsedComments;
+
+  /// Callback when a comment collapse state is toggled
+  final void Function(String uri)? onCollapseToggle;
+
+  /// Count all descendants recursively
+  static int countDescendants(ThreadViewComment thread) {
+    if (thread.replies == null || thread.replies!.isEmpty) {
+      return 0;
+    }
+    var count = thread.replies!.length;
+    for (final reply in thread.replies!) {
+      count += countDescendants(reply);
+    }
+    return count;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Calculate effective depth (flatten after maxDepth)
     final effectiveDepth = depth > maxDepth ? maxDepth : depth;
 
+    // Check if this comment is collapsed
+    final isCollapsed = collapsedComments.contains(thread.comment.uri);
+    final collapsedCount = isCollapsed ? countDescendants(thread) : 0;
+
+    // Check if there are replies to render
+    final hasReplies = thread.replies != null && thread.replies!.isNotEmpty;
+
+    // Only build replies widget when NOT collapsed (optimization)
+    // When collapsed, AnimatedSwitcher shows SizedBox.shrink() so children
+    // are never mounted - no need to build them at all
+    final repliesWidget = hasReplies && !isCollapsed
+        ? Column(
+            key: const ValueKey('replies'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: thread.replies!.map((reply) {
+              return CommentThread(
+                thread: reply,
+                depth: depth + 1,
+                maxDepth: maxDepth,
+                currentTime: currentTime,
+                onLoadMoreReplies: onLoadMoreReplies,
+                onCommentTap: onCommentTap,
+                collapsedComments: collapsedComments,
+                onCollapseToggle: onCollapseToggle,
+              );
+            }).toList(),
+          )
+        : null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Render the comment with tap handler
+        // Render the comment with tap and long-press handlers
         CommentCard(
           comment: thread.comment,
           depth: effectiveDepth,
           currentTime: currentTime,
           onTap: onCommentTap != null ? () => onCommentTap!(thread) : null,
+          onLongPress: onCollapseToggle != null
+              ? () => onCollapseToggle!(thread.comment.uri)
+              : null,
+          isCollapsed: isCollapsed,
+          collapsedCount: collapsedCount,
         ),
 
-        // Render replies recursively
-        if (thread.replies != null && thread.replies!.isNotEmpty)
-          ...thread.replies!.map(
-            (reply) => CommentThread(
-              thread: reply,
-              depth: depth + 1,
-              maxDepth: maxDepth,
-              currentTime: currentTime,
-              onLoadMoreReplies: onLoadMoreReplies,
-              onCommentTap: onCommentTap,
-            ),
+        // Render replies with animation
+        if (hasReplies)
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            switchInCurve: Curves.easeInOutCubicEmphasized,
+            switchOutCurve: Curves.easeInOutCubicEmphasized,
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              return SizeTransition(
+                sizeFactor: animation,
+                axisAlignment: -1,
+                child: child,
+              );
+            },
+            child: isCollapsed
+                ? const SizedBox.shrink(key: ValueKey('collapsed'))
+                : repliesWidget,
           ),
 
-        // Show "Load more replies" button if there are more
-        if (thread.hasMore) _buildLoadMoreButton(context),
+        // Show "Load more replies" button if there are more (and not collapsed)
+        if (thread.hasMore && !isCollapsed) _buildLoadMoreButton(context),
       ],
     );
   }
