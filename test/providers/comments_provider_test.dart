@@ -200,7 +200,10 @@ void main() {
           ),
         ).thenAnswer((_) async => secondResponse);
 
-        await commentsProvider.loadComments(postUri: testPostUri, postCid: testPostCid);
+        await commentsProvider.loadComments(
+          postUri: testPostUri,
+          postCid: testPostCid,
+        );
 
         expect(commentsProvider.comments.length, 2);
         expect(commentsProvider.comments[0].comment.uri, 'comment1');
@@ -1286,6 +1289,130 @@ void main() {
       );
     });
 
+    group('Collapsed comments', () {
+      test('should toggle collapsed state for a comment', () {
+        const commentUri = 'at://did:plc:test/comment/123';
+
+        // Initially not collapsed
+        expect(commentsProvider.isCollapsed(commentUri), false);
+        expect(commentsProvider.collapsedComments.isEmpty, true);
+
+        // Toggle to collapsed
+        commentsProvider.toggleCollapsed(commentUri);
+
+        expect(commentsProvider.isCollapsed(commentUri), true);
+        expect(commentsProvider.collapsedComments.contains(commentUri), true);
+
+        // Toggle back to expanded
+        commentsProvider.toggleCollapsed(commentUri);
+
+        expect(commentsProvider.isCollapsed(commentUri), false);
+        expect(commentsProvider.collapsedComments.contains(commentUri), false);
+      });
+
+      test('should track multiple collapsed comments', () {
+        const comment1 = 'at://did:plc:test/comment/1';
+        const comment2 = 'at://did:plc:test/comment/2';
+        const comment3 = 'at://did:plc:test/comment/3';
+
+        commentsProvider
+          ..toggleCollapsed(comment1)
+          ..toggleCollapsed(comment2);
+
+        expect(commentsProvider.isCollapsed(comment1), true);
+        expect(commentsProvider.isCollapsed(comment2), true);
+        expect(commentsProvider.isCollapsed(comment3), false);
+        expect(commentsProvider.collapsedComments.length, 2);
+      });
+
+      test('should notify listeners when collapse state changes', () {
+        var notificationCount = 0;
+        commentsProvider.addListener(() {
+          notificationCount++;
+        });
+
+        commentsProvider.toggleCollapsed('at://did:plc:test/comment/1');
+        expect(notificationCount, 1);
+
+        commentsProvider.toggleCollapsed('at://did:plc:test/comment/1');
+        expect(notificationCount, 2);
+      });
+
+      test('should clear collapsed state on reset', () async {
+        // Collapse some comments
+        commentsProvider
+          ..toggleCollapsed('at://did:plc:test/comment/1')
+          ..toggleCollapsed('at://did:plc:test/comment/2');
+
+        expect(commentsProvider.collapsedComments.length, 2);
+
+        // Reset should clear collapsed state
+        commentsProvider.reset();
+
+        expect(commentsProvider.collapsedComments.isEmpty, true);
+        expect(
+          commentsProvider.isCollapsed('at://did:plc:test/comment/1'),
+          false,
+        );
+        expect(
+          commentsProvider.isCollapsed('at://did:plc:test/comment/2'),
+          false,
+        );
+      });
+
+      test('collapsedComments getter returns unmodifiable set', () {
+        commentsProvider.toggleCollapsed('at://did:plc:test/comment/1');
+
+        final collapsed = commentsProvider.collapsedComments;
+
+        // Attempting to modify should throw
+        expect(
+          () => collapsed.add('at://did:plc:test/comment/2'),
+          throwsUnsupportedError,
+        );
+      });
+
+      test('should clear collapsed state on post change', () async {
+        // Setup mock response
+        final response = CommentsResponse(
+          post: {},
+          comments: [_createMockThreadComment('comment1')],
+        );
+
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+          ),
+        ).thenAnswer((_) async => response);
+
+        // Load first post
+        await commentsProvider.loadComments(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          refresh: true,
+        );
+
+        // Collapse a comment
+        commentsProvider.toggleCollapsed('at://did:plc:test/comment/1');
+        expect(commentsProvider.collapsedComments.length, 1);
+
+        // Load different post
+        await commentsProvider.loadComments(
+          postUri: 'at://did:plc:test/social.coves.post.record/456',
+          postCid: 'different-cid',
+          refresh: true,
+        );
+
+        // Collapsed state should be cleared
+        expect(commentsProvider.collapsedComments.isEmpty, true);
+      });
+    });
+
     group('createComment', () {
       late MockCommentService mockCommentService;
       late CommentsProvider providerWithCommentService;
@@ -1341,40 +1468,48 @@ void main() {
         );
       });
 
-      test('should throw ValidationException for whitespace-only content', () async {
-        await providerWithCommentService.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+      test(
+        'should throw ValidationException for whitespace-only content',
+        () async {
+          await providerWithCommentService.loadComments(
+            postUri: testPostUri,
+            postCid: testPostCid,
+            refresh: true,
+          );
 
-        expect(
-          () => providerWithCommentService.createComment(content: '   \n\t  '),
-          throwsA(isA<ValidationException>()),
-        );
-      });
+          expect(
+            () =>
+                providerWithCommentService.createComment(content: '   \n\t  '),
+            throwsA(isA<ValidationException>()),
+          );
+        },
+      );
 
-      test('should throw ValidationException for content exceeding limit', () async {
-        await providerWithCommentService.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+      test(
+        'should throw ValidationException for content exceeding limit',
+        () async {
+          await providerWithCommentService.loadComments(
+            postUri: testPostUri,
+            postCid: testPostCid,
+            refresh: true,
+          );
 
-        // Create a string longer than 10000 characters
-        final longContent = 'a' * 10001;
+          // Create a string longer than 10000 characters
+          final longContent = 'a' * 10001;
 
-        expect(
-          () => providerWithCommentService.createComment(content: longContent),
-          throwsA(
-            isA<ValidationException>().having(
-              (e) => e.message,
-              'message',
-              contains('too long'),
+          expect(
+            () =>
+                providerWithCommentService.createComment(content: longContent),
+            throwsA(
+              isA<ValidationException>().having(
+                (e) => e.message,
+                'message',
+                contains('too long'),
+              ),
             ),
-          ),
-        );
-      });
+          );
+        },
+      );
 
       test('should count emoji correctly in character limit', () async {
         await providerWithCommentService.loadComments(
@@ -1420,9 +1555,8 @@ void main() {
         // Don't call loadComments first - no post context
 
         expect(
-          () => providerWithCommentService.createComment(
-            content: 'Test comment',
-          ),
+          () =>
+              providerWithCommentService.createComment(content: 'Test comment'),
           throwsA(
             isA<ApiException>().having(
               (e) => e.message,
@@ -1602,9 +1736,7 @@ void main() {
           ),
         );
 
-        await providerWithCommentService.createComment(
-          content: 'Test comment',
-        );
+        await providerWithCommentService.createComment(content: 'Test comment');
 
         // Should have called getComments twice - once for initial load,
         // once for refresh after comment creation
@@ -1638,9 +1770,8 @@ void main() {
         ).thenThrow(ApiException('Network error'));
 
         expect(
-          () => providerWithCommentService.createComment(
-            content: 'Test comment',
-          ),
+          () =>
+              providerWithCommentService.createComment(content: 'Test comment'),
           throwsA(
             isA<ApiException>().having(
               (e) => e.message,

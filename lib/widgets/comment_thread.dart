@@ -76,24 +76,26 @@ class CommentThread extends StatelessWidget {
     // Only build replies widget when NOT collapsed (optimization)
     // When collapsed, AnimatedSwitcher shows SizedBox.shrink() so children
     // are never mounted - no need to build them at all
-    final repliesWidget = hasReplies && !isCollapsed
-        ? Column(
-            key: const ValueKey('replies'),
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: thread.replies!.map((reply) {
-              return CommentThread(
-                thread: reply,
-                depth: depth + 1,
-                maxDepth: maxDepth,
-                currentTime: currentTime,
-                onLoadMoreReplies: onLoadMoreReplies,
-                onCommentTap: onCommentTap,
-                collapsedComments: collapsedComments,
-                onCollapseToggle: onCollapseToggle,
-              );
-            }).toList(),
-          )
-        : null;
+    final repliesWidget =
+        hasReplies && !isCollapsed
+            ? Column(
+              key: const ValueKey('replies'),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children:
+                  thread.replies!.map((reply) {
+                    return CommentThread(
+                      thread: reply,
+                      depth: depth + 1,
+                      maxDepth: maxDepth,
+                      currentTime: currentTime,
+                      onLoadMoreReplies: onLoadMoreReplies,
+                      onCommentTap: onCommentTap,
+                      collapsedComments: collapsedComments,
+                      onCollapseToggle: onCollapseToggle,
+                    );
+                  }).toList(),
+            )
+            : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,9 +106,10 @@ class CommentThread extends StatelessWidget {
           depth: effectiveDepth,
           currentTime: currentTime,
           onTap: onCommentTap != null ? () => onCommentTap!(thread) : null,
-          onLongPress: onCollapseToggle != null
-              ? () => onCollapseToggle!(thread.comment.uri)
-              : null,
+          onLongPress:
+              onCollapseToggle != null
+                  ? () => onCollapseToggle!(thread.comment.uri)
+                  : null,
           isCollapsed: isCollapsed,
           collapsedCount: collapsedCount,
         ),
@@ -114,19 +117,73 @@ class CommentThread extends StatelessWidget {
         // Render replies with animation
         if (hasReplies)
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            switchInCurve: Curves.easeInOutCubicEmphasized,
-            switchOutCurve: Curves.easeInOutCubicEmphasized,
+            duration: const Duration(milliseconds: 350),
+            reverseDuration: const Duration(milliseconds: 280),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
             transitionBuilder: (Widget child, Animation<double> animation) {
-              return SizeTransition(
-                sizeFactor: animation,
-                axisAlignment: -1,
-                child: child,
+              // Determine if we're expanding or collapsing based on key
+              final isExpanding = child.key == const ValueKey('replies');
+
+              // Different fade curves for expand vs collapse
+              final fadeCurve =
+                  isExpanding
+                      ? const Interval(0, 0.7, curve: Curves.easeOut)
+                      : const Interval(0, 0.5, curve: Curves.easeIn);
+
+              // Slide down from parent on expand, slide up on collapse
+              final slideOffset =
+                  isExpanding
+                      ? Tween<Offset>(
+                        begin: const Offset(0, -0.15),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: const Interval(
+                            0.2,
+                            1,
+                            curve: Curves.easeOutCubic,
+                          ),
+                        ),
+                      )
+                      : Tween<Offset>(
+                        begin: Offset.zero,
+                        end: const Offset(0, -0.05),
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeIn,
+                        ),
+                      );
+
+              return FadeTransition(
+                opacity: CurvedAnimation(parent: animation, curve: fadeCurve),
+                child: ClipRect(
+                  child: SizeTransition(
+                    sizeFactor: animation,
+                    axisAlignment: -1,
+                    child: SlideTransition(position: slideOffset, child: child),
+                  ),
+                ),
               );
             },
-            child: isCollapsed
-                ? const SizedBox.shrink(key: ValueKey('collapsed'))
-                : repliesWidget,
+            layoutBuilder: (currentChild, previousChildren) {
+              // Stack children during transition - ClipRect prevents
+              // overflow artifacts on deeply nested threads
+              return ClipRect(
+                child: Stack(
+                  children: [
+                    ...previousChildren,
+                    if (currentChild != null) currentChild,
+                  ],
+                ),
+              );
+            },
+            child:
+                isCollapsed
+                    ? const SizedBox.shrink(key: ValueKey('collapsed'))
+                    : repliesWidget,
           ),
 
         // Show "Load more replies" button if there are more (and not collapsed)

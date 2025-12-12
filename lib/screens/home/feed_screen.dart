@@ -73,9 +73,7 @@ class _FeedScreenState extends State<FeedScreen> {
     );
     final isLoading = context.select<FeedProvider, bool>((p) => p.isLoading);
     final error = context.select<FeedProvider, String?>((p) => p.error);
-    final feedType = context.select<FeedProvider, FeedType>(
-      (p) => p.feedType,
-    );
+    final feedType = context.select<FeedProvider, FeedType>((p) => p.feedType);
 
     // IMPORTANT: This relies on FeedProvider creating new list instances
     // (_posts = [..._posts, ...response.feed]) rather than mutating in-place.
@@ -106,10 +104,7 @@ class _FeedScreenState extends State<FeedScreen> {
               currentTime: currentTime,
             ),
             // Transparent header overlay
-            _buildHeader(
-              feedType: feedType,
-              isAuthenticated: isAuthenticated,
-            ),
+            _buildHeader(feedType: feedType, isAuthenticated: isAuthenticated),
           ],
         ),
       ),
@@ -218,9 +213,10 @@ class _FeedScreenState extends State<FeedScreen> {
             Text(
               label,
               style: TextStyle(
-                color: isActive
-                    ? AppColors.textPrimary
-                    : AppColors.textSecondary.withValues(alpha: 0.6),
+                color:
+                    isActive
+                        ? AppColors.textPrimary
+                        : AppColors.textSecondary.withValues(alpha: 0.6),
                 fontSize: 16,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
               ),

@@ -119,9 +119,7 @@ class CommentService {
       final cid = data['cid'] as String?;
 
       if (uri == null || uri.isEmpty || cid == null || cid.isEmpty) {
-        throw ApiException(
-          'Invalid response from server - missing uri or cid',
-        );
+        throw ApiException('Invalid response from server - missing uri or cid');
       }
 
       if (kDebugMode) {

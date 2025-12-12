@@ -178,101 +178,110 @@ void main() {
         );
       });
 
-      test('should throw ApiException on invalid response (null data)', () async {
-        when(
-          mockDio.post<Map<String, dynamic>>(
-            '/xrpc/social.coves.community.comment.create',
-            data: anyNamed('data'),
-          ),
-        ).thenAnswer(
-          (_) async => Response(
-            requestOptions: RequestOptions(path: ''),
-            statusCode: 200,
-            data: null,
-          ),
-        );
-
-        expect(
-          () => commentService.createComment(
-            rootUri: 'at://did:plc:author/post/123',
-            rootCid: 'rootCid',
-            parentUri: 'at://did:plc:author/post/123',
-            parentCid: 'parentCid',
-            content: 'Test comment',
-          ),
-          throwsA(
-            isA<ApiException>().having(
-              (e) => e.message,
-              'message',
-              contains('no data'),
+      test(
+        'should throw ApiException on invalid response (null data)',
+        () async {
+          when(
+            mockDio.post<Map<String, dynamic>>(
+              '/xrpc/social.coves.community.comment.create',
+              data: anyNamed('data'),
             ),
-          ),
-        );
-      });
-
-      test('should throw ApiException on invalid response (missing uri)', () async {
-        when(
-          mockDio.post<Map<String, dynamic>>(
-            '/xrpc/social.coves.community.comment.create',
-            data: anyNamed('data'),
-          ),
-        ).thenAnswer(
-          (_) async => Response(
-            requestOptions: RequestOptions(path: ''),
-            statusCode: 200,
-            data: {'cid': 'bafy123'},
-          ),
-        );
-
-        expect(
-          () => commentService.createComment(
-            rootUri: 'at://did:plc:author/post/123',
-            rootCid: 'rootCid',
-            parentUri: 'at://did:plc:author/post/123',
-            parentCid: 'parentCid',
-            content: 'Test comment',
-          ),
-          throwsA(
-            isA<ApiException>().having(
-              (e) => e.message,
-              'message',
-              contains('missing uri'),
+          ).thenAnswer(
+            (_) async => Response(
+              requestOptions: RequestOptions(path: ''),
+              statusCode: 200,
+              data: null,
             ),
-          ),
-        );
-      });
+          );
 
-      test('should throw ApiException on invalid response (empty uri)', () async {
-        when(
-          mockDio.post<Map<String, dynamic>>(
-            '/xrpc/social.coves.community.comment.create',
-            data: anyNamed('data'),
-          ),
-        ).thenAnswer(
-          (_) async => Response(
-            requestOptions: RequestOptions(path: ''),
-            statusCode: 200,
-            data: {'uri': '', 'cid': 'bafy123'},
-          ),
-        );
-
-        expect(
-          () => commentService.createComment(
-            rootUri: 'at://did:plc:author/post/123',
-            rootCid: 'rootCid',
-            parentUri: 'at://did:plc:author/post/123',
-            parentCid: 'parentCid',
-            content: 'Test comment',
-          ),
-          throwsA(
-            isA<ApiException>().having(
-              (e) => e.message,
-              'message',
-              contains('missing uri'),
+          expect(
+            () => commentService.createComment(
+              rootUri: 'at://did:plc:author/post/123',
+              rootCid: 'rootCid',
+              parentUri: 'at://did:plc:author/post/123',
+              parentCid: 'parentCid',
+              content: 'Test comment',
             ),
-          ),
-        );
-      });
+            throwsA(
+              isA<ApiException>().having(
+                (e) => e.message,
+                'message',
+                contains('no data'),
+              ),
+            ),
+          );
+        },
+      );
+
+      test(
+        'should throw ApiException on invalid response (missing uri)',
+        () async {
+          when(
+            mockDio.post<Map<String, dynamic>>(
+              '/xrpc/social.coves.community.comment.create',
+              data: anyNamed('data'),
+            ),
+          ).thenAnswer(
+            (_) async => Response(
+              requestOptions: RequestOptions(path: ''),
+              statusCode: 200,
+              data: {'cid': 'bafy123'},
+            ),
+          );
+
+          expect(
+            () => commentService.createComment(
+              rootUri: 'at://did:plc:author/post/123',
+              rootCid: 'rootCid',
+              parentUri: 'at://did:plc:author/post/123',
+              parentCid: 'parentCid',
+              content: 'Test comment',
+            ),
+            throwsA(
+              isA<ApiException>().having(
+                (e) => e.message,
+                'message',
+                contains('missing uri'),
+              ),
+            ),
+          );
+        },
+      );
+
+      test(
+        'should throw ApiException on invalid response (empty uri)',
+        () async {
+          when(
+            mockDio.post<Map<String, dynamic>>(
+              '/xrpc/social.coves.community.comment.create',
+              data: anyNamed('data'),
+            ),
+          ).thenAnswer(
+            (_) async => Response(
+              requestOptions: RequestOptions(path: ''),
+              statusCode: 200,
+              data: {'uri': '', 'cid': 'bafy123'},
+            ),
+          );
+
+          expect(
+            () => commentService.createComment(
+              rootUri: 'at://did:plc:author/post/123',
+              rootCid: 'rootCid',
+              parentUri: 'at://did:plc:author/post/123',
+              parentCid: 'parentCid',
+              content: 'Test comment',
+            ),
+            throwsA(
+              isA<ApiException>().having(
+                (e) => e.message,
+                'message',
+                contains('missing uri'),
+              ),
+            ),
+          );
+        },
+      );
 
       test('should throw ApiException on server error', () async {
         when(

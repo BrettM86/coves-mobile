@@ -454,10 +454,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     // Navigate to reply screen with comment context
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => ReplyScreen(
-          comment: comment,
-          onSubmit: (content) => _handleCommentReply(content, comment),
-        ),
+        builder:
+            (context) => ReplyScreen(
+              comment: comment,
+              onSubmit: (content) => _handleCommentReply(content, comment),
+            ),
       ),
     );
   }

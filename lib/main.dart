@@ -72,11 +72,7 @@ void main() async {
               ),
           update: (context, auth, vote, previous) {
             // Reuse existing provider to maintain state across rebuilds
-            return previous ??
-                FeedProvider(
-                  auth,
-                  voteProvider: vote,
-                );
+            return previous ?? FeedProvider(auth, voteProvider: vote);
           },
         ),
         ChangeNotifierProxyProvider2<

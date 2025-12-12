@@ -108,7 +108,7 @@ class CommentsProvider with ChangeNotifier {
   String get sort => _sort;
   String? get timeframe => _timeframe;
   ValueNotifier<DateTime?> get currentTimeNotifier => _currentTimeNotifier;
-  Set<String> get collapsedComments => _collapsedComments;
+  Set<String> get collapsedComments => Set.unmodifiable(_collapsedComments);
 
   /// Toggle collapsed state for a comment thread
   ///

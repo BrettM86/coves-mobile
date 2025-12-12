@@ -66,115 +66,114 @@ class CommentCard extends StatelessWidget {
     // the stroke width)
     final borderLeftOffset = (threadingLineCount * 6.0) + 2.0;
 
-    return GestureDetector(
-      onLongPress: onLongPress != null
-          ? () {
-              HapticFeedback.mediumImpact();
-              onLongPress!();
-            }
-          : null,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          decoration: const BoxDecoration(color: AppColors.background),
-          child: Stack(
-            children: [
-              // Threading indicators - vertical lines showing nesting ancestry
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _CommentDepthPainter(depth: threadingLineCount),
-                ),
-              ),
-              // Collapsed count badge - positioned after threading lines
-              // to avoid overlap at any depth level
-              if (isCollapsed && collapsedCount > 0)
-                Positioned(
-                  left: borderLeftOffset + 4,
-                  bottom: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '+$collapsedCount hidden',
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+    return Semantics(
+      button: true,
+      hint:
+          onLongPress != null
+              ? (isCollapsed
+                  ? 'Double tap and hold to expand thread'
+                  : 'Double tap and hold to collapse thread')
+              : null,
+      child: GestureDetector(
+        onLongPress:
+            onLongPress != null
+                ? () {
+                  HapticFeedback.mediumImpact();
+                  onLongPress!();
+                }
+                : null,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            decoration: const BoxDecoration(color: AppColors.background),
+            child: Stack(
+              children: [
+                // Threading indicators - vertical lines showing nesting ancestry
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _CommentDepthPainter(depth: threadingLineCount),
                   ),
                 ),
-              // Bottom border
-              // (starts after threading lines, not overlapping them)
-              Positioned(
-                left: borderLeftOffset,
-                right: 0,
-                bottom: 0,
-                child: Container(height: 1, color: AppColors.border),
-              ),
-              // Comment content with depth-based left padding
-              Padding(
-                padding: EdgeInsets.fromLTRB(leftPadding, 12, 16, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Author info row
-                    Row(
+                // Bottom border
+                // (starts after threading lines, not overlapping them)
+                Positioned(
+                  left: borderLeftOffset,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(height: 1, color: AppColors.border),
+                ),
+                // Comment content with depth-based left padding
+                // Animate height changes when collapsing/expanding
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      leftPadding,
+                      isCollapsed ? 10 : 12,
+                      16,
+                      isCollapsed ? 10 : 8,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Author avatar
-                        _buildAuthorAvatar(comment.author),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Author handle
-                              Text(
+                        // Author info row
+                        Row(
+                          children: [
+                            // Author avatar
+                            _buildAuthorAvatar(comment.author),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
                                 '@${comment.author.handle}',
                                 style: TextStyle(
                                   color: AppColors.textPrimary.withValues(
-                                    alpha: 0.5,
+                                    alpha: isCollapsed ? 0.7 : 0.5,
                                   ),
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                            // Show collapsed count OR time ago
+                            if (isCollapsed && collapsedCount > 0)
+                              _buildCollapsedBadge()
+                            else
+                              Text(
+                                DateTimeUtils.formatTimeAgo(
+                                  comment.createdAt,
+                                  currentTime: currentTime,
+                                ),
+                                style: TextStyle(
+                                  color: AppColors.textPrimary.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                  fontSize: 12,
+                                ),
+                              ),
+                          ],
                         ),
-                        // Time ago
-                        Text(
-                          DateTimeUtils.formatTimeAgo(
-                            comment.createdAt,
-                            currentTime: currentTime,
-                          ),
-                          style: TextStyle(
-                            color: AppColors.textPrimary.withValues(alpha: 0.5),
-                            fontSize: 12,
-                          ),
-                        ),
+
+                        // Only show content and actions when expanded
+                        if (!isCollapsed) ...[
+                          const SizedBox(height: 8),
+
+                          // Comment content
+                          if (comment.content.isNotEmpty) ...[
+                            _buildCommentContent(comment),
+                            const SizedBox(height: 8),
+                          ],
+
+                          // Action buttons (just vote for now)
+                          _buildActionButtons(context),
+                        ],
                       ],
                     ),
-                    const SizedBox(height: 8),
-
-                    // Comment content
-                    if (comment.content.isNotEmpty) ...[
-                      _buildCommentContent(comment),
-                      const SizedBox(height: 8),
-                    ],
-
-                    // Action buttons (just vote for now)
-                    _buildActionButtons(context),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -220,6 +219,25 @@ class CommentCard extends StatelessWidget {
             fontSize: 12,
             fontWeight: FontWeight.bold,
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Builds the compact collapsed badge showing "+X"
+  Widget _buildCollapsedBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '+$collapsedCount',
+        style: TextStyle(
+          color: AppColors.primary.withValues(alpha: 0.9),
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
