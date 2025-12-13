@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../models/comment.dart';
 import '../../models/post.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/post_card.dart';
@@ -32,6 +34,7 @@ class ReplyScreen extends StatefulWidget {
     this.post,
     this.comment,
     required this.onSubmit,
+    required this.commentsProvider,
     super.key,
   }) : assert(
          (post != null) != (comment != null),
@@ -47,6 +50,9 @@ class ReplyScreen extends StatefulWidget {
   /// Callback when user submits reply
   final Future<void> Function(String content) onSubmit;
 
+  /// CommentsProvider for draft save/restore and time updates
+  final CommentsProvider commentsProvider;
+
   @override
   State<ReplyScreen> createState() => _ReplyScreenState();
 }
@@ -58,6 +64,7 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   bool _hasText = false;
   bool _isKeyboardOpening = false;
   bool _isSubmitting = false;
+  bool _authInvalidated = false;
   double _lastKeyboardHeight = 0;
   Timer? _bannerDismissTimer;
 
@@ -68,13 +75,68 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     _textController.addListener(_onTextChanged);
     _focusNode.addListener(_onFocusChanged);
 
-    // Autofocus with delay (Thunder approach - let screen render first)
-    Future.delayed(const Duration(milliseconds: 300), () {
+    // Restore draft and autofocus after frame is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _isKeyboardOpening = true;
-        _focusNode.requestFocus();
+        _setupAuthListener();
+        _restoreDraft();
+
+        // Autofocus with delay (Thunder approach - let screen render first)
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            _isKeyboardOpening = true;
+            _focusNode.requestFocus();
+          }
+        });
       }
     });
+  }
+
+  void _setupAuthListener() {
+    try {
+      context.read<AuthProvider>().addListener(_onAuthChanged);
+    } on Exception {
+      // AuthProvider may not be available (e.g., tests)
+    }
+  }
+
+  void _onAuthChanged() {
+    if (!mounted || _authInvalidated) return;
+
+    try {
+      final authProvider = context.read<AuthProvider>();
+      if (!authProvider.isAuthenticated) {
+        _authInvalidated = true;
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      }
+    } on Exception {
+      // AuthProvider may not be available
+    }
+  }
+
+  /// Restore draft text if available for this reply context
+  void _restoreDraft() {
+    try {
+      final commentsProvider = context.read<CommentsProvider>();
+      final ourParentUri = widget.comment?.comment.uri;
+
+      // Get draft for this specific parent URI
+      final draft = commentsProvider.getDraft(parentUri: ourParentUri);
+
+      if (draft.isNotEmpty) {
+        _textController.text = draft;
+        setState(() {
+          _hasText = true;
+        });
+      }
+    } on Exception catch (e) {
+      // CommentsProvider might not be available (e.g., during testing)
+      if (kDebugMode) {
+        debugPrint('📝 Draft not restored: $e');
+      }
+    }
   }
 
   void _onFocusChanged() {
@@ -87,6 +149,10 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   @override
   void didChangeMetrics() {
     super.didChangeMetrics();
+    // Guard against being called after widget is deactivated
+    // (can happen during keyboard animation while navigating away)
+    if (!mounted) return;
+
     final keyboardHeight = View.of(context).viewInsets.bottom;
 
     // Detect keyboard closing and unfocus text field
@@ -120,6 +186,11 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     _bannerDismissTimer?.cancel();
+    try {
+      context.read<AuthProvider>().removeListener(_onAuthChanged);
+    } on Exception {
+      // AuthProvider may not be available
+    }
     WidgetsBinding.instance.removeObserver(this);
     _textController.dispose();
     _focusNode.dispose();
@@ -137,6 +208,10 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _handleSubmit() async {
+    if (_authInvalidated) {
+      return;
+    }
+
     final content = _textController.text.trim();
     if (content.isEmpty) {
       return;
@@ -152,6 +227,18 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
 
     try {
       await widget.onSubmit(content);
+      // Clear draft on success
+      try {
+        if (mounted) {
+          final parentUri = widget.comment?.comment.uri;
+          context.read<CommentsProvider>().clearDraft(parentUri: parentUri);
+        }
+      } on Exception catch (e) {
+        // CommentsProvider might not be available
+        if (kDebugMode) {
+          debugPrint('📝 Draft not cleared: $e');
+        }
+      }
       // Pop screen after successful submission
       if (mounted) {
         Navigator.of(context).pop();
@@ -213,17 +300,38 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   }
 
   void _handleCancel() {
+    // Save draft before closing (if text is not empty)
+    _saveDraft();
     Navigator.of(context).pop();
+  }
+
+  /// Save current text as draft
+  void _saveDraft() {
+    try {
+      final commentsProvider = context.read<CommentsProvider>();
+      commentsProvider.saveDraft(
+        _textController.text,
+        parentUri: widget.comment?.comment.uri,
+      );
+    } on Exception catch (e) {
+      // CommentsProvider might not be available
+      if (kDebugMode) {
+        debugPrint('📝 Draft not saved: $e');
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        // Dismiss keyboard when tapping outside
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
+    // Provide CommentsProvider to descendant widgets (Consumer in _ContextPreview)
+    return ChangeNotifierProvider.value(
+      value: widget.commentsProvider,
+      child: GestureDetector(
+        onTap: () {
+          // Dismiss keyboard when tapping outside
+          FocusManager.instance.primaryFocus?.unfocus();
+        },
+        child: Scaffold(
         backgroundColor: AppColors.background,
         resizeToAvoidBottomInset: false, // Thunder approach
         appBar: AppBar(
@@ -303,6 +411,7 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
             ),
           ],
         ),
+      ),
       ),
     );
   }
