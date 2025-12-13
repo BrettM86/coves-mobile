@@ -54,7 +54,9 @@ class EnvironmentConfig {
   static const String _flavor = String.fromEnvironment('FLUTTER_FLAVOR');
 
   /// Explicit environment override via --dart-define=ENVIRONMENT=local
+  /// Also supports --dart-define=ENV=dev for convenience
   static const String _envOverride = String.fromEnvironment('ENVIRONMENT');
+  static const String _envShorthand = String.fromEnvironment('ENV');
 
   /// Get current environment based on build configuration
   ///
@@ -68,6 +70,18 @@ class EnvironmentConfig {
       switch (_envOverride) {
         case 'local':
           return local;
+        case 'production':
+          return production;
+      }
+    }
+
+    // Priority 1b: Shorthand ENV override (dev -> local, prod -> production)
+    if (_envShorthand.isNotEmpty) {
+      switch (_envShorthand) {
+        case 'dev':
+        case 'local':
+          return local;
+        case 'prod':
         case 'production':
           return production;
       }
