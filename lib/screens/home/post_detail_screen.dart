@@ -18,7 +18,9 @@ import '../../widgets/icons/share_icon.dart';
 import '../../widgets/loading_error_states.dart';
 import '../../widgets/post_action_bar.dart';
 import '../../widgets/post_card.dart';
+import '../../widgets/status_bar_overlay.dart';
 import '../compose/reply_screen.dart';
+import 'focused_thread_screen.dart';
 
 /// Post Detail Screen
 ///
@@ -463,6 +465,22 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
+  /// Navigate to focused thread screen for deep threads
+  void _onContinueThread(
+    ThreadViewComment thread,
+    List<ThreadViewComment> ancestors,
+  ) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => FocusedThreadScreen(
+          thread: thread,
+          ancestors: ancestors,
+          onReply: _handleCommentReply,
+        ),
+      ),
+    );
+  }
+
   /// Build main content area
   Widget _buildContent() {
     // Use Consumer to rebuild when comments provider changes
@@ -488,35 +506,39 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         }
 
         // Content with RefreshIndicator and floating SliverAppBar
-        return RefreshIndicator(
-          onRefresh: _onRefresh,
-          color: AppColors.primary,
-          child: CustomScrollView(
-            controller: _scrollController,
-            slivers: [
-              // Floating app bar that hides on scroll down, shows on scroll up
-              SliverAppBar(
-                backgroundColor: AppColors.background,
-                surfaceTintColor: Colors.transparent,
-                foregroundColor: AppColors.textPrimary,
-                title: _buildCommunityTitle(),
-                centerTitle: false,
-                elevation: 0,
-                floating: true,
-                snap: true,
-                actions: [
-                  IconButton(
-                    icon: const ShareIcon(color: AppColors.textPrimary),
-                    onPressed: _handleShare,
-                    tooltip: 'Share',
+        // Wrapped in Stack to add solid status bar background overlay
+        return Stack(
+          children: [
+            RefreshIndicator(
+              onRefresh: _onRefresh,
+              color: AppColors.primary,
+              child: CustomScrollView(
+                controller: _scrollController,
+                slivers: [
+                  // Floating app bar that hides on scroll down,
+                  // shows on scroll up
+                  SliverAppBar(
+                    backgroundColor: AppColors.background,
+                    surfaceTintColor: Colors.transparent,
+                    foregroundColor: AppColors.textPrimary,
+                    title: _buildCommunityTitle(),
+                    centerTitle: false,
+                    elevation: 0,
+                    floating: true,
+                    snap: true,
+                    actions: [
+                      IconButton(
+                        icon: const ShareIcon(color: AppColors.textPrimary),
+                        onPressed: _handleShare,
+                        tooltip: 'Share',
+                      ),
+                    ],
                   ),
-                ],
-              ),
 
-              // Post + comments + loading indicator
-              SliverSafeArea(
-                top: false,
-                sliver: SliverList(
+                  // Post + comments + loading indicator
+                  SliverSafeArea(
+                    top: false,
+                    sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       // Post card (index 0)
@@ -577,6 +599,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         onCommentTap: _openReplyToComment,
                         collapsedComments: commentsProvider.collapsedComments,
                         onCollapseToggle: commentsProvider.toggleCollapsed,
+                        onContinueThread: _onContinueThread,
                       );
                     },
                     childCount:
@@ -588,6 +611,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ),
             ],
           ),
+        ),
+            // Prevents content showing through transparent status bar
+            const StatusBarOverlay(),
+          ],
         );
       },
     );
@@ -641,6 +668,7 @@ class _CommentItem extends StatelessWidget {
     this.onCommentTap,
     this.collapsedComments = const {},
     this.onCollapseToggle,
+    this.onContinueThread,
   });
 
   final ThreadViewComment comment;
@@ -648,6 +676,8 @@ class _CommentItem extends StatelessWidget {
   final void Function(ThreadViewComment)? onCommentTap;
   final Set<String> collapsedComments;
   final void Function(String uri)? onCollapseToggle;
+  final void Function(ThreadViewComment, List<ThreadViewComment>)?
+      onContinueThread;
 
   @override
   Widget build(BuildContext context) {
@@ -661,6 +691,7 @@ class _CommentItem extends StatelessWidget {
           onCommentTap: onCommentTap,
           collapsedComments: collapsedComments,
           onCollapseToggle: onCollapseToggle,
+          onContinueThread: onContinueThread,
         );
       },
     );

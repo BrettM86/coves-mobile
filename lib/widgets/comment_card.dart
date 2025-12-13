@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
+import '../constants/threading_colors.dart';
 import '../models/comment.dart';
 import '../models/post.dart';
 import '../providers/auth_provider.dart';
@@ -88,7 +89,8 @@ class CommentCard extends StatelessWidget {
             decoration: const BoxDecoration(color: AppColors.background),
             child: Stack(
               children: [
-                // Threading indicators - vertical lines showing nesting ancestry
+                // Threading indicators - vertical lines showing
+                // nesting ancestry
                 Positioned.fill(
                   child: CustomPaint(
                     painter: _CommentDepthPainter(depth: threadingLineCount),
@@ -355,16 +357,6 @@ class _CommentDepthPainter extends CustomPainter {
   _CommentDepthPainter({required this.depth});
   final int depth;
 
-  // Color palette for threading indicators (cycles through 6 colors)
-  static final List<Color> _threadingColors = [
-    const Color(0xFFFF6B6B), // Red
-    const Color(0xFF4ECDC4), // Teal
-    const Color(0xFFFFE66D), // Yellow
-    const Color(0xFF95E1D3), // Mint
-    const Color(0xFFC7CEEA), // Purple
-    const Color(0xFFFFAA5C), // Orange
-  ];
-
   @override
   void paint(Canvas canvas, Size size) {
     final paint =
@@ -375,7 +367,7 @@ class _CommentDepthPainter extends CustomPainter {
     // Draw vertical line for each depth level with different colors
     for (var i = 0; i < depth; i++) {
       // Cycle through colors based on depth level
-      paint.color = _threadingColors[i % _threadingColors.length].withValues(
+      paint.color = kThreadingColors[i % kThreadingColors.length].withValues(
         alpha: 0.5,
       );
 

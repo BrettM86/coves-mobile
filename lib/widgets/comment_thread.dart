@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
+import '../constants/threading_colors.dart';
 import '../models/comment.dart';
 import 'comment_card.dart';
 
@@ -31,6 +32,8 @@ class CommentThread extends StatelessWidget {
     this.onCommentTap,
     this.collapsedComments = const {},
     this.onCollapseToggle,
+    this.onContinueThread,
+    this.ancestors = const [],
     super.key,
   });
 
@@ -49,6 +52,17 @@ class CommentThread extends StatelessWidget {
   /// Callback when a comment collapse state is toggled
   final void Function(String uri)? onCollapseToggle;
 
+  /// Callback when "Read more replies" is tapped at max depth
+  /// Passes the thread to continue and its ancestors for context
+  final void Function(
+    ThreadViewComment thread,
+    List<ThreadViewComment> ancestors,
+  )?
+  onContinueThread;
+
+  /// Ancestor comments leading to this thread (for continue thread context)
+  final List<ThreadViewComment> ancestors;
+
   /// Count all descendants recursively
   static int countDescendants(ThreadViewComment thread) {
     if (thread.replies == null || thread.replies!.isEmpty) {
@@ -63,9 +77,6 @@ class CommentThread extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Calculate effective depth (flatten after maxDepth)
-    final effectiveDepth = depth > maxDepth ? maxDepth : depth;
-
     // Check if this comment is collapsed
     final isCollapsed = collapsedComments.contains(thread.comment.uri);
     final collapsedCount = isCollapsed ? countDescendants(thread) : 0;
@@ -73,11 +84,21 @@ class CommentThread extends StatelessWidget {
     // Check if there are replies to render
     final hasReplies = thread.replies != null && thread.replies!.isNotEmpty;
 
-    // Only build replies widget when NOT collapsed (optimization)
-    // When collapsed, AnimatedSwitcher shows SizedBox.shrink() so children
-    // are never mounted - no need to build them at all
+    // Check if we've hit max depth - stop threading here
+    final atMaxDepth = depth >= maxDepth;
+
+    // Only count descendants when needed (at max depth for continue link)
+    // Avoids O(n²) traversal on every render
+    final needsDescendantCount = hasReplies && atMaxDepth && !isCollapsed;
+    final replyCount = needsDescendantCount ? countDescendants(thread) : 0;
+
+    // Build updated ancestors list including current thread
+    final childAncestors = [...ancestors, thread];
+
+    // Only build replies widget when NOT collapsed and NOT at max depth
+    // When at max depth, we show "Read more replies" link instead
     final repliesWidget =
-        hasReplies && !isCollapsed
+        hasReplies && !isCollapsed && !atMaxDepth
             ? Column(
               key: const ValueKey('replies'),
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,6 +113,8 @@ class CommentThread extends StatelessWidget {
                       onCommentTap: onCommentTap,
                       collapsedComments: collapsedComments,
                       onCollapseToggle: onCollapseToggle,
+                      onContinueThread: onContinueThread,
+                      ancestors: childAncestors,
                     );
                   }).toList(),
             )
@@ -103,7 +126,7 @@ class CommentThread extends StatelessWidget {
         // Render the comment with tap and long-press handlers
         CommentCard(
           comment: thread.comment,
-          depth: effectiveDepth,
+          depth: depth,
           currentTime: currentTime,
           onTap: onCommentTap != null ? () => onCommentTap!(thread) : null,
           onLongPress:
@@ -114,8 +137,8 @@ class CommentThread extends StatelessWidget {
           collapsedCount: collapsedCount,
         ),
 
-        // Render replies with animation
-        if (hasReplies)
+        // Render replies with animation (only when NOT at max depth)
+        if (hasReplies && !atMaxDepth)
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 350),
             reverseDuration: const Duration(milliseconds: 280),
@@ -186,17 +209,76 @@ class CommentThread extends StatelessWidget {
                     : repliesWidget,
           ),
 
+        // Show "Read more replies" link at max depth when there are replies
+        if (hasReplies && atMaxDepth && !isCollapsed)
+          _buildContinueThreadLink(context, replyCount),
+
         // Show "Load more replies" button if there are more (and not collapsed)
         if (thread.hasMore && !isCollapsed) _buildLoadMoreButton(context),
       ],
     );
   }
 
+  /// Builds the "Read X more replies" link for continuing deep threads
+  Widget _buildContinueThreadLink(BuildContext context, int replyCount) {
+    final replyText = replyCount == 1 ? 'reply' : 'replies';
+
+    // Thread one level deeper than parent to feel like a child element
+    final threadingLineCount = depth + 2;
+    final leftPadding = (threadingLineCount * 6.0) + 14.0;
+
+    return InkWell(
+      onTap: () {
+        if (onContinueThread != null) {
+          // Pass thread and ancestors for context display
+          // Don't include thread - it's the anchor, not an ancestor
+          onContinueThread!(thread, ancestors);
+        } else {
+          if (kDebugMode) {
+            debugPrint('Continue thread tapped (no handler provided)');
+          }
+        }
+      },
+      child: Stack(
+        children: [
+          // Threading lines (one deeper than parent comment)
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _ContinueThreadPainter(depth: threadingLineCount),
+            ),
+          ),
+          // Content
+          Padding(
+            padding: EdgeInsets.fromLTRB(leftPadding, 10, 16, 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Read $replyCount more $replyText',
+                  style: TextStyle(
+                    color: AppColors.primary.withValues(alpha: 0.9),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 11,
+                  color: AppColors.primary.withValues(alpha: 0.7),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Builds the "Load more replies" button
   Widget _buildLoadMoreButton(BuildContext context) {
     // Calculate left padding based on depth (align with replies)
-    final effectiveDepth = depth > maxDepth ? maxDepth : depth;
-    final leftPadding = 16.0 + ((effectiveDepth + 1) * 12.0);
+    final leftPadding = 16.0 + ((depth + 1) * 12.0);
 
     return Container(
       padding: EdgeInsets.fromLTRB(leftPadding, 8, 16, 8),
@@ -236,5 +318,39 @@ class CommentThread extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Custom painter for drawing threading lines on continue thread link
+class _ContinueThreadPainter extends CustomPainter {
+  _ContinueThreadPainter({required this.depth});
+  final int depth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..strokeWidth = 2.0
+          ..style = PaintingStyle.stroke;
+
+    // Draw vertical line for each depth level with different colors
+    for (var i = 0; i < depth; i++) {
+      // Cycle through colors based on depth level
+      paint.color = kThreadingColors[i % kThreadingColors.length].withValues(
+        alpha: 0.5,
+      );
+
+      final xPosition = (i + 1) * 6.0;
+      canvas.drawLine(
+        Offset(xPosition, 0),
+        Offset(xPosition, size.height),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ContinueThreadPainter oldDelegate) {
+    return oldDelegate.depth != depth;
   }
 }
