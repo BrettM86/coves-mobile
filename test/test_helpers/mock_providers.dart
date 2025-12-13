@@ -2,6 +2,25 @@ import 'package:coves_flutter/models/coves_session.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:flutter/foundation.dart';
 
+/// Mock CommentsProvider for testing
+class MockCommentsProvider extends ChangeNotifier {
+  final String postUri;
+  final String postCid;
+
+  MockCommentsProvider({
+    required this.postUri,
+    required this.postCid,
+  });
+
+  final ValueNotifier<DateTime?> currentTimeNotifier = ValueNotifier(null);
+
+  @override
+  void dispose() {
+    currentTimeNotifier.dispose();
+    super.dispose();
+  }
+}
+
 /// Mock AuthProvider for testing
 class MockAuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;

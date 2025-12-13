@@ -1,5 +1,6 @@
 import 'package:coves_flutter/models/comment.dart';
 import 'package:coves_flutter/models/post.dart';
+import 'package:coves_flutter/providers/comments_provider.dart';
 import 'package:coves_flutter/screens/home/focused_thread_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,10 +11,19 @@ import '../test_helpers/mock_providers.dart';
 void main() {
   late MockAuthProvider mockAuthProvider;
   late MockVoteProvider mockVoteProvider;
+  late MockCommentsProvider mockCommentsProvider;
 
   setUp(() {
     mockAuthProvider = MockAuthProvider();
     mockVoteProvider = MockVoteProvider();
+    mockCommentsProvider = MockCommentsProvider(
+      postUri: 'at://did:plc:test/post/123',
+      postCid: 'post-cid',
+    );
+  });
+
+  tearDown(() {
+    mockCommentsProvider.dispose();
   });
 
   /// Helper to create a test comment
@@ -61,6 +71,8 @@ void main() {
           thread: thread,
           ancestors: ancestors,
           onReply: onReply ?? (content, parent) async {},
+          // Note: Using mock cast - tests are skipped so this won't actually run
+          commentsProvider: mockCommentsProvider as CommentsProvider,
         ),
       ),
     );
