@@ -38,7 +38,31 @@ void main() {
     });
 
     group('loadFeed', () {
-      test('should load timeline when authenticated', () async {
+      test('should load discover feed when authenticated by default', () async {
+        when(mockAuthProvider.isAuthenticated).thenReturn(true);
+
+        final mockResponse = TimelineResponse(
+          feed: [_createMockPost()],
+          cursor: 'next-cursor',
+        );
+
+        when(
+          mockApiService.getDiscover(
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+          ),
+        ).thenAnswer((_) async => mockResponse);
+
+        await feedProvider.loadFeed(refresh: true);
+
+        expect(feedProvider.posts.length, 1);
+        expect(feedProvider.error, null);
+        expect(feedProvider.isLoading, false);
+      });
+
+      test('should load timeline when feed type is For You', () async {
         when(mockAuthProvider.isAuthenticated).thenReturn(true);
 
         final mockResponse = TimelineResponse(
@@ -55,7 +79,7 @@ void main() {
           ),
         ).thenAnswer((_) async => mockResponse);
 
-        await feedProvider.loadFeed(refresh: true);
+        await feedProvider.setFeedType(FeedType.forYou);
 
         expect(feedProvider.posts.length, 1);
         expect(feedProvider.error, null);
@@ -274,10 +298,11 @@ void main() {
             sort: anyNamed('sort'),
             timeframe: anyNamed('timeframe'),
             limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
           ),
         ).thenAnswer((_) async => firstResponse);
 
-        await feedProvider.loadFeed(refresh: true);
+        await feedProvider.setFeedType(FeedType.forYou);
 
         // Load more
         final secondResponse = TimelineResponse(
@@ -316,7 +341,7 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        await feedProvider.fetchTimeline(refresh: true);
+        await feedProvider.setFeedType(FeedType.forYou);
         await feedProvider.loadMore();
 
         // Should not make additional calls while loading
@@ -356,7 +381,7 @@ void main() {
           ),
         ).thenThrow(Exception('Network error'));
 
-        await feedProvider.loadFeed(refresh: true);
+        await feedProvider.setFeedType(FeedType.forYou);
         expect(feedProvider.error, isNotNull);
 
         // Retry

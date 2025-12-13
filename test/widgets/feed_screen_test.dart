@@ -215,24 +215,26 @@ void main() {
       expect(find.text('Test Post 2'), findsOneWidget);
     });
 
-    testWidgets('should display "Feed" title when authenticated', (
+    testWidgets('should display feed type tabs when authenticated', (
       tester,
     ) async {
       fakeAuthProvider.setAuthenticated(value: true);
 
       await tester.pumpWidget(createTestWidget());
 
-      expect(find.text('Feed'), findsOneWidget);
+      expect(find.text('Discover'), findsOneWidget);
+      expect(find.text('For You'), findsOneWidget);
     });
 
-    testWidgets('should display "Explore" title when not authenticated', (
+    testWidgets('should display only Discover tab when not authenticated', (
       tester,
     ) async {
       fakeAuthProvider.setAuthenticated(value: false);
 
       await tester.pumpWidget(createTestWidget());
 
-      expect(find.text('Explore'), findsOneWidget);
+      expect(find.text('Discover'), findsOneWidget);
+      expect(find.text('For You'), findsNothing);
     });
 
     testWidgets('should handle pull-to-refresh', (tester) async {

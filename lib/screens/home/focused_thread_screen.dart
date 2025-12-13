@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../models/comment.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/comments_provider.dart';
 import '../../widgets/comment_card.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/status_bar_overlay.dart';
@@ -25,11 +26,16 @@ import '../compose/reply_screen.dart';
 /// any collapsed state is reset. This is by design - it allows users to
 /// explore deep threads without their collapse choices persisting across
 /// navigation, keeping the focused view clean and predictable.
+///
+/// ## Provider Sharing
+/// Receives the parent's CommentsProvider for draft text preservation and
+/// consistent vote state display.
 class FocusedThreadScreen extends StatelessWidget {
   const FocusedThreadScreen({
     required this.thread,
     required this.ancestors,
     required this.onReply,
+    required this.commentsProvider,
     super.key,
   });
 
@@ -42,14 +48,21 @@ class FocusedThreadScreen extends StatelessWidget {
   /// Callback when user replies to a comment
   final Future<void> Function(String content, ThreadViewComment parent) onReply;
 
+  /// Parent's CommentsProvider for draft preservation and vote state
+  final CommentsProvider commentsProvider;
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: _FocusedThreadBody(
-        thread: thread,
-        ancestors: ancestors,
-        onReply: onReply,
+    // Expose parent's CommentsProvider for ReplyScreen draft access
+    return ChangeNotifierProvider.value(
+      value: commentsProvider,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: _FocusedThreadBody(
+          thread: thread,
+          ancestors: ancestors,
+          onReply: onReply,
+        ),
       ),
     );
   }
@@ -126,9 +139,10 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
 
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => ReplyScreen(
+        builder: (navigatorContext) => ReplyScreen(
           comment: comment,
           onSubmit: (content) => widget.onReply(content, comment),
+          commentsProvider: context.read<CommentsProvider>(),
         ),
       ),
     );
@@ -141,10 +155,11 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   ) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => FocusedThreadScreen(
+        builder: (navigatorContext) => FocusedThreadScreen(
           thread: thread,
           ancestors: ancestors,
           onReply: widget.onReply,
+          commentsProvider: context.read<CommentsProvider>(),
         ),
       ),
     );

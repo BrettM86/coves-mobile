@@ -39,6 +39,8 @@ void main() {
 
       commentsProvider = CommentsProvider(
         mockAuthProvider,
+        postUri: testPostUri,
+        postCid: testPostCid,
         apiService: mockApiService,
         voteProvider: mockVoteProvider,
       );
@@ -72,11 +74,7 @@ void main() {
           ),
         ).thenAnswer((_) async => mockResponse);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.comments.length, 2);
         expect(commentsProvider.hasMore, true);
@@ -98,11 +96,7 @@ void main() {
           ),
         ).thenAnswer((_) async => mockResponse);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.comments.isEmpty, true);
         expect(commentsProvider.hasMore, false);
@@ -121,11 +115,7 @@ void main() {
           ),
         ).thenThrow(Exception('Network error'));
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.error, isNotNull);
         expect(commentsProvider.error, contains('Network error'));
@@ -145,11 +135,7 @@ void main() {
           ),
         ).thenThrow(Exception('TimeoutException: Request timed out'));
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.error, isNotNull);
         expect(commentsProvider.isLoading, false);
@@ -174,11 +160,7 @@ void main() {
           ),
         ).thenAnswer((_) async => firstResponse);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.comments.length, 1);
 
@@ -200,10 +182,7 @@ void main() {
           ),
         ).thenAnswer((_) async => secondResponse);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-        );
+        await commentsProvider.loadComments();
 
         expect(commentsProvider.comments.length, 2);
         expect(commentsProvider.comments[0].comment.uri, 'comment1');
@@ -229,11 +208,7 @@ void main() {
           ),
         ).thenAnswer((_) async => firstResponse);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.comments.length, 1);
 
@@ -257,11 +232,7 @@ void main() {
           ),
         ).thenAnswer((_) async => refreshResponse);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.comments.length, 2);
         expect(commentsProvider.comments[0].comment.uri, 'comment2');
@@ -285,72 +256,14 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.hasMore, false);
       });
 
-      test('should reset state when loading different post', () async {
-        // Load first post
-        final firstResponse = CommentsResponse(
-          post: {},
-          comments: [_createMockThreadComment('comment1')],
-          cursor: 'cursor-1',
-        );
-
-        when(
-          mockApiService.getComments(
-            postUri: anyNamed('postUri'),
-            sort: anyNamed('sort'),
-            timeframe: anyNamed('timeframe'),
-            depth: anyNamed('depth'),
-            limit: anyNamed('limit'),
-            cursor: anyNamed('cursor'),
-          ),
-        ).thenAnswer((_) async => firstResponse);
-
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
-
-        expect(commentsProvider.comments.length, 1);
-
-        // Load different post
-        const differentPostUri =
-            'at://did:plc:test/social.coves.post.record/456';
-        const differentPostCid = 'different-post-cid';
-        final secondResponse = CommentsResponse(
-          post: {},
-          comments: [_createMockThreadComment('comment2')],
-        );
-
-        when(
-          mockApiService.getComments(
-            postUri: differentPostUri,
-            sort: anyNamed('sort'),
-            timeframe: anyNamed('timeframe'),
-            depth: anyNamed('depth'),
-            limit: anyNamed('limit'),
-            cursor: anyNamed('cursor'),
-          ),
-        ).thenAnswer((_) async => secondResponse);
-
-        await commentsProvider.loadComments(
-          postUri: differentPostUri,
-          postCid: differentPostCid,
-          refresh: true,
-        );
-
-        // Should have reset and loaded new comments
-        expect(commentsProvider.comments.length, 1);
-        expect(commentsProvider.comments[0].comment.uri, 'comment2');
-      });
+      // Note: "reset state when loading different post" test removed
+      // Providers are now immutable per post - use CommentsProviderCache
+      // to get separate providers for different posts
 
       test('should not load when already loading', () async {
         final response = CommentsResponse(
@@ -374,18 +287,10 @@ void main() {
         });
 
         // Start first load
-        final firstFuture = commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        final firstFuture = commentsProvider.loadComments(refresh: true);
 
         // Try to load again while still loading - should schedule a refresh
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         await firstFuture;
         // Wait a bit for the pending refresh to execute
@@ -425,11 +330,7 @@ void main() {
             ),
           ).thenAnswer((_) async => mockResponse);
 
-          await commentsProvider.loadComments(
-            postUri: testPostUri,
-            postCid: testPostCid,
-            refresh: true,
-          );
+          await commentsProvider.loadComments(refresh: true);
 
           expect(commentsProvider.comments.length, 1);
           expect(commentsProvider.error, null);
@@ -455,11 +356,7 @@ void main() {
           ),
         ).thenAnswer((_) async => mockResponse);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.comments.length, 1);
         expect(commentsProvider.error, null);
@@ -486,11 +383,7 @@ void main() {
           ),
         ).thenAnswer((_) async => initialResponse);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.sort, 'hot');
 
@@ -544,11 +437,7 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         // Try to set same sort option
         await commentsProvider.setSortOption('hot');
@@ -587,11 +476,7 @@ void main() {
           ),
         ).thenAnswer((_) async => initialResponse);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.comments.length, 1);
 
@@ -619,20 +504,8 @@ void main() {
         expect(commentsProvider.comments.length, 2);
       });
 
-      test('should not refresh if no post loaded', () async {
-        await commentsProvider.refreshComments();
-
-        verifyNever(
-          mockApiService.getComments(
-            postUri: anyNamed('postUri'),
-            sort: anyNamed('sort'),
-            timeframe: anyNamed('timeframe'),
-            depth: anyNamed('depth'),
-            limit: anyNamed('limit'),
-            cursor: anyNamed('cursor'),
-          ),
-        );
-      });
+      // Note: "should not refresh if no post loaded" test removed
+      // Providers now always have a post URI at construction time
     });
 
     group('loadMoreComments', () {
@@ -657,11 +530,7 @@ void main() {
           ),
         ).thenAnswer((_) async => initialResponse);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.hasMore, true);
 
@@ -705,11 +574,7 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.hasMore, false);
 
@@ -729,20 +594,8 @@ void main() {
         ).called(1);
       });
 
-      test('should not load more if no post loaded', () async {
-        await commentsProvider.loadMoreComments();
-
-        verifyNever(
-          mockApiService.getComments(
-            postUri: anyNamed('postUri'),
-            sort: anyNamed('sort'),
-            timeframe: anyNamed('timeframe'),
-            depth: anyNamed('depth'),
-            limit: anyNamed('limit'),
-            cursor: anyNamed('cursor'),
-          ),
-        );
-      });
+      // Note: "should not load more if no post loaded" test removed
+      // Providers now always have a post URI at construction time
     });
 
     group('retry', () {
@@ -761,11 +614,7 @@ void main() {
           ),
         ).thenThrow(Exception('Network error'));
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.error, isNotNull);
 
@@ -793,42 +642,10 @@ void main() {
       });
     });
 
-    group('Auth state changes', () {
-      const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
-
-      test('should clear comments on sign-out', () async {
-        final response = CommentsResponse(
-          post: {},
-          comments: [_createMockThreadComment('comment1')],
-        );
-
-        when(
-          mockApiService.getComments(
-            postUri: anyNamed('postUri'),
-            sort: anyNamed('sort'),
-            timeframe: anyNamed('timeframe'),
-            depth: anyNamed('depth'),
-            limit: anyNamed('limit'),
-            cursor: anyNamed('cursor'),
-          ),
-        ).thenAnswer((_) async => response);
-
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
-
-        expect(commentsProvider.comments.length, 1);
-
-        // Simulate sign-out
-        when(mockAuthProvider.isAuthenticated).thenReturn(false);
-        // Trigger listener manually since we're using a mock
-        commentsProvider.reset();
-
-        expect(commentsProvider.comments.isEmpty, true);
-      });
-    });
+    // Note: "Auth state changes" group removed
+    // Sign-out cleanup is now handled by CommentsProviderCache which disposes
+    // all cached providers when the user signs out. Individual providers no
+    // longer have a reset() method.
 
     group('Time updates', () {
       test('should start time updates when comments are loaded', () async {
@@ -850,11 +667,7 @@ void main() {
 
         expect(commentsProvider.currentTimeNotifier.value, null);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.currentTimeNotifier.value, isNotNull);
       });
@@ -876,11 +689,7 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(commentsProvider.currentTimeNotifier.value, isNotNull);
 
@@ -915,11 +724,7 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         expect(notificationCount, greaterThan(0));
       });
@@ -944,11 +749,7 @@ void main() {
           return response;
         });
 
-        final loadFuture = commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        final loadFuture = commentsProvider.loadComments(refresh: true);
 
         // Should be loading
         expect(commentsProvider.isLoading, true);
@@ -986,11 +787,7 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         verify(
           mockVoteProvider.setInitialVoteState(
@@ -1024,11 +821,7 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         verify(
           mockVoteProvider.setInitialVoteState(
@@ -1064,11 +857,7 @@ void main() {
             ),
           ).thenAnswer((_) async => response);
 
-          await commentsProvider.loadComments(
-            postUri: testPostUri,
-            postCid: testPostCid,
-            refresh: true,
-          );
+          await commentsProvider.loadComments(refresh: true);
 
           // Should call setInitialVoteState with null to clear stale state
           verify(
@@ -1114,11 +903,7 @@ void main() {
             ),
           ).thenAnswer((_) async => response);
 
-          await commentsProvider.loadComments(
-            postUri: testPostUri,
-            postCid: testPostCid,
-            refresh: true,
-          );
+          await commentsProvider.loadComments(refresh: true);
 
           // Should initialize vote state for both parent and reply
           verify(
@@ -1177,11 +962,7 @@ void main() {
           ),
         ).thenAnswer((_) async => response);
 
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await commentsProvider.loadComments(refresh: true);
 
         // Should initialize vote state for all 3 levels
         verify(
@@ -1246,11 +1027,7 @@ void main() {
           ).thenAnswer((_) async => page2Response);
 
           // Load first page (refresh)
-          await commentsProvider.loadComments(
-            postUri: testPostUri,
-            postCid: testPostCid,
-            refresh: true,
-          );
+          await commentsProvider.loadComments(refresh: true);
 
           // Verify comment1 vote initialized
           verify(
@@ -1338,27 +1115,9 @@ void main() {
         expect(notificationCount, 2);
       });
 
-      test('should clear collapsed state on reset', () async {
-        // Collapse some comments
-        commentsProvider
-          ..toggleCollapsed('at://did:plc:test/comment/1')
-          ..toggleCollapsed('at://did:plc:test/comment/2');
-
-        expect(commentsProvider.collapsedComments.length, 2);
-
-        // Reset should clear collapsed state
-        commentsProvider.reset();
-
-        expect(commentsProvider.collapsedComments.isEmpty, true);
-        expect(
-          commentsProvider.isCollapsed('at://did:plc:test/comment/1'),
-          false,
-        );
-        expect(
-          commentsProvider.isCollapsed('at://did:plc:test/comment/2'),
-          false,
-        );
-      });
+      // Note: "clear collapsed state on reset" test removed
+      // Providers no longer have a reset() method - they are disposed entirely
+      // when evicted from cache or on sign-out
 
       test('collapsedComments getter returns unmodifiable set', () {
         commentsProvider.toggleCollapsed('at://did:plc:test/comment/1');
@@ -1372,45 +1131,10 @@ void main() {
         );
       });
 
-      test('should clear collapsed state on post change', () async {
-        // Setup mock response
-        final response = CommentsResponse(
-          post: {},
-          comments: [_createMockThreadComment('comment1')],
-        );
-
-        when(
-          mockApiService.getComments(
-            postUri: anyNamed('postUri'),
-            sort: anyNamed('sort'),
-            timeframe: anyNamed('timeframe'),
-            depth: anyNamed('depth'),
-            limit: anyNamed('limit'),
-            cursor: anyNamed('cursor'),
-          ),
-        ).thenAnswer((_) async => response);
-
-        // Load first post
-        await commentsProvider.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
-
-        // Collapse a comment
-        commentsProvider.toggleCollapsed('at://did:plc:test/comment/1');
-        expect(commentsProvider.collapsedComments.length, 1);
-
-        // Load different post
-        await commentsProvider.loadComments(
-          postUri: 'at://did:plc:test/social.coves.post.record/456',
-          postCid: 'different-cid',
-          refresh: true,
-        );
-
-        // Collapsed state should be cleared
-        expect(commentsProvider.collapsedComments.isEmpty, true);
-      });
+      // Note: "clear collapsed state on post change" test removed
+      // Providers are now immutable per post - each post gets its own provider
+      // with its own collapsed state. Use CommentsProviderCache to get different
+      // providers for different posts.
     });
 
     group('createComment', () {
@@ -1438,6 +1162,8 @@ void main() {
 
         providerWithCommentService = CommentsProvider(
           mockAuthProvider,
+          postUri: testPostUri,
+          postCid: testPostCid,
           apiService: mockApiService,
           voteProvider: mockVoteProvider,
           commentService: mockCommentService,
@@ -1450,11 +1176,7 @@ void main() {
 
       test('should throw ValidationException for empty content', () async {
         // First load comments to set up post context
-        await providerWithCommentService.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await providerWithCommentService.loadComments(refresh: true);
 
         expect(
           () => providerWithCommentService.createComment(content: ''),
@@ -1471,11 +1193,7 @@ void main() {
       test(
         'should throw ValidationException for whitespace-only content',
         () async {
-          await providerWithCommentService.loadComments(
-            postUri: testPostUri,
-            postCid: testPostCid,
-            refresh: true,
-          );
+          await providerWithCommentService.loadComments(refresh: true);
 
           expect(
             () =>
@@ -1488,11 +1206,7 @@ void main() {
       test(
         'should throw ValidationException for content exceeding limit',
         () async {
-          await providerWithCommentService.loadComments(
-            postUri: testPostUri,
-            postCid: testPostCid,
-            refresh: true,
-          );
+          await providerWithCommentService.loadComments(refresh: true);
 
           // Create a string longer than 10000 characters
           final longContent = 'a' * 10001;
@@ -1512,11 +1226,7 @@ void main() {
       );
 
       test('should count emoji correctly in character limit', () async {
-        await providerWithCommentService.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await providerWithCommentService.loadComments(refresh: true);
 
         // Each emoji should count as 1 character, not 2-4 bytes
         // 9999 'a' chars + 1 emoji = 10000 chars (should pass)
@@ -1551,34 +1261,17 @@ void main() {
         ).called(1);
       });
 
-      test('should throw ApiException when no post loaded', () async {
-        // Don't call loadComments first - no post context
-
-        expect(
-          () =>
-              providerWithCommentService.createComment(content: 'Test comment'),
-          throwsA(
-            isA<ApiException>().having(
-              (e) => e.message,
-              'message',
-              contains('No post loaded'),
-            ),
-          ),
-        );
-      });
+      // Note: "should throw ApiException when no post loaded" test removed
+      // Post context is now always provided via constructor - this case can't occur
 
       test('should throw ApiException when no CommentService', () async {
         // Create provider without CommentService
         final providerWithoutService = CommentsProvider(
           mockAuthProvider,
-          apiService: mockApiService,
-          voteProvider: mockVoteProvider,
-        );
-
-        await providerWithoutService.loadComments(
           postUri: testPostUri,
           postCid: testPostCid,
-          refresh: true,
+          apiService: mockApiService,
+          voteProvider: mockVoteProvider,
         );
 
         expect(
@@ -1596,11 +1289,7 @@ void main() {
       });
 
       test('should create top-level comment (reply to post)', () async {
-        await providerWithCommentService.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await providerWithCommentService.loadComments(refresh: true);
 
         when(
           mockCommentService.createComment(
@@ -1635,11 +1324,7 @@ void main() {
       });
 
       test('should create nested comment (reply to comment)', () async {
-        await providerWithCommentService.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await providerWithCommentService.loadComments(refresh: true);
 
         when(
           mockCommentService.createComment(
@@ -1677,11 +1362,7 @@ void main() {
       });
 
       test('should trim content before sending', () async {
-        await providerWithCommentService.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await providerWithCommentService.loadComments(refresh: true);
 
         when(
           mockCommentService.createComment(
@@ -1715,11 +1396,7 @@ void main() {
       });
 
       test('should refresh comments after successful creation', () async {
-        await providerWithCommentService.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await providerWithCommentService.loadComments(refresh: true);
 
         when(
           mockCommentService.createComment(
@@ -1753,11 +1430,7 @@ void main() {
       });
 
       test('should rethrow exception from CommentService', () async {
-        await providerWithCommentService.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await providerWithCommentService.loadComments(refresh: true);
 
         when(
           mockCommentService.createComment(
@@ -1783,11 +1456,7 @@ void main() {
       });
 
       test('should accept content at exactly max length', () async {
-        await providerWithCommentService.loadComments(
-          postUri: testPostUri,
-          postCid: testPostCid,
-          refresh: true,
-        );
+        await providerWithCommentService.loadComments(refresh: true);
 
         final contentAtLimit = 'a' * CommentsProvider.maxCommentLength;
 

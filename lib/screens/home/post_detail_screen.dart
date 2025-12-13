@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +11,7 @@ import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
 import '../../providers/vote_provider.dart';
+import '../../services/comments_provider_cache.dart';
 import '../../utils/community_handle_utils.dart';
 import '../../utils/error_messages.dart';
 import '../../widgets/comment_thread.dart';
@@ -48,56 +50,173 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _commentsHeaderKey = GlobalKey();
 
-  // Current sort option
-  String _currentSort = 'hot';
+  // Cached provider from CommentsProviderCache
+  late CommentsProvider _commentsProvider;
+  CommentsProviderCache? _commentsCache;
+
+  // Track initialization state
+  bool _isInitialized = false;
+
+  // Track if provider has been invalidated (e.g., by sign-out)
+  bool _providerInvalidated = false;
 
   @override
   void initState() {
     super.initState();
-
-    // Initialize scroll controller for pagination
     _scrollController.addListener(_onScroll);
 
-    // Load comments after frame is built using provider from tree
+    // Initialize provider after frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _loadComments();
+        _initializeProvider();
+        _setupAuthListener();
       }
+    });
+  }
+
+  /// Listen for auth state changes to handle sign-out
+  void _setupAuthListener() {
+    final authProvider = context.read<AuthProvider>();
+    authProvider.addListener(_onAuthChanged);
+  }
+
+  /// Handle auth state changes (specifically sign-out)
+  void _onAuthChanged() {
+    if (!mounted) return;
+
+    final authProvider = context.read<AuthProvider>();
+
+    // If user signed out while viewing this screen, navigate back
+    // The CommentsProviderCache has already disposed our provider
+    if (!authProvider.isAuthenticated && _isInitialized && !_providerInvalidated) {
+      _providerInvalidated = true;
+
+      if (kDebugMode) {
+        debugPrint('🚪 User signed out - cleaning up PostDetailScreen');
+      }
+
+      // Remove listener from provider (it's disposed but this is safe)
+      try {
+        _commentsProvider.removeListener(_onProviderChanged);
+      } on Exception {
+        // Provider already disposed - expected
+      }
+
+      // Navigate back to feed
+      if (mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    }
+  }
+
+  /// Initialize provider from cache and restore state
+  void _initializeProvider() {
+    // Get or create provider from cache
+    final cache = context.read<CommentsProviderCache>();
+    _commentsCache = cache;
+    _commentsProvider = cache.acquireProvider(
+      postUri: widget.post.post.uri,
+      postCid: widget.post.post.cid,
+    );
+
+    // Listen for changes to trigger rebuilds
+    _commentsProvider.addListener(_onProviderChanged);
+
+    // Check if we already have cached data
+    if (_commentsProvider.comments.isNotEmpty) {
+      // Already have data - restore scroll position immediately
+      if (kDebugMode) {
+        debugPrint(
+          '📦 Using cached comments (${_commentsProvider.comments.length})',
+        );
+      }
+      _restoreScrollPosition();
+
+      // Background refresh if data is stale
+      if (_commentsProvider.isStale) {
+        if (kDebugMode) {
+          debugPrint('🔄 Data stale, refreshing in background');
+        }
+        _commentsProvider.loadComments(refresh: true);
+      }
+    } else {
+      // No cached data - load fresh
+      _commentsProvider.loadComments(refresh: true);
+    }
+
+    setState(() {
+      _isInitialized = true;
     });
   }
 
   @override
   void dispose() {
+    // Remove auth listener
+    try {
+      context.read<AuthProvider>().removeListener(_onAuthChanged);
+    } on Exception {
+      // Context may not be valid during dispose
+    }
+
+    // Release provider pin in cache (prevents LRU eviction disposing an active
+    // provider while this screen is in the navigation stack).
+    if (_isInitialized) {
+      try {
+        _commentsCache?.releaseProvider(widget.post.post.uri);
+      } on Exception {
+        // Cache may already be disposed
+      }
+    }
+
+    // Remove provider listener if not already invalidated
+    if (_isInitialized && !_providerInvalidated) {
+      try {
+        _commentsProvider.removeListener(_onProviderChanged);
+      } on Exception {
+        // Provider may already be disposed
+      }
+    }
     _scrollController.dispose();
     super.dispose();
   }
 
-  /// Load comments for the current post
-  void _loadComments() {
-    context.read<CommentsProvider>().loadComments(
-      postUri: widget.post.post.uri,
-      postCid: widget.post.post.cid,
-      refresh: true,
-    );
+  /// Handle provider changes
+  void _onProviderChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  /// Restore scroll position from provider
+  void _restoreScrollPosition() {
+    final savedPosition = _commentsProvider.scrollPosition;
+    if (savedPosition <= 0) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+
+      final maxExtent = _scrollController.position.maxScrollExtent;
+      final targetPosition = savedPosition.clamp(0.0, maxExtent);
+
+      if (targetPosition > 0) {
+        _scrollController.jumpTo(targetPosition);
+        if (kDebugMode) {
+          debugPrint('📍 Restored scroll to $targetPosition (max: $maxExtent)');
+        }
+      }
+    });
   }
 
   /// Handle sort changes from dropdown
   Future<void> _onSortChanged(String newSort) async {
-    final previousSort = _currentSort;
+    final success = await _commentsProvider.setSortOption(newSort);
 
-    setState(() {
-      _currentSort = newSort;
-    });
-
-    final commentsProvider = context.read<CommentsProvider>();
-    final success = await commentsProvider.setSortOption(newSort);
-
-    // Show error snackbar and revert UI if sort change failed
+    // Show error snackbar if sort change failed
     if (!success && mounted) {
-      setState(() {
-        _currentSort = previousSort;
-      });
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Failed to change sort order. Please try again.'),
@@ -118,24 +237,55 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   /// Handle scroll for pagination
   void _onScroll() {
+    // Don't interact with disposed provider
+    if (_providerInvalidated) return;
+
+    // Save scroll position to provider on every scroll event
+    if (_scrollController.hasClients) {
+      _commentsProvider.saveScrollPosition(_scrollController.position.pixels);
+    }
+
+    // Load more comments when near bottom
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200) {
-      context.read<CommentsProvider>().loadMoreComments();
+      _commentsProvider.loadMoreComments();
     }
   }
 
   /// Handle pull-to-refresh
   Future<void> _onRefresh() async {
-    final commentsProvider = context.read<CommentsProvider>();
-    await commentsProvider.refreshComments();
+    // Don't interact with disposed provider
+    if (_providerInvalidated) return;
+
+    await _commentsProvider.refreshComments();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: _buildContent(),
-      bottomNavigationBar: _buildActionBar(),
+    // Show loading until provider is initialized
+    if (!_isInitialized) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: FullScreenLoading(),
+      );
+    }
+
+    // If provider was invalidated (sign-out), show loading while navigating away
+    if (_providerInvalidated) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: FullScreenLoading(),
+      );
+    }
+
+    // Provide the cached CommentsProvider to descendant widgets
+    return ChangeNotifierProvider.value(
+      value: _commentsProvider,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: _buildContent(),
+        bottomNavigationBar: _buildActionBar(),
+      ),
     );
   }
 
@@ -365,19 +515,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder:
-            (context) =>
-                ReplyScreen(post: widget.post, onSubmit: _handleCommentSubmit),
+            (context) => ReplyScreen(
+              post: widget.post,
+              onSubmit: _handleCommentSubmit,
+              commentsProvider: _commentsProvider,
+            ),
       ),
     );
   }
 
   /// Handle comment submission (reply to post)
   Future<void> _handleCommentSubmit(String content) async {
-    final commentsProvider = context.read<CommentsProvider>();
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      await commentsProvider.createComment(content: content);
+      await _commentsProvider.createComment(content: content);
 
       if (mounted) {
         messenger.showSnackBar(
@@ -407,11 +559,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     String content,
     ThreadViewComment parentComment,
   ) async {
-    final commentsProvider = context.read<CommentsProvider>();
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      await commentsProvider.createComment(
+      await _commentsProvider.createComment(
         content: content,
         parentComment: parentComment,
       );
@@ -460,6 +611,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             (context) => ReplyScreen(
               comment: comment,
               onSubmit: (content) => _handleCommentReply(content, comment),
+              commentsProvider: _commentsProvider,
             ),
       ),
     );
@@ -472,11 +624,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   ) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => FocusedThreadScreen(
-          thread: thread,
-          ancestors: ancestors,
-          onReply: _handleCommentReply,
-        ),
+        builder:
+            (context) => FocusedThreadScreen(
+              thread: thread,
+              ancestors: ancestors,
+              onReply: _handleCommentReply,
+              commentsProvider: _commentsProvider,
+            ),
       ),
     );
   }
@@ -539,79 +693,82 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   SliverSafeArea(
                     top: false,
                     sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      // Post card (index 0)
-                      if (index == 0) {
-                        return Column(
-                          children: [
-                            // Reuse PostCard (hide comment button in
-                            // detail view)
-                            // Use ValueListenableBuilder to only rebuild
-                            // when time changes
-                            _PostHeader(
-                              post: widget.post,
-                              currentTimeNotifier:
-                                  commentsProvider.currentTimeNotifier,
-                            ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          // Post card (index 0)
+                          if (index == 0) {
+                            return Column(
+                              children: [
+                                // Reuse PostCard (hide comment button in
+                                // detail view)
+                                // Use ValueListenableBuilder to only rebuild
+                                // when time changes
+                                _PostHeader(
+                                  post: widget.post,
+                                  currentTimeNotifier:
+                                      commentsProvider.currentTimeNotifier,
+                                ),
 
-                            // Visual divider before comments section
-                            Container(
-                              margin: const EdgeInsets.symmetric(vertical: 16),
-                              height: 1,
-                              color: AppColors.border,
-                            ),
+                                // Visual divider before comments section
+                                Container(
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  height: 1,
+                                  color: AppColors.border,
+                                ),
 
-                            // Comments header with sort dropdown
-                            CommentsHeader(
-                              key: _commentsHeaderKey,
-                              commentCount: comments.length,
-                              currentSort: _currentSort,
-                              onSortChanged: _onSortChanged,
-                            ),
-                          ],
-                        );
-                      }
+                                // Comments header with sort dropdown
+                                CommentsHeader(
+                                  key: _commentsHeaderKey,
+                                  commentCount: comments.length,
+                                  currentSort: commentsProvider.sort,
+                                  onSortChanged: _onSortChanged,
+                                ),
+                              ],
+                            );
+                          }
 
-                      // Loading indicator or error at the end
-                      if (index == comments.length + 1) {
-                        if (isLoadingMore) {
-                          return const InlineLoading();
-                        }
-                        if (error != null) {
-                          return InlineError(
-                            message: ErrorMessages.getUserFriendly(error),
-                            onRetry: () {
-                              commentsProvider
-                                ..clearError()
-                                ..loadMoreComments();
-                            },
+                          // Loading indicator or error at the end
+                          if (index == comments.length + 1) {
+                            if (isLoadingMore) {
+                              return const InlineLoading();
+                            }
+                            if (error != null) {
+                              return InlineError(
+                                message: ErrorMessages.getUserFriendly(error),
+                                onRetry: () {
+                                  commentsProvider
+                                    ..clearError()
+                                    ..loadMoreComments();
+                                },
+                              );
+                            }
+                          }
+
+                          // Comment item - use existing CommentThread widget
+                          final comment = comments[index - 1];
+                          return _CommentItem(
+                            comment: comment,
+                            currentTimeNotifier:
+                                commentsProvider.currentTimeNotifier,
+                            onCommentTap: _openReplyToComment,
+                            collapsedComments:
+                                commentsProvider.collapsedComments,
+                            onCollapseToggle: commentsProvider.toggleCollapsed,
+                            onContinueThread: _onContinueThread,
                           );
-                        }
-                      }
-
-                      // Comment item - use existing CommentThread widget
-                      final comment = comments[index - 1];
-                      return _CommentItem(
-                        comment: comment,
-                        currentTimeNotifier:
-                            commentsProvider.currentTimeNotifier,
-                        onCommentTap: _openReplyToComment,
-                        collapsedComments: commentsProvider.collapsedComments,
-                        onCollapseToggle: commentsProvider.toggleCollapsed,
-                        onContinueThread: _onContinueThread,
-                      );
-                    },
-                    childCount:
-                        1 +
-                        comments.length +
-                        (isLoadingMore || error != null ? 1 : 0),
+                        },
+                        childCount:
+                            1 +
+                            comments.length +
+                            (isLoadingMore || error != null ? 1 : 0),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
             // Prevents content showing through transparent status bar
             const StatusBarOverlay(),
           ],
@@ -677,7 +834,7 @@ class _CommentItem extends StatelessWidget {
   final Set<String> collapsedComments;
   final void Function(String uri)? onCollapseToggle;
   final void Function(ThreadViewComment, List<ThreadViewComment>)?
-      onContinueThread;
+  onContinueThread;
 
   @override
   Widget build(BuildContext context) {

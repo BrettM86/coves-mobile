@@ -12,7 +12,12 @@ import 'vote_provider.dart';
 /// Comments Provider
 ///
 /// Manages comment state and fetching logic for a specific post.
-/// Supports sorting (hot/top/new), pagination, and vote integration.
+/// Each provider instance is bound to a single post (immutable postUri/postCid).
+/// Supports sorting (hot/top/new), pagination, vote integration, scroll position,
+/// and draft text preservation.
+///
+/// IMPORTANT: Provider instances are managed by CommentsProviderCache which
+/// handles LRU eviction and sign-out cleanup. Do not create directly in widgets.
 ///
 /// IMPORTANT: Accepts AuthProvider reference to fetch fresh access
 /// tokens before each authenticated request (critical for atProto OAuth
@@ -20,10 +25,14 @@ import 'vote_provider.dart';
 class CommentsProvider with ChangeNotifier {
   CommentsProvider(
     this._authProvider, {
+    required String postUri,
+    required String postCid,
     CovesApiService? apiService,
     VoteProvider? voteProvider,
     CommentService? commentService,
-  }) : _voteProvider = voteProvider,
+  }) : _postUri = postUri,
+       _postCid = postCid,
+       _voteProvider = voteProvider,
        _commentService = commentService {
     // Use injected service (for testing) or create new one (for production)
     // Pass token getter, refresh handler, and sign out handler to API service
@@ -35,43 +44,23 @@ class CommentsProvider with ChangeNotifier {
           tokenRefresher: _authProvider.refreshToken,
           signOutHandler: _authProvider.signOut,
         );
-
-    // Track initial auth state
-    _wasAuthenticated = _authProvider.isAuthenticated;
-
-    // Listen to auth state changes and clear comments on sign-out
-    _authProvider.addListener(_onAuthChanged);
   }
 
   /// Maximum comment length in characters (matches backend limit)
   /// Note: This counts Unicode grapheme clusters, so emojis count correctly
   static const int maxCommentLength = 10000;
 
-  /// Handle authentication state changes
-  ///
-  /// Clears comment state when user signs out to prevent privacy issues.
-  void _onAuthChanged() {
-    final isAuthenticated = _authProvider.isAuthenticated;
-
-    // Only clear if transitioning from authenticated → unauthenticated
-    if (_wasAuthenticated && !isAuthenticated && _comments.isNotEmpty) {
-      if (kDebugMode) {
-        debugPrint('🔒 User signed out - clearing comments');
-      }
-      reset();
-    }
-
-    // Update tracked state
-    _wasAuthenticated = isAuthenticated;
-  }
+  /// Default staleness threshold for background refresh
+  static const Duration stalenessThreshold = Duration(minutes: 5);
 
   final AuthProvider _authProvider;
   late final CovesApiService _apiService;
   final VoteProvider? _voteProvider;
   final CommentService? _commentService;
 
-  // Track previous auth state to detect transitions
-  bool _wasAuthenticated = false;
+  // Post context - immutable per provider instance
+  final String _postUri;
+  final String _postCid;
 
   // Comment state
   List<ThreadViewComment> _comments = [];
@@ -84,9 +73,15 @@ class CommentsProvider with ChangeNotifier {
   // Collapsed thread state - stores URIs of collapsed comments
   final Set<String> _collapsedComments = {};
 
-  // Current post being viewed
-  String? _postUri;
-  String? _postCid;
+  // Scroll position state (replaces ScrollStateService for this post)
+  double _scrollPosition = 0;
+
+  // Draft reply text - stored per-parent-URI (null key = top-level reply to post)
+  // This allows users to have separate drafts for different comments within the same post
+  final Map<String?, String> _drafts = {};
+
+  // Staleness tracking for background refresh
+  DateTime? _lastRefreshTime;
 
   // Comment configuration
   String _sort = 'hot';
@@ -99,7 +94,16 @@ class CommentsProvider with ChangeNotifier {
   Timer? _timeUpdateTimer;
   final ValueNotifier<DateTime?> _currentTimeNotifier = ValueNotifier(null);
 
+  bool _isDisposed = false;
+
+  void _safeNotifyListeners() {
+    if (_isDisposed) return;
+    notifyListeners();
+  }
+
   // Getters
+  String get postUri => _postUri;
+  String get postCid => _postCid;
   List<ThreadViewComment> get comments => _comments;
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
@@ -109,6 +113,57 @@ class CommentsProvider with ChangeNotifier {
   String? get timeframe => _timeframe;
   ValueNotifier<DateTime?> get currentTimeNotifier => _currentTimeNotifier;
   Set<String> get collapsedComments => Set.unmodifiable(_collapsedComments);
+  double get scrollPosition => _scrollPosition;
+  DateTime? get lastRefreshTime => _lastRefreshTime;
+
+  /// Get draft text for a specific parent URI
+  ///
+  /// [parentUri] - URI of parent comment (null for top-level post reply)
+  /// Returns the draft text, or empty string if no draft exists
+  String getDraft({String? parentUri}) => _drafts[parentUri] ?? '';
+
+  /// Legacy getters for backward compatibility
+  /// @deprecated Use getDraft(parentUri: ...) instead
+  String get draftText => _drafts.values.firstOrNull ?? '';
+  String? get draftParentUri => _drafts.keys.firstOrNull;
+
+  /// Check if cached data is stale and should be refreshed in background
+  bool get isStale {
+    if (_lastRefreshTime == null) {
+      return true;
+    }
+    return DateTime.now().difference(_lastRefreshTime!) > stalenessThreshold;
+  }
+
+  /// Save scroll position (called on every scroll event)
+  void saveScrollPosition(double position) {
+    _scrollPosition = position;
+    // No notifyListeners - this is passive state save
+  }
+
+  /// Save draft reply text
+  ///
+  /// [text] - The draft text content
+  /// [parentUri] - URI of parent comment (null for top-level post reply)
+  ///
+  /// Each parent URI gets its own draft, so switching between replies
+  /// preserves drafts for each context.
+  void saveDraft(String text, {String? parentUri}) {
+    if (text.trim().isEmpty) {
+      // Remove empty drafts to avoid clutter
+      _drafts.remove(parentUri);
+    } else {
+      _drafts[parentUri] = text;
+    }
+    // No notifyListeners - this is passive state save
+  }
+
+  /// Clear draft text for a specific parent (call after successful submission)
+  ///
+  /// [parentUri] - URI of parent comment (null for top-level post reply)
+  void clearDraft({String? parentUri}) {
+    _drafts.remove(parentUri);
+  }
 
   /// Toggle collapsed state for a comment thread
   ///
@@ -120,7 +175,7 @@ class CommentsProvider with ChangeNotifier {
     } else {
       _collapsedComments.add(uri);
     }
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   /// Check if a specific comment is collapsed
@@ -161,24 +216,11 @@ class CommentsProvider with ChangeNotifier {
     }
   }
 
-  /// Load comments for a specific post
+  /// Load comments for this provider's post
   ///
   /// Parameters:
-  /// - [postUri]: AT-URI of the post
-  /// - [postCid]: CID of the post (needed for creating comments)
-  /// - [refresh]: Whether to refresh from the beginning
-  Future<void> loadComments({
-    required String postUri,
-    required String postCid,
-    bool refresh = false,
-  }) async {
-    // If loading for a different post, reset state
-    if (postUri != _postUri) {
-      reset();
-      _postUri = postUri;
-      _postCid = postCid;
-    }
-
+  /// - [refresh]: Whether to refresh from the beginning (true) or paginate (false)
+  Future<void> loadComments({bool refresh = false}) async {
     // If already loading, schedule a refresh to happen after current load
     if (_isLoading || _isLoadingMore) {
       if (refresh) {
@@ -200,22 +242,25 @@ class CommentsProvider with ChangeNotifier {
       } else {
         _isLoadingMore = true;
       }
-      notifyListeners();
+      _safeNotifyListeners();
 
       if (kDebugMode) {
-        debugPrint('📡 Fetching comments: sort=$_sort, postUri=$postUri');
+        debugPrint('📡 Fetching comments: sort=$_sort, postUri=$_postUri');
       }
 
       final response = await _apiService.getComments(
-        postUri: postUri,
+        postUri: _postUri,
         sort: _sort,
         timeframe: _timeframe,
         cursor: refresh ? null : _cursor,
       );
 
+      if (_isDisposed) return;
+
       // Only update state after successful fetch
       if (refresh) {
         _comments = response.comments;
+        _lastRefreshTime = DateTime.now();
       } else {
         // Create new list instance to trigger rebuilds
         _comments = [..._comments, ...response.comments];
@@ -246,26 +291,26 @@ class CommentsProvider with ChangeNotifier {
         startTimeUpdates();
       }
     } on Exception catch (e) {
+      if (_isDisposed) return;
       _error = e.toString();
       if (kDebugMode) {
         debugPrint('❌ Failed to fetch comments: $e');
       }
     } finally {
+      if (_isDisposed) return;
       _isLoading = false;
       _isLoadingMore = false;
-      notifyListeners();
+      _safeNotifyListeners();
 
       // If a refresh was scheduled during this load, execute it now
-      if (_pendingRefresh && _postUri != null) {
+      if (_pendingRefresh) {
         if (kDebugMode) {
           debugPrint('🔄 Executing pending refresh');
         }
         _pendingRefresh = false;
         // Schedule refresh without awaiting to avoid blocking
         // This is intentional - we want the refresh to happen asynchronously
-        unawaited(
-          loadComments(postUri: _postUri!, postCid: _postCid!, refresh: true),
-        );
+        unawaited(loadComments(refresh: true));
       }
     }
   }
@@ -274,21 +319,15 @@ class CommentsProvider with ChangeNotifier {
   ///
   /// Reloads comments from the beginning for the current post.
   Future<void> refreshComments() async {
-    if (_postUri == null || _postCid == null) {
-      if (kDebugMode) {
-        debugPrint('⚠️ Cannot refresh - no post loaded');
-      }
-      return;
-    }
-    await loadComments(postUri: _postUri!, postCid: _postCid!, refresh: true);
+    await loadComments(refresh: true);
   }
 
   /// Load more comments (pagination)
   Future<void> loadMoreComments() async {
-    if (!_hasMore || _isLoadingMore || _postUri == null || _postCid == null) {
+    if (!_hasMore || _isLoadingMore) {
       return;
     }
-    await loadComments(postUri: _postUri!, postCid: _postCid!);
+    await loadComments();
   }
 
   /// Change sort order
@@ -305,31 +344,24 @@ class CommentsProvider with ChangeNotifier {
 
     final previousSort = _sort;
     _sort = newSort;
-    notifyListeners();
+    _safeNotifyListeners();
 
     // Reload comments with new sort
-    if (_postUri != null && _postCid != null) {
-      try {
-        await loadComments(
-          postUri: _postUri!,
-          postCid: _postCid!,
-          refresh: true,
-        );
-        return true;
-      } on Exception catch (e) {
-        // Revert to previous sort option on failure
-        _sort = previousSort;
-        notifyListeners();
+    try {
+      await loadComments(refresh: true);
+      return true;
+    } on Exception catch (e) {
+      if (_isDisposed) return false;
+      // Revert to previous sort option on failure
+      _sort = previousSort;
+      _safeNotifyListeners();
 
-        if (kDebugMode) {
-          debugPrint('Failed to apply sort option: $e');
-        }
-
-        return false;
+      if (kDebugMode) {
+        debugPrint('Failed to apply sort option: $e');
       }
-    }
 
-    return true;
+      return false;
+    }
   }
 
   /// Vote on a comment
@@ -417,13 +449,9 @@ class CommentsProvider with ChangeNotifier {
       throw ApiException('CommentService not available');
     }
 
-    if (_postUri == null || _postCid == null) {
-      throw ApiException('No post loaded - cannot create comment');
-    }
-
     // Root is always the original post
-    final rootUri = _postUri!;
-    final rootCid = _postCid!;
+    final rootUri = _postUri;
+    final rootCid = _postCid;
 
     // Parent depends on whether this is a top-level or nested reply
     final String parentUri;
@@ -492,38 +520,21 @@ class CommentsProvider with ChangeNotifier {
   /// Retry loading after error
   Future<void> retry() async {
     _error = null;
-    if (_postUri != null && _postCid != null) {
-      await loadComments(postUri: _postUri!, postCid: _postCid!, refresh: true);
-    }
+    await loadComments(refresh: true);
   }
 
   /// Clear error
   void clearError() {
     _error = null;
-    notifyListeners();
-  }
-
-  /// Reset comment state
-  void reset() {
-    _comments = [];
-    _cursor = null;
-    _hasMore = true;
-    _error = null;
-    _isLoading = false;
-    _isLoadingMore = false;
-    _postUri = null;
-    _postCid = null;
-    _pendingRefresh = false;
-    _collapsedComments.clear();
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
     // Stop time updates and cancel timer (also sets value to null)
     stopTimeUpdates();
-    // Remove auth listener to prevent memory leaks
-    _authProvider.removeListener(_onAuthChanged);
+    // Dispose API service
     _apiService.dispose();
     // Dispose the ValueNotifier last
     _currentTimeNotifier.dispose();

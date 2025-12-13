@@ -8,7 +8,6 @@ import 'config/oauth_config.dart';
 import 'constants/app_colors.dart';
 import 'models/post.dart';
 import 'providers/auth_provider.dart';
-import 'providers/comments_provider.dart';
 import 'providers/feed_provider.dart';
 import 'providers/vote_provider.dart';
 import 'screens/auth/login_screen.dart';
@@ -16,6 +15,7 @@ import 'screens/home/main_shell_screen.dart';
 import 'screens/home/post_detail_screen.dart';
 import 'screens/landing_screen.dart';
 import 'services/comment_service.dart';
+import 'services/comments_provider_cache.dart';
 import 'services/streamable_service.dart';
 import 'services/vote_service.dart';
 import 'widgets/loading_error_states.dart';
@@ -75,26 +75,23 @@ void main() async {
             return previous ?? FeedProvider(auth, voteProvider: vote);
           },
         ),
-        ChangeNotifierProxyProvider2<
-          AuthProvider,
-          VoteProvider,
-          CommentsProvider
-        >(
-          create:
-              (context) => CommentsProvider(
-                authProvider,
-                voteProvider: context.read<VoteProvider>(),
-                commentService: commentService,
-              ),
+        // CommentsProviderCache manages per-post CommentsProvider instances
+        // with LRU eviction and sign-out cleanup
+        ProxyProvider2<AuthProvider, VoteProvider, CommentsProviderCache>(
+          create: (context) => CommentsProviderCache(
+            authProvider: authProvider,
+            voteProvider: context.read<VoteProvider>(),
+            commentService: commentService,
+          ),
           update: (context, auth, vote, previous) {
-            // Reuse existing provider to maintain state across rebuilds
-            return previous ??
-                CommentsProvider(
-                  auth,
-                  voteProvider: vote,
-                  commentService: commentService,
-                );
+            // Reuse existing cache
+            return previous ?? CommentsProviderCache(
+              authProvider: auth,
+              voteProvider: vote,
+              commentService: commentService,
+            );
           },
+          dispose: (_, cache) => cache.dispose(),
         ),
         // StreamableService for video embeds
         Provider<StreamableService>(create: (_) => StreamableService()),
