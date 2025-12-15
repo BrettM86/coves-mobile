@@ -2,17 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
-import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/feed_provider.dart';
+import '../../providers/multi_feed_provider.dart';
+import '../../widgets/feed_page.dart';
 import '../../widgets/icons/bluesky_icons.dart';
-import '../../widgets/post_card.dart';
 
 /// Header layout constants
 const double _kHeaderHeight = 44;
 const double _kTabUnderlineWidth = 28;
 const double _kTabUnderlineHeight = 3;
-const double _kHeaderContentPadding = _kHeaderHeight;
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key, this.onSearchTap});
@@ -25,68 +23,121 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  final ScrollController _scrollController = ScrollController();
+  late PageController _pageController;
+  final Map<FeedType, ScrollController> _scrollControllers = {};
+  late AuthProvider _authProvider;
+  bool _wasAuthenticated = false;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
 
-    // Fetch feed after frame is built
+    // Initialize PageController
+    // Start on page 0 (Discover) or 1 (For You) based on current feed
+    final provider = context.read<MultiFeedProvider>();
+    final initialPage = provider.currentFeedType == FeedType.forYou ? 1 : 0;
+    _pageController = PageController(initialPage: initialPage);
+
+    // Save reference to AuthProvider for listener management
+    _authProvider = context.read<AuthProvider>();
+    _wasAuthenticated = _authProvider.isAuthenticated;
+
+    // Listen to auth changes to sync PageController with provider state
+    _authProvider.addListener(_onAuthChanged);
+
+    // Load initial feed after frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Check if widget is still mounted before loading
       if (mounted) {
-        _loadFeed();
+        _loadInitialFeed();
       }
     });
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
+    _authProvider.removeListener(_onAuthChanged);
+    _pageController.dispose();
+    for (final controller in _scrollControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
-  /// Load feed - business logic is now in FeedProvider
-  void _loadFeed() {
-    Provider.of<FeedProvider>(context, listen: false).loadFeed(refresh: true);
+  /// Handle auth state changes to sync PageController with provider
+  ///
+  /// When user signs out while on For You tab, the provider switches to
+  /// Discover but PageController stays on page 1. This listener ensures
+  /// they stay in sync.
+  void _onAuthChanged() {
+    final isAuthenticated = _authProvider.isAuthenticated;
+
+    // On sign-out: jump to Discover (page 0) to match provider state
+    if (_wasAuthenticated && !isAuthenticated) {
+      if (_pageController.hasClients && _pageController.page != 0) {
+        _pageController.jumpToPage(0);
+      }
+    }
+
+    _wasAuthenticated = isAuthenticated;
   }
 
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
-      Provider.of<FeedProvider>(context, listen: false).loadMore();
+  /// Load initial feed based on authentication
+  void _loadInitialFeed() {
+    final provider = context.read<MultiFeedProvider>();
+    final isAuthenticated = context.read<AuthProvider>().isAuthenticated;
+
+    // Load the current feed
+    provider.loadFeed(provider.currentFeedType, refresh: true);
+
+    // Preload the other feed if authenticated
+    if (isAuthenticated) {
+      final otherFeed =
+          provider.currentFeedType == FeedType.discover
+              ? FeedType.forYou
+              : FeedType.discover;
+      provider.loadFeed(otherFeed, refresh: true);
     }
   }
 
-  Future<void> _onRefresh() async {
-    final feedProvider = Provider.of<FeedProvider>(context, listen: false);
-    await feedProvider.loadFeed(refresh: true);
+  /// Get or create scroll controller for a feed type
+  ScrollController _getOrCreateScrollController(FeedType type) {
+    if (!_scrollControllers.containsKey(type)) {
+      final provider = context.read<MultiFeedProvider>();
+      final state = provider.getState(type);
+      _scrollControllers[type] = ScrollController(
+        initialScrollOffset: state.scrollPosition,
+      );
+      _scrollControllers[type]!.addListener(() => _onScroll(type));
+    }
+    return _scrollControllers[type]!;
+  }
+
+  /// Handle scroll events for pagination and scroll position saving
+  void _onScroll(FeedType type) {
+    final controller = _scrollControllers[type];
+    if (controller != null && controller.hasClients) {
+      // Save scroll position passively (no rebuild needed)
+      context.read<MultiFeedProvider>().saveScrollPosition(
+        type,
+        controller.position.pixels,
+      );
+
+      // Trigger pagination when near bottom
+      if (controller.position.pixels >=
+          controller.position.maxScrollExtent - 200) {
+        context.read<MultiFeedProvider>().loadMore(type);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Optimized: Use select to only rebuild when specific fields change
-    // This prevents unnecessary rebuilds when unrelated provider fields change
+    // Use select to only rebuild when specific fields change
     final isAuthenticated = context.select<AuthProvider, bool>(
       (p) => p.isAuthenticated,
     );
-    final isLoading = context.select<FeedProvider, bool>((p) => p.isLoading);
-    final error = context.select<FeedProvider, String?>((p) => p.error);
-    final feedType = context.select<FeedProvider, FeedType>((p) => p.feedType);
-
-    // IMPORTANT: This relies on FeedProvider creating new list instances
-    // (_posts = [..._posts, ...response.feed]) rather than mutating in-place.
-    // context.select uses == for comparison, and Lists use reference equality,
-    // so in-place mutations (_posts.addAll(...)) would not trigger rebuilds.
-    final posts = context.select<FeedProvider, List<FeedViewPost>>(
-      (p) => p.posts,
-    );
-    final isLoadingMore = context.select<FeedProvider, bool>(
-      (p) => p.isLoadingMore,
-    );
-    final currentTime = context.select<FeedProvider, DateTime?>(
-      (p) => p.currentTime,
+    final currentFeed = context.select<MultiFeedProvider, FeedType>(
+      (p) => p.currentFeedType,
     );
 
     return Scaffold(
@@ -94,17 +145,13 @@ class _FeedScreenState extends State<FeedScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Feed content (behind header)
-            _buildBody(
-              isLoading: isLoading,
-              error: error,
-              posts: posts,
-              isLoadingMore: isLoadingMore,
-              isAuthenticated: isAuthenticated,
-              currentTime: currentTime,
-            ),
+            // Feed content with PageView for swipe navigation
+            _buildBody(isAuthenticated: isAuthenticated),
             // Transparent header overlay
-            _buildHeader(feedType: feedType, isAuthenticated: isAuthenticated),
+            _buildHeader(
+              feedType: currentFeed,
+              isAuthenticated: isAuthenticated,
+            ),
           ],
         ),
       ),
@@ -182,13 +229,13 @@ class _FeedScreenState extends State<FeedScreen> {
         _buildFeedTypeTab(
           label: 'Discover',
           isActive: feedType == FeedType.discover,
-          onTap: () => _switchToFeedType(FeedType.discover),
+          onTap: () => _switchToFeedType(FeedType.discover, 0),
         ),
         const SizedBox(width: 24),
         _buildFeedTypeTab(
           label: 'For You',
           isActive: feedType == FeedType.forYou,
-          onTap: () => _switchToFeedType(FeedType.forYou),
+          onTap: () => _switchToFeedType(FeedType.forYou, 1),
         ),
       ],
     );
@@ -237,212 +284,111 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  void _switchToFeedType(FeedType type) {
-    Provider.of<FeedProvider>(context, listen: false).setFeedType(type);
+  /// Switch to a feed type and animate PageView
+  void _switchToFeedType(FeedType type, int pageIndex) {
+    context.read<MultiFeedProvider>().setCurrentFeed(type);
+
+    // Animate to the corresponding page
+    _pageController.animateToPage(
+      pageIndex,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+
+    // Load the feed if it hasn't been loaded yet
+    _ensureFeedLoaded(type);
+
+    // Restore scroll position after page animation completes
+    _restoreScrollPosition(type);
   }
 
-  Widget _buildBody({
-    required bool isLoading,
-    required String? error,
-    required List<FeedViewPost> posts,
-    required bool isLoadingMore,
-    required bool isAuthenticated,
-    required DateTime? currentTime,
-  }) {
-    // Loading state (only show full-screen loader for initial load,
-    // not refresh)
-    if (isLoading && posts.isEmpty) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
-      );
+  /// Ensure a feed is loaded (trigger initial load if needed)
+  ///
+  /// Called when switching to a feed that may not have been loaded yet,
+  /// e.g., when user signs in after app start and taps "For You" tab.
+  void _ensureFeedLoaded(FeedType type) {
+    final provider = context.read<MultiFeedProvider>();
+    final state = provider.getState(type);
+
+    // If the feed has no posts and isn't currently loading, trigger a load
+    if (state.posts.isEmpty && !state.isLoading) {
+      provider.loadFeed(type, refresh: true);
+    }
+  }
+
+  /// Restore scroll position for a feed type
+  void _restoreScrollPosition(FeedType type) {
+    // Wait for the next frame to ensure the controller has clients
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      final controller = _scrollControllers[type];
+      if (controller != null && controller.hasClients) {
+        final provider = context.read<MultiFeedProvider>();
+        final savedPosition = provider.getState(type).scrollPosition;
+
+        // Only jump if the saved position differs from current
+        if ((controller.offset - savedPosition).abs() > 1) {
+          controller.jumpTo(savedPosition);
+        }
+      }
+    });
+  }
+
+  Widget _buildBody({required bool isAuthenticated}) {
+    // For unauthenticated users, show only Discover feed (no PageView)
+    if (!isAuthenticated) {
+      return _buildFeedPage(FeedType.discover, isAuthenticated);
     }
 
-    // Error state (only show full-screen error when no posts loaded
-    // yet). If we have posts but pagination failed, we'll show the error
-    // at the bottom
-    if (error != null && posts.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.error_outline,
-                size: 64,
-                color: AppColors.primary,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Failed to load feed',
-                style: TextStyle(
-                  fontSize: 20,
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _getUserFriendlyError(error),
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  Provider.of<FeedProvider>(context, listen: false).retry();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                ),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Empty state
-    if (posts.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.forum, size: 64, color: AppColors.primary),
-              const SizedBox(height: 24),
-              Text(
-                isAuthenticated ? 'No posts yet' : 'No posts to discover',
-                style: const TextStyle(
-                  fontSize: 20,
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                isAuthenticated
-                    ? 'Subscribe to communities to see posts in your feed'
-                    : 'Check back later for new posts',
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Posts list
-    return RefreshIndicator(
-      onRefresh: _onRefresh,
-      color: AppColors.primary,
-      child: ListView.builder(
-        controller: _scrollController,
-        // Add top padding so content isn't hidden behind transparent header
-        padding: const EdgeInsets.only(top: _kHeaderContentPadding),
-        // Add extra item for loading indicator or pagination error
-        itemCount: posts.length + (isLoadingMore || error != null ? 1 : 0),
-        itemBuilder: (context, index) {
-          // Footer: loading indicator or error message
-          if (index == posts.length) {
-            // Show loading indicator for pagination
-            if (isLoadingMore) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
-              );
-            }
-            // Show error message for pagination failures
-            if (error != null) {
-              return Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.primary),
-                ),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      color: AppColors.primary,
-                      size: 32,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _getUserFriendlyError(error),
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: () {
-                        Provider.of<FeedProvider>(context, listen: false)
-                          ..clearError()
-                          ..loadMore();
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                      ),
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              );
-            }
-          }
-
-          final post = posts[index];
-          return Semantics(
-            label:
-                'Feed post in ${post.post.community.name} by '
-                '${post.post.author.displayName ?? post.post.author.handle}. '
-                '${post.post.title ?? ""}',
-            button: true,
-            child: PostCard(post: post, currentTime: currentTime),
-          );
-        },
-      ),
+    // For authenticated users, use PageView for swipe navigation
+    return PageView(
+      controller: _pageController,
+      onPageChanged: (index) {
+        final type = index == 0 ? FeedType.discover : FeedType.forYou;
+        context.read<MultiFeedProvider>().setCurrentFeed(type);
+        // Load the feed if it hasn't been loaded yet
+        _ensureFeedLoaded(type);
+        // Restore scroll position when swiping between feeds
+        _restoreScrollPosition(type);
+      },
+      children: [
+        _buildFeedPage(FeedType.discover, isAuthenticated),
+        _buildFeedPage(FeedType.forYou, isAuthenticated),
+      ],
     );
   }
 
-  /// Transform technical error messages into user-friendly ones
-  String _getUserFriendlyError(String error) {
-    final lowerError = error.toLowerCase();
+  /// Build a FeedPage widget with all required state from provider
+  Widget _buildFeedPage(FeedType feedType, bool isAuthenticated) {
+    return Consumer<MultiFeedProvider>(
+      builder: (context, provider, _) {
+        final state = provider.getState(feedType);
 
-    if (lowerError.contains('socketexception') ||
-        lowerError.contains('network') ||
-        lowerError.contains('connection refused')) {
-      return 'Please check your internet connection';
-    } else if (lowerError.contains('timeoutexception') ||
-        lowerError.contains('timeout')) {
-      return 'Request timed out. Please try again';
-    } else if (lowerError.contains('401') ||
-        lowerError.contains('unauthorized')) {
-      return 'Authentication failed. Please sign in again';
-    } else if (lowerError.contains('404') || lowerError.contains('not found')) {
-      return 'Content not found';
-    } else if (lowerError.contains('500') ||
-        lowerError.contains('internal server')) {
-      return 'Server error. Please try again later';
-    }
+        // Handle error: treat null and empty string as no error
+        final error = state.error;
+        final hasError = error != null && error.isNotEmpty;
 
-    // Fallback to generic message for unknown errors
-    return 'Something went wrong. Please try again';
+        return FeedPage(
+          feedType: feedType,
+          posts: state.posts,
+          isLoading: state.isLoading,
+          isLoadingMore: state.isLoadingMore,
+          error: hasError ? error : null,
+          scrollController: _getOrCreateScrollController(feedType),
+          onRefresh: () => provider.loadFeed(feedType, refresh: true),
+          onRetry: () => provider.retry(feedType),
+          onClearErrorAndLoadMore:
+              () =>
+                  provider
+                    ..clearError(feedType)
+                    ..loadMore(feedType),
+          isAuthenticated: isAuthenticated,
+          currentTime: provider.currentTime,
+        );
+      },
+    );
   }
 }
