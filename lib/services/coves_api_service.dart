@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../config/environment_config.dart';
 import '../models/comment.dart';
+import '../models/community.dart';
 import '../models/post.dart';
 import 'api_exceptions.dart';
 
@@ -355,6 +356,131 @@ class CovesApiService {
         debugPrint('❌ Error parsing comments response: $e');
       }
       throw ApiException('Failed to parse server response', originalError: e);
+    }
+  }
+
+  /// List communities with optional filtering
+  ///
+  /// Fetches a list of communities with pagination support.
+  /// Requires authentication.
+  ///
+  /// Parameters:
+  /// - [limit]: Number of communities per page (default: 50, max: 100)
+  /// - [cursor]: Pagination cursor from previous response
+  /// - [sort]: Sort order - 'popular', 'new', or 'alphabetical' (default: 'popular')
+  Future<CommunitiesResponse> listCommunities({
+    int limit = 50,
+    String? cursor,
+    String sort = 'popular',
+  }) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Fetching communities: sort=$sort, limit=$limit');
+      }
+
+      final queryParams = <String, dynamic>{
+        'limit': limit,
+        'sort': sort,
+      };
+
+      if (cursor != null) {
+        queryParams['cursor'] = cursor;
+      }
+
+      final response = await _dio.get(
+        '/xrpc/social.coves.community.list',
+        queryParameters: queryParams,
+      );
+
+      if (kDebugMode) {
+        debugPrint(
+          '✅ Communities fetched: '
+          '${response.data['communities']?.length ?? 0} communities',
+        );
+      }
+
+      return CommunitiesResponse.fromJson(
+        response.data as Map<String, dynamic>,
+      );
+    } on DioException catch (e) {
+      _handleDioException(e, 'communities');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error parsing communities response: $e');
+      }
+      throw ApiException('Failed to parse server response', originalError: e);
+    }
+  }
+
+  /// Create a new post in a community
+  ///
+  /// Creates a new post with optional title, content, and embed.
+  /// Requires authentication.
+  ///
+  /// Parameters:
+  /// - [community]: Community identifier (required)
+  /// - [title]: Post title (optional)
+  /// - [content]: Post content (optional)
+  /// - [embed]: External embed (link, image, etc.) (optional)
+  /// - [langs]: Language codes for the post (optional)
+  /// - [labels]: Self-applied content labels (optional)
+  Future<CreatePostResponse> createPost({
+    required String community,
+    String? title,
+    String? content,
+    ExternalEmbedInput? embed,
+    List<String>? langs,
+    SelfLabels? labels,
+  }) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Creating post in community: $community');
+      }
+
+      // Build request body with only non-null fields
+      final requestBody = <String, dynamic>{
+        'community': community,
+      };
+
+      if (title != null) {
+        requestBody['title'] = title;
+      }
+
+      if (content != null) {
+        requestBody['content'] = content;
+      }
+
+      if (embed != null) {
+        requestBody['embed'] = embed.toJson();
+      }
+
+      if (langs != null && langs.isNotEmpty) {
+        requestBody['langs'] = langs;
+      }
+
+      if (labels != null) {
+        requestBody['labels'] = labels.toJson();
+      }
+
+      final response = await _dio.post(
+        '/xrpc/social.coves.community.post.create',
+        data: requestBody,
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Post created successfully');
+      }
+
+      return CreatePostResponse.fromJson(
+        response.data as Map<String, dynamic>,
+      );
+    } on DioException catch (e) {
+      _handleDioException(e, 'create post');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error creating post: $e');
+      }
+      throw ApiException('Failed to create post', originalError: e);
     }
   }
 
