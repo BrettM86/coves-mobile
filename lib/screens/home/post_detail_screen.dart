@@ -37,7 +37,11 @@ import 'focused_thread_screen.dart';
 /// - Loading, empty, and error states
 /// - Automatic comment loading on screen init
 class PostDetailScreen extends StatefulWidget {
-  const PostDetailScreen({required this.post, this.isOptimistic = false, super.key});
+  const PostDetailScreen({
+    required this.post,
+    this.isOptimistic = false,
+    super.key,
+  });
 
   /// Post to display (passed via route extras)
   final FeedViewPost post;
@@ -51,7 +55,8 @@ class PostDetailScreen extends StatefulWidget {
 }
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
-  final ScrollController _scrollController = ScrollController();
+  // ScrollController created lazily with cached scroll position for instant restoration
+  late ScrollController _scrollController;
   final GlobalKey _commentsHeaderKey = GlobalKey();
 
   // Cached provider from CommentsProviderCache
@@ -67,15 +72,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
+    // ScrollController and provider initialization moved to didChangeDependencies
+    // where we have access to context for synchronous provider acquisition
+  }
 
-    // Initialize provider after frame is built
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _initializeProvider();
-        _setupAuthListener();
-      }
-    });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Initialize provider synchronously on first call (has context access)
+    // This ensures cached data is available for the first build, avoiding
+    // the flash from loading state → content → scroll position jump
+    if (!_isInitialized) {
+      _initializeProviderSync();
+    }
   }
 
   /// Listen for auth state changes to handle sign-out
@@ -92,7 +101,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
     // If user signed out while viewing this screen, navigate back
     // The CommentsProviderCache has already disposed our provider
-    if (!authProvider.isAuthenticated && _isInitialized && !_providerInvalidated) {
+    if (!authProvider.isAuthenticated &&
+        _isInitialized &&
+        !_providerInvalidated) {
       _providerInvalidated = true;
 
       if (kDebugMode) {
@@ -113,8 +124,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
-  /// Initialize provider from cache and restore state
-  void _initializeProvider() {
+  /// Initialize provider synchronously from cache
+  ///
+  /// Called from didChangeDependencies to ensure cached data is available
+  /// for the first build. Creates ScrollController with initialScrollOffset
+  /// set to cached position for instant scroll restoration without flicker.
+  void _initializeProviderSync() {
     // Get or create provider from cache
     final cache = context.read<CommentsProviderCache>();
     _commentsCache = cache;
@@ -123,8 +138,29 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       postCid: widget.post.post.cid,
     );
 
+    // Create scroll controller with cached position for instant restoration
+    // This avoids the flash: loading → content at top → jump to cached position
+    final cachedScrollPosition = _commentsProvider.scrollPosition;
+    _scrollController = ScrollController(
+      initialScrollOffset: cachedScrollPosition,
+    );
+    _scrollController.addListener(_onScroll);
+
+    if (kDebugMode && cachedScrollPosition > 0) {
+      debugPrint(
+        '📍 Created ScrollController with initial offset: $cachedScrollPosition',
+      );
+    }
+
     // Listen for changes to trigger rebuilds
     _commentsProvider.addListener(_onProviderChanged);
+
+    // Setup auth listener
+    _setupAuthListener();
+
+    // Mark as initialized before triggering any loads
+    // This ensures the first build shows content (not loading) when cached
+    _isInitialized = true;
 
     // Skip loading for optimistic posts (just created, not yet indexed)
     if (widget.isOptimistic) {
@@ -133,15 +169,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       }
       // Don't load comments - there won't be any yet
     } else if (_commentsProvider.comments.isNotEmpty) {
-      // Already have data - restore scroll position immediately
+      // Already have cached data - it will render immediately
       if (kDebugMode) {
         debugPrint(
           '📦 Using cached comments (${_commentsProvider.comments.length})',
         );
       }
-      _restoreScrollPosition();
 
-      // Background refresh if data is stale
+      // Background refresh if data is stale (won't cause flicker)
       if (_commentsProvider.isStale) {
         if (kDebugMode) {
           debugPrint('🔄 Data stale, refreshing in background');
@@ -152,10 +187,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       // No cached data - load fresh
       _commentsProvider.loadComments(refresh: true);
     }
-
-    setState(() {
-      _isInitialized = true;
-    });
   }
 
   @override
@@ -194,30 +225,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     if (mounted) {
       setState(() {});
     }
-  }
-
-  /// Restore scroll position from provider
-  void _restoreScrollPosition() {
-    final savedPosition = _commentsProvider.scrollPosition;
-    if (savedPosition <= 0) {
-      return;
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) {
-        return;
-      }
-
-      final maxExtent = _scrollController.position.maxScrollExtent;
-      final targetPosition = savedPosition.clamp(0.0, maxExtent);
-
-      if (targetPosition > 0) {
-        _scrollController.jumpTo(targetPosition);
-        if (kDebugMode) {
-          debugPrint('📍 Restored scroll to $targetPosition (max: $maxExtent)');
-        }
-      }
-    });
   }
 
   /// Handle sort changes from dropdown
