@@ -64,8 +64,11 @@ void main() async {
                 authProvider: authProvider,
               ),
         ),
-        ChangeNotifierProxyProvider2<AuthProvider, VoteProvider,
-            MultiFeedProvider>(
+        ChangeNotifierProxyProvider2<
+          AuthProvider,
+          VoteProvider,
+          MultiFeedProvider
+        >(
           create:
               (context) => MultiFeedProvider(
                 authProvider,
@@ -79,18 +82,20 @@ void main() async {
         // CommentsProviderCache manages per-post CommentsProvider instances
         // with LRU eviction and sign-out cleanup
         ProxyProvider2<AuthProvider, VoteProvider, CommentsProviderCache>(
-          create: (context) => CommentsProviderCache(
-            authProvider: authProvider,
-            voteProvider: context.read<VoteProvider>(),
-            commentService: commentService,
-          ),
+          create:
+              (context) => CommentsProviderCache(
+                authProvider: authProvider,
+                voteProvider: context.read<VoteProvider>(),
+                commentService: commentService,
+              ),
           update: (context, auth, vote, previous) {
             // Reuse existing cache
-            return previous ?? CommentsProviderCache(
-              authProvider: auth,
-              voteProvider: vote,
-              commentService: commentService,
-            );
+            return previous ??
+                CommentsProviderCache(
+                  authProvider: auth,
+                  voteProvider: vote,
+                  commentService: commentService,
+                );
           },
           dispose: (_, cache) => cache.dispose(),
         ),

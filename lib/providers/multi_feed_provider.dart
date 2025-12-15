@@ -33,7 +33,8 @@ class MultiFeedProvider with ChangeNotifier {
     // Use injected service (for testing) or create new one (for production)
     // Pass token getter, refresh handler, and sign out handler to API service
     // for automatic fresh token retrieval and automatic token refresh on 401
-    _apiService = apiService ??
+    _apiService =
+        apiService ??
         CovesApiService(
           tokenGetter: _authProvider.getAccessToken,
           tokenRefresher: _authProvider.refreshToken,
@@ -228,15 +229,10 @@ class MultiFeedProvider with ChangeNotifier {
     try {
       if (refresh) {
         // Start loading, keep existing data visible
-        _feedStates[type] = currentState.copyWith(
-          isLoading: true,
-          error: null,
-        );
+        _feedStates[type] = currentState.copyWith(isLoading: true, error: null);
       } else {
         // Pagination
-        _feedStates[type] = currentState.copyWith(
-          isLoadingMore: true,
-        );
+        _feedStates[type] = currentState.copyWith(isLoadingMore: true);
       }
       notifyListeners();
 
@@ -342,11 +338,12 @@ class MultiFeedProvider with ChangeNotifier {
     return _fetchFeed(
       type: type,
       refresh: refresh,
-      fetcher: () => _apiService.getTimeline(
-        sort: _sort,
-        timeframe: _timeframe,
-        cursor: refresh ? null : currentState.cursor,
-      ),
+      fetcher:
+          () => _apiService.getTimeline(
+            sort: _sort,
+            timeframe: _timeframe,
+            cursor: refresh ? null : currentState.cursor,
+          ),
       feedName: 'Timeline',
     );
   }
@@ -361,11 +358,12 @@ class MultiFeedProvider with ChangeNotifier {
     return _fetchFeed(
       type: type,
       refresh: refresh,
-      fetcher: () => _apiService.getDiscover(
-        sort: _sort,
-        timeframe: _timeframe,
-        cursor: refresh ? null : currentState.cursor,
-      ),
+      fetcher:
+          () => _apiService.getDiscover(
+            sort: _sort,
+            timeframe: _timeframe,
+            cursor: refresh ? null : currentState.cursor,
+          ),
       feedName: 'Discover',
     );
   }

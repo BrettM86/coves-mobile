@@ -286,8 +286,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   /// Switch to a feed type and animate PageView
   void _switchToFeedType(FeedType type, int pageIndex) {
-    final provider = context.read<MultiFeedProvider>();
-    provider.setCurrentFeed(type);
+    context.read<MultiFeedProvider>().setCurrentFeed(type);
 
     // Animate to the corresponding page
     _pageController.animateToPage(
@@ -321,7 +320,9 @@ class _FeedScreenState extends State<FeedScreen> {
   void _restoreScrollPosition(FeedType type) {
     // Wait for the next frame to ensure the controller has clients
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       final controller = _scrollControllers[type];
       if (controller != null && controller.hasClients) {
@@ -379,10 +380,11 @@ class _FeedScreenState extends State<FeedScreen> {
           scrollController: _getOrCreateScrollController(feedType),
           onRefresh: () => provider.loadFeed(feedType, refresh: true),
           onRetry: () => provider.retry(feedType),
-          onClearErrorAndLoadMore: () {
-            provider.clearError(feedType);
-            provider.loadMore(feedType);
-          },
+          onClearErrorAndLoadMore:
+              () =>
+                  provider
+                    ..clearError(feedType)
+                    ..loadMore(feedType),
           isAuthenticated: isAuthenticated,
           currentTime: provider.currentTime,
         );

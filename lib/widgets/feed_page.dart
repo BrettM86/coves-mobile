@@ -151,7 +151,8 @@ class _FeedPageState extends State<FeedPage>
                       const SizedBox(height: 8),
                       Text(
                         widget.isAuthenticated
-                            ? 'Subscribe to communities to see posts in your feed'
+                            ? 'Subscribe to communities to see '
+                                'posts in your feed'
                             : 'Check back later for new posts',
                         style: const TextStyle(
                           fontSize: 14,

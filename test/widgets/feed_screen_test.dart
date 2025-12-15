@@ -362,8 +362,9 @@ void main() {
       tester,
     ) async {
       fakeAuthProvider.setAuthenticated(value: true);
-      fakeFeedProvider.setPosts(FeedType.discover, [_createMockPost('Post 1')]);
-      fakeFeedProvider.setPosts(FeedType.forYou, [_createMockPost('Post 2')]);
+      fakeFeedProvider
+        ..setPosts(FeedType.discover, [_createMockPost('Post 1')])
+        ..setPosts(FeedType.forYou, [_createMockPost('Post 2')]);
 
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();

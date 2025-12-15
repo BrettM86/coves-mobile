@@ -71,9 +71,10 @@ class FeedState {
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       error: error == _sentinel ? this.error : error as String?,
       scrollPosition: scrollPosition ?? this.scrollPosition,
-      lastRefreshTime: lastRefreshTime == _sentinel
-          ? this.lastRefreshTime
-          : lastRefreshTime as DateTime?,
+      lastRefreshTime:
+          lastRefreshTime == _sentinel
+              ? this.lastRefreshTime
+              : lastRefreshTime as DateTime?,
     );
   }
 }
