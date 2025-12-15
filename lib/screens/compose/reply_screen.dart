@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show FlutterView;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -67,6 +68,7 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   bool _authInvalidated = false;
   double _lastKeyboardHeight = 0;
   Timer? _bannerDismissTimer;
+  FlutterView? _cachedView;
 
   @override
   void initState() {
@@ -90,6 +92,14 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
         });
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Cache the view reference so we can safely use it in didChangeMetrics
+    // even when the widget is being deactivated
+    _cachedView = View.of(context);
   }
 
   void _setupAuthListener() {
@@ -151,9 +161,9 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     super.didChangeMetrics();
     // Guard against being called after widget is deactivated
     // (can happen during keyboard animation while navigating away)
-    if (!mounted) return;
+    if (!mounted || _cachedView == null) return;
 
-    final keyboardHeight = View.of(context).viewInsets.bottom;
+    final keyboardHeight = _cachedView!.viewInsets.bottom;
 
     // Detect keyboard closing and unfocus text field
     if (_lastKeyboardHeight > 0 && keyboardHeight == 0) {
@@ -495,6 +505,7 @@ class _ReplyToolbarState extends State<_ReplyToolbar>
     with WidgetsBindingObserver {
   final ValueNotifier<double> _keyboardMarginNotifier = ValueNotifier(0);
   final ValueNotifier<double> _safeAreaBottomNotifier = ValueNotifier(0);
+  FlutterView? _cachedView;
 
   @override
   void initState() {
@@ -505,6 +516,8 @@ class _ReplyToolbarState extends State<_ReplyToolbar>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // Cache view reference for safe access in didChangeMetrics
+    _cachedView = View.of(context);
     _updateMargins();
   }
 
@@ -518,14 +531,17 @@ class _ReplyToolbarState extends State<_ReplyToolbar>
 
   @override
   void didChangeMetrics() {
-    _updateMargins();
+    // Schedule update after frame to ensure context is valid
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateMargins();
+    });
   }
 
   void _updateMargins() {
-    if (!mounted) {
+    if (!mounted || _cachedView == null) {
       return;
     }
-    final view = View.of(context);
+    final view = _cachedView!;
     final devicePixelRatio = view.devicePixelRatio;
     final keyboardInset = view.viewInsets.bottom / devicePixelRatio;
     final viewPaddingBottom = view.viewPadding.bottom / devicePixelRatio;
