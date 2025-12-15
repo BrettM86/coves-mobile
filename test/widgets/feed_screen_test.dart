@@ -1,6 +1,7 @@
+import 'package:coves_flutter/models/feed_state.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
-import 'package:coves_flutter/providers/feed_provider.dart';
+import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/feed_screen.dart';
 import 'package:coves_flutter/services/vote_service.dart';
@@ -52,73 +53,71 @@ class FakeVoteProvider extends VoteProvider {
   }
 }
 
-// Fake FeedProvider for testing
-class FakeFeedProvider extends FeedProvider {
-  FakeFeedProvider() : super(FakeAuthProvider());
+// Fake MultiFeedProvider for testing
+class FakeMultiFeedProvider extends MultiFeedProvider {
+  FakeMultiFeedProvider() : super(FakeAuthProvider());
 
-  List<FeedViewPost> _posts = [];
-  bool _isLoading = false;
-  bool _isLoadingMore = false;
-  String? _error;
-  bool _hasMore = true;
+  final Map<FeedType, FeedState> _states = {
+    FeedType.discover: FeedState.initial(),
+    FeedType.forYou: FeedState.initial(),
+  };
+
   int _loadFeedCallCount = 0;
   int _retryCallCount = 0;
-
-  @override
-  List<FeedViewPost> get posts => _posts;
-
-  @override
-  bool get isLoading => _isLoading;
-
-  @override
-  bool get isLoadingMore => _isLoadingMore;
-
-  @override
-  String? get error => _error;
-
-  @override
-  bool get hasMore => _hasMore;
 
   int get loadFeedCallCount => _loadFeedCallCount;
   int get retryCallCount => _retryCallCount;
 
-  void setPosts(List<FeedViewPost> value) {
-    _posts = value;
+  @override
+  FeedState getState(FeedType type) => _states[type] ?? FeedState.initial();
+
+  void setStateForType(FeedType type, FeedState state) {
+    _states[type] = state;
     notifyListeners();
   }
 
-  void setLoading({required bool value}) {
-    _isLoading = value;
+  void setPosts(FeedType type, List<FeedViewPost> posts) {
+    _states[type] = _states[type]!.copyWith(posts: posts);
     notifyListeners();
   }
 
-  void setLoadingMore({required bool value}) {
-    _isLoadingMore = value;
+  void setLoading(FeedType type, {required bool value}) {
+    _states[type] = _states[type]!.copyWith(isLoading: value);
     notifyListeners();
   }
 
-  void setError(String? value) {
-    _error = value;
+  void setLoadingMore(FeedType type, {required bool value}) {
+    _states[type] = _states[type]!.copyWith(isLoadingMore: value);
     notifyListeners();
   }
 
-  void setHasMore({required bool value}) {
-    _hasMore = value;
+  void setError(FeedType type, String? value) {
+    _states[type] = _states[type]!.copyWith(error: value);
+    notifyListeners();
+  }
+
+  void setHasMore(FeedType type, {required bool value}) {
+    _states[type] = _states[type]!.copyWith(hasMore: value);
     notifyListeners();
   }
 
   @override
-  Future<void> loadFeed({bool refresh = false}) async {
+  Future<void> loadFeed(FeedType type, {bool refresh = false}) async {
     _loadFeedCallCount++;
   }
 
   @override
-  Future<void> retry() async {
+  Future<void> retry(FeedType type) async {
     _retryCallCount++;
   }
 
   @override
-  Future<void> loadMore() async {
+  Future<void> loadMore(FeedType type) async {
+    // No-op for testing
+  }
+
+  @override
+  void saveScrollPosition(FeedType type, double position) {
     // No-op for testing
   }
 }
@@ -126,12 +125,12 @@ class FakeFeedProvider extends FeedProvider {
 void main() {
   group('FeedScreen Widget Tests', () {
     late FakeAuthProvider fakeAuthProvider;
-    late FakeFeedProvider fakeFeedProvider;
+    late FakeMultiFeedProvider fakeFeedProvider;
     late FakeVoteProvider fakeVoteProvider;
 
     setUp(() {
       fakeAuthProvider = FakeAuthProvider();
-      fakeFeedProvider = FakeFeedProvider();
+      fakeFeedProvider = FakeMultiFeedProvider();
       fakeVoteProvider = FakeVoteProvider();
     });
 
@@ -139,7 +138,9 @@ void main() {
       return MultiProvider(
         providers: [
           ChangeNotifierProvider<AuthProvider>.value(value: fakeAuthProvider),
-          ChangeNotifierProvider<FeedProvider>.value(value: fakeFeedProvider),
+          ChangeNotifierProvider<MultiFeedProvider>.value(
+            value: fakeFeedProvider,
+          ),
           ChangeNotifierProvider<VoteProvider>.value(value: fakeVoteProvider),
         ],
         child: const MaterialApp(home: FeedScreen()),
@@ -149,7 +150,7 @@ void main() {
     testWidgets('should display loading indicator when loading', (
       tester,
     ) async {
-      fakeFeedProvider.setLoading(value: true);
+      fakeFeedProvider.setLoading(FeedType.discover, value: true);
 
       await tester.pumpWidget(createTestWidget());
 
@@ -157,7 +158,7 @@ void main() {
     });
 
     testWidgets('should display error state with retry button', (tester) async {
-      fakeFeedProvider.setError('Network error');
+      fakeFeedProvider.setError(FeedType.discover, 'Network error');
 
       await tester.pumpWidget(createTestWidget());
 
@@ -177,7 +178,7 @@ void main() {
     });
 
     testWidgets('should display empty state when no posts', (tester) async {
-      fakeFeedProvider.setPosts([]);
+      fakeFeedProvider.setPosts(FeedType.discover, []);
       fakeAuthProvider.setAuthenticated(value: false);
 
       await tester.pumpWidget(createTestWidget());
@@ -189,7 +190,7 @@ void main() {
     testWidgets('should display different empty state when authenticated', (
       tester,
     ) async {
-      fakeFeedProvider.setPosts([]);
+      fakeFeedProvider.setPosts(FeedType.discover, []);
       fakeAuthProvider.setAuthenticated(value: true);
 
       await tester.pumpWidget(createTestWidget());
@@ -207,7 +208,7 @@ void main() {
         _createMockPost('Test Post 2'),
       ];
 
-      fakeFeedProvider.setPosts(mockPosts);
+      fakeFeedProvider.setPosts(FeedType.discover, mockPosts);
 
       await tester.pumpWidget(createTestWidget());
 
@@ -239,7 +240,7 @@ void main() {
 
     testWidgets('should handle pull-to-refresh', (tester) async {
       final mockPosts = [_createMockPost('Test Post')];
-      fakeFeedProvider.setPosts(mockPosts);
+      fakeFeedProvider.setPosts(FeedType.discover, mockPosts);
 
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
@@ -247,8 +248,8 @@ void main() {
       // Verify RefreshIndicator exists
       expect(find.byType(RefreshIndicator), findsOneWidget);
 
-      // The loadFeed is called once on init
-      expect(fakeFeedProvider.loadFeedCallCount, 1);
+      // loadFeed is called once for initial load (or twice if authenticated)
+      expect(fakeFeedProvider.loadFeedCallCount, greaterThanOrEqualTo(1));
     });
 
     testWidgets('should show loading indicator at bottom when loading more', (
@@ -256,8 +257,8 @@ void main() {
     ) async {
       final mockPosts = [_createMockPost('Test Post')];
       fakeFeedProvider
-        ..setPosts(mockPosts)
-        ..setLoadingMore(value: true);
+        ..setPosts(FeedType.discover, mockPosts)
+        ..setLoadingMore(FeedType.discover, value: true);
 
       await tester.pumpWidget(createTestWidget());
 
@@ -303,7 +304,7 @@ void main() {
         ),
       );
 
-      fakeFeedProvider.setPosts([mockPost]);
+      fakeFeedProvider.setPosts(FeedType.discover, [mockPost]);
 
       await tester.pumpWidget(createTestWidget());
 
@@ -313,11 +314,11 @@ void main() {
 
     testWidgets('should display community and author info', (tester) async {
       final mockPost = _createMockPost('Test Post');
-      fakeFeedProvider.setPosts([mockPost]);
+      fakeFeedProvider.setPosts(FeedType.discover, [mockPost]);
 
       await tester.pumpWidget(createTestWidget());
 
-      // Check for community handle parts (displayed as !test-community@coves.social)
+      // Check for community handle parts (displayed as !test-community@...)
       expect(find.textContaining('!test-community'), findsOneWidget);
       expect(find.text('@test.user'), findsOneWidget);
     });
@@ -326,12 +327,12 @@ void main() {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
-      expect(fakeFeedProvider.loadFeedCallCount, 1);
+      expect(fakeFeedProvider.loadFeedCallCount, greaterThanOrEqualTo(1));
     });
 
     testWidgets('should have proper accessibility semantics', (tester) async {
       final mockPost = _createMockPost('Accessible Post');
-      fakeFeedProvider.setPosts([mockPost]);
+      fakeFeedProvider.setPosts(FeedType.discover, [mockPost]);
 
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
@@ -341,7 +342,7 @@ void main() {
 
       // Verify post card exists (which contains Semantics wrapper)
       expect(find.text('Accessible Post'), findsOneWidget);
-      // Check for community handle parts (displayed as !test-community@coves.social)
+      // Check for community handle parts
       expect(find.textContaining('!test-community'), findsOneWidget);
       expect(find.textContaining('@coves.social'), findsOneWidget);
     });
@@ -355,6 +356,33 @@ void main() {
 
       // If we get here without errors, dispose was called properly
       expect(true, true);
+    });
+
+    testWidgets('should support swipe navigation when authenticated', (
+      tester,
+    ) async {
+      fakeAuthProvider.setAuthenticated(value: true);
+      fakeFeedProvider.setPosts(FeedType.discover, [_createMockPost('Post 1')]);
+      fakeFeedProvider.setPosts(FeedType.forYou, [_createMockPost('Post 2')]);
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      // PageView should exist for authenticated users
+      expect(find.byType(PageView), findsOneWidget);
+    });
+
+    testWidgets('should not have PageView when not authenticated', (
+      tester,
+    ) async {
+      fakeAuthProvider.setAuthenticated(value: false);
+      fakeFeedProvider.setPosts(FeedType.discover, [_createMockPost('Post 1')]);
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      // PageView should not exist for unauthenticated users
+      expect(find.byType(PageView), findsNothing);
     });
   });
 }

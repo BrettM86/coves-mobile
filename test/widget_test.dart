@@ -1,6 +1,6 @@
 import 'package:coves_flutter/main.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
-import 'package:coves_flutter/providers/feed_provider.dart';
+import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -15,7 +15,9 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider.value(value: authProvider),
-          ChangeNotifierProvider(create: (_) => FeedProvider(authProvider)),
+          ChangeNotifierProvider(
+            create: (_) => MultiFeedProvider(authProvider),
+          ),
         ],
         child: const CovesApp(),
       ),
