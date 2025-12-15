@@ -37,10 +37,14 @@ import 'focused_thread_screen.dart';
 /// - Loading, empty, and error states
 /// - Automatic comment loading on screen init
 class PostDetailScreen extends StatefulWidget {
-  const PostDetailScreen({required this.post, super.key});
+  const PostDetailScreen({required this.post, this.isOptimistic = false, super.key});
 
   /// Post to display (passed via route extras)
   final FeedViewPost post;
+
+  /// Whether this is an optimistic post (just created, not yet indexed)
+  /// When true, skips initial comment load since we know there are no comments
+  final bool isOptimistic;
 
   @override
   State<PostDetailScreen> createState() => _PostDetailScreenState();
@@ -122,8 +126,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     // Listen for changes to trigger rebuilds
     _commentsProvider.addListener(_onProviderChanged);
 
-    // Check if we already have cached data
-    if (_commentsProvider.comments.isNotEmpty) {
+    // Skip loading for optimistic posts (just created, not yet indexed)
+    if (widget.isOptimistic) {
+      if (kDebugMode) {
+        debugPrint('✨ Optimistic post - skipping initial comment load');
+      }
+      // Don't load comments - there won't be any yet
+    } else if (_commentsProvider.comments.isNotEmpty) {
       // Already have data - restore scroll position immediately
       if (kDebugMode) {
         debugPrint(
@@ -668,6 +677,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               color: AppColors.primary,
               child: CustomScrollView(
                 controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
                   // Floating app bar that hides on scroll down,
                   // shows on scroll up
