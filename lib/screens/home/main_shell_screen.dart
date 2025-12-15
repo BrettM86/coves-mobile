@@ -30,6 +30,12 @@ class _MainShellScreenState extends State<MainShellScreen> {
     });
   }
 
+  void _onNavigateToFeed() {
+    setState(() {
+      _selectedIndex = 0; // Switch to feed tab
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -38,7 +44,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
         children: [
           FeedScreen(onSearchTap: _onCommunitiesTap),
           const CommunitiesScreen(),
-          const CreatePostScreen(),
+          CreatePostScreen(onNavigateToFeed: _onNavigateToFeed),
           const NotificationsScreen(),
           const ProfileScreen(),
         ],
