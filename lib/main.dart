@@ -8,7 +8,7 @@ import 'config/oauth_config.dart';
 import 'constants/app_colors.dart';
 import 'models/post.dart';
 import 'providers/auth_provider.dart';
-import 'providers/feed_provider.dart';
+import 'providers/multi_feed_provider.dart';
 import 'providers/vote_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/main_shell_screen.dart';
@@ -64,15 +64,16 @@ void main() async {
                 authProvider: authProvider,
               ),
         ),
-        ChangeNotifierProxyProvider2<AuthProvider, VoteProvider, FeedProvider>(
+        ChangeNotifierProxyProvider2<AuthProvider, VoteProvider,
+            MultiFeedProvider>(
           create:
-              (context) => FeedProvider(
+              (context) => MultiFeedProvider(
                 authProvider,
                 voteProvider: context.read<VoteProvider>(),
               ),
           update: (context, auth, vote, previous) {
             // Reuse existing provider to maintain state across rebuilds
-            return previous ?? FeedProvider(auth, voteProvider: vote);
+            return previous ?? MultiFeedProvider(auth, voteProvider: vote);
           },
         ),
         // CommentsProviderCache manages per-post CommentsProvider instances
