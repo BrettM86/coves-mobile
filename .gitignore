@@ -50,3 +50,6 @@ app.*.map.json
 
 # macOS (not targeting this platform)
 macos/
+
+# Claude Code local settings
+.claude/settings.local.json
