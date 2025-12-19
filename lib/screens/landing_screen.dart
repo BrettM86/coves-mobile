@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+
+import '../constants/app_colors.dart';
 import '../widgets/primary_button.dart';
 
 class LandingScreen extends StatelessWidget {
@@ -9,7 +11,7 @@ class LandingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F14),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -22,6 +24,10 @@ class LandingScreen extends StatelessWidget {
                   'assets/logo/lil_dude.svg',
                   width: 120,
                   height: 120,
+                  errorBuilder: (context, error, stackTrace) {
+                    debugPrint('Failed to load lil_dude.svg: $error');
+                    return const SizedBox(width: 120, height: 120);
+                  },
                 ),
                 const SizedBox(height: 16),
 
@@ -30,11 +36,53 @@ class LandingScreen extends StatelessWidget {
                   'assets/logo/coves_bubble.svg',
                   width: 180,
                   height: 60,
+                  errorBuilder: (context, error, stackTrace) {
+                    debugPrint('Failed to load coves_bubble.svg: $error');
+                    return const SizedBox(width: 180, height: 60);
+                  },
                 ),
 
                 const SizedBox(height: 48),
 
-                // Buttons
+                // "Bring your @handle" with logos
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'Bring your atproto handle',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF8A96A6),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SvgPicture.asset(
+                      'assets/icons/atproto/providers_landing.svg',
+                      height: 18,
+                      errorBuilder: (context, error, stackTrace) {
+                        debugPrint(
+                          'Failed to load providers_landing.svg: $error',
+                        );
+                        return const SizedBox(height: 18);
+                      },
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                // Sign in button
+                PrimaryButton(
+                  title: 'Sign in',
+                  onPressed: () {
+                    context.go('/login');
+                  },
+                ),
+
+                const SizedBox(height: 12),
+
+                // Create account button
                 PrimaryButton(
                   title: 'Create account',
                   onPressed: () {
@@ -44,15 +92,6 @@ class LandingScreen extends StatelessWidget {
                         duration: Duration(seconds: 2),
                       ),
                     );
-                  },
-                ),
-
-                const SizedBox(height: 12),
-
-                PrimaryButton(
-                  title: 'Sign in',
-                  onPressed: () {
-                    context.go('/login');
                   },
                   variant: ButtonVariant.outline,
                 ),
