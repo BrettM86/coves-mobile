@@ -484,6 +484,57 @@ class CovesApiService {
     }
   }
 
+  /// Create a new community
+  ///
+  /// Creates a new community with the given name, display name, and description.
+  /// Requires authentication and admin privileges (backend enforces).
+  ///
+  /// Parameters:
+  /// - [name]: DNS-valid unique identifier (e.g., "worldnews")
+  /// - [displayName]: Human-readable display name (e.g., "World News")
+  /// - [description]: Community description
+  /// - [visibility]: Visibility level - 'public', 'unlisted', or 'private'
+  ///   (default: 'public')
+  Future<CreateCommunityResponse> createCommunity({
+    required String name,
+    required String displayName,
+    required String description,
+    String visibility = 'public',
+  }) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Creating community: $name ($displayName)');
+      }
+
+      final requestBody = <String, dynamic>{
+        'name': name,
+        'displayName': displayName,
+        'description': description,
+        'visibility': visibility,
+      };
+
+      final response = await _dio.post(
+        '/xrpc/social.coves.community.create',
+        data: requestBody,
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Community created successfully');
+      }
+
+      return CreateCommunityResponse.fromJson(
+        response.data as Map<String, dynamic>,
+      );
+    } on DioException catch (e) {
+      _handleDioException(e, 'create community');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error creating community: $e');
+      }
+      throw ApiException('Failed to create community', originalError: e);
+    }
+  }
+
   /// Handle Dio exceptions with specific error types
   ///
   /// Converts generic DioException into specific typed exceptions

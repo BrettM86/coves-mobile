@@ -262,3 +262,74 @@ class SelfLabel {
   /// Label value (e.g., "nsfw", "spoiler")
   final String val;
 }
+
+/// Response from POST /xrpc/social.coves.community.create
+class CreateCommunityResponse {
+  const CreateCommunityResponse({
+    required this.uri,
+    required this.cid,
+    required this.did,
+    required this.handle,
+  });
+
+  /// Parse response from JSON with defensive validation.
+  ///
+  /// Throws [FormatException] if required fields are missing or invalid.
+  factory CreateCommunityResponse.fromJson(Map<String, dynamic> json) {
+    final uri = json['uri'];
+    final cid = json['cid'];
+    final did = json['did'];
+    final handle = json['handle'];
+
+    if (uri == null || uri is! String) {
+      throw const FormatException('Missing or invalid "uri" in response');
+    }
+    if (cid == null || cid is! String) {
+      throw const FormatException('Missing or invalid "cid" in response');
+    }
+    if (did == null || did is! String) {
+      throw const FormatException('Missing or invalid "did" in response');
+    }
+    if (handle == null || handle is! String) {
+      throw const FormatException('Missing or invalid "handle" in response');
+    }
+
+    return CreateCommunityResponse(
+      uri: uri,
+      cid: cid,
+      did: did,
+      handle: handle,
+    );
+  }
+
+  /// AT-URI of the created community profile
+  final String uri;
+
+  /// Content identifier (CID) of the created community profile
+  final String cid;
+
+  /// DID of the created community
+  final String did;
+
+  /// Scoped handle of the created community
+  final String handle;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is CreateCommunityResponse &&
+        other.uri == uri &&
+        other.cid == cid &&
+        other.did == did &&
+        other.handle == handle;
+  }
+
+  @override
+  int get hashCode => Object.hash(uri, cid, did, handle);
+
+  @override
+  String toString() {
+    return 'CreateCommunityResponse(uri: $uri, cid: $cid, did: $did, '
+        'handle: $handle)';
+  }
+}
