@@ -9,6 +9,7 @@ import '../models/post.dart';
 import '../services/streamable_service.dart';
 import '../utils/community_handle_utils.dart';
 import '../utils/date_time_utils.dart';
+import 'bluesky_post_card.dart';
 import 'external_link_bar.dart';
 import 'fullscreen_video_player.dart';
 import 'post_card_actions.dart';
@@ -187,6 +188,15 @@ class PostCard extends StatelessWidget {
                         disableNavigation
                             ? null
                             : () => _navigateToDetail(context),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+
+                // Bluesky post embed
+                if (post.post.embed?.blueskyPost != null) ...[
+                  BlueskyPostCard(
+                    embed: post.post.embed!.blueskyPost!,
+                    currentTime: currentTime,
                   ),
                   const SizedBox(height: 8),
                 ],

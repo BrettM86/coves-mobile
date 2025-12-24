@@ -4,6 +4,8 @@
 // /xrpc/social.coves.feed.getTimeline
 // /xrpc/social.coves.feed.getDiscover
 
+import 'bluesky_post.dart';
+
 class TimelineResponse {
   TimelineResponse({required this.feed, this.cursor});
 
@@ -110,7 +112,7 @@ class PostView {
       ),
       createdAt: DateTime.parse(json['createdAt'] as String),
       indexedAt: DateTime.parse(json['indexedAt'] as String),
-      text: json['text'] as String,
+      text: json['text'] as String? ?? '',
       title: json['title'] as String?,
       stats: PostStats.fromJson(json['stats'] as Map<String, dynamic>),
       embed:
@@ -211,11 +213,17 @@ class PostStats {
 }
 
 class PostEmbed {
-  PostEmbed({required this.type, this.external, required this.data});
+  PostEmbed({
+    required this.type,
+    this.external,
+    this.blueskyPost,
+    required this.data,
+  });
 
   factory PostEmbed.fromJson(Map<String, dynamic> json) {
     final embedType = json[r'$type'] as String? ?? 'unknown';
     ExternalEmbed? externalEmbed;
+    BlueskyPostEmbed? blueskyPostEmbed;
 
     if (embedType == 'social.coves.embed.external' &&
         json['external'] != null) {
@@ -224,10 +232,20 @@ class PostEmbed {
       );
     }
 
-    return PostEmbed(type: embedType, external: externalEmbed, data: json);
+    if (embedType == 'social.coves.embed.post') {
+      blueskyPostEmbed = BlueskyPostEmbed.fromJson(json);
+    }
+
+    return PostEmbed(
+      type: embedType,
+      external: externalEmbed,
+      blueskyPost: blueskyPostEmbed,
+      data: json,
+    );
   }
   final String type;
   final ExternalEmbed? external;
+  final BlueskyPostEmbed? blueskyPost;
   final Map<String, dynamic> data;
 }
 

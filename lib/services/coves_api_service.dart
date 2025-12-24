@@ -250,6 +250,11 @@ class CovesApiService {
       return TimelineResponse.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       _handleDioException(e, 'timeline');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error parsing timeline response: $e');
+      }
+      throw ApiException('Failed to parse server response', originalError: e);
     }
   }
 
@@ -293,6 +298,11 @@ class CovesApiService {
       return TimelineResponse.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       _handleDioException(e, 'discover feed');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error parsing discover feed response: $e');
+      }
+      throw ApiException('Failed to parse server response', originalError: e);
     }
   }
 
