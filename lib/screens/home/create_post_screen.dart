@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
+import '../../constants/embed_types.dart';
 import '../../models/community.dart';
 import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
@@ -290,7 +291,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     final url = _urlController.text.trim();
     if (url.isNotEmpty) {
       embed = PostEmbed(
-        type: 'social.coves.embed.external',
+        type: EmbedTypes.external,
         external: ExternalEmbed(
           uri: url,
           title: _titleController.text.trim().isNotEmpty
@@ -301,7 +302,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
               : null,
         ),
         data: {
-          r'$type': 'social.coves.embed.external',
+          r'$type': EmbedTypes.external,
           'external': {
             'uri': url,
             if (_titleController.text.trim().isNotEmpty)

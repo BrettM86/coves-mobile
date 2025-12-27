@@ -4,6 +4,9 @@
 // /xrpc/social.coves.feed.getTimeline
 // /xrpc/social.coves.feed.getDiscover
 
+import 'package:flutter/foundation.dart';
+
+import '../constants/embed_types.dart';
 import 'bluesky_post.dart';
 
 class TimelineResponse {
@@ -12,19 +15,22 @@ class TimelineResponse {
   factory TimelineResponse.fromJson(Map<String, dynamic> json) {
     // Handle null feed array from backend
     final feedData = json['feed'];
-    final List<FeedViewPost> feedList;
+    final feedList = <FeedViewPost>[];
 
-    if (feedData == null) {
-      // Backend returned null, use empty list
-      feedList = [];
-    } else {
-      // Parse feed items
-      feedList =
-          (feedData as List<dynamic>)
-              .map(
-                (item) => FeedViewPost.fromJson(item as Map<String, dynamic>),
-              )
-              .toList();
+    if (feedData != null) {
+      // Parse feed items, skipping any that fail to parse
+      for (final item in feedData as List<dynamic>) {
+        try {
+          feedList.add(
+            FeedViewPost.fromJson(item as Map<String, dynamic>),
+          );
+        } on Exception catch (e) {
+          // Skip malformed posts (e.g., deleted posts with missing data)
+          if (kDebugMode) {
+            debugPrint('⚠️ Skipping malformed feed item: $e');
+          }
+        }
+      }
     }
 
     return TimelineResponse(feed: feedList, cursor: json['cursor'] as String?);
@@ -225,15 +231,30 @@ class PostEmbed {
     ExternalEmbed? externalEmbed;
     BlueskyPostEmbed? blueskyPostEmbed;
 
-    if (embedType == 'social.coves.embed.external' &&
+    if (embedType == EmbedTypes.external &&
         json['external'] != null) {
       externalEmbed = ExternalEmbed.fromJson(
         json['external'] as Map<String, dynamic>,
       );
     }
 
-    if (embedType == 'social.coves.embed.post') {
+    if (embedType == EmbedTypes.post) {
       blueskyPostEmbed = BlueskyPostEmbed.fromJson(json);
+    }
+
+    // Fallback: if no typed embed was parsed but we have a uri field at the
+    // top level, treat it as an external link embed. This handles cases where
+    // the backend returns simple link embeds without the full $type wrapper.
+    if (externalEmbed == null &&
+        blueskyPostEmbed == null &&
+        json['uri'] != null) {
+      if (kDebugMode) {
+        debugPrint(
+          'PostEmbed fallback: treating unrecognized embed as external link. '
+          'Type was: ${json[r'$type']}, keys: ${json.keys.toList()}',
+        );
+      }
+      externalEmbed = ExternalEmbed.fromJson(json);
     }
 
     return PostEmbed(

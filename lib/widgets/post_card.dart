@@ -156,8 +156,9 @@ class PostCard extends StatelessWidget {
                         // Spacing after title
                         if (post.post.title != null &&
                             (post.post.embed?.external != null ||
+                                post.post.embed?.blueskyPost != null ||
                                 post.post.text.isNotEmpty))
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                       ],
                     ),
                   )
@@ -174,8 +175,9 @@ class PostCard extends StatelessWidget {
                     ),
                   ),
                   if (post.post.embed?.external != null ||
+                      post.post.embed?.blueskyPost != null ||
                       post.post.text.isNotEmpty)
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                 ],
 
                 // Embed (handles its own taps - not wrapped in InkWell)

@@ -48,4 +48,37 @@ class DateTimeUtils {
       return '${thousands.toStringAsFixed(1)}k';
     }
   }
+
+  /// Format datetime as full date/time string like Bluesky
+  ///
+  /// Example: "12:01PM · Dec 26, 2025"
+  ///
+  /// [dateTime] is the time to format
+  static String formatFullDateTime(DateTime dateTime) {
+    final hour = dateTime.hour;
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    assert(dateTime.month >= 1 && dateTime.month <= 12, 'Invalid month');
+    final month = months[dateTime.month - 1];
+    final day = dateTime.day;
+    final year = dateTime.year;
+
+    return '$hour12:$minute$period · $month $day, $year';
+  }
 }

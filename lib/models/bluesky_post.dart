@@ -6,6 +6,58 @@ import 'package:flutter/foundation.dart';
 
 import 'post.dart';
 
+/// External link embed from a Bluesky post (link cards with title/description).
+class BlueskyExternalEmbed {
+  BlueskyExternalEmbed({
+    required this.uri,
+    this.title,
+    this.description,
+    this.thumb,
+  });
+
+  factory BlueskyExternalEmbed.fromJson(Map<String, dynamic> json) {
+    final uri = json['uri'];
+    if (uri == null || uri is! String) {
+      throw const FormatException(
+        'Missing or invalid uri field in BlueskyExternalEmbed',
+      );
+    }
+
+    return BlueskyExternalEmbed(
+      uri: uri,
+      title: json['title'] as String?,
+      description: json['description'] as String?,
+      thumb: json['thumb'] as String?,
+    );
+  }
+
+  /// URL of the external link
+  final String uri;
+
+  /// Page title (from og:title or <title>)
+  final String? title;
+
+  /// Page description (from og:description or meta description)
+  final String? description;
+
+  /// Thumbnail URL
+  final String? thumb;
+
+  /// Extract a nice domain from the URL (e.g., "lemonde.fr" from full URL)
+  String get domain {
+    final parsed = Uri.tryParse(uri);
+    if (parsed == null || parsed.host.isEmpty) {
+      return uri;
+    }
+    var host = parsed.host;
+    // Remove www. prefix
+    if (host.startsWith('www.')) {
+      host = host.substring(4);
+    }
+    return host;
+  }
+}
+
 class BlueskyPostResult {
   BlueskyPostResult({
     required this.uri,
@@ -21,6 +73,7 @@ class BlueskyPostResult {
     this.quotedPost,
     required this.unavailable,
     this.message,
+    this.embed,
   }) : assert(replyCount >= 0, 'replyCount must be non-negative'),
        assert(repostCount >= 0, 'repostCount must be non-negative'),
        assert(likeCount >= 0, 'likeCount must be non-negative'),
@@ -120,6 +173,21 @@ class BlueskyPostResult {
       );
     }
 
+    // Parse optional external embed
+    BlueskyExternalEmbed? embed;
+    if (json['embed'] != null) {
+      try {
+        embed = BlueskyExternalEmbed.fromJson(
+          json['embed'] as Map<String, dynamic>,
+        );
+      } on FormatException catch (e) {
+        if (kDebugMode) {
+          debugPrint('BlueskyPostResult: Failed to parse embed: $e');
+        }
+        // Leave embed as null
+      }
+    }
+
     return BlueskyPostResult(
       uri: uri,
       cid: cid,
@@ -139,6 +207,7 @@ class BlueskyPostResult {
               : null,
       unavailable: unavailable,
       message: json['message'] as String?,
+      embed: embed,
     );
   }
 
@@ -155,6 +224,9 @@ class BlueskyPostResult {
   final BlueskyPostResult? quotedPost;
   final bool unavailable;
   final String? message;
+
+  /// External link embed (link card) if present in the post
+  final BlueskyExternalEmbed? embed;
 
   // NOTE: Missing ==, hashCode overrides (known limitation)
   // Consider using freezed package for value equality in the future
@@ -191,16 +263,26 @@ class BlueskyPostEmbed {
       );
     }
 
-    return BlueskyPostEmbed(
-      uri: uri,
-      cid: cid,
-      resolved:
-          json['resolved'] != null
-              ? BlueskyPostResult.fromJson(
-                json['resolved'] as Map<String, dynamic>,
-              )
-              : null,
-    );
+    // Try to parse resolved post, but handle gracefully if it fails
+    // (e.g., deleted posts may have partial data without author)
+    BlueskyPostResult? resolved;
+    if (json['resolved'] != null) {
+      try {
+        resolved = BlueskyPostResult.fromJson(
+          json['resolved'] as Map<String, dynamic>,
+        );
+      } on FormatException catch (e) {
+        if (kDebugMode) {
+          debugPrint(
+            'BlueskyPostEmbed: Failed to parse resolved post, '
+            'treating as unavailable. Error: $e',
+          );
+        }
+        // Leave resolved as null - UI will show unavailable card
+      }
+    }
+
+    return BlueskyPostEmbed(uri: uri, cid: cid, resolved: resolved);
   }
 
   static const _blueskyBaseUrl = 'https://bsky.app';
@@ -218,31 +300,47 @@ class BlueskyPostEmbed {
   /// at://did:plc:xxx/app.bsky.feed.post/abc123 -> https://bsky.app/profile/handle/post/abc123
   ///
   /// Returns null if the AT-URI is invalid. Logs debug information when validation fails.
+  ///
+  /// Note: We manually parse AT-URIs because Dart's Uri.tryParse() fails on
+  /// DIDs containing colons (e.g., did:plc:xxx).
   static String? getPostWebUrl(BlueskyPostResult post, String atUri) {
-    final uri = Uri.tryParse(atUri);
-    if (uri == null) {
+    // AT-URI format: at://did:plc:xxx/app.bsky.feed.post/rkey
+    const prefix = 'at://';
+
+    if (!atUri.startsWith(prefix)) {
       if (kDebugMode) {
-        debugPrint('getPostWebUrl: Failed to parse URI: $atUri');
+        debugPrint('getPostWebUrl: URI does not start with at://: $atUri');
       }
       return null;
     }
-    if (uri.scheme != 'at') {
+
+    // Remove the at:// prefix and find the path
+    final remainder = atUri.substring(prefix.length);
+
+    // Find the first slash after the DID to get the path
+    final firstSlash = remainder.indexOf('/');
+    if (firstSlash == -1) {
+      if (kDebugMode) {
+        debugPrint('getPostWebUrl: No path found in URI: $atUri');
+      }
+      return null;
+    }
+
+    // Extract path segments (collection/rkey)
+    final path = remainder.substring(firstSlash + 1);
+    final pathSegments = path.split('/');
+
+    if (pathSegments.length < 2) {
       if (kDebugMode) {
         debugPrint(
-          'getPostWebUrl: Invalid URI scheme (expected "at", got "${uri.scheme}"): $atUri',
+          'getPostWebUrl: Invalid path (expected collection/rkey): $atUri',
         );
       }
       return null;
     }
-    if (uri.pathSegments.length < 2) {
-      if (kDebugMode) {
-        debugPrint(
-          'getPostWebUrl: Invalid URI path (expected at least 2 segments, got ${uri.pathSegments.length}): $atUri',
-        );
-      }
-      return null;
-    }
-    final rkey = uri.pathSegments.last;
+
+    // The rkey is the last segment
+    final rkey = pathSegments.last;
     return '$_blueskyBaseUrl/profile/${post.author.handle}/post/$rkey';
   }
 

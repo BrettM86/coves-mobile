@@ -4,6 +4,8 @@
 // GET /xrpc/social.coves.community.list
 // POST /xrpc/social.coves.community.post.create
 
+import '../constants/embed_types.dart';
+
 /// Response from GET /xrpc/social.coves.community.list
 class CommunitiesResponse {
   CommunitiesResponse({required this.communities, this.cursor});
@@ -197,7 +199,41 @@ class CreatePostResponse {
 
 /// External link embed input for creating posts
 class ExternalEmbedInput {
-  const ExternalEmbedInput({
+  /// Creates an [ExternalEmbedInput] with URI validation.
+  ///
+  /// Throws [ArgumentError] if [uri] is empty or not a valid URL.
+  factory ExternalEmbedInput({
+    required String uri,
+    String? title,
+    String? description,
+    String? thumb,
+  }) {
+    // Validate URI is not empty
+    if (uri.isEmpty) {
+      throw ArgumentError.value(uri, 'uri', 'URI cannot be empty');
+    }
+
+    // Validate URI is a well-formed URL
+    final parsedUri = Uri.tryParse(uri);
+    if (parsedUri == null ||
+        !parsedUri.hasScheme ||
+        (!parsedUri.isScheme('http') && !parsedUri.isScheme('https'))) {
+      throw ArgumentError.value(
+        uri,
+        'uri',
+        'URI must be a valid HTTP or HTTPS URL',
+      );
+    }
+
+    return ExternalEmbedInput._(
+      uri: uri,
+      title: title,
+      description: description,
+      thumb: thumb,
+    );
+  }
+
+  const ExternalEmbedInput._({
     required this.uri,
     this.title,
     this.description,
@@ -205,21 +241,25 @@ class ExternalEmbedInput {
   });
 
   Map<String, dynamic> toJson() {
-    final json = <String, dynamic>{
+    final external = <String, dynamic>{
       'uri': uri,
     };
 
     if (title != null) {
-      json['title'] = title;
+      external['title'] = title;
     }
     if (description != null) {
-      json['description'] = description;
+      external['description'] = description;
     }
     if (thumb != null) {
-      json['thumb'] = thumb;
+      external['thumb'] = thumb;
     }
 
-    return json;
+    // Return proper embed structure expected by backend
+    return {
+      r'$type': EmbedTypes.external,
+      'external': external,
+    };
   }
 
   /// URL of the external link
@@ -316,7 +356,9 @@ class CreateCommunityResponse {
 
   @override
   bool operator ==(Object other) {
-    if (identical(this, other)) return true;
+    if (identical(this, other)) {
+      return true;
+    }
     return other is CreateCommunityResponse &&
         other.uri == uri &&
         other.cid == cid &&
