@@ -13,6 +13,7 @@ import 'bluesky_post_card.dart';
 import 'external_link_bar.dart';
 import 'fullscreen_video_player.dart';
 import 'post_card_actions.dart';
+import 'source_link_bar.dart';
 
 /// Post card widget for displaying feed posts
 ///
@@ -37,6 +38,7 @@ class PostCard extends StatelessWidget {
     this.showBorder = true,
     this.showFullText = false,
     this.showAuthorFooter = false,
+    this.showSources = false,
     this.textFontSize = 13,
     this.textLineHeight = 1.4,
     this.embedHeight = 180,
@@ -54,6 +56,7 @@ class PostCard extends StatelessWidget {
   final bool showBorder;
   final bool showFullText;
   final bool showAuthorFooter;
+  final bool showSources;
   final double textFontSize;
   final double textLineHeight;
   final double embedHeight;
@@ -222,6 +225,28 @@ class PostCard extends StatelessWidget {
               ExternalLinkBar(embed: post.post.embed!.external!),
             ],
 
+            // Sources section (for megathreads, shown in detail view)
+            if (showSources &&
+                post.post.embed?.external?.sources != null &&
+                post.post.embed!.external!.sources!.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Text(
+                'Sources',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...post.post.embed!.external!.sources!.map(
+                (source) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: SourceLinkBar(source: source),
+                ),
+              ),
+            ],
+
             // Reduced spacing before action buttons
             if (showActions) const SizedBox(height: 4),
 
@@ -366,11 +391,11 @@ class PostCard extends StatelessWidget {
           // Author avatar (circular, small)
           if (author.avatar != null && author.avatar!.isNotEmpty)
             ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               child: CachedNetworkImage(
                 imageUrl: author.avatar!,
-                width: 24,
-                height: 24,
+                width: 20,
+                height: 20,
                 fit: BoxFit.cover,
                 placeholder:
                     (context, url) => _buildAuthorFallbackAvatar(author),
@@ -387,8 +412,7 @@ class PostCard extends StatelessWidget {
             '@${author.handle}',
             style: const TextStyle(
               color: AppColors.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
+              fontSize: 13,
             ),
             overflow: TextOverflow.ellipsis,
           ),
@@ -418,18 +442,18 @@ class PostCard extends StatelessWidget {
             ? (author.displayName ?? author.handle)[0]
             : '?';
     return Container(
-      width: 24,
-      height: 24,
+      width: 20,
+      height: 20,
       decoration: BoxDecoration(
         color: AppColors.primary,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Center(
         child: Text(
           firstLetter.toUpperCase(),
           style: const TextStyle(
             color: AppColors.textPrimary,
-            fontSize: 12,
+            fontSize: 10,
             fontWeight: FontWeight.bold,
           ),
         ),

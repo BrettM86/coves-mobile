@@ -820,11 +820,11 @@ class _PostHeader extends StatelessWidget {
           showBorder: false,
           showFullText: true,
           showAuthorFooter: true,
-          textFontSize: 16,
-          textLineHeight: 1.6,
-          embedHeight: 280,
-          titleFontSize: 20,
-          titleFontWeight: FontWeight.w600,
+          showSources: true,
+          textFontSize: 14,
+          textLineHeight: 1.5,
+          titleFontSize: 16,
+          titleFontWeight: FontWeight.w800,
         );
       },
     );

@@ -243,8 +243,12 @@ class _FeedPageState extends State<FeedPage>
 
           final post = widget.posts[index];
           // RepaintBoundary isolates each post card to prevent unnecessary
-          // repaints of other items during scrolling
+          // repaints of other items during scrolling.
+          // ValueKey on RepaintBoundary ensures Flutter correctly identifies
+          // and reuses the entire isolated subtree during list updates,
+          // preserving both identity and paint optimization.
           return RepaintBoundary(
+            key: ValueKey(post.post.uri),
             child: Semantics(
               label:
                   'Feed post in ${post.post.community.name} by '

@@ -281,6 +281,7 @@ class ExternalEmbed {
     this.provider,
     this.images,
     this.totalCount,
+    this.sources,
   });
 
   factory ExternalEmbed.fromJson(Map<String, dynamic> json) {
@@ -294,6 +295,16 @@ class ExternalEmbed {
           (json['images'] as List).whereType<Map<String, dynamic>>().toList();
     }
 
+    // Handle sources array if present
+    List<EmbedSource>? sourcesList;
+    if (json['sources'] != null && json['sources'] is List) {
+      sourcesList =
+          (json['sources'] as List)
+              .whereType<Map<String, dynamic>>()
+              .map(EmbedSource.fromJson)
+              .toList();
+    }
+
     return ExternalEmbed(
       uri: json['uri'] as String,
       title: json['title'] as String?,
@@ -304,6 +315,7 @@ class ExternalEmbed {
       provider: json['provider'] as String?,
       images: imagesList,
       totalCount: json['totalCount'] as int?,
+      sources: sourcesList,
     );
   }
   final String uri;
@@ -315,6 +327,60 @@ class ExternalEmbed {
   final String? provider;
   final List<Map<String, dynamic>>? images;
   final int? totalCount;
+  final List<EmbedSource>? sources;
+}
+
+/// A source link aggregated into a megathread
+class EmbedSource {
+  EmbedSource({
+    required this.uri,
+    this.title,
+    this.domain,
+  });
+
+  factory EmbedSource.fromJson(Map<String, dynamic> json) {
+    final uri = json['uri'];
+    if (uri == null || uri is! String || uri.isEmpty) {
+      throw const FormatException(
+        'EmbedSource: Required field "uri" is missing or invalid',
+      );
+    }
+
+    // Validate URI scheme for security
+    final parsedUri = Uri.tryParse(uri);
+    if (parsedUri == null ||
+        !parsedUri.hasScheme ||
+        !['http', 'https'].contains(parsedUri.scheme.toLowerCase())) {
+      throw FormatException(
+        'EmbedSource: URI has invalid or unsupported scheme: $uri',
+      );
+    }
+
+    return EmbedSource(
+      uri: uri,
+      title: json['title'] as String?,
+      domain: json['domain'] as String?,
+    );
+  }
+
+  final String uri;
+  final String? title;
+  final String? domain;
+
+  @override
+  String toString() => 'EmbedSource(uri: $uri, title: $title, domain: $domain)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EmbedSource &&
+          runtimeType == other.runtimeType &&
+          uri == other.uri &&
+          title == other.title &&
+          domain == other.domain;
+
+  @override
+  int get hashCode => Object.hash(uri, title, domain);
 }
 
 class PostFacet {
