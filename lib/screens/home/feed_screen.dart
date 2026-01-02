@@ -376,6 +376,7 @@ class _FeedScreenState extends State<FeedScreen> {
           posts: state.posts,
           isLoading: state.isLoading,
           isLoadingMore: state.isLoadingMore,
+          hasMore: state.hasMore,
           error: hasError ? error : null,
           scrollController: _getOrCreateScrollController(feedType),
           onRefresh: () => provider.loadFeed(feedType, refresh: true),

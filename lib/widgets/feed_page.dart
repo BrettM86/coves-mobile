@@ -25,6 +25,7 @@ class FeedPage extends StatefulWidget {
     required this.posts,
     required this.isLoading,
     required this.isLoadingMore,
+    required this.hasMore,
     required this.error,
     required this.scrollController,
     required this.onRefresh,
@@ -39,6 +40,7 @@ class FeedPage extends StatefulWidget {
   final List<FeedViewPost> posts;
   final bool isLoading;
   final bool isLoadingMore;
+  final bool hasMore;
   final String? error;
   final ScrollController scrollController;
   final Future<void> Function() onRefresh;
@@ -55,6 +57,10 @@ class _FeedPageState extends State<FeedPage>
     with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
+
+  /// Whether to show a footer item (loading, error, or end of feed)
+  bool get _shouldShowFooter =>
+      widget.isLoadingMore || widget.error != null || !widget.hasMore;
 
   @override
   Widget build(BuildContext context) {
@@ -185,12 +191,12 @@ class _FeedPageState extends State<FeedPage>
         cacheExtent: 800,
         // Add top padding so content isn't hidden behind transparent header
         padding: const EdgeInsets.only(top: 44),
-        // Add extra item for loading indicator or pagination error
+        // Add extra item for loading indicator, pagination error, or end of feed
         itemCount:
             widget.posts.length +
-            (widget.isLoadingMore || widget.error != null ? 1 : 0),
+            (_shouldShowFooter ? 1 : 0),
         itemBuilder: (context, index) {
-          // Footer: loading indicator or error message
+          // Footer: loading indicator, error message, or end of feed
           if (index == widget.posts.length) {
             // Show loading indicator for pagination
             if (widget.isLoadingMore) {
@@ -234,6 +240,30 @@ class _FeedPageState extends State<FeedPage>
                         foregroundColor: AppColors.primary,
                       ),
                       child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              );
+            }
+            // Show end of feed message when no more posts available
+            if (!widget.hasMore) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      color: AppColors.textSecondary,
+                      size: 32,
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      "You're all caught up!",
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
