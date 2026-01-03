@@ -19,10 +19,10 @@ class FeedScreen extends StatefulWidget {
   final VoidCallback? onSearchTap;
 
   @override
-  State<FeedScreen> createState() => _FeedScreenState();
+  State<FeedScreen> createState() => FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen> {
+class FeedScreenState extends State<FeedScreen> {
   late PageController _pageController;
   final Map<FeedType, ScrollController> _scrollControllers = {};
   late AuthProvider _authProvider;
@@ -127,6 +127,19 @@ class _FeedScreenState extends State<FeedScreen> {
           controller.position.maxScrollExtent - 200) {
         context.read<MultiFeedProvider>().loadMore(type);
       }
+    }
+  }
+
+  /// Scroll the current feed to the top with animation
+  void scrollToTop() {
+    final currentFeed = context.read<MultiFeedProvider>().currentFeedType;
+    final controller = _scrollControllers[currentFeed];
+    if (controller != null && controller.hasClients) {
+      controller.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     }
   }
 

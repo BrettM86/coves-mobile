@@ -17,8 +17,14 @@ class MainShellScreen extends StatefulWidget {
 
 class _MainShellScreenState extends State<MainShellScreen> {
   int _selectedIndex = 0;
+  final _feedScreenKey = GlobalKey<FeedScreenState>();
 
   void _onItemTapped(int index) {
+    // If already on feed tab, scroll to top
+    if (index == 0 && _selectedIndex == 0) {
+      _feedScreenKey.currentState?.scrollToTop();
+      return;
+    }
     setState(() {
       _selectedIndex = index;
     });
@@ -42,7 +48,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
       body: IndexedStack(
         index: _selectedIndex,
         children: [
-          FeedScreen(onSearchTap: _onCommunitiesTap),
+          FeedScreen(key: _feedScreenKey, onSearchTap: _onCommunitiesTap),
           const CommunitiesScreen(),
           CreatePostScreen(onNavigateToFeed: _onNavigateToFeed),
           const NotificationsScreen(),
