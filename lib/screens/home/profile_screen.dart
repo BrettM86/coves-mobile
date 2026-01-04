@@ -180,6 +180,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // Show error state
     if (profileProvider.profileError != null &&
         profileProvider.profile == null) {
+      // Only show sign out option for own profile (no actor param)
+      // This prevents users from being trapped with a misconfigured profile
+      final isOwnProfile = widget.actor == null;
+
       return Scaffold(
         backgroundColor: AppColors.background,
         appBar: _buildAppBar(context, null),
@@ -187,6 +191,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           title: 'Failed to load profile',
           message: profileProvider.profileError!,
           onRetry: () => profileProvider.retryProfile(),
+          secondaryActionLabel: isOwnProfile ? 'Sign Out' : null,
+          onSecondaryAction: isOwnProfile ? _handleSignOut : null,
+          secondaryActionDestructive: true,
         ),
       );
     }

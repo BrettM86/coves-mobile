@@ -14,18 +14,30 @@ class FullScreenLoading extends StatelessWidget {
   }
 }
 
-/// Full-screen error state with retry button
+/// Full-screen error state with retry button and optional secondary action
 class FullScreenError extends StatelessWidget {
   const FullScreenError({
     required this.message,
     required this.onRetry,
     this.title = 'Failed to load',
+    this.secondaryActionLabel,
+    this.onSecondaryAction,
+    this.secondaryActionDestructive = false,
     super.key,
   });
 
   final String title;
   final String message;
   final VoidCallback onRetry;
+
+  /// Optional secondary action button label (e.g., "Sign Out")
+  final String? secondaryActionLabel;
+
+  /// Optional secondary action callback
+  final VoidCallback? onSecondaryAction;
+
+  /// Whether the secondary action is destructive (shows in red)
+  final bool secondaryActionDestructive;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +74,18 @@ class FullScreenError extends StatelessWidget {
               ),
               child: const Text('Retry'),
             ),
+            if (secondaryActionLabel != null && onSecondaryAction != null) ...[
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: onSecondaryAction,
+                style: TextButton.styleFrom(
+                  foregroundColor: secondaryActionDestructive
+                      ? Colors.red.shade400
+                      : AppColors.textSecondary,
+                ),
+                child: Text(secondaryActionLabel!),
+              ),
+            ],
           ],
         ),
       ),
