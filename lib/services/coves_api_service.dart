@@ -5,6 +5,7 @@ import '../config/environment_config.dart';
 import '../models/comment.dart';
 import '../models/community.dart';
 import '../models/post.dart';
+import '../models/user_profile.dart';
 import 'api_exceptions.dart';
 
 /// Coves API Service
@@ -388,10 +389,7 @@ class CovesApiService {
         debugPrint('📡 Fetching communities: sort=$sort, limit=$limit');
       }
 
-      final queryParams = <String, dynamic>{
-        'limit': limit,
-        'sort': sort,
-      };
+      final queryParams = <String, dynamic>{'limit': limit, 'sort': sort};
 
       if (cursor != null) {
         queryParams['cursor'] = cursor;
@@ -448,9 +446,7 @@ class CovesApiService {
       }
 
       // Build request body with only non-null fields
-      final requestBody = <String, dynamic>{
-        'community': community,
-      };
+      final requestBody = <String, dynamic>{'community': community};
 
       if (title != null) {
         requestBody['title'] = title;
@@ -481,9 +477,7 @@ class CovesApiService {
         debugPrint('✅ Post created successfully');
       }
 
-      return CreatePostResponse.fromJson(
-        response.data as Map<String, dynamic>,
-      );
+      return CreatePostResponse.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       _handleDioException(e, 'create post');
     } catch (e) {
@@ -545,6 +539,128 @@ class CovesApiService {
     }
   }
 
+  /// Get user profile by DID or handle
+  ///
+  /// Fetches detailed profile information for a user.
+  /// Works with both DID (did:plc:...) or handle (user.bsky.social).
+  ///
+  /// Parameters:
+  /// - [actor]: User's DID or handle (required)
+  ///
+  /// Throws:
+  /// - `NotFoundException` if the user does not exist
+  /// - `UnauthorizedException` if authentication is required/expired
+  /// - `ApiException` for other API errors
+  Future<UserProfile> getProfile({required String actor}) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Fetching profile for: $actor');
+      }
+
+      final response = await _dio.get(
+        '/xrpc/social.coves.actor.getprofile',
+        queryParameters: {'actor': actor},
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Profile fetched for: $actor');
+      }
+
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        throw FormatException('Expected Map but got ${data.runtimeType}');
+      }
+      return UserProfile.fromJson(data);
+    } on DioException catch (e) {
+      _handleDioException(e, 'profile'); // Never returns - always throws
+    } on FormatException {
+      rethrow;
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error parsing profile response: $e');
+      }
+      throw ApiException('Failed to parse server response', originalError: e);
+    }
+  }
+
+  /// Get posts by a specific actor
+  ///
+  /// Fetches posts created by a specific user using the dedicated
+  /// actor posts endpoint.
+  ///
+  /// Parameters:
+  /// - [actor]: User's DID or handle (required)
+  /// - [filter]: Post filter type (optional):
+  ///   - 'posts_with_replies': Include replies
+  ///   - 'posts_no_replies': Exclude replies (default behavior)
+  ///   - 'posts_with_media': Only posts with media attachments
+  /// - [community]: Filter to posts in a specific community (optional)
+  /// - [limit]: Number of posts per page (default: 15, max: 50)
+  /// - [cursor]: Pagination cursor from previous response
+  ///
+  /// Throws:
+  /// - `NotFoundException` if the actor does not exist
+  /// - `UnauthorizedException` if authentication is required/expired
+  /// - `ApiException` for other API errors
+  Future<TimelineResponse> getAuthorPosts({
+    required String actor,
+    String? filter,
+    String? community,
+    int limit = 15,
+    String? cursor,
+  }) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Fetching posts for actor: $actor');
+      }
+
+      final queryParams = <String, dynamic>{
+        'actor': actor,
+        'limit': limit,
+      };
+
+      if (filter != null) {
+        queryParams['filter'] = filter;
+      }
+
+      if (community != null) {
+        queryParams['community'] = community;
+      }
+
+      if (cursor != null) {
+        queryParams['cursor'] = cursor;
+      }
+
+      final response = await _dio.get(
+        '/xrpc/social.coves.actor.getPosts',
+        queryParameters: queryParams,
+      );
+
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        throw FormatException('Expected Map but got ${data.runtimeType}');
+      }
+
+      if (kDebugMode) {
+        debugPrint(
+          '✅ Actor posts fetched: '
+          '${data['feed']?.length ?? 0} posts',
+        );
+      }
+
+      return TimelineResponse.fromJson(data);
+    } on DioException catch (e) {
+      _handleDioException(e, 'actor posts'); // Never returns - always throws
+    } on FormatException {
+      rethrow;
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error parsing actor posts response: $e');
+      }
+      throw ApiException('Failed to parse server response', originalError: e);
+    }
+  }
+
   /// Handle Dio exceptions with specific error types
   ///
   /// Converts generic DioException into specific typed exceptions
@@ -561,8 +677,14 @@ class CovesApiService {
     // Handle specific HTTP status codes
     if (e.response != null) {
       final statusCode = e.response!.statusCode;
-      final message =
-          e.response!.data?['error'] ?? e.response!.data?['message'];
+      // Handle both JSON error responses and plain text responses
+      String? message;
+      final data = e.response!.data;
+      if (data is Map<String, dynamic>) {
+        message = data['error'] as String? ?? data['message'] as String?;
+      } else if (data is String && data.isNotEmpty) {
+        message = data;
+      }
 
       if (statusCode != null) {
         if (statusCode == 401) {

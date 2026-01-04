@@ -13,6 +13,7 @@ import '../providers/vote_provider.dart';
 import '../utils/date_time_utils.dart';
 import 'icons/animated_heart_icon.dart';
 import 'sign_in_dialog.dart';
+import 'tappable_author.dart';
 
 /// Comment card widget for displaying individual comments
 ///
@@ -123,21 +124,29 @@ class CommentCard extends StatelessWidget {
                         // Author info row
                         Row(
                           children: [
-                            // Author avatar
-                            _buildAuthorAvatar(comment.author),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                '@${comment.author.handle}',
-                                style: TextStyle(
-                                  color: AppColors.textPrimary.withValues(
-                                    alpha: isCollapsed ? 0.7 : 0.5,
+                            // Author avatar and handle (tappable for profile)
+                            TappableAuthor(
+                              authorDid: comment.author.did,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Author avatar
+                                  _buildAuthorAvatar(comment.author),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '@${comment.author.handle}',
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary.withValues(
+                                        alpha: isCollapsed ? 0.7 : 0.5,
+                                      ),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                                ],
                               ),
                             ),
+                            const Spacer(),
                             // Show collapsed count OR time ago
                             if (isCollapsed && collapsedCount > 0)
                               _buildCollapsedBadge()

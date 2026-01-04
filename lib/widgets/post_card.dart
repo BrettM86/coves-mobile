@@ -14,6 +14,7 @@ import 'external_link_bar.dart';
 import 'fullscreen_video_player.dart';
 import 'post_card_actions.dart';
 import 'source_link_bar.dart';
+import 'tappable_author.dart';
 
 /// Post card widget for displaying feed posts
 ///
@@ -100,12 +101,16 @@ class PostCard extends StatelessWidget {
                       children: [
                         // Community handle with styled parts
                         _buildCommunityHandle(post.post.community),
-                        // Author handle
-                        Text(
-                          '@${post.post.author.handle}',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
+                        // Author handle (tappable for profile navigation)
+                        TappableAuthor(
+                          authorDid: post.post.author.did,
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Text(
+                            '@${post.post.author.handle}',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                       ],
@@ -133,7 +138,7 @@ class PostCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Author info (shown in detail view, above title)
-                if (showAuthorFooter) _buildAuthorFooter(),
+                if (showAuthorFooter) _buildAuthorFooter(context),
 
                 // Title and text wrapped in InkWell for navigation
                 if (!disableNavigation &&
@@ -298,8 +303,9 @@ class PostCard extends StatelessWidget {
 
   /// Builds the community handle with styled parts (name + instance)
   Widget _buildCommunityHandle(CommunityRef community) {
-    final displayHandle =
-        CommunityHandleUtils.formatHandleForDisplay(community.handle);
+    final displayHandle = CommunityHandleUtils.formatHandleForDisplay(
+      community.handle,
+    );
 
     // Fallback to raw handle or name if formatting fails
     if (displayHandle == null || !displayHandle.contains('@')) {
@@ -381,40 +387,50 @@ class PostCard extends StatelessWidget {
   }
 
   /// Builds author footer with avatar, handle, and timestamp
-  Widget _buildAuthorFooter() {
+  Widget _buildAuthorFooter(BuildContext context) {
     final author = post.post.author;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       child: Row(
         children: [
-          // Author avatar (circular, small)
-          if (author.avatar != null && author.avatar!.isNotEmpty)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: CachedNetworkImage(
-                imageUrl: author.avatar!,
-                width: 20,
-                height: 20,
-                fit: BoxFit.cover,
-                placeholder:
-                    (context, url) => _buildAuthorFallbackAvatar(author),
-                errorWidget:
-                    (context, url, error) => _buildAuthorFallbackAvatar(author),
-              ),
-            )
-          else
-            _buildAuthorFallbackAvatar(author),
-          const SizedBox(width: 8),
+          // Author avatar and handle (tappable for profile navigation)
+          TappableAuthor(
+            authorDid: author.did,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Author avatar (circular, small)
+                if (author.avatar != null && author.avatar!.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: CachedNetworkImage(
+                      imageUrl: author.avatar!,
+                      width: 20,
+                      height: 20,
+                      fit: BoxFit.cover,
+                      placeholder:
+                          (context, url) => _buildAuthorFallbackAvatar(author),
+                      errorWidget:
+                          (context, url, error) =>
+                              _buildAuthorFallbackAvatar(author),
+                    ),
+                  )
+                else
+                  _buildAuthorFallbackAvatar(author),
+                const SizedBox(width: 8),
 
-          // Author handle
-          Text(
-            '@${author.handle}',
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 13,
+                // Author handle
+                Text(
+                  '@${author.handle}',
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
-            overflow: TextOverflow.ellipsis,
           ),
 
           const SizedBox(width: 8),

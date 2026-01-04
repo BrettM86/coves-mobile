@@ -9,10 +9,12 @@ import 'constants/app_colors.dart';
 import 'models/post.dart';
 import 'providers/auth_provider.dart';
 import 'providers/multi_feed_provider.dart';
+import 'providers/user_profile_provider.dart';
 import 'providers/vote_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/main_shell_screen.dart';
 import 'screens/home/post_detail_screen.dart';
+import 'screens/home/profile_screen.dart';
 import 'screens/landing_screen.dart';
 import 'services/comment_service.dart';
 import 'services/comments_provider_cache.dart';
@@ -101,6 +103,15 @@ void main() async {
         ),
         // StreamableService for video embeds
         Provider<StreamableService>(create: (_) => StreamableService()),
+        // UserProfileProvider for profile pages
+        ChangeNotifierProxyProvider<AuthProvider, UserProfileProvider>(
+          create: (context) => UserProfileProvider(authProvider),
+          update: (context, auth, previous) {
+            // Propagate auth changes to existing provider
+            previous?.updateAuthProvider(auth);
+            return previous ?? UserProfileProvider(auth);
+          },
+        ),
       ],
       child: const CovesApp(),
     ),
@@ -139,6 +150,13 @@ GoRouter _createRouter(AuthProvider authProvider) {
       GoRoute(
         path: '/feed',
         builder: (context, state) => const MainShellScreen(),
+      ),
+      GoRoute(
+        path: '/profile/:actor',
+        builder: (context, state) {
+          final actor = state.pathParameters['actor']!;
+          return ProfileScreen(actor: actor);
+        },
       ),
       GoRoute(
         path: '/post/:postUri',

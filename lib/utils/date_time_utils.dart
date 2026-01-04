@@ -81,4 +81,29 @@ class DateTimeUtils {
 
     return '$hour12:$minute$period · $month $day, $year';
   }
+
+  /// Format datetime as "Joined Month Year" string
+  ///
+  /// Example: "Joined January 2025"
+  ///
+  /// [dateTime] is the account creation date
+  static String formatJoinedDate(DateTime dateTime) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    assert(dateTime.month >= 1 && dateTime.month <= 12, 'Invalid month');
+    final month = months[dateTime.month - 1];
+    return 'Joined $month ${dateTime.year}';
+  }
 }

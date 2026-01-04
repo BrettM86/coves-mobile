@@ -1,0 +1,392 @@
+import 'package:flutter/foundation.dart';
+
+import '../models/feed_state.dart';
+import '../models/post.dart';
+import '../models/user_profile.dart';
+import '../services/api_exceptions.dart';
+import '../services/coves_api_service.dart';
+import 'auth_provider.dart';
+
+/// User Profile Provider
+///
+/// Manages state for user profile pages including profile data and
+/// author posts feed. Supports viewing both own profile and other users.
+///
+/// IMPORTANT: Accepts AuthProvider reference to fetch fresh access
+/// tokens before each authenticated request (critical for atProto OAuth
+/// token rotation).
+class UserProfileProvider with ChangeNotifier {
+  UserProfileProvider(AuthProvider authProvider, {CovesApiService? apiService})
+    : _authProvider = authProvider {
+    _apiService =
+        apiService ??
+        CovesApiService(
+          tokenGetter: _authProvider.getAccessToken,
+          tokenRefresher: _authProvider.refreshToken,
+          signOutHandler: _authProvider.signOut,
+        );
+
+    // Listen to auth state changes
+    _authProvider.addListener(_onAuthChanged);
+  }
+
+  AuthProvider _authProvider;
+
+  /// Update auth provider reference (called by ChangeNotifierProxyProvider)
+  ///
+  /// This ensures token refresh and sign-out handlers stay in sync when
+  /// auth state changes propagate through the provider tree.
+  void updateAuthProvider(AuthProvider newAuth) {
+    if (_authProvider != newAuth) {
+      _authProvider.removeListener(_onAuthChanged);
+      _authProvider = newAuth;
+      _authProvider.addListener(_onAuthChanged);
+      // Recreate API service with new auth callbacks
+      _apiService.dispose();
+      _apiService = CovesApiService(
+        tokenGetter: _authProvider.getAccessToken,
+        tokenRefresher: _authProvider.refreshToken,
+        signOutHandler: _authProvider.signOut,
+      );
+    }
+  }
+
+  late CovesApiService _apiService;
+
+  // Profile state
+  UserProfile? _profile;
+  bool _isLoadingProfile = false;
+  String? _profileError;
+  String? _currentProfileDid;
+
+  // Posts feed state (reusing FeedState pattern)
+  FeedState _postsState = FeedState.initial();
+
+  // LRU profile cache keyed by DID (max 50 entries)
+  static const int _maxCacheSize = 50;
+  final Map<String, UserProfile> _profileCache = {};
+  final List<String> _cacheAccessOrder = [];
+
+  /// Add profile to cache with LRU eviction
+  void _cacheProfile(UserProfile profile) {
+    final did = profile.did;
+
+    // Remove from current position in access order
+    _cacheAccessOrder.remove(did);
+
+    // Add to end (most recently used)
+    _cacheAccessOrder.add(did);
+    _profileCache[did] = profile;
+
+    // Evict oldest entries if over capacity
+    while (_cacheAccessOrder.length > _maxCacheSize) {
+      final oldestDid = _cacheAccessOrder.removeAt(0);
+      _profileCache.remove(oldestDid);
+    }
+  }
+
+  /// Get profile from cache (updates access order)
+  UserProfile? _getCachedProfile(String did) {
+    final profile = _profileCache[did];
+    if (profile != null) {
+      // Update access order (move to end)
+      _cacheAccessOrder.remove(did);
+      _cacheAccessOrder.add(did);
+    }
+    return profile;
+  }
+
+  // Getters
+  UserProfile? get profile => _profile;
+  bool get isLoadingProfile => _isLoadingProfile;
+  String? get profileError => _profileError;
+  String? get currentProfileDid => _currentProfileDid;
+  FeedState get postsState => _postsState;
+
+  /// Check if currently viewing own profile
+  bool get isOwnProfile {
+    if (_currentProfileDid == null) return false;
+    return _currentProfileDid == _authProvider.did;
+  }
+
+  /// Handle auth state changes
+  void _onAuthChanged() {
+    // Clear profile cache on sign-out to prevent stale data
+    if (!_authProvider.isAuthenticated) {
+      if (kDebugMode) {
+        debugPrint('🔒 User signed out - clearing profile cache');
+      }
+      _profileCache.clear();
+      _cacheAccessOrder.clear();
+      _profile = null;
+      _postsState = FeedState.initial();
+      _currentProfileDid = null;
+      notifyListeners();
+    }
+  }
+
+  /// Load profile for a user
+  ///
+  /// Parameters:
+  /// - [actor]: User's DID or handle (required)
+  /// - [forceRefresh]: Bypass cache and fetch fresh data
+  Future<void> loadProfile(String actor, {bool forceRefresh = false}) async {
+    // Check cache first (updates LRU access order)
+    final cachedProfile = _getCachedProfile(actor);
+    if (cachedProfile != null && !forceRefresh) {
+      _profile = cachedProfile;
+      _currentProfileDid = cachedProfile.did;
+      _profileError = null;
+      notifyListeners();
+      return;
+    }
+
+    if (_isLoadingProfile) return;
+
+    _isLoadingProfile = true;
+    _profileError = null;
+    _currentProfileDid = actor.startsWith('did:') ? actor : null;
+    notifyListeners();
+
+    try {
+      final profile = await _apiService.getProfile(actor: actor);
+
+      // Cache by DID with LRU eviction
+      _cacheProfile(profile);
+
+      _profile = profile;
+      _currentProfileDid = profile.did;
+      _isLoadingProfile = false;
+      _profileError = null;
+
+      if (kDebugMode) {
+        debugPrint('✅ Profile loaded: ${profile.displayNameOrHandle}');
+      }
+    } on NotFoundException {
+      _isLoadingProfile = false;
+      _profileError = 'User not found';
+      _profile = null;
+
+      if (kDebugMode) {
+        debugPrint('❌ Profile not found: $actor');
+      }
+    } on AuthenticationException {
+      _isLoadingProfile = false;
+      _profileError = 'Please sign in to view this profile';
+
+      if (kDebugMode) {
+        debugPrint('❌ Auth required to load profile: $actor');
+      }
+    } on NetworkException catch (e) {
+      _isLoadingProfile = false;
+      _profileError = 'Network error. Check your connection.';
+
+      if (kDebugMode) {
+        debugPrint('❌ Network error loading profile: ${e.message}');
+      }
+    } on ApiException catch (e) {
+      _isLoadingProfile = false;
+      _profileError = e.message;
+
+      if (kDebugMode) {
+        debugPrint('❌ Failed to load profile: ${e.message}');
+      }
+    } on FormatException catch (e) {
+      _isLoadingProfile = false;
+      _profileError = 'Invalid data received from server';
+
+      if (kDebugMode) {
+        debugPrint('❌ Format error loading profile: $e');
+      }
+    } on Exception catch (e) {
+      // Catch-all for other exceptions
+      _isLoadingProfile = false;
+      _profileError = 'Failed to load profile. Please try again.';
+
+      if (kDebugMode) {
+        debugPrint('❌ Unexpected error loading profile: $e');
+      }
+    }
+
+    notifyListeners();
+  }
+
+  /// Load posts by the current profile's author
+  ///
+  /// Parameters:
+  /// - [refresh]: Reload from beginning instead of paginating
+  Future<void> loadPosts({bool refresh = false}) async {
+    if (_currentProfileDid == null) {
+      // Set error state instead of silently returning
+      _postsState = _postsState.copyWith(
+        error: 'No profile loaded',
+        isLoading: false,
+        isLoadingMore: false,
+      );
+      notifyListeners();
+      return;
+    }
+    if (_postsState.isLoading || _postsState.isLoadingMore) return;
+
+    final currentState = _postsState;
+
+    try {
+      if (refresh) {
+        _postsState = currentState.copyWith(isLoading: true, error: null);
+      } else {
+        if (!currentState.hasMore) return;
+        _postsState = currentState.copyWith(isLoadingMore: true);
+      }
+      notifyListeners();
+
+      final response = await _apiService.getAuthorPosts(
+        actor: _currentProfileDid!,
+        cursor: refresh ? null : currentState.cursor,
+      );
+
+      final List<FeedViewPost> newPosts;
+      if (refresh) {
+        newPosts = response.feed;
+      } else {
+        newPosts = [...currentState.posts, ...response.feed];
+      }
+
+      _postsState = currentState.copyWith(
+        posts: newPosts,
+        cursor: response.cursor,
+        hasMore: response.cursor != null,
+        error: null,
+        isLoading: false,
+        isLoadingMore: false,
+        lastRefreshTime:
+            refresh ? DateTime.now() : currentState.lastRefreshTime,
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Author posts loaded: ${newPosts.length} posts total');
+      }
+    } on AuthenticationException {
+      _postsState = currentState.copyWith(
+        error: 'Please sign in to view posts',
+        isLoading: false,
+        isLoadingMore: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('❌ Auth required to load posts');
+      }
+    } on NotFoundException {
+      // Author posts endpoint not implemented yet - show empty state
+      _postsState = currentState.copyWith(
+        posts: [],
+        hasMore: false,
+        error: null,
+        isLoading: false,
+        isLoadingMore: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('⚠️ Author posts endpoint not available');
+      }
+    } on NetworkException catch (e) {
+      _postsState = currentState.copyWith(
+        error: 'Network error. Check your connection.',
+        isLoading: false,
+        isLoadingMore: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('❌ Network error loading posts: ${e.message}');
+      }
+    } on ApiException catch (e) {
+      _postsState = currentState.copyWith(
+        error: e.message,
+        isLoading: false,
+        isLoadingMore: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('❌ Failed to load author posts: ${e.message}');
+      }
+    } on FormatException catch (e) {
+      _postsState = currentState.copyWith(
+        error: 'Invalid data received from server',
+        isLoading: false,
+        isLoadingMore: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('❌ Format error loading posts: $e');
+      }
+    } on Exception catch (e) {
+      // Catch-all for other exceptions
+      _postsState = currentState.copyWith(
+        error: 'Failed to load posts. Please try again.',
+        isLoading: false,
+        isLoadingMore: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('❌ Unexpected error loading posts: $e');
+      }
+    }
+
+    notifyListeners();
+  }
+
+  /// Load more posts (pagination)
+  Future<void> loadMorePosts() async {
+    await loadPosts(refresh: false);
+  }
+
+  /// Clear current profile and reset state
+  void clearProfile() {
+    _profile = null;
+    _currentProfileDid = null;
+    _postsState = FeedState.initial();
+    _profileError = null;
+    _isLoadingProfile = false;
+    notifyListeners();
+  }
+
+  /// Set an error message directly (for cases like missing actor)
+  void setError(String message) {
+    _profileError = message;
+    _isLoadingProfile = false;
+    notifyListeners();
+  }
+
+  /// Retry loading profile after error
+  ///
+  /// Returns:
+  /// - `true` if retry was initiated (profile DID was available)
+  /// - `false` if no profile DID is available to retry
+  ///
+  /// Note: A return of `true` does not mean the profile loaded successfully,
+  /// only that the retry attempt was started. Check [profileError] after
+  /// the operation completes to determine if it succeeded.
+  Future<bool> retryProfile() async {
+    if (_currentProfileDid == null) {
+      if (kDebugMode) {
+        debugPrint('⚠️ retryProfile called but no profile DID available');
+      }
+      return false;
+    }
+    await loadProfile(_currentProfileDid!, forceRefresh: true);
+    return true;
+  }
+
+  /// Retry loading posts after error
+  Future<void> retryPosts() async {
+    _postsState = _postsState.copyWith(error: null);
+    notifyListeners();
+    await loadPosts(refresh: true);
+  }
+
+  @override
+  void dispose() {
+    _authProvider.removeListener(_onAuthChanged);
+    _apiService.dispose();
+    super.dispose();
+  }
+}
