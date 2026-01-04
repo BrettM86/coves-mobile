@@ -6,8 +6,10 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../constants/app_colors.dart';
+import '../../models/comment.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/user_profile_provider.dart';
+import '../../widgets/comment_card.dart';
 import '../../widgets/loading_error_states.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/primary_button.dart';
@@ -29,6 +31,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   int _selectedTabIndex = 0;
+  bool _commentsLoadedOnce = false;
 
   @override
   void initState() {
@@ -42,7 +45,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void didUpdateWidget(ProfileScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.actor != widget.actor) {
+      // Reset comments loaded flag when viewing a different profile
+      _commentsLoadedOnce = false;
       _loadProfile();
+    }
+  }
+
+  void _onTabChanged(int index) {
+    setState(() {
+      _selectedTabIndex = index;
+    });
+
+    // Lazy load comments when first switching to Comments tab
+    if (index == 1 && !_commentsLoadedOnce) {
+      _commentsLoadedOnce = true;
+      final profileProvider = context.read<UserProfileProvider>();
+      profileProvider.loadComments(refresh: true);
     }
   }
 
@@ -182,7 +200,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final actor = widget.actor ?? authProvider.did;
           if (actor != null) {
             await profileProvider.loadProfile(actor, forceRefresh: true);
-            await profileProvider.loadPosts(refresh: true);
+            // Refresh the active tab content
+            if (_selectedTabIndex == 0) {
+              await profileProvider.loadPosts(refresh: true);
+            } else if (_selectedTabIndex == 1) {
+              await profileProvider.loadComments(refresh: true);
+            }
           }
         },
         child: CustomScrollView(
@@ -275,11 +298,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   color: AppColors.background,
                   child: _ProfileTabBar(
                     selectedIndex: _selectedTabIndex,
-                    onTabChanged: (index) {
-                      setState(() {
-                        _selectedTabIndex = index;
-                      });
-                    },
+                    onTabChanged: _onTabChanged,
                   ),
                 ),
               ),
@@ -287,10 +306,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // Content based on selected tab
             if (_selectedTabIndex == 0)
               _buildPostsList(profileProvider)
+            else if (_selectedTabIndex == 1)
+              _buildCommentsList(profileProvider)
             else
-              _buildComingSoonPlaceholder(
-                _selectedTabIndex == 1 ? 'Comments' : 'Likes',
-              ),
+              _buildComingSoonPlaceholder('Likes'),
           ],
         ),
       ),
@@ -422,6 +441,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final feedViewPost = postsState.posts[index];
         return PostCard(post: feedViewPost);
       }, childCount: postsState.posts.length + (showLoadingSlot ? 1 : 0)),
+    );
+  }
+
+  Widget _buildCommentsList(UserProfileProvider profileProvider) {
+    final commentsState = profileProvider.commentsState;
+
+    // Loading state for comments
+    if (commentsState.isLoading && commentsState.comments.isEmpty) {
+      return const SliverFillRemaining(
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+
+    // Error state for comments
+    if (commentsState.error != null && commentsState.comments.isEmpty) {
+      return SliverFillRemaining(
+        child: Center(
+          child: InlineError(
+            message: commentsState.error!,
+            onRetry: () => profileProvider.retryComments(),
+          ),
+        ),
+      );
+    }
+
+    // Empty state
+    if (commentsState.comments.isEmpty && !commentsState.isLoading) {
+      return const SliverFillRemaining(
+        child: Center(
+          child: Text(
+            'No comments yet',
+            style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
+          ),
+        ),
+      );
+    }
+
+    // Comments list
+    final showLoadingSlot =
+        commentsState.isLoadingMore || commentsState.error != null;
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        // Load more when reaching end
+        if (index == commentsState.comments.length - 3 &&
+            commentsState.hasMore) {
+          profileProvider.loadMoreComments();
+        }
+
+        // Show loading indicator or error at the end
+        if (index == commentsState.comments.length) {
+          if (commentsState.isLoadingMore) {
+            return const InlineLoading();
+          }
+          if (commentsState.error != null) {
+            return InlineError(
+              message: commentsState.error!,
+              onRetry: () => profileProvider.loadMoreComments(),
+            );
+          }
+          return const SizedBox.shrink();
+        }
+
+        final comment = commentsState.comments[index];
+        return _ProfileCommentCard(comment: comment);
+      }, childCount: commentsState.comments.length + (showLoadingSlot ? 1 : 0)),
     );
   }
 
@@ -589,5 +676,23 @@ class _ProfileTabBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(covariant _ProfileTabBarDelegate oldDelegate) {
     return child != oldDelegate.child;
+  }
+}
+
+/// A simplified comment card for the profile comments list
+///
+/// Displays a flat comment without threading since these are shown in
+/// a profile context without parent/child relationships visible.
+class _ProfileCommentCard extends StatelessWidget {
+  const _ProfileCommentCard({required this.comment});
+
+  final CommentView comment;
+
+  @override
+  Widget build(BuildContext context) {
+    return CommentCard(
+      comment: comment,
+      depth: 0,
+    );
   }
 }

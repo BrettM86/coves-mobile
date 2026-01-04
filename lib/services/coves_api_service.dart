@@ -661,6 +661,74 @@ class CovesApiService {
     }
   }
 
+  /// Get comments by a specific actor
+  ///
+  /// Fetches comments created by a specific user for their profile page.
+  ///
+  /// Parameters:
+  /// - [actor]: User's DID or handle (required)
+  /// - [community]: Filter to comments in a specific community (optional)
+  /// - [limit]: Number of comments per page (default: 50, max: 100)
+  /// - [cursor]: Pagination cursor from previous response
+  ///
+  /// Throws:
+  /// - `NotFoundException` if the actor does not exist
+  /// - `AuthenticationException` if authentication is required/expired
+  /// - `ApiException` for other API errors
+  Future<ActorCommentsResponse> getActorComments({
+    required String actor,
+    String? community,
+    int limit = 50,
+    String? cursor,
+  }) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Fetching comments for actor: $actor');
+      }
+
+      final queryParams = <String, dynamic>{
+        'actor': actor,
+        'limit': limit,
+      };
+
+      if (community != null) {
+        queryParams['community'] = community;
+      }
+
+      if (cursor != null) {
+        queryParams['cursor'] = cursor;
+      }
+
+      final response = await _dio.get(
+        '/xrpc/social.coves.actor.getComments',
+        queryParameters: queryParams,
+      );
+
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        throw FormatException('Expected Map but got ${data.runtimeType}');
+      }
+
+      if (kDebugMode) {
+        debugPrint(
+          '✅ Actor comments fetched: '
+          '${data['comments']?.length ?? 0} comments',
+        );
+      }
+
+      return ActorCommentsResponse.fromJson(data);
+    } on DioException catch (e) {
+      _handleDioException(e, 'actor comments');
+    } on FormatException {
+      rethrow;
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error parsing actor comments response: $e');
+      }
+      throw ApiException('Failed to parse server response', originalError: e);
+    }
+  }
+
   /// Handle Dio exceptions with specific error types
   ///
   /// Converts generic DioException into specific typed exceptions

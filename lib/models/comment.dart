@@ -171,3 +171,107 @@ class CommentViewerState {
   /// AT-URI of the vote record (if backend provides it)
   final String? voteUri;
 }
+
+/// Sentinel value for copyWith to distinguish "not provided" from "null"
+const _sentinel = Object();
+
+/// State container for a comments list (e.g., actor comments)
+///
+/// Holds all state for a paginated comments list including loading states,
+/// pagination, and errors.
+///
+/// The [comments] list is immutable - callers cannot modify it externally.
+class CommentsState {
+  /// Creates a new CommentsState with an immutable comments list.
+  CommentsState({
+    List<CommentView> comments = const [],
+    this.cursor,
+    this.hasMore = true,
+    this.isLoading = false,
+    this.isLoadingMore = false,
+    this.error,
+  }) : comments = List.unmodifiable(comments);
+
+  /// Create a default empty state
+  factory CommentsState.initial() {
+    return CommentsState();
+  }
+
+  /// Unmodifiable list of comments
+  final List<CommentView> comments;
+
+  /// Pagination cursor for next page
+  final String? cursor;
+
+  /// Whether more pages are available
+  final bool hasMore;
+
+  /// Initial load in progress
+  final bool isLoading;
+
+  /// Pagination (load more) in progress
+  final bool isLoadingMore;
+
+  /// Error message if any
+  final String? error;
+
+  /// Create a copy with modified fields (immutable updates)
+  ///
+  /// Nullable fields (cursor, error) use a sentinel pattern to distinguish
+  /// between "not provided" and "explicitly set to null".
+  CommentsState copyWith({
+    List<CommentView>? comments,
+    Object? cursor = _sentinel,
+    bool? hasMore,
+    bool? isLoading,
+    bool? isLoadingMore,
+    Object? error = _sentinel,
+  }) {
+    return CommentsState(
+      comments: comments ?? this.comments,
+      cursor: cursor == _sentinel ? this.cursor : cursor as String?,
+      hasMore: hasMore ?? this.hasMore,
+      isLoading: isLoading ?? this.isLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      error: error == _sentinel ? this.error : error as String?,
+    );
+  }
+}
+
+/// Response from social.coves.actor.getComments endpoint.
+///
+/// Returns a flat list of comments by a specific user for their profile page.
+/// The endpoint returns an empty array when the user has no comments,
+/// and 404 when the user doesn't exist.
+class ActorCommentsResponse {
+  ActorCommentsResponse({required this.comments, this.cursor});
+
+  /// Parses the JSON response from the API.
+  ///
+  /// Handles null comments array gracefully by returning an empty list.
+  factory ActorCommentsResponse.fromJson(Map<String, dynamic> json) {
+    final commentsData = json['comments'];
+    final List<CommentView> commentsList;
+
+    if (commentsData == null) {
+      commentsList = [];
+    } else {
+      commentsList =
+          (commentsData as List<dynamic>)
+              .map((item) => CommentView.fromJson(item as Map<String, dynamic>))
+              .toList();
+    }
+
+    return ActorCommentsResponse(
+      comments: commentsList,
+      cursor: json['cursor'] as String?,
+    );
+  }
+
+  /// List of comments by the actor, ordered newest first.
+  final List<CommentView> comments;
+
+  /// Pagination cursor for fetching the next page of comments.
+  /// Null when there are no more comments to fetch.
+  final String? cursor;
+}

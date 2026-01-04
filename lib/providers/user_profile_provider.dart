@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../models/comment.dart';
 import '../models/feed_state.dart';
 import '../models/post.dart';
 import '../models/user_profile.dart';
@@ -62,6 +63,9 @@ class UserProfileProvider with ChangeNotifier {
   // Posts feed state (reusing FeedState pattern)
   FeedState _postsState = FeedState.initial();
 
+  // Comments feed state
+  CommentsState _commentsState = CommentsState.initial();
+
   // LRU profile cache keyed by DID (max 50 entries)
   static const int _maxCacheSize = 50;
   final Map<String, UserProfile> _profileCache = {};
@@ -102,6 +106,7 @@ class UserProfileProvider with ChangeNotifier {
   String? get profileError => _profileError;
   String? get currentProfileDid => _currentProfileDid;
   FeedState get postsState => _postsState;
+  CommentsState get commentsState => _commentsState;
 
   /// Check if currently viewing own profile
   bool get isOwnProfile {
@@ -120,6 +125,7 @@ class UserProfileProvider with ChangeNotifier {
       _cacheAccessOrder.clear();
       _profile = null;
       _postsState = FeedState.initial();
+      _commentsState = CommentsState.initial();
       _currentProfileDid = null;
       notifyListeners();
     }
@@ -276,17 +282,16 @@ class UserProfileProvider with ChangeNotifier {
         debugPrint('❌ Auth required to load posts');
       }
     } on NotFoundException {
-      // Author posts endpoint not implemented yet - show empty state
+      // 404 means the actor doesn't exist (not "no posts")
+      // Empty posts are returned as an empty array, not 404
       _postsState = currentState.copyWith(
-        posts: [],
-        hasMore: false,
-        error: null,
+        error: 'User not found',
         isLoading: false,
         isLoadingMore: false,
       );
 
       if (kDebugMode) {
-        debugPrint('⚠️ Author posts endpoint not available');
+        debugPrint('❌ Actor not found when loading posts');
       }
     } on NetworkException catch (e) {
       _postsState = currentState.copyWith(
@@ -339,11 +344,137 @@ class UserProfileProvider with ChangeNotifier {
     await loadPosts(refresh: false);
   }
 
+  /// Load comments by the current profile's author
+  ///
+  /// Parameters:
+  /// - [refresh]: Reload from beginning instead of paginating
+  Future<void> loadComments({bool refresh = false}) async {
+    if (_currentProfileDid == null) {
+      _commentsState = _commentsState.copyWith(
+        error: 'No profile loaded',
+        isLoading: false,
+        isLoadingMore: false,
+      );
+      notifyListeners();
+      return;
+    }
+    if (_commentsState.isLoading || _commentsState.isLoadingMore) return;
+
+    final currentState = _commentsState;
+
+    try {
+      if (refresh) {
+        _commentsState = currentState.copyWith(isLoading: true, error: null);
+      } else {
+        if (!currentState.hasMore) return;
+        _commentsState = currentState.copyWith(isLoadingMore: true);
+      }
+      notifyListeners();
+
+      final response = await _apiService.getActorComments(
+        actor: _currentProfileDid!,
+        cursor: refresh ? null : currentState.cursor,
+      );
+
+      final List<CommentView> newComments;
+      if (refresh) {
+        newComments = response.comments;
+      } else {
+        newComments = [...currentState.comments, ...response.comments];
+      }
+
+      _commentsState = currentState.copyWith(
+        comments: newComments,
+        cursor: response.cursor,
+        hasMore: response.cursor != null,
+        error: null,
+        isLoading: false,
+        isLoadingMore: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint(
+          '✅ Author comments loaded: ${newComments.length} comments total',
+        );
+      }
+    } on AuthenticationException {
+      _commentsState = currentState.copyWith(
+        error: 'Please sign in to view comments',
+        isLoading: false,
+        isLoadingMore: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('❌ Auth required to load comments');
+      }
+    } on NotFoundException {
+      // 404 means the actor doesn't exist (not "no comments")
+      // Empty comments are returned as an empty array, not 404
+      _commentsState = currentState.copyWith(
+        error: 'User not found',
+        isLoading: false,
+        isLoadingMore: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('❌ Actor not found when loading comments');
+      }
+    } on NetworkException catch (e) {
+      _commentsState = currentState.copyWith(
+        error: 'Network error. Check your connection.',
+        isLoading: false,
+        isLoadingMore: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('❌ Network error loading comments: ${e.message}');
+      }
+    } on ApiException catch (e) {
+      _commentsState = currentState.copyWith(
+        error: e.message,
+        isLoading: false,
+        isLoadingMore: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('❌ Failed to load author comments: ${e.message}');
+      }
+    } on FormatException catch (e) {
+      _commentsState = currentState.copyWith(
+        error: 'Invalid data received from server',
+        isLoading: false,
+        isLoadingMore: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('❌ Format error loading comments: $e');
+      }
+    } on Exception catch (e) {
+      _commentsState = currentState.copyWith(
+        error: 'Failed to load comments. Please try again.',
+        isLoading: false,
+        isLoadingMore: false,
+      );
+
+      if (kDebugMode) {
+        debugPrint('❌ Unexpected error loading comments: $e');
+      }
+    }
+
+    notifyListeners();
+  }
+
+  /// Load more comments (pagination)
+  Future<void> loadMoreComments() async {
+    await loadComments(refresh: false);
+  }
+
   /// Clear current profile and reset state
   void clearProfile() {
     _profile = null;
     _currentProfileDid = null;
     _postsState = FeedState.initial();
+    _commentsState = CommentsState.initial();
     _profileError = null;
     _isLoadingProfile = false;
     notifyListeners();
@@ -381,6 +512,13 @@ class UserProfileProvider with ChangeNotifier {
     _postsState = _postsState.copyWith(error: null);
     notifyListeners();
     await loadPosts(refresh: true);
+  }
+
+  /// Retry loading comments after error
+  Future<void> retryComments() async {
+    _commentsState = _commentsState.copyWith(error: null);
+    notifyListeners();
+    await loadComments(refresh: true);
   }
 
   @override
