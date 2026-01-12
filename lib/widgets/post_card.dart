@@ -574,32 +574,9 @@ class _EmbedCardState extends State<_EmbedCard> {
 
   @override
   Widget build(BuildContext context) {
-    // Show placeholder when no thumbnail available
+    // Hide embed area when no thumbnail available
     if (widget.embed.thumb == null) {
-      final placeholderWidget = Container(
-        height: widget.height,
-        decoration: BoxDecoration(
-          color: AppColors.backgroundSecondary,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: const Center(
-          child: Icon(
-            Icons.link,
-            color: AppColors.textSecondary,
-            size: 32,
-          ),
-        ),
-      );
-
-      // Make tappable if handler provided
-      if (widget.onImageTap != null) {
-        return GestureDetector(
-          onTap: widget.onImageTap,
-          child: placeholderWidget,
-        );
-      }
-      return placeholderWidget;
+      return const SizedBox.shrink();
     }
 
     // Build the thumbnail image
