@@ -58,9 +58,10 @@ class _FeedPageState extends State<FeedPage>
   @override
   bool get wantKeepAlive => true;
 
-  /// Whether to show a footer item (loading, error, or end of feed)
-  bool get _shouldShowFooter =>
-      widget.isLoadingMore || widget.error != null || !widget.hasMore;
+  /// Always show a footer slot to maintain stable itemCount during pagination.
+  /// Without this, itemCount fluctuates when loading spinner appears/disappears,
+  /// causing small scroll position jumps (~100px).
+  bool get _shouldShowFooter => widget.posts.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -176,11 +177,14 @@ class _FeedPageState extends State<FeedPage>
       );
     }
 
-    // Posts list
+    // Posts list - use ListView.custom with findChildIndexCallback for
+    // scroll position stability during pagination. This tells Flutter how to
+    // map item keys to indices, preventing scroll jumps when new items are
+    // appended.
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
       color: AppColors.primary,
-      child: ListView.builder(
+      child: ListView.custom(
         controller: widget.scrollController,
         // Default platform physics (matches Thunder)
         // Android: ClampingScrollPhysics, iOS: BouncingScrollPhysics
@@ -191,82 +195,15 @@ class _FeedPageState extends State<FeedPage>
         cacheExtent: 5000,
         // Add top padding so content isn't hidden behind transparent header
         padding: const EdgeInsets.only(top: 44),
-        // Add extra item for loading indicator, pagination error, or end of feed
-        itemCount: widget.posts.length + (_shouldShowFooter ? 1 : 0),
-        itemBuilder: (context, index) {
+        childrenDelegate: SliverChildBuilderDelegate(
+          (context, index) {
           // Footer: loading indicator, error message, or end of feed
+          // Use consistent key so Flutter can track this item across rebuilds
           if (index == widget.posts.length) {
-            // Show loading indicator for pagination
-            if (widget.isLoadingMore) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: CircularProgressIndicator(color: AppColors.primary),
-                ),
-              );
-            }
-            // Show error message for pagination failures
-            if (widget.error != null) {
-              return Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.primary),
-                ),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.error_outline,
-                      color: AppColors.primary,
-                      size: 32,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _getUserFriendlyError(widget.error!),
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: widget.onClearErrorAndLoadMore,
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                      ),
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              );
-            }
-            // Show end of feed message when no more posts available
-            if (!widget.hasMore) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 32, horizontal: 16),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.check_circle_outline,
-                      color: AppColors.textSecondary,
-                      size: 32,
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      "You're all caught up!",
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
+            return KeyedSubtree(
+              key: const ValueKey('feed_footer'),
+              child: _buildFooter(),
+            );
           }
 
           final post = widget.posts[index];
@@ -287,9 +224,111 @@ class _FeedPageState extends State<FeedPage>
               child: PostCard(post: post, currentTime: widget.currentTime),
             ),
           );
-        },
+          },
+          childCount: widget.posts.length + (_shouldShowFooter ? 1 : 0),
+          // findChildIndexCallback enables Flutter to track items by key
+          // during list updates. When pagination adds items, Flutter uses
+          // this to map existing keys to indices, maintaining scroll position.
+          findChildIndexCallback: (Key key) {
+            if (key is ValueKey<String>) {
+              final keyValue = key.value;
+              // Footer is always at the last index
+              if (keyValue == 'feed_footer') {
+                return widget.posts.length;
+              }
+              // Find post by URI
+              final index = widget.posts.indexWhere(
+                (p) => p.post.uri == keyValue,
+              );
+              return index != -1 ? index : null;
+            }
+            return null;
+          },
+        ),
       ),
     );
+  }
+
+  /// Build the footer widget (loading, error, or end of feed)
+  Widget _buildFooter() {
+    // Show loading indicator for pagination
+    if (widget.isLoadingMore) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+
+    // Show error message for pagination failures
+    if (widget.error != null) {
+      return Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.primary),
+        ),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.error_outline,
+              color: AppColors.primary,
+              size: 32,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _getUserFriendlyError(widget.error!),
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: widget.onClearErrorAndLoadMore,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
+              ),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Show end of feed message when no more posts available
+    if (!widget.hasMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+        child: Column(
+          children: [
+            Icon(
+              Icons.check_circle_outline,
+              color: AppColors.textSecondary,
+              size: 32,
+            ),
+            SizedBox(height: 8),
+            Text(
+              "You're all caught up!",
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Idle state: invisible placeholder with same height as loading spinner
+    // to prevent scroll jumps when transitioning between loading/idle states.
+    // Height matches: padding (16) + spinner (~48) + padding (16) = 80
+    return const SizedBox(height: 80);
   }
 
   /// Transform technical error messages into user-friendly ones
