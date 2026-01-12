@@ -270,6 +270,7 @@ class MultiFeedProvider with ChangeNotifier {
       }
 
       final hasMore = response.cursor != null;
+
       _feedStates[type] = currentState.copyWith(
         posts: newPosts,
         cursor: response.cursor,

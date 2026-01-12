@@ -182,19 +182,17 @@ class _FeedPageState extends State<FeedPage>
       color: AppColors.primary,
       child: ListView.builder(
         controller: widget.scrollController,
-        // Smooth bouncy scroll physics (iOS-style) with always-scrollable
-        // for pull-to-refresh support
-        physics: const BouncingScrollPhysics(
-          parent: AlwaysScrollableScrollPhysics(),
-        ),
-        // Pre-render items 800px above/below viewport for smoother scrolling
-        cacheExtent: 800,
+        // Default platform physics (matches Thunder)
+        // Android: ClampingScrollPhysics, iOS: BouncingScrollPhysics
+        physics: const AlwaysScrollableScrollPhysics(),
+        // Pre-render items 5000px in each direction (10000px total cache).
+        // Builds items before they're visible, reducing layout shift jitter
+        // from lazy height calculation.
+        cacheExtent: 5000,
         // Add top padding so content isn't hidden behind transparent header
         padding: const EdgeInsets.only(top: 44),
         // Add extra item for loading indicator, pagination error, or end of feed
-        itemCount:
-            widget.posts.length +
-            (_shouldShowFooter ? 1 : 0),
+        itemCount: widget.posts.length + (_shouldShowFooter ? 1 : 0),
         itemBuilder: (context, index) {
           // Footer: loading indicator, error message, or end of feed
           if (index == widget.posts.length) {
@@ -272,6 +270,7 @@ class _FeedPageState extends State<FeedPage>
           }
 
           final post = widget.posts[index];
+
           // RepaintBoundary isolates each post card to prevent unnecessary
           // repaints of other items during scrolling.
           // ValueKey on RepaintBoundary ensures Flutter correctly identifies

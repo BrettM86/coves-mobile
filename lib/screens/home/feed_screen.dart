@@ -28,6 +28,11 @@ class FeedScreenState extends State<FeedScreen> {
   late AuthProvider _authProvider;
   bool _wasAuthenticated = false;
 
+  // Throttle pagination calls per feed type (100ms minimum between calls).
+  // Prevents rapid-fire pagination requests during fast scrolling which can
+  // cause duplicate posts or race conditions with cursor-based pagination.
+  final Map<FeedType, DateTime> _lastPaginationTime = {};
+
   @override
   void initState() {
     super.initState();
@@ -116,16 +121,19 @@ class FeedScreenState extends State<FeedScreen> {
   void _onScroll(FeedType type) {
     final controller = _scrollControllers[type];
     if (controller != null && controller.hasClients) {
-      // Save scroll position passively (no rebuild needed)
-      context.read<MultiFeedProvider>().saveScrollPosition(
-        type,
-        controller.position.pixels,
-      );
+      final position = controller.position.pixels;
 
-      // Trigger pagination when near bottom
-      if (controller.position.pixels >=
-          controller.position.maxScrollExtent - 200) {
-        context.read<MultiFeedProvider>().loadMore(type);
+      // Save scroll position passively (no rebuild needed)
+      context.read<MultiFeedProvider>().saveScrollPosition(type, position);
+
+      // Trigger pagination when near bottom (with 100ms throttle per feed)
+      if (position >= controller.position.maxScrollExtent - 200) {
+        final now = DateTime.now();
+        final lastTime = _lastPaginationTime[type];
+        if (lastTime == null || now.difference(lastTime).inMilliseconds > 100) {
+          _lastPaginationTime[type] = now;
+          context.read<MultiFeedProvider>().loadMore(type);
+        }
       }
     }
   }

@@ -188,7 +188,7 @@ class PostCard extends StatelessWidget {
                     const SizedBox(height: 12),
                 ],
 
-                // Embed (handles its own taps - not wrapped in InkWell)
+                // Embed thumbnail
                 if (post.post.embed?.external != null) ...[
                   _EmbedCard(
                     embed: post.post.embed!.external!,
@@ -354,6 +354,9 @@ class PostCard extends StatelessWidget {
           width: 24,
           height: 24,
           fit: BoxFit.cover,
+          // Disable fade animation to prevent scroll jitter
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
           placeholder: (context, url) => _buildFallbackAvatar(community),
           errorWidget: (context, url, error) => _buildFallbackAvatar(community),
         ),
@@ -409,6 +412,9 @@ class PostCard extends StatelessWidget {
                       width: 20,
                       height: 20,
                       fit: BoxFit.cover,
+                      // Disable fade animation to prevent scroll jitter
+                      fadeInDuration: Duration.zero,
+                      fadeOutDuration: Duration.zero,
                       placeholder:
                           (context, url) => _buildAuthorFallbackAvatar(author),
                       errorWidget:
@@ -568,9 +574,32 @@ class _EmbedCardState extends State<_EmbedCard> {
 
   @override
   Widget build(BuildContext context) {
-    // Only show image if thumbnail exists
+    // Show placeholder when no thumbnail available
     if (widget.embed.thumb == null) {
-      return const SizedBox.shrink();
+      final placeholderWidget = Container(
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: AppColors.backgroundSecondary,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Center(
+          child: Icon(
+            Icons.link,
+            color: AppColors.textSecondary,
+            size: 32,
+          ),
+        ),
+      );
+
+      // Make tappable if handler provided
+      if (widget.onImageTap != null) {
+        return GestureDetector(
+          onTap: widget.onImageTap,
+          child: placeholderWidget,
+        );
+      }
+      return placeholderWidget;
     }
 
     // Build the thumbnail image
@@ -585,14 +614,19 @@ class _EmbedCardState extends State<_EmbedCard> {
         width: double.infinity,
         height: widget.height,
         fit: BoxFit.cover,
+        // Disable fade animation to prevent scroll jitter from height changes
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
         placeholder:
             (context, url) => Container(
               width: double.infinity,
               height: widget.height,
-              color: AppColors.background,
+              color: AppColors.backgroundSecondary,
               child: const Center(
-                child: CircularProgressIndicator(
-                  color: AppColors.loadingIndicator,
+                child: Icon(
+                  Icons.image_outlined,
+                  color: AppColors.textSecondary,
+                  size: 32,
                 ),
               ),
             ),

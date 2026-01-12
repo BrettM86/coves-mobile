@@ -133,6 +133,9 @@ class ProfileHeader extends StatelessWidget {
         child: CachedNetworkImage(
           imageUrl: profile!.banner!,
           fit: BoxFit.cover,
+          // Disable fade animation to prevent scroll jitter
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
           placeholder: (context, url) => _buildDefaultBanner(),
           errorWidget: (context, url, error) => _buildDefaultBanner(),
         ),
@@ -255,6 +258,10 @@ class ProfileHeader extends StatelessWidget {
         width: size,
         height: size,
         fit: BoxFit.cover,
+        // Disable fade animation to prevent scroll jitter
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
+        // Static placeholder instead of animated spinner to prevent scroll jitter
         placeholder: (context, url) => _buildAvatarLoading(size),
         errorWidget: (context, url, error) => _buildFallbackAvatar(size),
       );
@@ -263,20 +270,11 @@ class ProfileHeader extends StatelessWidget {
   }
 
   Widget _buildAvatarLoading(double size) {
+    // Static placeholder instead of animated spinner to prevent scroll jitter
     return Container(
       width: size,
       height: size,
       color: AppColors.backgroundSecondary,
-      child: const Center(
-        child: SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppColors.primary,
-          ),
-        ),
-      ),
     );
   }
 

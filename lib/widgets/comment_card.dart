@@ -202,6 +202,9 @@ class CommentCard extends StatelessWidget {
           width: 14,
           height: 14,
           fit: BoxFit.cover,
+          // Disable fade animation to prevent scroll jitter
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
           placeholder: (context, url) => _buildFallbackAvatar(author),
           errorWidget: (context, url, error) => _buildFallbackAvatar(author),
         ),

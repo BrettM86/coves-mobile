@@ -313,6 +313,9 @@ class BlueskyPostCard extends StatelessWidget {
           width: 40,
           height: 40,
           fit: BoxFit.cover,
+          // Disable fade animation to prevent scroll jitter
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
           placeholder: (context, url) => _buildFallbackAvatar(author),
           errorWidget: (context, url, error) {
             if (kDebugMode) {
@@ -413,15 +416,12 @@ class BlueskyPostCard extends StatelessWidget {
                 child: CachedNetworkImage(
                   imageUrl: embed.thumb!,
                   fit: BoxFit.cover,
+                  // Disable fade animation to prevent scroll jitter
+                  fadeInDuration: Duration.zero,
+                  fadeOutDuration: Duration.zero,
+                  // Static placeholder instead of animated spinner
                   placeholder: (context, url) => Container(
                     color: BlueskyColors.cardBorder.withValues(alpha: 0.3),
-                    child: const Center(
-                      child: Icon(
-                        Icons.image_outlined,
-                        color: BlueskyColors.textSecondary,
-                        size: 32,
-                      ),
-                    ),
                   ),
                   errorWidget: (context, url, error) => Container(
                     color: BlueskyColors.cardBorder.withValues(alpha: 0.3),
@@ -631,6 +631,9 @@ class BlueskyPostCard extends StatelessWidget {
           width: 20,
           height: 20,
           fit: BoxFit.cover,
+          // Disable fade animation to prevent scroll jitter
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
           placeholder: (context, url) => _buildSmallFallbackAvatar(author),
           errorWidget: (context, url, error) {
             if (kDebugMode) {
