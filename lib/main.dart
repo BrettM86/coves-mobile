@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'config/oauth_config.dart';
 import 'constants/app_colors.dart';
@@ -22,99 +25,126 @@ import 'services/streamable_service.dart';
 import 'services/vote_service.dart';
 import 'widgets/loading_error_states.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+Future<void> main() async {
+  await SentryFlutter.init(
+    (options) {
+      // TODO: Replace with your actual Sentry DSN from sentry.io
+      options.dsn = const String.fromEnvironment(
+        'SENTRY_DSN',
+        defaultValue: '',
+      );
+      options.tracesSampleRate = kDebugMode ? 1.0 : 0.2;
+      options.environment = kDebugMode ? 'development' : 'production';
+      options.sendDefaultPii = false;
+      options.attachScreenshot = true;
+      options.attachViewHierarchy = true;
+    },
+    appRunner: () async {
+      WidgetsFlutterBinding.ensureInitialized();
 
-  // Set system UI overlay style (Android navigation bar)
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      systemNavigationBarColor: Color(0xFF0B0F14),
-      systemNavigationBarIconBrightness: Brightness.light,
-    ),
-  );
-
-  // Initialize auth provider
-  final authProvider = AuthProvider();
-  await authProvider.initialize();
-
-  // Initialize vote service with auth callbacks
-  // Votes go through the Coves backend (which proxies to PDS with DPoP)
-  // Includes token refresh and sign-out handlers for automatic 401 recovery
-  final voteService = VoteService(
-    sessionGetter: () async => authProvider.session,
-    didGetter: () => authProvider.did,
-    tokenRefresher: authProvider.refreshToken,
-    signOutHandler: authProvider.signOut,
-  );
-
-  // Initialize comment service with auth callbacks
-  // Comments go through the Coves backend (which proxies to PDS with DPoP)
-  final commentService = CommentService(
-    sessionGetter: () async => authProvider.session,
-    tokenRefresher: authProvider.refreshToken,
-    signOutHandler: authProvider.signOut,
-  );
-
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: authProvider),
-        ChangeNotifierProvider(
-          create:
-              (_) => VoteProvider(
-                voteService: voteService,
-                authProvider: authProvider,
-              ),
+      // Set system UI overlay style (Android navigation bar)
+      SystemChrome.setSystemUIOverlayStyle(
+        const SystemUiOverlayStyle(
+          systemNavigationBarColor: Color(0xFF0B0F14),
+          systemNavigationBarIconBrightness: Brightness.light,
         ),
-        ChangeNotifierProxyProvider2<
-          AuthProvider,
-          VoteProvider,
-          MultiFeedProvider
-        >(
-          create:
-              (context) => MultiFeedProvider(
-                authProvider,
-                voteProvider: context.read<VoteProvider>(),
-              ),
-          update: (context, auth, vote, previous) {
-            // Reuse existing provider to maintain state across rebuilds
-            return previous ?? MultiFeedProvider(auth, voteProvider: vote);
+      );
+
+      // Initialize auth provider
+      final authProvider = AuthProvider();
+      try {
+        await authProvider.initialize();
+      } on Exception catch (error, stackTrace) {
+        // Log initialization failure but continue - user can retry login
+        await Sentry.captureException(
+          error,
+          stackTrace: stackTrace,
+          withScope: (scope) {
+            scope.setTag('phase', 'auth_initialization');
           },
+        );
+      }
+
+      // Initialize vote service with auth callbacks
+      // Votes go through the Coves backend (which proxies to PDS with DPoP)
+      // Includes token refresh and sign-out handlers for automatic 401 recovery
+      final voteService = VoteService(
+        sessionGetter: () async => authProvider.session,
+        didGetter: () => authProvider.did,
+        tokenRefresher: authProvider.refreshToken,
+        signOutHandler: authProvider.signOut,
+      );
+
+      // Initialize comment service with auth callbacks
+      // Comments go through the Coves backend (which proxies to PDS with DPoP)
+      final commentService = CommentService(
+        sessionGetter: () async => authProvider.session,
+        tokenRefresher: authProvider.refreshToken,
+        signOutHandler: authProvider.signOut,
+      );
+
+      runApp(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: authProvider),
+            ChangeNotifierProvider(
+              create:
+                  (_) => VoteProvider(
+                    voteService: voteService,
+                    authProvider: authProvider,
+                  ),
+            ),
+            ChangeNotifierProxyProvider2<
+              AuthProvider,
+              VoteProvider,
+              MultiFeedProvider
+            >(
+              create:
+                  (context) => MultiFeedProvider(
+                    authProvider,
+                    voteProvider: context.read<VoteProvider>(),
+                  ),
+              update: (context, auth, vote, previous) {
+                // Reuse existing provider to maintain state across rebuilds
+                return previous ?? MultiFeedProvider(auth, voteProvider: vote);
+              },
+            ),
+            // CommentsProviderCache manages per-post CommentsProvider instances
+            // with LRU eviction and sign-out cleanup
+            ProxyProvider2<AuthProvider, VoteProvider, CommentsProviderCache>(
+              create:
+                  (context) => CommentsProviderCache(
+                    authProvider: authProvider,
+                    voteProvider: context.read<VoteProvider>(),
+                    commentService: commentService,
+                  ),
+              update: (context, auth, vote, previous) {
+                // Reuse existing cache
+                return previous ??
+                    CommentsProviderCache(
+                      authProvider: auth,
+                      voteProvider: vote,
+                      commentService: commentService,
+                    );
+              },
+              dispose: (_, cache) => cache.dispose(),
+            ),
+            // StreamableService for video embeds
+            Provider<StreamableService>(create: (_) => StreamableService()),
+            // UserProfileProvider for profile pages
+            ChangeNotifierProxyProvider<AuthProvider, UserProfileProvider>(
+              create: (context) => UserProfileProvider(authProvider),
+              update: (context, auth, previous) {
+                // Propagate auth changes to existing provider
+                previous?.updateAuthProvider(auth);
+                return previous ?? UserProfileProvider(auth);
+              },
+            ),
+          ],
+          child: const CovesApp(),
         ),
-        // CommentsProviderCache manages per-post CommentsProvider instances
-        // with LRU eviction and sign-out cleanup
-        ProxyProvider2<AuthProvider, VoteProvider, CommentsProviderCache>(
-          create:
-              (context) => CommentsProviderCache(
-                authProvider: authProvider,
-                voteProvider: context.read<VoteProvider>(),
-                commentService: commentService,
-              ),
-          update: (context, auth, vote, previous) {
-            // Reuse existing cache
-            return previous ??
-                CommentsProviderCache(
-                  authProvider: auth,
-                  voteProvider: vote,
-                  commentService: commentService,
-                );
-          },
-          dispose: (_, cache) => cache.dispose(),
-        ),
-        // StreamableService for video embeds
-        Provider<StreamableService>(create: (_) => StreamableService()),
-        // UserProfileProvider for profile pages
-        ChangeNotifierProxyProvider<AuthProvider, UserProfileProvider>(
-          create: (context) => UserProfileProvider(authProvider),
-          update: (context, auth, previous) {
-            // Propagate auth changes to existing provider
-            previous?.updateAuthProvider(auth);
-            return previous ?? UserProfileProvider(auth);
-          },
-        ),
-      ],
-      child: const CovesApp(),
-    ),
+      );
+    },
   );
 }
 

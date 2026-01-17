@@ -48,8 +48,10 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# macOS (not targeting this platform)
+# Desktop platforms (not targeting these)
+linux/
 macos/
+windows/
 
 # Claude Code local settings
 .claude/settings.local.json
