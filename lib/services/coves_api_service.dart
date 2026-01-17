@@ -7,6 +7,7 @@ import '../models/community.dart';
 import '../models/post.dart';
 import '../models/user_profile.dart';
 import 'api_exceptions.dart';
+import 'retry_interceptor.dart';
 
 /// Coves API Service
 ///
@@ -36,13 +37,24 @@ class CovesApiService {
         Dio(
           BaseOptions(
             baseUrl: EnvironmentConfig.current.apiUrl,
-            connectTimeout: const Duration(seconds: 30),
+            // Shorter timeout with retries for mobile network resilience
+            connectTimeout: const Duration(seconds: 10),
             receiveTimeout: const Duration(seconds: 30),
             headers: {'Content-Type': 'application/json'},
           ),
         );
 
-    // Add auth interceptor FIRST to add bearer token
+    // Add retry interceptor FIRST for transient network errors
+    // (connection timeouts, mobile network flakiness)
+    _dio.interceptors.add(
+      RetryInterceptor(
+        dio: _dio,
+        maxRetries: 2,
+        serviceName: 'CovesApiService',
+      ),
+    );
+
+    // Add auth interceptor to add bearer token
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {

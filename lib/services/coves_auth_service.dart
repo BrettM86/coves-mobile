@@ -8,6 +8,7 @@ import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import '../config/environment_config.dart';
 import '../config/oauth_config.dart';
 import '../models/coves_session.dart';
+import 'retry_interceptor.dart';
 
 /// Coves Authentication Service
 ///
@@ -39,12 +40,8 @@ class CovesAuthService {
             iOptions: IOSOptions(
               accessibility: KeychainAccessibility.first_unlock,
             ),
-          ) {
-    // Initialize Dio if provided, otherwise it will be initialized in initialize()
-    if (dio != null) {
-      _dio = dio;
-    }
-  }
+          ),
+      _injectedDio = dio;
 
   static CovesAuthService? _instance;
 
@@ -71,8 +68,9 @@ class CovesAuthService {
   String get _storageKey =>
       'coves_session_${EnvironmentConfig.current.environment.name}';
 
-  // HTTP client for API calls
-  late final Dio _dio;
+  // HTTP client for API calls - injected for testing or created in initialize()
+  final Dio? _injectedDio;
+  Dio? _dio;
 
   // Current session (cached in memory)
   CovesSession? _session;
@@ -89,20 +87,30 @@ class CovesAuthService {
 
   /// Initialize the auth service
   Future<void> initialize() async {
-    // Set up Dio with base URL if not already provided (e.g., for testing)
-    // This check is necessary because _dio is late final
-    try {
-      // Try to access _dio - if it's already initialized, this won't throw
-      _dio.options;
-    } catch (_) {
-      // Not initialized yet, so initialize it now
-      _dio = Dio(
-        BaseOptions(
-          baseUrl: EnvironmentConfig.current.apiUrl,
-          connectTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(seconds: 30),
-        ),
-      );
+    // Use injected Dio (for testing) or create a new one
+    if (_dio == null) {
+      if (_injectedDio != null) {
+        _dio = _injectedDio;
+      } else {
+        final dio = Dio(
+          BaseOptions(
+            baseUrl: EnvironmentConfig.current.apiUrl,
+            // Shorter timeout with retries for mobile network resilience
+            connectTimeout: const Duration(seconds: 10),
+            receiveTimeout: const Duration(seconds: 30),
+          ),
+        );
+        // Add retry interceptor for transient network errors
+        // Critical for token refresh - don't sign out user on transient failure
+        dio.interceptors.add(
+          RetryInterceptor(
+            dio: dio,
+            maxRetries: 2,
+            serviceName: 'CovesAuthService',
+          ),
+        );
+        _dio = dio;
+      }
     }
 
     if (kDebugMode) {
@@ -213,12 +221,22 @@ class CovesAuthService {
 
       return session;
     } catch (e) {
-      // Catch all errors including TypeError from malformed JSON
+      // Catch all errors including:
+      // - FormatException/TypeError from malformed JSON (data corruption)
+      // - PlatformException from secure storage access failures
+      // - Any other unexpected errors
+      //
+      // We treat all errors the same (clear and return null) because:
+      // 1. Data corruption: The stored data is unusable, clearing is correct
+      // 2. Storage access errors: Retrying won't help, user needs to re-auth
+      // 3. Both cases require the user to sign in again anyway
+      //
+      // The specific error type is logged in debug mode for troubleshooting.
       if (kDebugMode) {
-        print('Failed to restore session: $e');
+        print('Failed to restore session (${e.runtimeType}): $e');
       }
 
-      // Clear corrupted data
+      // Clear potentially corrupted data
       await _storage.delete(key: _storageKey);
       return null;
     }
@@ -264,7 +282,7 @@ class CovesAuthService {
         'sealed_token': _session!.token,
       };
 
-      final response = await _dio.post<Map<String, dynamic>>(
+      final response = await _dio!.post<Map<String, dynamic>>(
         '/oauth/refresh',
         data: requestBody,
       );
@@ -334,7 +352,7 @@ class CovesAuthService {
 
         // Best-effort server-side revocation
         try {
-          await _dio.post<void>(
+          await _dio!.post<void>(
             '/oauth/logout',
             options: Options(
               headers: {'Authorization': 'Bearer ${_session!.token}'},
