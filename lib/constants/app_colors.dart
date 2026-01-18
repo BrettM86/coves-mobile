@@ -66,14 +66,17 @@ class AppColors {
   /// Border color - subtle dark gray
   static const border = Color(0xFF2A2F36);
 
+  /// Border warm - subtle coral-tinted gray for cards
+  static const borderWarm = Color(0xFF2D2A28);
+
   /// Border focused - coral accent
   static const borderFocused = coral;
 
   /// Loading indicator
   static const loadingIndicator = Color(0xFF484F58);
 
-  /// Community name - light cyan/blue
-  static const communityName = Color(0xFF7CB9E8);
+  /// Community name - teal accent (matches brand)
+  static const communityName = teal;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SEMANTIC COLORS

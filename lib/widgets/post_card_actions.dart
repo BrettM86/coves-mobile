@@ -218,6 +218,8 @@ class PostCardActions extends StatelessWidget {
                                 alpha: 0.6,
                               ),
                               fontSize: 13,
+                              fontWeight:
+                                  isLiked ? FontWeight.w600 : FontWeight.w400,
                             ),
                           ),
                         ],

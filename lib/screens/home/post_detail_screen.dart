@@ -17,9 +17,9 @@ import '../../utils/error_messages.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/comments_header.dart';
 import '../../widgets/icons/share_icon.dart';
+import '../../widgets/detailed_post_view.dart';
 import '../../widgets/loading_error_states.dart';
 import '../../widgets/post_action_bar.dart';
-import '../../widgets/post_card.dart';
 import '../../widgets/status_bar_overlay.dart';
 import '../compose/reply_screen.dart';
 import 'focused_thread_screen.dart';
@@ -810,21 +810,10 @@ class _PostHeader extends StatelessWidget {
     return ValueListenableBuilder<DateTime?>(
       valueListenable: currentTimeNotifier,
       builder: (context, currentTime, child) {
-        return PostCard(
+        return DetailedPostView(
           post: post,
           currentTime: currentTime,
-          showCommentButton: false,
-          disableNavigation: true,
-          showActions: false,
-          showHeader: false,
-          showBorder: false,
-          showFullText: true,
-          showAuthorFooter: true,
           showSources: true,
-          textFontSize: 14,
-          textLineHeight: 1.5,
-          titleFontSize: 16,
-          titleFontWeight: FontWeight.w800,
         );
       },
     );

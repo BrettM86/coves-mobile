@@ -80,7 +80,9 @@ class PostCard extends StatelessWidget {
         color: AppColors.background,
         border:
             showBorder
-                ? const Border(bottom: BorderSide(color: AppColors.border))
+                ? const Border(
+                    bottom: BorderSide(color: AppColors.borderWarm, width: 0.5),
+                  )
                 : null,
       ),
       child: Padding(
@@ -155,8 +157,9 @@ class PostCard extends StatelessWidget {
                             style: TextStyle(
                               color: AppColors.textPrimary,
                               fontSize: titleFontSize,
-                              fontWeight: titleFontWeight,
-                              height: 1.3,
+                              fontWeight: FontWeight.w500,
+                              height: 1.25,
+                              letterSpacing: -0.3,
                             ),
                           ),
                         ],
@@ -178,8 +181,9 @@ class PostCard extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: titleFontSize,
-                      fontWeight: titleFontWeight,
-                      height: 1.3,
+                      fontWeight: FontWeight.w500,
+                      height: 1.25,
+                      letterSpacing: -0.3,
                     ),
                   ),
                   if (post.post.embed?.external != null ||
@@ -280,12 +284,16 @@ class PostCard extends StatelessWidget {
         ),
       );
     } else {
-      // Feed view: compact preview with container
+      // Feed view: compact preview with refined container
       return Container(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.backgroundSecondary,
-          borderRadius: BorderRadius.circular(8),
+          color: AppColors.backgroundSecondary.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: AppColors.border.withValues(alpha: 0.3),
+            width: 0.5,
+          ),
         ),
         child: Text(
           post.post.text,
