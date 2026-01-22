@@ -11,6 +11,7 @@ import '../../widgets/icons/bluesky_icons.dart';
 const double _kHeaderHeight = 44;
 const double _kTabUnderlineWidth = 28;
 const double _kTabUnderlineHeight = 3;
+const double _kInactiveTabOpacity = 0.5;
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key, this.onSearchTap});
@@ -33,6 +34,9 @@ class FeedScreenState extends State<FeedScreen> {
   // cause duplicate posts or race conditions with cursor-based pagination.
   final Map<FeedType, DateTime> _lastPaginationTime = {};
 
+  // Track last synced page to avoid redundant state updates
+  int _lastSyncedPage = 0;
+
   @override
   void initState() {
     super.initState();
@@ -42,6 +46,10 @@ class FeedScreenState extends State<FeedScreen> {
     final provider = context.read<MultiFeedProvider>();
     final initialPage = provider.currentFeedType == FeedType.forYou ? 1 : 0;
     _pageController = PageController(initialPage: initialPage);
+    _lastSyncedPage = initialPage;
+
+    // Listen to page controller to detect when page settles
+    _pageController.addListener(_onPageControllerUpdate);
 
     // Save reference to AuthProvider for listener management
     _authProvider = context.read<AuthProvider>();
@@ -61,11 +69,34 @@ class FeedScreenState extends State<FeedScreen> {
   @override
   void dispose() {
     _authProvider.removeListener(_onAuthChanged);
-    _pageController.dispose();
+    _pageController
+      ..removeListener(_onPageControllerUpdate)
+      ..dispose();
     for (final controller in _scrollControllers.values) {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  /// Detect when the page settles and sync state.
+  /// This avoids jank from onPageChanged firing during the animation.
+  void _onPageControllerUpdate() {
+    if (!mounted) return;
+    if (!_pageController.hasClients) return;
+
+    // Clamp page value to valid range (iOS bounce physics can over-scroll)
+    final page = (_pageController.page ?? 0.0).clamp(0.0, 1.0);
+    final roundedPage = page.round();
+
+    // Only sync when page is very close to an integer (settled)
+    // and different from last synced page
+    if ((page - roundedPage).abs() < 0.01 && roundedPage != _lastSyncedPage) {
+      _lastSyncedPage = roundedPage;
+      final type = roundedPage == 0 ? FeedType.discover : FeedType.forYou;
+      context.read<MultiFeedProvider>().setCurrentFeed(type);
+      _ensureFeedLoaded(type);
+      _restoreScrollPosition(type);
+    }
   }
 
   /// Handle auth state changes to sync PageController with provider
@@ -243,22 +274,20 @@ class FeedScreenState extends State<FeedScreen> {
       );
     }
 
-    // Authenticated: show both tabs side by side (TikTok style)
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildFeedTypeTab(
-          label: 'Discover',
-          isActive: feedType == FeedType.discover,
-          onTap: () => _switchToFeedType(FeedType.discover, 0),
-        ),
-        const SizedBox(width: 24),
-        _buildFeedTypeTab(
-          label: 'For You',
-          isActive: feedType == FeedType.forYou,
-          onTap: () => _switchToFeedType(FeedType.forYou, 1),
-        ),
-      ],
+    // Authenticated: show both tabs with sliding underline
+    return AnimatedBuilder(
+      animation: _pageController,
+      builder: (context, child) {
+        // Get current page position (0.0 to 1.0) for smooth animation
+        final pageValue =
+            _pageController.hasClients ? (_pageController.page ?? 0.0) : 0.0;
+
+        return _FeedTabsWithSlidingUnderline(
+          pageValue: pageValue,
+          onDiscoverTap: () => _switchToFeedType(FeedType.discover, 0),
+          onForYouTap: () => _switchToFeedType(FeedType.forYou, 1),
+        );
+      },
     );
   }
 
@@ -284,20 +313,18 @@ class FeedScreenState extends State<FeedScreen> {
                 color:
                     isActive
                         ? AppColors.textPrimary
-                        : AppColors.textSecondary.withValues(alpha: 0.6),
+                        : AppColors.textSecondary.withValues(
+                            alpha: _kInactiveTabOpacity,
+                          ),
                 fontSize: 16,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
               ),
             ),
             const SizedBox(height: 2),
-            // Underline indicator (TikTok style)
-            Container(
+            // Placeholder for underline height
+            const SizedBox(
               width: _kTabUnderlineWidth,
               height: _kTabUnderlineHeight,
-              decoration: BoxDecoration(
-                color: isActive ? AppColors.textPrimary : Colors.transparent,
-                borderRadius: BorderRadius.circular(2),
-              ),
             ),
           ],
         ),
@@ -364,17 +391,14 @@ class FeedScreenState extends State<FeedScreen> {
       return _buildFeedPage(FeedType.discover, isAuthenticated);
     }
 
-    // For authenticated users, use PageView for swipe navigation
+    // For authenticated users, use PageView for swipe navigation.
+    // Uses platform-default physics (BouncingScrollPhysics on iOS,
+    // ClampingScrollPhysics on Android).
+    // Note: We don't use onPageChanged here because it fires during the
+    // animation and causes jank. Instead, we sync state when the page
+    // settles (detected in _onPageControllerUpdate via the controller listener).
     return PageView(
       controller: _pageController,
-      onPageChanged: (index) {
-        final type = index == 0 ? FeedType.discover : FeedType.forYou;
-        context.read<MultiFeedProvider>().setCurrentFeed(type);
-        // Load the feed if it hasn't been loaded yet
-        _ensureFeedLoaded(type);
-        // Restore scroll position when swiping between feeds
-        _restoreScrollPosition(type);
-      },
       children: [
         _buildFeedPage(FeedType.discover, isAuthenticated),
         _buildFeedPage(FeedType.forYou, isAuthenticated),
@@ -411,6 +435,129 @@ class FeedScreenState extends State<FeedScreen> {
           currentTime: provider.currentTime,
         );
       },
+    );
+  }
+}
+
+/// Feed tabs with a smoothly sliding underline indicator.
+///
+/// The underline position interpolates based on [pageValue] (0.0 = Discover,
+/// 1.0 = For You), creating a smooth animation during swipe gestures.
+class _FeedTabsWithSlidingUnderline extends StatelessWidget {
+  const _FeedTabsWithSlidingUnderline({
+    required this.pageValue,
+    required this.onDiscoverTap,
+    required this.onForYouTap,
+  });
+
+  /// Current page position (0.0 to 1.0) for underline animation
+  final double pageValue;
+  final VoidCallback onDiscoverTap;
+  final VoidCallback onForYouTap;
+
+  // Tab spacing constant (matches the SizedBox width between tabs)
+  static const double _tabSpacing = 24;
+
+  @override
+  Widget build(BuildContext context) {
+    // Calculate opacity for each tab (smooth interpolation, no threshold snap)
+    // Discover: fully visible at page 0, faded at page 1
+    // For You: faded at page 0, fully visible at page 1
+    final discoverOpacity = 1.0 - pageValue;
+    final forYouOpacity = pageValue;
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Tab labels row
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildTabLabel(
+              label: 'Discover',
+              opacity: discoverOpacity,
+              onTap: onDiscoverTap,
+            ),
+            const SizedBox(width: _tabSpacing),
+            _buildTabLabel(
+              label: 'For You',
+              opacity: forYouOpacity,
+              onTap: onForYouTap,
+            ),
+          ],
+        ),
+        // Sliding underline positioned absolutely
+        Positioned(
+          bottom: 0,
+          child: _buildSlidingUnderline(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTabLabel({
+    required String label,
+    required double opacity,
+    required VoidCallback onTap,
+  }) {
+    // Use consistent font weight to avoid layout jank during swipe.
+    // Only opacity changes smoothly with the swipe.
+    return Semantics(
+      label: '$label feed',
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: Color.lerp(
+                  AppColors.textSecondary.withValues(
+                    alpha: _kInactiveTabOpacity,
+                  ),
+                  AppColors.textPrimary,
+                  opacity,
+                ),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            // Spacer for underline height
+            const SizedBox(height: _kTabUnderlineHeight),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlidingUnderline() {
+    // Calculate the horizontal offset for the underline.
+    // At pageValue 0, underline is centered under "Discover"
+    // At pageValue 1, underline is centered under "For You"
+    //
+    // The offset calculation accounts for asymmetric tab widths:
+    // - "Discover" is ~58px wide, center at -(58/2 + 24/2) = -41px from Row center
+    // - "For You" is ~50px wide, center at +(50/2 + 24/2) = +37px from Row center
+    // We interpolate between these positions based on pageValue.
+    const discoverOffset = -41.0;
+    const forYouOffset = 42.0;
+    final offset = discoverOffset + pageValue * (forYouOffset - discoverOffset);
+
+    return Transform.translate(
+      offset: Offset(offset, 0),
+      child: Container(
+        width: _kTabUnderlineWidth,
+        height: _kTabUnderlineHeight,
+        decoration: BoxDecoration(
+          color: AppColors.textPrimary,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
     );
   }
 }
