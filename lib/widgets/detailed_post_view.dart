@@ -7,6 +7,7 @@ import '../constants/app_colors.dart';
 import '../models/post.dart';
 import '../services/streamable_service.dart';
 import '../utils/date_time_utils.dart';
+import '../utils/url_launcher.dart';
 import 'bluesky_post_card.dart';
 import 'external_link_bar.dart';
 import 'fullscreen_video_player.dart';
@@ -119,7 +120,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
     );
   }
 
-  /// Reddit-style author row: avatar • username • time
+  /// Reddit-style author row: avatar • @handle • time
   Widget _buildAuthorRow() {
     final author = widget.post.post.author;
 
@@ -133,13 +134,13 @@ class _DetailedPostViewState extends State<DetailedPostView> {
             _buildAvatar(author),
             const SizedBox(width: 8),
 
-            // Username
+            // Handle with @ prefix - always shown in muted grey
             Text(
-              author.displayName ?? author.handle,
+              '@${author.handle}',
               style: GoogleFonts.inter(
                 fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textSecondary,
               ),
             ),
 
@@ -154,27 +155,6 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                 ),
               ),
             ),
-
-            // Handle (if different from display name)
-            if (author.displayName != null) ...[
-              Text(
-                '@${author.handle}',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Text(
-                  '•',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary.withValues(alpha: 0.6),
-                  ),
-                ),
-              ),
-            ],
 
             // Time ago
             Text(
@@ -195,7 +175,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
 
   /// Small circular avatar
   Widget _buildAvatar(AuthorView author) {
-    const size = 28.0;
+    const size = 22.0;
 
     if (author.avatar != null && author.avatar!.isNotEmpty) {
       return ClipRRect(
@@ -284,77 +264,137 @@ class _DetailedPostViewState extends State<DetailedPostView> {
     );
   }
 
-  /// Image carousel for multi-image posts
+  /// Image carousel for multi-image posts with attached link bar
   Widget _buildImageCarousel() {
     final embed = widget.post.post.embed!.external!;
     final images = embed.images ?? [];
 
     if (images.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      children: [
-        // Images
-        SizedBox(
-          height: 300,
-          child: PageView.builder(
-            controller: _imagePageController,
-            onPageChanged: (index) {
-              setState(() => _currentImageIndex = index);
-            },
-            itemCount: images.length,
-            itemBuilder: (context, index) {
-              final image = images[index];
-              final imageUrl = image['thumb'] as String? ??
-                  image['fullsize'] as String? ??
-                  '';
-
-              if (imageUrl.isEmpty) return _buildImagePlaceholder();
-
-              return CachedNetworkImage(
-                imageUrl: imageUrl,
-                fit: BoxFit.cover,
-                fadeInDuration: Duration.zero,
-                fadeOutDuration: Duration.zero,
-                placeholder: (context, url) => _buildImagePlaceholder(),
-                errorWidget: (context, url, error) => _buildImagePlaceholder(),
-              );
-            },
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: AppColors.border.withValues(alpha: 0.5),
           ),
         ),
+        child: Column(
+          children: [
+            // Images carousel (top of card)
+            ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(7),
+                topRight: Radius.circular(7),
+              ),
+              child: GestureDetector(
+                onTap: () => UrlLauncher.launchExternalUrl(
+                  embed.uri,
+                  context: context,
+                ),
+                child: SizedBox(
+                  height: 300,
+                  child: PageView.builder(
+                    controller: _imagePageController,
+                    onPageChanged: (index) {
+                      setState(() => _currentImageIndex = index);
+                    },
+                    itemCount: images.length,
+                    itemBuilder: (context, index) {
+                      final image = images[index];
+                      final imageUrl = image['thumb'] as String? ??
+                          image['fullsize'] as String? ??
+                          '';
 
-        // Page indicators
-        if (images.length > 1) ...[
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Counter badge
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.backgroundSecondary,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '${_currentImageIndex + 1}/${images.length}',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textSecondary,
+                      if (imageUrl.isEmpty) return _buildImagePlaceholder();
+
+                      return CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        fadeInDuration: Duration.zero,
+                        fadeOutDuration: Duration.zero,
+                        placeholder: (context, url) => _buildImagePlaceholder(),
+                        errorWidget: (context, url, error) =>
+                            _buildImagePlaceholder(),
+                      );
+                    },
                   ),
                 ),
               ),
-            ],
-          ),
-        ],
-      ],
+            ),
+
+            // Link bar with page indicator (bottom of card)
+            GestureDetector(
+              onTap: () => UrlLauncher.launchExternalUrl(
+                embed.uri,
+                context: context,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundSecondary,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(7),
+                    bottomRight: Radius.circular(7),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    _buildFavicon(embed.uri),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _formatUrlForDisplay(embed.uri),
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: AppColors.textPrimary.withValues(alpha: 0.7),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+
+                    // Page counter (if multiple images)
+                    if (images.length > 1) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.background.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${_currentImageIndex + 1}/${images.length}',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.open_in_new,
+                      size: 14,
+                      color: AppColors.textPrimary.withValues(alpha: 0.7),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  /// Single full-width image
+  /// Single full-width image with attached link bar
   Widget _buildSingleImage() {
     final embed = widget.post.post.embed!.external!;
 
@@ -362,17 +402,88 @@ class _DetailedPostViewState extends State<DetailedPostView> {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: CachedNetworkImage(
-          imageUrl: embed.thumb!,
-          width: double.infinity,
-          height: 220,
-          fit: BoxFit.cover,
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
-          placeholder: (context, url) => _buildImagePlaceholder(),
-          errorWidget: (context, url, error) => _buildImagePlaceholder(),
+      child: GestureDetector(
+        onTap: () => UrlLauncher.launchExternalUrl(
+          embed.uri,
+          context: context,
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: AppColors.border.withValues(alpha: 0.5),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Image (top of card)
+              ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(7),
+                  topRight: Radius.circular(7),
+                ),
+                child: CachedNetworkImage(
+                  imageUrl: embed.thumb!,
+                  width: double.infinity,
+                  height: 220,
+                  fit: BoxFit.cover,
+                  fadeInDuration: Duration.zero,
+                  fadeOutDuration: Duration.zero,
+                  placeholder: (context, url) => Container(
+                    height: 220,
+                    color: AppColors.backgroundSecondary,
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    height: 220,
+                    color: AppColors.backgroundSecondary,
+                    child: const Center(
+                      child: Icon(
+                        Icons.image_outlined,
+                        color: AppColors.textMuted,
+                        size: 40,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Link bar (bottom of card)
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.backgroundSecondary,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(7),
+                    bottomRight: Radius.circular(7),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    _buildFavicon(embed.uri),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _formatUrlForDisplay(embed.uri),
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: AppColors.textPrimary.withValues(alpha: 0.7),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.open_in_new,
+                      size: 14,
+                      color: AppColors.textPrimary.withValues(alpha: 0.7),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -458,6 +569,67 @@ class _DetailedPostViewState extends State<DetailedPostView> {
           Icons.image_outlined,
           color: AppColors.textMuted,
           size: 40,
+        ),
+      ),
+    );
+  }
+
+  /// Formats a URL for display (removes protocol, keeps domain + path start)
+  String _formatUrlForDisplay(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final host = uri.host;
+      final path = uri.path;
+
+      // Combine host and path, removing trailing slash if present
+      if (path.isEmpty || path == '/') {
+        return host;
+      }
+      return '$host$path';
+    } on FormatException {
+      return url;
+    }
+  }
+
+  /// Builds a favicon widget for the given URL
+  Widget _buildFavicon(String url) {
+    String? domain;
+    try {
+      final uri = Uri.parse(url);
+      domain = uri.host;
+    } on FormatException {
+      domain = null;
+    }
+
+    if (domain == null || domain.isEmpty) {
+      return Icon(
+        Icons.link,
+        size: 18,
+        color: AppColors.textPrimary.withValues(alpha: 0.7),
+      );
+    }
+
+    final faviconUrl =
+        'https://www.google.com/s2/favicons?domain=$domain&sz=32';
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: CachedNetworkImage(
+        imageUrl: faviconUrl,
+        width: 18,
+        height: 18,
+        fit: BoxFit.cover,
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
+        placeholder: (context, url) => Icon(
+          Icons.link,
+          size: 18,
+          color: AppColors.textPrimary.withValues(alpha: 0.7),
+        ),
+        errorWidget: (context, url, error) => Icon(
+          Icons.link,
+          size: 18,
+          color: AppColors.textPrimary.withValues(alpha: 0.7),
         ),
       ),
     );

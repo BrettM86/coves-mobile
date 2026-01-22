@@ -1,5 +1,4 @@
 import 'dart:async' show unawaited;
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -11,49 +10,8 @@ import '../constants/app_colors.dart';
 import '../widgets/primary_button.dart';
 
 /// Landing screen with Coves beach-inspired dark theme design.
-///
-/// Clean, lightweight layout with floating decorative bubbles.
-class LandingScreen extends StatefulWidget {
+class LandingScreen extends StatelessWidget {
   const LandingScreen({super.key});
-
-  @override
-  State<LandingScreen> createState() => _LandingScreenState();
-}
-
-class _LandingScreenState extends State<LandingScreen>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  // Floating bubbles animation
-  late AnimationController _bubbleController;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _bubbleController = AnimationController(
-      duration: const Duration(seconds: 8),
-      vsync: this,
-    )..repeat();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Pause continuous animations when app is backgrounded to save battery
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      _bubbleController.stop();
-    } else if (state == AppLifecycleState.resumed) {
-      if (!_bubbleController.isAnimating) {
-        _bubbleController.repeat();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _bubbleController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,9 +23,6 @@ class _LandingScreenState extends State<LandingScreen>
         children: [
           // Ocean gradient background
           _buildOceanGradient(screenHeight),
-
-          // Floating bubbles
-          _buildFloatingBubbles(),
 
           // Main content
           SafeArea(
@@ -115,79 +70,6 @@ class _LandingScreenState extends State<LandingScreen>
               AppColors.teal.withValues(alpha: 0.15),
             ],
             stops: const [0.0, 0.5, 1.0],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFloatingBubbles() {
-    return AnimatedBuilder(
-      animation: _bubbleController,
-      builder: (context, child) {
-        return Stack(
-          children: [
-            _buildBubble(
-              left: 20,
-              bottom: 100,
-              size: 80,
-              color: AppColors.coral,
-              offset: 0.0,
-            ),
-            _buildBubble(
-              right: 30,
-              bottom: 200,
-              size: 60,
-              color: AppColors.teal,
-              offset: 0.25,
-            ),
-            _buildBubble(
-              left: 60,
-              top: 150,
-              size: 50,
-              color: AppColors.coralLight,
-              offset: 0.5,
-            ),
-            _buildBubble(
-              right: 50,
-              top: 250,
-              size: 70,
-              color: AppColors.tealDark,
-              offset: 0.75,
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildBubble({
-    double? left,
-    double? right,
-    double? top,
-    double? bottom,
-    required double size,
-    required Color color,
-    required double offset,
-  }) {
-    final progress = (_bubbleController.value + offset) % 1.0;
-    final yOffset = math.sin(progress * 2 * math.pi) * 20;
-
-    return Positioned(
-      left: left,
-      right: right,
-      top: top != null ? top + yOffset : null,
-      bottom: bottom != null ? bottom - yOffset : null,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [
-              color.withValues(alpha: 0.2),
-              color.withValues(alpha: 0.05),
-            ],
           ),
         ),
       ),
