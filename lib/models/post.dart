@@ -180,6 +180,7 @@ class CommunityRef {
     required this.name,
     this.handle,
     this.avatar,
+    this.viewer,
   });
 
   factory CommunityRef.fromJson(Map<String, dynamic> json) {
@@ -188,12 +189,34 @@ class CommunityRef {
       name: json['name'] as String,
       handle: json['handle'] as String?,
       avatar: json['avatar'] as String?,
+      viewer: json['viewer'] != null
+          ? CommunityRefViewerState.fromJson(
+              json['viewer'] as Map<String, dynamic>,
+            )
+          : null,
     );
   }
   final String did;
   final String name;
   final String? handle;
   final String? avatar;
+
+  /// Current user's relationship with this community (if available)
+  final CommunityRefViewerState? viewer;
+}
+
+/// Viewer state for community ref embedded in posts
+class CommunityRefViewerState {
+  CommunityRefViewerState({this.subscribed});
+
+  factory CommunityRefViewerState.fromJson(Map<String, dynamic> json) {
+    return CommunityRefViewerState(
+      subscribed: json['subscribed'] as bool?,
+    );
+  }
+
+  /// Whether the current user is subscribed to this community
+  final bool? subscribed;
 }
 
 class PostStats {

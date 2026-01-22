@@ -385,26 +385,35 @@ class CovesApiService {
   /// List communities with optional filtering
   ///
   /// Fetches a list of communities with pagination support.
-  /// Requires authentication.
+  /// Requires authentication when filtering by subscribed communities.
   ///
   /// Parameters:
   /// - [limit]: Number of communities per page (default: 50, max: 100)
   /// - [cursor]: Pagination cursor from previous response
   /// - [sort]: Sort order - 'popular', 'new', or 'alphabetical' (default: 'popular')
+  /// - [subscribed]: If true, only return communities the user is subscribed to
   Future<CommunitiesResponse> listCommunities({
     int limit = 50,
     String? cursor,
     String sort = 'popular',
+    bool? subscribed,
   }) async {
     try {
       if (kDebugMode) {
-        debugPrint('📡 Fetching communities: sort=$sort, limit=$limit');
+        debugPrint(
+          '📡 Fetching communities: sort=$sort, limit=$limit, '
+          'subscribed=$subscribed',
+        );
       }
 
       final queryParams = <String, dynamic>{'limit': limit, 'sort': sort};
 
       if (cursor != null) {
         queryParams['cursor'] = cursor;
+      }
+
+      if (subscribed == true) {
+        queryParams['subscribed'] = 'true';
       }
 
       final response = await _dio.get(
@@ -738,6 +747,80 @@ class CovesApiService {
         debugPrint('❌ Error parsing actor comments response: $e');
       }
       throw ApiException('Failed to parse server response', originalError: e);
+    }
+  }
+
+  /// Subscribe to a community
+  ///
+  /// Subscribes the authenticated user to a community.
+  /// Requires authentication.
+  ///
+  /// Parameters:
+  /// - [community]: Community DID or handle (required)
+  ///
+  /// Returns the subscription URI on success.
+  Future<String> subscribeToCommunity({required String community}) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Subscribing to community: $community');
+      }
+
+      final response = await _dio.post(
+        '/xrpc/social.coves.community.subscribe',
+        data: {'community': community},
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Subscribed to community: $community');
+      }
+
+      final data = response.data as Map<String, dynamic>;
+      final uri = data['uri'] as String?;
+      if (uri == null || uri.isEmpty) {
+        throw ApiException('Server returned invalid subscription response');
+      }
+      return uri;
+    } on DioException catch (e) {
+      _handleDioException(e, 'subscribe to community');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error subscribing to community: $e');
+      }
+      throw ApiException('Failed to subscribe to community', originalError: e);
+    }
+  }
+
+  /// Unsubscribe from a community
+  ///
+  /// Unsubscribes the authenticated user from a community.
+  /// Requires authentication.
+  ///
+  /// Parameters:
+  /// - [community]: Community DID or handle (required)
+  Future<void> unsubscribeFromCommunity({required String community}) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Unsubscribing from community: $community');
+      }
+
+      await _dio.post(
+        '/xrpc/social.coves.community.unsubscribe',
+        data: {'community': community},
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Unsubscribed from community: $community');
+      }
+    } on DioException catch (e) {
+      _handleDioException(e, 'unsubscribe from community');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error unsubscribing from community: $e');
+      }
+      throw ApiException(
+        'Failed to unsubscribe from community',
+        originalError: e,
+      );
     }
   }
 

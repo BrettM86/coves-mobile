@@ -5,6 +5,7 @@ import '../models/feed_state.dart';
 import '../models/post.dart';
 import '../services/coves_api_service.dart';
 import 'auth_provider.dart';
+import 'community_subscription_provider.dart';
 import 'vote_provider.dart';
 
 /// Feed types available in the app
@@ -29,7 +30,9 @@ class MultiFeedProvider with ChangeNotifier {
     this._authProvider, {
     CovesApiService? apiService,
     VoteProvider? voteProvider,
-  }) : _voteProvider = voteProvider {
+    CommunitySubscriptionProvider? subscriptionProvider,
+  })  : _voteProvider = voteProvider,
+        _subscriptionProvider = subscriptionProvider {
     // Use injected service (for testing) or create new one (for production)
     // Pass token getter, refresh handler, and sign out handler to API service
     // for automatic fresh token retrieval and automatic token refresh on 401
@@ -82,6 +85,7 @@ class MultiFeedProvider with ChangeNotifier {
   final AuthProvider _authProvider;
   late final CovesApiService _apiService;
   final VoteProvider? _voteProvider;
+  final CommunitySubscriptionProvider? _subscriptionProvider;
 
   // Track previous auth state to detect transitions
   bool _wasAuthenticated = false;
@@ -299,6 +303,20 @@ class MultiFeedProvider with ChangeNotifier {
             voteDirection: viewer?.vote,
             voteUri: viewer?.voteUri,
           );
+        }
+      }
+
+      // Initialize subscription state from community viewer data
+      // This ensures the menu shows correct subscribe/unsubscribe state
+      if (_authProvider.isAuthenticated && _subscriptionProvider != null) {
+        for (final feedItem in response.feed) {
+          final communityViewer = feedItem.post.community.viewer;
+          if (communityViewer?.subscribed != null) {
+            _subscriptionProvider.setInitialSubscriptionState(
+              communityDid: feedItem.post.community.did,
+              isSubscribed: communityViewer!.subscribed!,
+            );
+          }
         }
       }
     } on Exception catch (e) {

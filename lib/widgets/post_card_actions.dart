@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
 import '../models/post.dart';
 import '../providers/auth_provider.dart';
+import '../providers/community_subscription_provider.dart';
 import '../providers/vote_provider.dart';
 import '../utils/date_time_utils.dart';
 import 'icons/animated_heart_icon.dart';
@@ -27,6 +28,72 @@ class PostCardActions extends StatelessWidget {
   final FeedViewPost post;
   final bool showCommentButton;
 
+  Future<void> _handleMenuAction(BuildContext context, String action) async {
+    final communityDid = post.post.community.did;
+    final communityName = post.post.community.name;
+
+    if (action == 'subscribe') {
+      // Check authentication
+      final authProvider = context.read<AuthProvider>();
+      if (!authProvider.isAuthenticated) {
+        if (!context.mounted) return;
+        final shouldSignIn = await SignInDialog.show(
+          context,
+          message: 'You need to sign in to subscribe to communities.',
+        );
+        if ((shouldSignIn ?? false) && context.mounted) {
+          if (kDebugMode) {
+            debugPrint('Navigate to sign-in screen');
+          }
+        }
+        return;
+      }
+
+      // Toggle subscription
+      try {
+        await HapticFeedback.lightImpact();
+      } on PlatformException {
+        // Haptics not supported
+      }
+
+      if (!context.mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      final subscriptionProvider =
+          context.read<CommunitySubscriptionProvider>();
+
+      try {
+        final nowSubscribed = await subscriptionProvider.toggleSubscription(
+          communityDid: communityDid,
+        );
+
+        if (context.mounted) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                nowSubscribed
+                    ? 'Subscribed to !$communityName'
+                    : 'Unsubscribed from !$communityName',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } on Exception catch (e) {
+        if (kDebugMode) {
+          debugPrint('Failed to toggle subscription: $e');
+        }
+        if (context.mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Could not update subscription. Please try again.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -37,28 +104,71 @@ class PostCardActions extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Three dots menu button
-            Semantics(
-              button: true,
-              label: 'Post options menu',
-              child: InkWell(
-                onTap: () {
-                  // TODO: Show post options menu
-                  if (kDebugMode) {
-                    debugPrint('Menu button tapped for post');
-                  }
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 10,
-                  ),
-                  child: Icon(
+            Consumer<CommunitySubscriptionProvider>(
+              builder: (context, subscriptionProvider, child) {
+                final communityDid = post.post.community.did;
+                final communityName = post.post.community.name;
+                final isSubscribed =
+                    subscriptionProvider.isSubscribed(communityDid);
+                final isPending = subscriptionProvider.isPending(communityDid);
+
+                return PopupMenuButton<String>(
+                  icon: Icon(
                     Icons.more_horiz,
                     size: 20,
                     color: AppColors.textPrimary.withValues(alpha: 0.6),
                   ),
-                ),
-              ),
+                  tooltip: 'Post options',
+                  color: AppColors.backgroundSecondary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  onSelected: (action) => _handleMenuAction(context, action),
+                  itemBuilder: (context) => [
+                    PopupMenuItem<String>(
+                      value: 'subscribe',
+                      enabled: !isPending,
+                      child: Row(
+                        children: [
+                          if (isPending)
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                          else
+                            Icon(
+                              isSubscribed
+                                  ? Icons.remove_circle_outline
+                                  : Icons.add_circle_outline,
+                              size: 20,
+                            ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              isPending
+                                  ? (isSubscribed
+                                      ? 'Unsubscribing...'
+                                      : 'Subscribing...')
+                                  : (isSubscribed
+                                      ? 'Unsubscribe from !$communityName'
+                                      : 'Subscribe to !$communityName'),
+                            ),
+                          ),
+                          if (isSubscribed && !isPending)
+                            const Icon(
+                              Icons.check,
+                              color: AppColors.primary,
+                              size: 20,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
 
             // Share button
@@ -211,8 +321,10 @@ class PostCardActions extends StatelessWidget {
                         }
                         if (context.mounted) {
                           messenger.showSnackBar(
-                            SnackBar(
-                              content: Text('Failed to vote: $e'),
+                            const SnackBar(
+                              content: Text(
+                                'Could not update your vote. Please try again.',
+                              ),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );

@@ -11,6 +11,7 @@ import 'config/oauth_config.dart';
 import 'constants/app_colors.dart';
 import 'models/post.dart';
 import 'providers/auth_provider.dart';
+import 'providers/community_subscription_provider.dart';
 import 'providers/multi_feed_provider.dart';
 import 'providers/user_profile_provider.dart';
 import 'providers/vote_provider.dart';
@@ -94,19 +95,32 @@ Future<void> main() async {
                     authProvider: authProvider,
                   ),
             ),
-            ChangeNotifierProxyProvider2<
+            ChangeNotifierProvider(
+              create: (_) => CommunitySubscriptionProvider(
+                authProvider: authProvider,
+              ),
+            ),
+            ChangeNotifierProxyProvider3<
               AuthProvider,
               VoteProvider,
+              CommunitySubscriptionProvider,
               MultiFeedProvider
             >(
               create:
                   (context) => MultiFeedProvider(
                     authProvider,
                     voteProvider: context.read<VoteProvider>(),
+                    subscriptionProvider:
+                        context.read<CommunitySubscriptionProvider>(),
                   ),
-              update: (context, auth, vote, previous) {
+              update: (context, auth, vote, subscription, previous) {
                 // Reuse existing provider to maintain state across rebuilds
-                return previous ?? MultiFeedProvider(auth, voteProvider: vote);
+                return previous ??
+                    MultiFeedProvider(
+                      auth,
+                      voteProvider: vote,
+                      subscriptionProvider: subscription,
+                    );
               },
             ),
             // CommentsProviderCache manages per-post CommentsProvider instances
