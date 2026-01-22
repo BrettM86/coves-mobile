@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../constants/app_colors.dart';
 import '../models/post.dart';
@@ -68,13 +67,22 @@ class PostCardActions extends StatelessWidget {
               label: 'Share post',
               child: InkWell(
                 onTap: () async {
-                  // Add haptic feedback
-                  await HapticFeedback.lightImpact();
+                  try {
+                    await HapticFeedback.lightImpact();
+                  } on PlatformException {
+                    // Haptics not supported on this platform - ignore
+                  }
 
-                  // Share post title and URI
-                  final postUri = post.post.uri;
-                  final title = post.post.title ?? 'Check out this post';
-                  await Share.share('$title\n\n$postUri', subject: title);
+                  if (!context.mounted) {
+                    return;
+                  }
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Share feature coming soon!'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
                 },
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -181,8 +189,15 @@ class PostCardActions extends StatelessWidget {
                         return;
                       }
 
+                      // Capture messenger before async gap
+                      final messenger = ScaffoldMessenger.of(context);
+
                       // Light haptic feedback on both like and unlike
-                      await HapticFeedback.lightImpact();
+                      try {
+                        await HapticFeedback.lightImpact();
+                      } on PlatformException {
+                        // Haptics not supported on this platform - ignore
+                      }
 
                       // Toggle vote with optimistic update
                       try {
@@ -194,7 +209,14 @@ class PostCardActions extends StatelessWidget {
                         if (kDebugMode) {
                           debugPrint('Failed to toggle vote: $e');
                         }
-                        // TODO: Show error snackbar
+                        if (context.mounted) {
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to vote: $e'),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
                       }
                     },
                     child: Padding(

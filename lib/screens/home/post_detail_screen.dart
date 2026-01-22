@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../constants/app_colors.dart';
 import '../../models/comment.dart';
@@ -12,7 +11,6 @@ import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
 import '../../providers/vote_provider.dart';
 import '../../services/comments_provider_cache.dart';
-import '../../utils/community_handle_utils.dart';
 import '../../utils/error_messages.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/comments_header.dart';
@@ -194,8 +192,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     // Remove auth listener
     try {
       context.read<AuthProvider>().removeListener(_onAuthChanged);
-    } on Exception {
-      // Context may not be valid during dispose
+    } on Exception catch (e) {
+      // Context may not be valid during dispose - expected behavior
+      if (kDebugMode) {
+        debugPrint('dispose: auth listener removal failed: $e');
+      }
     }
 
     // Release provider pin in cache (prevents LRU eviction disposing an active
@@ -203,8 +204,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     if (_isInitialized) {
       try {
         _commentsCache?.releaseProvider(widget.post.post.uri);
-      } on Exception {
-        // Cache may already be disposed
+      } on Exception catch (e) {
+        // Cache may already be disposed - expected behavior
+        if (kDebugMode) {
+          debugPrint('dispose: cache release failed: $e');
+        }
       }
     }
 
@@ -212,8 +216,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     if (_isInitialized && !_providerInvalidated) {
       try {
         _commentsProvider.removeListener(_onProviderChanged);
-      } on Exception {
-        // Provider may already be disposed
+      } on Exception catch (e) {
+        // Provider may already be disposed - expected behavior
+        if (kDebugMode) {
+          debugPrint('dispose: provider listener removal failed: $e');
+        }
       }
     }
     _scrollController.dispose();
@@ -305,96 +312,96 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
-  /// Build community title with avatar and handle
+  /// Build community title with avatar, name on top and instance below
   Widget _buildCommunityTitle() {
     final community = widget.post.post.community;
-    final displayHandle = CommunityHandleUtils.formatHandleForDisplay(
-      community.handle,
-    );
+
+    // Extract instance from handle - take last two segments
+    // e.g., "test-science.coves.social" -> "coves.social"
+    var instance = 'coves.social'; // default
+    if (community.handle != null && community.handle!.contains('.')) {
+      final parts = community.handle!.split('.');
+      if (parts.length >= 2) {
+        // Take last two segments for the instance
+        instance = parts.sublist(parts.length - 2).join('.');
+      }
+    }
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         // Community avatar
-        if (community.avatar != null && community.avatar!.isNotEmpty)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: CachedNetworkImage(
-              imageUrl: community.avatar!,
-              width: 32,
-              height: 32,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => _buildFallbackAvatar(community),
-              errorWidget:
-                  (context, url, error) => _buildFallbackAvatar(community),
-            ),
-          )
-        else
-          _buildFallbackAvatar(community),
-        const SizedBox(width: 8),
-        // Community handle with styled parts
-        if (displayHandle != null)
-          Flexible(child: _buildStyledHandle(displayHandle))
-        else
-          Flexible(
-            child: Text(
-              community.name,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              overflow: TextOverflow.ellipsis,
-            ),
+        _buildCommunityAvatar(community),
+        const SizedBox(width: 10),
+        // Text column
+        Flexible(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Community name with ! prefix - bigger, teal
+              Text(
+                '!${community.name}',
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.communityName,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              // Instance below - smaller
+              Text(
+                instance,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                  color: AppColors.textSecondary.withValues(alpha: 0.8),
+                ),
+              ),
+            ],
           ),
+        ),
       ],
     );
   }
 
-  /// Build styled community handle with color-coded parts
-  Widget _buildStyledHandle(String displayHandle) {
-    // Format: !gaming@coves.social
-    final atIndex = displayHandle.indexOf('@');
-    final communityPart = displayHandle.substring(0, atIndex);
-    final instancePart = displayHandle.substring(atIndex);
+  /// Build community avatar or fallback
+  Widget _buildCommunityAvatar(CommunityRef community) {
+    const size = 28.0;
 
-    return Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(
-            text: communityPart,
-            style: const TextStyle(
-              color: AppColors.communityName,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          TextSpan(
-            text: instancePart,
-            style: TextStyle(
-              color: AppColors.textSecondary.withValues(alpha: 0.8),
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-      overflow: TextOverflow.ellipsis,
-    );
+    if (community.avatar != null && community.avatar!.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(size / 2),
+        child: CachedNetworkImage(
+          imageUrl: community.avatar!,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          placeholder: (context, url) => _buildFallbackAvatar(community, size),
+          errorWidget: (_, __, ___) => _buildFallbackAvatar(community, size),
+        ),
+      );
+    }
+
+    return _buildFallbackAvatar(community, size);
   }
 
   /// Build fallback avatar with first letter
-  Widget _buildFallbackAvatar(CommunityRef community) {
+  Widget _buildFallbackAvatar(CommunityRef community, double size) {
     final firstLetter = community.name.isNotEmpty ? community.name[0] : '?';
     return Container(
-      width: 32,
-      height: 32,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.communityName.withValues(alpha: 0.2),
+        shape: BoxShape.circle,
       ),
       child: Center(
         child: Text(
           firstLetter.toUpperCase(),
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 14,
+          style: TextStyle(
+            color: AppColors.communityName,
+            fontSize: size * 0.45,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -404,14 +411,78 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   /// Handle share button tap
   Future<void> _handleShare() async {
-    // Add haptic feedback
-    await HapticFeedback.lightImpact();
+    // Haptic feedback is non-essential, silently fail if unsupported
+    try {
+      await HapticFeedback.lightImpact();
+    } on PlatformException {
+      // Haptics not supported on this platform - ignore
+    }
 
-    // TODO: Generate proper deep link URL when deep linking is implemented
-    final postUri = widget.post.post.uri;
-    final title = widget.post.post.title ?? 'Check out this post';
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Share feature coming soon!'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 
-    await Share.share('$title\n\n$postUri', subject: title);
+  /// Handle menu action selection
+  Future<void> _handleMenuAction(String action) async {
+    // Haptic feedback is non-essential, silently fail if unsupported
+    try {
+      await HapticFeedback.lightImpact();
+    } on PlatformException {
+      // Haptics not supported on this platform - ignore
+    }
+
+    switch (action) {
+      case 'copy_link':
+        final postUri = widget.post.post.uri;
+        try {
+          await Clipboard.setData(ClipboardData(text: postUri));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Link copied to clipboard'),
+                behavior: SnackBarBehavior.floating,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        } on PlatformException {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to copy link to clipboard'),
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: AppColors.primary,
+              ),
+            );
+          }
+        }
+      case 'report':
+        // TODO: Implement report functionality
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Report feature coming soon!'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      case 'hide':
+        // TODO: Implement hide functionality
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Hide feature coming soon!'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+    }
   }
 
   /// Build bottom action bar with vote, save, and comment actions
@@ -470,7 +541,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             final messenger = ScaffoldMessenger.of(context);
 
             // Light haptic feedback on both like and unlike
-            await HapticFeedback.lightImpact();
+            // Haptic feedback is non-essential, silently fail if unsupported
+            try {
+              await HapticFeedback.lightImpact();
+            } on PlatformException {
+              // Haptics not supported on this platform - ignore
+            }
             try {
               await voteProvider.toggleVote(
                 postUri: widget.post.post.uri,
@@ -686,8 +762,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 slivers: [
-                  // Floating app bar that hides on scroll down,
-                  // shows on scroll up
+                  // Pinned app bar that stays visible when scrolling
                   SliverAppBar(
                     backgroundColor: AppColors.background,
                     surfaceTintColor: Colors.transparent,
@@ -695,13 +770,50 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     title: _buildCommunityTitle(),
                     centerTitle: false,
                     elevation: 0,
-                    floating: true,
-                    snap: true,
+                    pinned: true,
                     actions: [
                       IconButton(
                         icon: const ShareIcon(color: AppColors.textPrimary),
                         onPressed: _handleShare,
                         tooltip: 'Share',
+                      ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert),
+                        tooltip: 'More options',
+                        color: AppColors.backgroundSecondary,
+                        onSelected: _handleMenuAction,
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'copy_link',
+                            child: Row(
+                              children: [
+                                Icon(Icons.link, size: 20),
+                                SizedBox(width: 12),
+                                Text('Copy link'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'report',
+                            child: Row(
+                              children: [
+                                Icon(Icons.flag_outlined, size: 20),
+                                SizedBox(width: 12),
+                                Text('Report'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'hide',
+                            child: Row(
+                              children: [
+                                Icon(Icons.visibility_off_outlined, size: 20),
+                                SizedBox(width: 12),
+                                Text('Hide post'),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

@@ -40,6 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void dispose() {
     _handleController.dispose();
+    _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
     super.dispose();
   }
@@ -219,7 +220,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
+        if (!didPop && context.canPop()) {
           context.pop();
         }
       },
@@ -317,21 +318,24 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildAppBar(BuildContext context) {
+    final canGoBack = context.canPop();
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Row(
         children: [
-          IconButton(
-            icon: Icon(
-              Icons.arrow_back_rounded,
-              color: AppColors.textSecondary,
+          if (canGoBack)
+            IconButton(
+              icon: Icon(
+                Icons.arrow_back_rounded,
+                color: AppColors.textSecondary,
+              ),
+              onPressed: () => context.pop(),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.backgroundSecondary,
+                padding: const EdgeInsets.all(12),
+              ),
             ),
-            onPressed: () => context.pop(),
-            style: IconButton.styleFrom(
-              backgroundColor: AppColors.backgroundSecondary,
-              padding: const EdgeInsets.all(12),
-            ),
-          ),
         ],
       ),
     );
