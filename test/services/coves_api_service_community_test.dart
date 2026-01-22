@@ -269,8 +269,11 @@ void main() {
           'title': 'Test Post Title',
           'content': 'Test post content',
           'embed': {
-            'uri': 'https://example.com/article',
-            'title': 'Article Title',
+            r'$type': 'social.coves.embed.external',
+            'external': {
+              'uri': 'https://example.com/article',
+              'title': 'Article Title',
+            },
           },
           'langs': ['en'],
           'labels': {
@@ -285,7 +288,7 @@ void main() {
         community: 'did:plc:community1',
         title: 'Test Post Title',
         content: 'Test post content',
-        embed: const ExternalEmbedInput(
+        embed: ExternalEmbedInput(
           uri: 'https://example.com/article',
           title: 'Article Title',
         ),
@@ -341,7 +344,7 @@ void main() {
 
       final response = await apiService.createPost(
         community: 'did:plc:community1',
-        embed: const ExternalEmbedInput(uri: 'https://example.com/article'),
+        embed: ExternalEmbedInput(uri: 'https://example.com/article'),
       );
 
       expect(response, isA<CreatePostResponse>());

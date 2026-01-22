@@ -233,42 +233,119 @@ void main() {
 
   group('ExternalEmbedInput', () {
     test('should serialize complete JSON', () {
-      const embed = ExternalEmbedInput(
+      final embed = ExternalEmbedInput(
         uri: 'https://example.com/article',
         title: 'Article Title',
         description: 'Article description',
-        thumb: 'https://example.com/thumb.jpg',
       );
 
       final json = embed.toJson();
 
-      expect(json['uri'], 'https://example.com/article');
-      expect(json['title'], 'Article Title');
-      expect(json['description'], 'Article description');
-      expect(json['thumb'], 'https://example.com/thumb.jpg');
+      expect(json[r'$type'], 'social.coves.embed.external');
+      expect(json['external']['uri'], 'https://example.com/article');
+      expect(json['external']['title'], 'Article Title');
+      expect(json['external']['description'], 'Article description');
     });
 
     test('should serialize minimal JSON with only required fields', () {
-      const embed = ExternalEmbedInput(
+      final embed = ExternalEmbedInput(
         uri: 'https://example.com/article',
       );
 
       final json = embed.toJson();
 
-      expect(json['uri'], 'https://example.com/article');
-      expect(json.containsKey('title'), false);
-      expect(json.containsKey('description'), false);
-      expect(json.containsKey('thumb'), false);
+      expect(json['external']['uri'], 'https://example.com/article');
+      expect((json['external'] as Map).containsKey('title'), false);
+      expect((json['external'] as Map).containsKey('description'), false);
     });
 
-    test('should be const constructible', () {
-      const embed = ExternalEmbedInput(
+    test('should validate URI and store fields correctly', () {
+      final embed = ExternalEmbedInput(
         uri: 'https://example.com',
         title: 'Test',
       );
 
       expect(embed.uri, 'https://example.com');
       expect(embed.title, 'Test');
+    });
+
+    test('should serialize embed with uri and description only', () {
+      final embed = ExternalEmbedInput(
+        uri: 'https://example.com/article',
+        description: 'Article description',
+      );
+
+      final json = embed.toJson();
+
+      expect(json['external']['uri'], 'https://example.com/article');
+      expect((json['external'] as Map).containsKey('title'), false);
+      expect(json['external']['description'], 'Article description');
+    });
+
+    test('should throw ArgumentError for empty URI', () {
+      expect(
+        () => ExternalEmbedInput(uri: ''),
+        throwsA(
+          isA<ArgumentError>()
+              .having((e) => e.name, 'name', 'uri')
+              .having((e) => e.message, 'message', 'URI cannot be empty'),
+        ),
+      );
+    });
+
+    test('should throw ArgumentError for ftp scheme', () {
+      expect(
+        () => ExternalEmbedInput(uri: 'ftp://example.com/file'),
+        throwsA(
+          isA<ArgumentError>()
+              .having((e) => e.name, 'name', 'uri')
+              .having(
+                (e) => e.message,
+                'message',
+                'URI must be a valid HTTP or HTTPS URL',
+              ),
+        ),
+      );
+    });
+
+    test('should throw ArgumentError for javascript scheme', () {
+      expect(
+        () => ExternalEmbedInput(uri: 'javascript:alert(1)'),
+        throwsA(
+          isA<ArgumentError>()
+              .having((e) => e.name, 'name', 'uri')
+              .having(
+                (e) => e.message,
+                'message',
+                'URI must be a valid HTTP or HTTPS URL',
+              ),
+        ),
+      );
+    });
+
+    test('should throw ArgumentError for malformed URL', () {
+      expect(
+        () => ExternalEmbedInput(uri: 'not a valid url'),
+        throwsA(
+          isA<ArgumentError>()
+              .having((e) => e.name, 'name', 'uri')
+              .having(
+                (e) => e.message,
+                'message',
+                'URI must be a valid HTTP or HTTPS URL',
+              ),
+        ),
+      );
+    });
+
+    test('should accept valid HTTP URL', () {
+      final embed = ExternalEmbedInput(uri: 'http://example.com');
+      expect(embed.uri, 'http://example.com');
+    });
+
+    test('should accept valid HTTPS URL', () {
+      final embed = ExternalEmbedInput(uri: 'https://example.com/path?query=1');
+      expect(embed.uri, 'https://example.com/path?query=1');
     });
   });
 
@@ -321,7 +398,7 @@ void main() {
         community: 'did:plc:community1',
         title: 'Test Post',
         content: 'Post content here',
-        embed: const ExternalEmbedInput(
+        embed: ExternalEmbedInput(
           uri: 'https://example.com',
           title: 'Link Title',
         ),

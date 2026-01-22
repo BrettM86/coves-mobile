@@ -206,7 +206,6 @@ class ExternalEmbedInput {
     required String uri,
     String? title,
     String? description,
-    String? thumb,
   }) {
     // Validate URI is not empty
     if (uri.isEmpty) {
@@ -229,7 +228,6 @@ class ExternalEmbedInput {
       uri: uri,
       title: title,
       description: description,
-      thumb: thumb,
     );
   }
 
@@ -237,7 +235,6 @@ class ExternalEmbedInput {
     required this.uri,
     this.title,
     this.description,
-    this.thumb,
   });
 
   Map<String, dynamic> toJson() {
@@ -250,9 +247,6 @@ class ExternalEmbedInput {
     }
     if (description != null) {
       external['description'] = description;
-    }
-    if (thumb != null) {
-      external['thumb'] = thumb;
     }
 
     // Return proper embed structure expected by backend
@@ -271,8 +265,21 @@ class ExternalEmbedInput {
   /// Description of the linked content
   final String? description;
 
-  /// Thumbnail URL
-  final String? thumb;
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExternalEmbedInput &&
+          runtimeType == other.runtimeType &&
+          uri == other.uri &&
+          title == other.title &&
+          description == other.description;
+
+  @override
+  int get hashCode => Object.hash(uri, title, description);
+
+  @override
+  String toString() =>
+      'ExternalEmbedInput(uri: $uri, title: $title, description: $description)';
 }
 
 /// Self-applied content labels

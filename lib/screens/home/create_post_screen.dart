@@ -34,7 +34,7 @@ const int kContentMaxLength = 10000;
 ///
 /// Features:
 /// - Community selector (required)
-/// - Optional title, URL, thumbnail, and body fields
+/// - Optional title, URL, and body fields
 /// - Language dropdown and NSFW toggle
 /// - Form validation (at least one of title/body/URL required)
 /// - Loading states and error handling
@@ -54,14 +54,12 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   // Text controllers
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _urlController = TextEditingController();
-  final TextEditingController _thumbnailController = TextEditingController();
   final TextEditingController _bodyController = TextEditingController();
 
   // Scroll and focus
   final ScrollController _scrollController = ScrollController();
   final FocusNode _titleFocusNode = FocusNode();
   final FocusNode _urlFocusNode = FocusNode();
-  final FocusNode _thumbnailFocusNode = FocusNode();
   final FocusNode _bodyFocusNode = FocusNode();
   double _lastKeyboardHeight = 0;
 
@@ -94,12 +92,10 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     WidgetsBinding.instance.removeObserver(this);
     _titleController.dispose();
     _urlController.dispose();
-    _thumbnailController.dispose();
     _bodyController.dispose();
     _scrollController.dispose();
     _titleFocusNode.dispose();
     _urlFocusNode.dispose();
-    _thumbnailFocusNode.dispose();
     _bodyFocusNode.dispose();
     super.dispose();
   }
@@ -189,9 +185,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           title: _titleController.text.trim().isNotEmpty
               ? _titleController.text.trim()
               : null,
-          thumb: _thumbnailController.text.trim().isNotEmpty
-              ? _thumbnailController.text.trim()
-              : null,
         );
       }
 
@@ -269,7 +262,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     setState(() {
       _titleController.clear();
       _urlController.clear();
-      _thumbnailController.clear();
       _bodyController.clear();
       _selectedCommunity = null;
       _language = 'en';
@@ -297,9 +289,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           title: _titleController.text.trim().isNotEmpty
               ? _titleController.text.trim()
               : null,
-          thumb: _thumbnailController.text.trim().isNotEmpty
-              ? _thumbnailController.text.trim()
-              : null,
         ),
         data: {
           r'$type': EmbedTypes.external,
@@ -307,8 +296,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
             'uri': url,
             if (_titleController.text.trim().isNotEmpty)
               'title': _titleController.text.trim(),
-            if (_thumbnailController.text.trim().isNotEmpty)
-              'thumb': _thumbnailController.text.trim(),
           },
         },
       );
@@ -454,18 +441,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                 maxLines: 1,
                 keyboardType: TextInputType.url,
               ),
-
-              // Thumbnail field (only visible when URL is filled)
-              if (_urlController.text.trim().isNotEmpty) ...[
-                const SizedBox(height: 16),
-                _buildTextField(
-                  controller: _thumbnailController,
-                  focusNode: _thumbnailFocusNode,
-                  hintText: 'Thumbnail URL',
-                  maxLines: 1,
-                  keyboardType: TextInputType.url,
-                ),
-              ],
 
               const SizedBox(height: 16),
 
