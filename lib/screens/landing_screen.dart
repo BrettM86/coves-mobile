@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../constants/app_colors.dart';
+import '../widgets/bluesky_sign_in_button.dart';
 import '../widgets/primary_button.dart';
 
 /// Landing screen with Coves beach-inspired dark theme design.
@@ -197,6 +198,13 @@ class LandingScreen extends StatelessWidget {
         // Sign in button
         PrimaryButton(
           title: 'Sign in',
+          onPressed: () => context.push('/login'),
+        ),
+
+        const SizedBox(height: 14),
+
+        // Sign in with Bluesky button
+        BlueskySignInButton(
           onPressed: () => context.push('/login'),
         ),
 

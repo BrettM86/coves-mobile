@@ -33,6 +33,9 @@ class BlueskyColors {
   /// Link color - Bluesky blue
   static const linkBlue = Color(0xFF1185FE);
 
+  /// Link color lightened - for press states
+  static const linkBlueLight = Color(0xFF4AABFF);
+
   /// Avatar fallback background
   static const avatarFallback = Color(0xFF2E3D4F);
 
