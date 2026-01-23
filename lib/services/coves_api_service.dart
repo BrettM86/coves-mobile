@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
@@ -821,6 +823,88 @@ class CovesApiService {
         'Failed to unsubscribe from community',
         originalError: e,
       );
+    }
+  }
+
+  /// Update a community's profile (e.g., avatar)
+  ///
+  /// Updates a community's profile with a new avatar image.
+  /// Requires authentication and admin privileges (backend enforces).
+  ///
+  /// Parameters:
+  /// - [communityDid]: The DID of the community to update (required)
+  /// - [imageBytes]: The avatar image bytes (required, max 1 MB)
+  /// - [mimeType]: The MIME type of the image (required)
+  ///   Supported: 'image/jpeg', 'image/png', 'image/webp'
+  ///
+  /// Returns [CreateCommunityResponse] with updated community info.
+  ///
+  /// Throws:
+  /// - [ApiException] if image exceeds 1 MB or has unsupported MIME type
+  /// - [AuthenticationException] if not authenticated
+  /// - [ApiException] for other API errors
+  Future<CreateCommunityResponse> updateCommunity({
+    required String communityDid,
+    required Uint8List imageBytes,
+    required String mimeType,
+  }) async {
+    // Validate image size (max 1 MB)
+    const maxSizeBytes = 1024 * 1024; // 1 MB
+    if (imageBytes.length > maxSizeBytes) {
+      throw ApiException(
+        'Image size exceeds maximum of 1 MB '
+        '(${(imageBytes.length / 1024 / 1024).toStringAsFixed(2)} MB)',
+      );
+    }
+
+    // Validate MIME type
+    const supportedMimeTypes = {'image/jpeg', 'image/png', 'image/webp'};
+    if (!supportedMimeTypes.contains(mimeType)) {
+      throw ApiException(
+        'Unsupported image type: $mimeType. '
+        'Supported types: ${supportedMimeTypes.join(', ')}',
+      );
+    }
+
+    try {
+      if (kDebugMode) {
+        debugPrint(
+          '📡 Updating community avatar: $communityDid '
+          '(${imageBytes.length} bytes, $mimeType)',
+        );
+      }
+
+      // Encode image bytes to base64
+      final avatarBlob = base64Encode(imageBytes);
+
+      final requestBody = <String, dynamic>{
+        'communityDid': communityDid,
+        'avatarBlob': avatarBlob,
+        'avatarMimeType': mimeType,
+      };
+
+      final response = await _dio.post(
+        '/xrpc/social.coves.community.update',
+        data: requestBody,
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Community avatar updated successfully');
+      }
+
+      return CreateCommunityResponse.fromJson(
+        response.data as Map<String, dynamic>,
+      );
+    } on DioException catch (e) {
+      _handleDioException(e, 'update community');
+    } catch (e) {
+      if (e is ApiException) {
+        rethrow;
+      }
+      if (kDebugMode) {
+        debugPrint('❌ Error updating community: $e');
+      }
+      throw ApiException('Failed to update community', originalError: e);
     }
   }
 
