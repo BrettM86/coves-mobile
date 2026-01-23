@@ -25,8 +25,8 @@ class AppColors {
   // BRAND COLORS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /// Primary coral - warm orange (main accent)
-  static const coral = Color(0xFFF08C59);
+  /// Primary coral - energized warm orange (main accent)
+  static const coral = Color(0xFFFF8040);
 
   /// Coral light - hover/glow states
   static const coralLight = Color(0xFFFFB468);
