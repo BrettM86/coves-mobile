@@ -1,15 +1,17 @@
-import 'dart:io';
+import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
 import '../../models/community.dart';
+import '../../models/picked_image.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
+import '../../utils/image_picker_utils.dart';
+import '../../widgets/image_source_picker.dart';
 
 /// Admin handles that can create communities
 const Set<String> kAdminHandles = {
@@ -65,8 +67,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
   bool _isLoadingCommunities = false;
   List<CommunityView> _communities = [];
   CommunityView? _selectedCommunity;
-  File? _selectedImage;
-  final ImagePicker _imagePicker = ImagePicker();
+  PickedImage? _selectedImage;
 
   // Computed state
   bool get _isFormValid {
@@ -696,7 +697,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(50),
                           child: Image.file(
-                            _selectedImage!,
+                            _selectedImage!.file,
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -962,110 +963,34 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
 
   Future<void> _pickAndUploadImage() async {
     // Show bottom sheet to choose between gallery and camera
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: AppColors.backgroundSecondary,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: AppColors.border,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const Text(
-                  'Select Image Source',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.photo_library,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  title: const Text(
-                    'Choose from Gallery',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  subtitle: const Text(
-                    'Select an existing photo',
-                    style: TextStyle(color: Color(0xFFB6C2D2), fontSize: 12),
-                  ),
-                  onTap: () => Navigator.pop(context, ImageSource.gallery),
-                ),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.teal.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.camera_alt,
-                      color: AppColors.teal,
-                    ),
-                  ),
-                  title: const Text(
-                    'Take a Photo',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  subtitle: const Text(
-                    'Use camera to capture',
-                    style: TextStyle(color: Color(0xFFB6C2D2), fontSize: 12),
-                  ),
-                  onTap: () => Navigator.pop(context, ImageSource.camera),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (source == null) {
-      return;
-    }
+    final source = await ImageSourcePicker.show(context);
+    if (source == null) return;
 
     try {
-      final pickedFile = await _imagePicker.pickImage(
-        source: source,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 85,
-      );
-
-      if (pickedFile != null && mounted) {
+      final picked = await ImagePickerUtils.pickImage(source);
+      if (picked != null && mounted) {
         setState(() {
-          _selectedImage = File(pickedFile.path);
+          _selectedImage = picked;
         });
       }
-    } on Exception catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error picking image: $e');
+    } on ImageValidationException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
+    } on Exception catch (e, stackTrace) {
+      developer.log(
+        'Error picking image',
+        name: 'CommunitiesAdminPanel',
+        error: e,
+        stackTrace: stackTrace,
+        level: 1000, // Error level
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1088,24 +1013,9 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
     });
 
     try {
-      // Read the image file as bytes
-      final imageBytes = await _selectedImage!.readAsBytes();
-
-      // Determine MIME type from file extension
-      final extension = _selectedImage!.path.split('.').last.toLowerCase();
-      String mimeType;
-      switch (extension) {
-        case 'jpg':
-        case 'jpeg':
-          mimeType = 'image/jpeg';
-        case 'png':
-          mimeType = 'image/png';
-        case 'webp':
-          mimeType = 'image/webp';
-        default:
-          // Default to JPEG for unknown extensions
-          mimeType = 'image/jpeg';
-      }
+      // Use bytes and mimeType from PickedImage (already read during picking)
+      final imageBytes = _selectedImage!.bytes;
+      final mimeType = _selectedImage!.mimeType;
 
       if (kDebugMode) {
         debugPrint(
@@ -1140,10 +1050,14 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
         // Reload communities list to show updated avatar
         await _loadCommunities();
       }
-    } on ApiException catch (e) {
-      if (kDebugMode) {
-        debugPrint('API error uploading avatar: ${e.message}');
-      }
+    } on ApiException catch (e, stackTrace) {
+      developer.log(
+        'API error uploading avatar',
+        name: 'CommunitiesAdminPanel',
+        error: e,
+        stackTrace: stackTrace,
+        level: 1000,
+      );
       if (mounted) {
         setState(() {
           _isSubmitting = false;
@@ -1157,10 +1071,13 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
         );
       }
     } catch (e, stackTrace) {
-      if (kDebugMode) {
-        debugPrint('Unexpected error in _uploadImage: $e');
-        debugPrint('Stack trace: $stackTrace');
-      }
+      developer.log(
+        'Unexpected error uploading avatar',
+        name: 'CommunitiesAdminPanel',
+        error: e,
+        stackTrace: stackTrace,
+        level: 1000,
+      );
       if (mounted) {
         setState(() {
           _isSubmitting = false;
