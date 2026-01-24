@@ -1,5 +1,6 @@
 import 'dart:developer' as developer;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -648,10 +649,17 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(50),
                           child: _selectedCommunity!.avatar != null
-                              ? Image.network(
-                                  _selectedCommunity!.avatar!,
+                              ? CachedNetworkImage(
+                                  imageUrl: '${_selectedCommunity!.avatar!}',
+                                  width: 100,
+                                  height: 100,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
+                                  fadeInDuration: Duration.zero,
+                                  fadeOutDuration: Duration.zero,
+                                  placeholder: (context, url) => Container(
+                                    color: AppColors.backgroundSecondary,
+                                  ),
+                                  errorWidget: (context, url, error) =>
                                       const Icon(
                                     Icons.workspaces_outlined,
                                     size: 40,
@@ -816,10 +824,17 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(60),
                         child: _selectedCommunity!.avatar != null
-                            ? Image.network(
-                                _selectedCommunity!.avatar!,
+                            ? CachedNetworkImage(
+                                imageUrl: '${_selectedCommunity!.avatar!}',
+                                width: 120,
+                                height: 120,
                                 fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
+                                fadeInDuration: Duration.zero,
+                                fadeOutDuration: Duration.zero,
+                                placeholder: (context, url) => Container(
+                                  color: AppColors.backgroundSecondary,
+                                ),
+                                errorWidget: (context, url, error) =>
                                     const Icon(
                                   Icons.workspaces_outlined,
                                   size: 48,
@@ -910,10 +925,17 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
                 child: community.avatar != null
-                    ? Image.network(
-                        community.avatar!,
+                    ? CachedNetworkImage(
+                        imageUrl: '${community.avatar!}',
+                        width: 40,
+                        height: 40,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
+                        fadeInDuration: Duration.zero,
+                        fadeOutDuration: Duration.zero,
+                        placeholder: (context, url) => Container(
+                          color: AppColors.backgroundSecondary,
+                        ),
+                        errorWidget: (context, url, error) =>
                             const Icon(
                           Icons.workspaces_outlined,
                           size: 20,
