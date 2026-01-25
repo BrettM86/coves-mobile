@@ -1004,8 +1004,155 @@ class CovesApiService {
     }
   }
 
+  /// Update the authenticated user's profile
+  ///
+  /// All parameters are optional - only non-null values will be sent to
+  /// the API. This allows updating individual fields without affecting others.
+  ///
+  /// Parameters:
+  /// - [displayName]: New display name (optional, max 64 chars)
+  /// - [bio]: New bio text (optional, max 256 chars)
+  /// - [avatarBytes]: Avatar image bytes (optional, max 1 MB)
+  /// - [avatarMimeType]: Avatar MIME type (required if avatarBytes provided)
+  /// - [bannerBytes]: Banner image bytes (optional, max 2 MB)
+  /// - [bannerMimeType]: Banner MIME type (required if bannerBytes provided)
+  ///
+  /// Returns [UpdateProfileResponse] with URI and CID of updated profile.
+  ///
+  /// Throws:
+  /// - [ApiException] if validation fails (size, MIME type, missing params)
+  /// - [AuthenticationException] if not authenticated
+  /// - [ApiException] for other API errors
+  Future<UpdateProfileResponse> updateProfile({
+    String? displayName,
+    String? bio,
+    Uint8List? avatarBytes,
+    String? avatarMimeType,
+    Uint8List? bannerBytes,
+    String? bannerMimeType,
+  }) async {
+    // Validate avatar if provided
+    if (avatarBytes != null) {
+      if (avatarMimeType == null) {
+        throw ApiException('avatarMimeType required when avatarBytes provided');
+      }
+      const maxAvatarBytes = 1024 * 1024; // 1 MB
+      if (avatarBytes.length > maxAvatarBytes) {
+        throw ApiException(
+          'Avatar size exceeds maximum of 1 MB '
+          '(${(avatarBytes.length / 1024 / 1024).toStringAsFixed(2)} MB)',
+        );
+      }
+      _validateImageMimeType(avatarMimeType);
+    }
+
+    // Validate banner if provided
+    if (bannerBytes != null) {
+      if (bannerMimeType == null) {
+        throw ApiException('bannerMimeType required when bannerBytes provided');
+      }
+      const maxBannerBytes = 2 * 1024 * 1024; // 2 MB
+      if (bannerBytes.length > maxBannerBytes) {
+        throw ApiException(
+          'Banner size exceeds maximum of 2 MB '
+          '(${(bannerBytes.length / 1024 / 1024).toStringAsFixed(2)} MB)',
+        );
+      }
+      _validateImageMimeType(bannerMimeType);
+    }
+
+    try {
+      if (kDebugMode) {
+        debugPrint(
+          '📡 Updating profile: '
+          'displayName=${displayName != null}, '
+          'bio=${bio != null}, '
+          'avatar=${avatarBytes != null ? "${avatarBytes.length} bytes" : "null"}, '
+          'banner=${bannerBytes != null ? "${bannerBytes.length} bytes" : "null"}',
+        );
+      }
+
+      // Build request body with only non-null fields
+      final requestBody = <String, dynamic>{};
+
+      if (displayName != null) {
+        requestBody['displayName'] = displayName;
+      }
+
+      if (bio != null) {
+        requestBody['bio'] = bio;
+      }
+
+      if (avatarBytes != null) {
+        requestBody['avatarBlob'] = base64Encode(avatarBytes);
+        requestBody['avatarMimeType'] = avatarMimeType;
+      }
+
+      if (bannerBytes != null) {
+        requestBody['bannerBlob'] = base64Encode(bannerBytes);
+        requestBody['bannerMimeType'] = bannerMimeType;
+      }
+
+      final response = await _dio.post(
+        '/xrpc/social.coves.actor.updateProfile',
+        data: requestBody,
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Profile updated successfully');
+      }
+
+      return UpdateProfileResponse.fromJson(
+        response.data as Map<String, dynamic>,
+      );
+    } on DioException catch (e) {
+      _handleDioException(e, 'update profile');
+    } catch (e) {
+      if (e is ApiException) {
+        rethrow;
+      }
+      if (kDebugMode) {
+        debugPrint('❌ Error updating profile: $e');
+      }
+      throw ApiException('Failed to update profile', originalError: e);
+    }
+  }
+
+  /// Validate image MIME type for profile images
+  void _validateImageMimeType(String mimeType) {
+    const supportedMimeTypes = {'image/jpeg', 'image/png', 'image/webp'};
+    if (!supportedMimeTypes.contains(mimeType)) {
+      throw ApiException(
+        'Unsupported image type: $mimeType. '
+        'Supported types: ${supportedMimeTypes.join(', ')}',
+      );
+    }
+  }
+
   /// Dispose resources
   void dispose() {
     _dio.close();
   }
+}
+
+/// Response from POST /xrpc/social.coves.actor.updateProfile
+class UpdateProfileResponse {
+  const UpdateProfileResponse({required this.uri, required this.cid});
+
+  factory UpdateProfileResponse.fromJson(Map<String, dynamic> json) {
+    final uri = json['uri'];
+    final cid = json['cid'];
+
+    if (uri is! String || uri.isEmpty) {
+      throw const FormatException('UpdateProfileResponse: missing or invalid uri');
+    }
+    if (cid is! String || cid.isEmpty) {
+      throw const FormatException('UpdateProfileResponse: missing or invalid cid');
+    }
+
+    return UpdateProfileResponse(uri: uri, cid: cid);
+  }
+
+  final String uri;
+  final String cid;
 }

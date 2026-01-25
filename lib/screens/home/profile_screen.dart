@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../constants/app_colors.dart';
 import '../../models/comment.dart';
+import '../../models/user_profile.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/user_profile_provider.dart';
 import '../../widgets/comment_card.dart';
@@ -14,6 +15,7 @@ import '../../widgets/loading_error_states.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/profile_header.dart';
+import 'edit_profile_screen.dart';
 
 /// Profile screen displaying user profile with header and posts
 ///
@@ -158,6 +160,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     context.go('/login');
   }
 
+  void _navigateToEditProfile(BuildContext context, UserProfile profile) {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (context) => EditProfileScreen(profile: profile),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
@@ -234,6 +245,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               automaticallyImplyLeading: widget.actor != null,
               actions: profileProvider.isOwnProfile
                   ? [
+                      if (profileProvider.profile != null)
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: () => _navigateToEditProfile(
+                            context,
+                            profileProvider.profile!,
+                          ),
+                          tooltip: 'Edit Profile',
+                        ),
                       IconButton(
                         icon: const Icon(Icons.share_outlined),
                         onPressed: _handleShare,
@@ -269,7 +289,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         bottom: 0,
                         child: ProfileHeader(
                           profile: profileProvider.profile,
-                          isOwnProfile: profileProvider.isOwnProfile,
                         ),
                       ),
                       // Frosted glass overlay when collapsed

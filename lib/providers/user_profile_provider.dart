@@ -521,6 +521,53 @@ class UserProfileProvider with ChangeNotifier {
     await loadComments(refresh: true);
   }
 
+  /// Update the current user's profile
+  ///
+  /// Only non-null parameters will be sent to the API.
+  /// On success, force refreshes the profile from server to get updated URLs.
+  ///
+  /// Parameters:
+  /// - [displayName]: New display name (optional)
+  /// - [bio]: New bio text (optional)
+  /// - [avatarBytes]: Avatar image bytes (optional)
+  /// - [avatarMimeType]: Avatar MIME type (required if avatarBytes provided)
+  /// - [bannerBytes]: Banner image bytes (optional)
+  /// - [bannerMimeType]: Banner MIME type (required if bannerBytes provided)
+  ///
+  /// Throws [ApiException] on failure.
+  Future<void> updateProfile({
+    String? displayName,
+    String? bio,
+    Uint8List? avatarBytes,
+    String? avatarMimeType,
+    Uint8List? bannerBytes,
+    String? bannerMimeType,
+  }) async {
+    if (!isOwnProfile || _profile == null) {
+      throw ApiException('Can only update own profile');
+    }
+
+    if (kDebugMode) {
+      debugPrint('📝 Updating profile for: $_currentProfileDid');
+    }
+
+    await _apiService.updateProfile(
+      displayName: displayName,
+      bio: bio,
+      avatarBytes: avatarBytes,
+      avatarMimeType: avatarMimeType,
+      bannerBytes: bannerBytes,
+      bannerMimeType: bannerMimeType,
+    );
+
+    // Force refresh profile from server to get updated URLs
+    await loadProfile(_currentProfileDid!, forceRefresh: true);
+
+    if (kDebugMode) {
+      debugPrint('✅ Profile updated and refreshed');
+    }
+  }
+
   @override
   void dispose() {
     _authProvider.removeListener(_onAuthChanged);
