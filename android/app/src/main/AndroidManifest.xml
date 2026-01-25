@@ -40,6 +40,12 @@
                 <data android:scheme="social.coves"/>
             </intent-filter>
         </activity>
+        <!-- UCrop activity for image_cropper -->
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/UCropTheme"/>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

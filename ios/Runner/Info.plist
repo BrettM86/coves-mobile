@@ -45,6 +45,10 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Coves needs access to your photo library to select images for your profile and posts.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Coves needs access to your camera to take photos for your profile and posts.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

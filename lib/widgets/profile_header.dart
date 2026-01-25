@@ -15,18 +15,10 @@ import '../utils/date_time_utils.dart';
 class ProfileHeader extends StatelessWidget {
   const ProfileHeader({
     required this.profile,
-    required this.isOwnProfile,
-    this.onEditPressed,
-    this.onMenuPressed,
-    this.onSharePressed,
     super.key,
   });
 
   final UserProfile? profile;
-  final bool isOwnProfile;
-  final VoidCallback? onEditPressed;
-  final VoidCallback? onMenuPressed;
-  final VoidCallback? onSharePressed;
 
   static const double bannerHeight = 150;
 
@@ -225,12 +217,15 @@ class ProfileHeader extends StatelessWidget {
                         color: AppColors.textSecondary,
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        profile!.did,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                          fontFamily: 'monospace',
+                      Expanded(
+                        child: Text(
+                          profile!.did,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            fontFamily: 'monospace',
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -239,13 +234,6 @@ class ProfileHeader extends StatelessWidget {
               ],
             ),
           ),
-          // Edit button for own profile
-          if (isOwnProfile && onEditPressed != null)
-            _ActionButton(
-              icon: Icons.edit_outlined,
-              onPressed: onEditPressed!,
-              tooltip: 'Edit Profile',
-            ),
         ],
       ),
     );
@@ -298,38 +286,6 @@ class ProfileHeader extends StatelessWidget {
         _StatItem(label: 'Comments', value: stats?.commentCount ?? 0),
         _StatItem(label: 'Memberships', value: stats?.membershipCount ?? 0),
       ],
-    );
-  }
-}
-
-/// Small action button for profile actions
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.icon,
-    required this.onPressed,
-    this.tooltip,
-  });
-
-  final IconData icon;
-  final VoidCallback onPressed;
-  final String? tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip ?? '',
-      child: Material(
-        color: AppColors.backgroundSecondary,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Icon(icon, size: 20, color: AppColors.textSecondary),
-          ),
-        ),
-      ),
     );
   }
 }

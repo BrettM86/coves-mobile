@@ -11,6 +11,7 @@ import '../../models/picked_image.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
+import '../../utils/image_crop_utils.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../widgets/image_source_picker.dart';
 
@@ -989,7 +990,10 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
     if (source == null) return;
 
     try {
-      final picked = await ImagePickerUtils.pickImage(source);
+      // Pick image and open native cropper
+      final picked = await ImageCropUtils.pickAndCropImage(
+        source: source,
+      );
       if (picked != null && mounted) {
         setState(() {
           _selectedImage = picked;
@@ -1016,7 +1020,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to pick image: ${e.toString()}'),
+            content: Text('Failed to process image: ${e.toString()}'),
             backgroundColor: Colors.red[700],
             behavior: SnackBarBehavior.floating,
           ),
