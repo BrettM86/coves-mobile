@@ -356,7 +356,7 @@ class PostCard extends StatelessWidget {
     if (community.avatar != null && community.avatar!.isNotEmpty) {
       // Show real community avatar
       return ClipRRect(
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(12),
         child: CachedNetworkImage(
           imageUrl: community.avatar!,
           width: 24,
@@ -380,9 +380,9 @@ class PostCard extends StatelessWidget {
     return Container(
       width: 24,
       height: 24,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.primary,
-        borderRadius: BorderRadius.circular(4),
+        shape: BoxShape.circle,
       ),
       child: Center(
         child: Text(
