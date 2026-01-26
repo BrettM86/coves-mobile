@@ -24,12 +24,15 @@ class ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
+
     // Stack-based layout with banner image behind profile content
     return Stack(
       children: [
         // Banner image (or gradient fallback)
         _buildBannerImage(),
         // Gradient overlay for text readability
+        // iOS needs more aggressive gradient due to larger SafeArea (Dynamic Island/notch)
         Positioned.fill(
           child: Container(
             decoration: BoxDecoration(
@@ -38,10 +41,12 @@ class ProfileHeader extends StatelessWidget {
                 end: Alignment.bottomCenter,
                 colors: [
                   Colors.transparent,
-                  AppColors.background.withValues(alpha: 0.3),
+                  AppColors.background.withValues(alpha: isIOS ? 0.6 : 0.3),
                   AppColors.background,
                 ],
-                stops: const [0.0, 0.5, 1.0],
+                stops: isIOS
+                    ? const [0.0, 0.25, 0.55]
+                    : const [0.0, 0.5, 1.0],
               ),
             ),
           ),

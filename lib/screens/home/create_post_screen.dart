@@ -110,8 +110,16 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     final keyboardHeight = View.of(context).viewInsets.bottom;
 
     // Detect keyboard closing and unfocus all text fields
+    // Use a debounce to avoid false positives during keyboard animations
     if (_lastKeyboardHeight > 0 && keyboardHeight == 0) {
-      FocusManager.instance.primaryFocus?.unfocus();
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (!mounted) return;
+        final currentHeight = View.of(context).viewInsets.bottom;
+        // Only unfocus if keyboard is still closed after delay
+        if (currentHeight == 0) {
+          FocusManager.instance.primaryFocus?.unfocus();
+        }
+      });
     }
 
     _lastKeyboardHeight = keyboardHeight;
