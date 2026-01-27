@@ -34,6 +34,7 @@ class CommentThread extends StatelessWidget {
     this.onCollapseToggle,
     this.onContinueThread,
     this.ancestors = const [],
+    this.onDelete,
     super.key,
   });
 
@@ -63,23 +64,15 @@ class CommentThread extends StatelessWidget {
   /// Ancestor comments leading to this thread (for continue thread context)
   final List<ThreadViewComment> ancestors;
 
-  /// Count all descendants recursively
-  static int countDescendants(ThreadViewComment thread) {
-    if (thread.replies == null || thread.replies!.isEmpty) {
-      return 0;
-    }
-    var count = thread.replies!.length;
-    for (final reply in thread.replies!) {
-      count += countDescendants(reply);
-    }
-    return count;
-  }
+  /// Callback when a comment is deleted
+  final Future<void> Function(String commentUri)? onDelete;
 
   @override
   Widget build(BuildContext context) {
     // Check if this comment is collapsed
     final isCollapsed = collapsedComments.contains(thread.comment.uri);
-    final collapsedCount = isCollapsed ? countDescendants(thread) : 0;
+    // Use API's replyCount for accurate count (includes unloaded replies)
+    final collapsedCount = isCollapsed ? thread.comment.stats.replyCount : 0;
 
     // Check if there are replies to render
     final hasReplies = thread.replies != null && thread.replies!.isNotEmpty;
@@ -87,10 +80,11 @@ class CommentThread extends StatelessWidget {
     // Check if we've hit max depth - stop threading here
     final atMaxDepth = depth >= maxDepth;
 
-    // Only count descendants when needed (at max depth for continue link)
-    // Avoids O(n²) traversal on every render
-    final needsDescendantCount = hasReplies && atMaxDepth && !isCollapsed;
-    final replyCount = needsDescendantCount ? countDescendants(thread) : 0;
+    // Use API's replyCount for accurate count at max depth (includes unloaded replies)
+    final replyCount =
+        (hasReplies && atMaxDepth && !isCollapsed)
+            ? thread.comment.stats.replyCount
+            : 0;
 
     // Build updated ancestors list including current thread
     final childAncestors = [...ancestors, thread];
@@ -115,6 +109,7 @@ class CommentThread extends StatelessWidget {
                       onCollapseToggle: onCollapseToggle,
                       onContinueThread: onContinueThread,
                       ancestors: childAncestors,
+                      onDelete: onDelete,
                     );
                   }).toList(),
             )
@@ -135,6 +130,7 @@ class CommentThread extends StatelessWidget {
                   : null,
           isCollapsed: isCollapsed,
           collapsedCount: collapsedCount,
+          onDelete: onDelete,
         ),
 
         // Render replies with animation (only when NOT at max depth)

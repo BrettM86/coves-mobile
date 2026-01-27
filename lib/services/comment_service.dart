@@ -171,6 +171,104 @@ class CommentService {
       throw ApiException('Failed to create comment: $e');
     }
   }
+
+  /// Delete a comment
+  ///
+  /// Deletes a comment. Only the comment author can delete.
+  /// Requires authentication.
+  ///
+  /// Parameters:
+  /// - [uri]: AT-URI of the comment to delete
+  ///
+  /// Throws:
+  /// - AuthenticationException if not authenticated
+  /// - ApiException with 'You can only delete your own comments' if not the comment author
+  /// - ApiException for other errors
+  Future<void> deleteComment({required String uri}) async {
+    try {
+      final session = await _sessionGetter?.call();
+
+      if (session == null) {
+        throw AuthenticationException(
+          'User not authenticated - no session available',
+        );
+      }
+
+      if (kDebugMode) {
+        debugPrint('🗑️ Deleting comment: $uri');
+      }
+
+      await _dio.post<Map<String, dynamic>>(
+        '/xrpc/social.coves.community.comment.delete',
+        data: {'uri': uri},
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Comment deleted successfully');
+      }
+    } on DioException catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Comment deletion failed: ${e.message}');
+      }
+
+      if (e.response?.statusCode == 401) {
+        throw AuthenticationException(
+          'Authentication failed. Please sign in again.',
+          originalError: e,
+        );
+      }
+
+      if (e.response?.statusCode == 403) {
+        throw ApiException(
+          'You can only delete your own comments',
+          statusCode: 403,
+          originalError: e,
+        );
+      }
+
+      if (e.response?.statusCode == 404) {
+        throw NotFoundException(
+          'Comment not found. It may have already been deleted.',
+          originalError: e,
+        );
+      }
+
+      // Handle network-level errors
+      if (e.response == null) {
+        switch (e.type) {
+          case DioExceptionType.connectionTimeout:
+          case DioExceptionType.sendTimeout:
+          case DioExceptionType.receiveTimeout:
+          case DioExceptionType.connectionError:
+            throw NetworkException(
+              'Network error. Please check your connection.',
+              originalError: e,
+            );
+          default:
+            break;
+        }
+      }
+
+      throw ApiException(
+        'Failed to delete comment: ${e.message}',
+        statusCode: e.response?.statusCode,
+        originalError: e,
+      );
+    } on AuthenticationException {
+      rethrow;
+    } on NotFoundException {
+      rethrow;
+    } on NetworkException {
+      rethrow;
+    } on ApiException {
+      rethrow;
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Delete comment failed with unexpected error: $e');
+      }
+      throw ApiException('Failed to delete comment: $e', originalError: e);
+    }
+  }
 }
 
 /// Response from comment creation

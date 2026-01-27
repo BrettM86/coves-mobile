@@ -222,6 +222,9 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
                         onCollapseToggle: _toggleCollapsed,
                         onContinueThread: _onContinueThread,
                         ancestors: [widget.thread],
+                        onDelete: (uri) => context
+                            .read<CommentsProvider>()
+                            .deleteComment(commentUri: uri),
                       );
                     }),
 
@@ -252,6 +255,8 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
       child: CommentCard(
         comment: ancestor.comment,
         onTap: () => _openReplyScreen(ancestor),
+        onDelete: (uri) =>
+            context.read<CommentsProvider>().deleteComment(commentUri: uri),
       ),
     );
   }
@@ -276,8 +281,10 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
         onLongPress: () => _toggleCollapsed(widget.thread.comment.uri),
         isCollapsed: _collapsedComments.contains(widget.thread.comment.uri),
         collapsedCount: _collapsedComments.contains(widget.thread.comment.uri)
-            ? CommentThread.countDescendants(widget.thread)
+            ? widget.thread.comment.stats.replyCount
             : 0,
+        onDelete: (uri) =>
+            context.read<CommentsProvider>().deleteComment(commentUri: uri),
       ),
     );
   }

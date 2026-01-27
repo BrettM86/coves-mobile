@@ -211,19 +211,26 @@ class CommentRef {
 }
 
 class CommentStats {
-  CommentStats({this.upvotes = 0, this.downvotes = 0, this.score = 0});
+  const CommentStats({
+    this.upvotes = 0,
+    this.downvotes = 0,
+    this.score = 0,
+    this.replyCount = 0,
+  });
 
   factory CommentStats.fromJson(Map<String, dynamic> json) {
     return CommentStats(
       upvotes: json['upvotes'] as int? ?? 0,
       downvotes: json['downvotes'] as int? ?? 0,
       score: json['score'] as int? ?? 0,
+      replyCount: json['replyCount'] as int? ?? 0,
     );
   }
 
   final int upvotes;
   final int downvotes;
   final int score;
+  final int replyCount;
 }
 
 class CommentViewerState {

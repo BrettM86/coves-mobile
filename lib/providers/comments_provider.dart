@@ -500,6 +500,44 @@ class CommentsProvider with ChangeNotifier {
     }
   }
 
+  /// Delete a comment
+  ///
+  /// Deletes a comment and refreshes the comment list.
+  /// Only the comment author can delete their comments.
+  ///
+  /// Parameters:
+  /// - [commentUri]: AT-URI of the comment to delete
+  ///
+  /// Throws:
+  /// - ApiException if CommentService is not available
+  /// - AuthenticationException if not authenticated
+  /// - ApiException for API errors
+  Future<void> deleteComment({required String commentUri}) async {
+    if (_commentService == null) {
+      throw ApiException('CommentService not available');
+    }
+
+    if (kDebugMode) {
+      debugPrint('🗑️ Deleting comment: $commentUri');
+    }
+
+    try {
+      await _commentService.deleteComment(uri: commentUri);
+
+      if (kDebugMode) {
+        debugPrint('✅ Comment deleted, refreshing comments');
+      }
+
+      // Refresh comments to reflect deletion
+      await refreshComments();
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Failed to delete comment: $e');
+      }
+      rethrow;
+    }
+  }
+
   /// Initialize vote state for a comment and its replies recursively
   ///
   /// Extracts viewer vote data from comment and initializes VoteProvider state.

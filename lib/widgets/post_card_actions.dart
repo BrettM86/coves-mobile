@@ -9,6 +9,8 @@ import '../models/post.dart';
 import '../providers/auth_provider.dart';
 import '../providers/community_subscription_provider.dart';
 import '../providers/vote_provider.dart';
+import '../services/api_exceptions.dart';
+import '../services/coves_api_service.dart';
 import '../utils/date_time_utils.dart';
 import 'icons/animated_heart_icon.dart';
 import 'icons/share_icon.dart';
@@ -18,15 +20,28 @@ import 'sign_in_dialog.dart';
 ///
 /// Displays menu, share, comment, and like buttons with proper
 /// authentication handling and optimistic updates.
-class PostCardActions extends StatelessWidget {
+class PostCardActions extends StatefulWidget {
   const PostCardActions({
     required this.post,
     this.showCommentButton = true,
+    this.onDeleted,
     super.key,
   });
 
   final FeedViewPost post;
   final bool showCommentButton;
+  final VoidCallback? onDeleted;
+
+  @override
+  State<PostCardActions> createState() => _PostCardActionsState();
+}
+
+class _PostCardActionsState extends State<PostCardActions> {
+  bool _isDeleting = false;
+
+  FeedViewPost get post => widget.post;
+  bool get showCommentButton => widget.showCommentButton;
+  VoidCallback? get onDeleted => widget.onDeleted;
 
   Future<void> _handleMenuAction(BuildContext context, String action) async {
     final communityDid = post.post.community.did;
@@ -91,6 +106,136 @@ class PostCardActions extends StatelessWidget {
           );
         }
       }
+    } else if (action == 'delete') {
+      // Prevent multiple taps - set flag immediately before dialog
+      if (_isDeleting) return;
+      setState(() => _isDeleting = true);
+
+      // Check authentication
+      final authProvider = context.read<AuthProvider>();
+      if (!authProvider.isAuthenticated) {
+        setState(() => _isDeleting = false);
+        return;
+      }
+
+      // Show confirmation dialog
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Delete Post'),
+          content: const Text(
+            'Are you sure you want to delete this post? This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true || !context.mounted) {
+        if (mounted) setState(() => _isDeleting = false);
+        return;
+      }
+
+      try {
+        await HapticFeedback.lightImpact();
+      } on PlatformException catch (e) {
+        if (kDebugMode) {
+          debugPrint('Haptics not supported: $e');
+        }
+      }
+
+      if (!context.mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+
+      final apiService = CovesApiService(
+        tokenGetter: authProvider.getAccessToken,
+        tokenRefresher: authProvider.refreshToken,
+        signOutHandler: authProvider.signOut,
+      );
+
+      try {
+        await apiService.deletePost(uri: post.post.uri);
+
+        if (context.mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Post deleted'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+
+          // Notify parent to handle post removal from feed
+          onDeleted?.call();
+        }
+      } on NetworkException catch (e) {
+        if (kDebugMode) {
+          debugPrint('Network error deleting post: $e');
+        }
+        if (context.mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Network error. Please check your connection and try again.',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } on NotFoundException catch (e) {
+        if (kDebugMode) {
+          debugPrint('Post not found: $e');
+        }
+        if (context.mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Post not found. It may have already been deleted.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } on ApiException catch (e) {
+        if (kDebugMode) {
+          debugPrint('Failed to delete post: $e');
+        }
+        if (context.mounted) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                e.statusCode == 403
+                    ? 'You can only delete your own posts'
+                    : 'Could not delete post. Please try again.',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } on Exception catch (e) {
+        if (kDebugMode) {
+          debugPrint('Failed to delete post: $e');
+        }
+        if (context.mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Could not delete post. Please try again.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } finally {
+        apiService.dispose();
+        if (mounted) {
+          setState(() => _isDeleting = false);
+        }
+      }
     }
   }
 
@@ -104,13 +249,15 @@ class PostCardActions extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Three dots menu button
-            Consumer<CommunitySubscriptionProvider>(
-              builder: (context, subscriptionProvider, child) {
+            Consumer2<CommunitySubscriptionProvider, AuthProvider>(
+              builder: (context, subscriptionProvider, authProvider, child) {
                 final communityDid = post.post.community.did;
                 final communityName = post.post.community.name;
                 final isSubscribed =
                     subscriptionProvider.isSubscribed(communityDid);
                 final isPending = subscriptionProvider.isPending(communityDid);
+                final isPostAuthor =
+                    authProvider.did == post.post.author.did;
 
                 return PopupMenuButton<String>(
                   icon: Icon(
@@ -166,6 +313,25 @@ class PostCardActions extends StatelessWidget {
                         ],
                       ),
                     ),
+                    // Delete option (only for post author)
+                    if (isPostAuthor)
+                      const PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline,
+                              size: 20,
+                              color: Colors.red,
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Delete post',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 );
               },
