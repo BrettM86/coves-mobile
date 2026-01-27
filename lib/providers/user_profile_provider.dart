@@ -7,6 +7,7 @@ import '../models/user_profile.dart';
 import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
 import 'auth_provider.dart';
+import 'vote_provider.dart';
 
 /// User Profile Provider
 ///
@@ -17,8 +18,12 @@ import 'auth_provider.dart';
 /// tokens before each authenticated request (critical for atProto OAuth
 /// token rotation).
 class UserProfileProvider with ChangeNotifier {
-  UserProfileProvider(AuthProvider authProvider, {CovesApiService? apiService})
-    : _authProvider = authProvider {
+  UserProfileProvider(
+    AuthProvider authProvider, {
+    CovesApiService? apiService,
+    VoteProvider? voteProvider,
+  }) : _authProvider = authProvider,
+       _voteProvider = voteProvider {
     _apiService =
         apiService ??
         CovesApiService(
@@ -32,6 +37,7 @@ class UserProfileProvider with ChangeNotifier {
   }
 
   AuthProvider _authProvider;
+  final VoteProvider? _voteProvider;
 
   /// Update auth provider reference (called by ChangeNotifierProxyProvider)
   ///
@@ -392,6 +398,25 @@ class UserProfileProvider with ChangeNotifier {
         isLoadingMore: false,
       );
 
+      // Initialize vote state from viewer data in comments response.
+      // Ensures server scores are authoritative, prevents double-counting.
+      if (_authProvider.isAuthenticated && _voteProvider != null) {
+        if (refresh) {
+          // On refresh, initialize all comments - server data is truth
+          _commentsState.comments.forEach(_initializeCommentVoteState);
+        } else {
+          // On pagination, only initialize newly fetched comments
+          response.comments.forEach(_initializeCommentVoteState);
+        }
+      } else if (_authProvider.isAuthenticated && _voteProvider == null) {
+        if (kDebugMode) {
+          debugPrint(
+            '⚠️ VoteProvider is null - '
+            'cannot initialize comment vote states',
+          );
+        }
+      }
+
       if (kDebugMode) {
         debugPrint(
           '✅ Author comments loaded: ${newComments.length} comments total',
@@ -467,6 +492,27 @@ class UserProfileProvider with ChangeNotifier {
   /// Load more comments (pagination)
   Future<void> loadMoreComments() async {
     await loadComments(refresh: false);
+  }
+
+  /// Initialize vote state for a comment from viewer data.
+  ///
+  /// Unlike CommentsProvider._initializeCommentVoteState, this handles
+  /// flat CommentView objects (no nested replies) since actor comments
+  /// are returned as a flat list.
+  ///
+  /// If [_voteProvider] is null, this method returns early as a defensive
+  /// measure. This also handles the case where the viewer's vote is null
+  /// (vote removed on another device) - the vote state is cleared accordingly.
+  void _initializeCommentVoteState(CommentView comment) {
+    final voteProvider = _voteProvider;
+    if (voteProvider == null) return;
+
+    final viewer = comment.viewer;
+    voteProvider.setInitialVoteState(
+      postUri: comment.uri,
+      voteDirection: viewer?.vote,
+      voteUri: viewer?.voteUri,
+    );
   }
 
   /// Clear current profile and reset state

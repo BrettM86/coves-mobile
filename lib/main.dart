@@ -146,12 +146,17 @@ Future<void> main() async {
             // StreamableService for video embeds
             Provider<StreamableService>(create: (_) => StreamableService()),
             // UserProfileProvider for profile pages
-            ChangeNotifierProxyProvider<AuthProvider, UserProfileProvider>(
-              create: (context) => UserProfileProvider(authProvider),
-              update: (context, auth, previous) {
+            ChangeNotifierProxyProvider2<AuthProvider, VoteProvider,
+                UserProfileProvider>(
+              create: (context) => UserProfileProvider(
+                authProvider,
+                voteProvider: context.read<VoteProvider>(),
+              ),
+              update: (context, auth, vote, previous) {
                 // Propagate auth changes to existing provider
                 previous?.updateAuthProvider(auth);
-                return previous ?? UserProfileProvider(auth);
+                return previous ??
+                    UserProfileProvider(auth, voteProvider: vote);
               },
             ),
           ],
