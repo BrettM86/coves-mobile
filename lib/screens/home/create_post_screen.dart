@@ -336,10 +336,12 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         ),
         createdAt: now,
         indexedAt: now,
-        text: _bodyController.text.trim(),
-        title: _titleController.text.trim().isNotEmpty
-            ? _titleController.text.trim()
-            : null,
+        record: PostRecord(
+          content: _bodyController.text.trim(),
+          title: _titleController.text.trim().isNotEmpty
+              ? _titleController.text.trim()
+              : null,
+        ),
         stats: PostStats(
           upvotes: 0,
           downvotes: 0,

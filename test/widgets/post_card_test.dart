@@ -53,8 +53,10 @@ void main() {
             ),
             createdAt: DateTime(2024),
             indexedAt: DateTime(2024),
-            text: 'Test post content',
-            title: 'Test Post Title',
+            record: PostRecord(
+              content: 'Test post content',
+              title: 'Test Post Title',
+            ),
             stats: PostStats(
               upvotes: 10,
               downvotes: 2,
@@ -97,7 +99,6 @@ void main() {
             ),
             createdAt: DateTime(2024),
             indexedAt: DateTime(2024),
-            text: '',
             stats: PostStats(
               upvotes: 0,
               downvotes: 0,
@@ -127,7 +128,6 @@ void main() {
             ),
             createdAt: DateTime(2024),
             indexedAt: DateTime(2024),
-            text: '',
             stats: PostStats(
               upvotes: 0,
               downvotes: 0,
@@ -158,7 +158,6 @@ void main() {
             ),
             createdAt: DateTime(2024),
             indexedAt: DateTime(2024),
-            text: '',
             stats: PostStats(
               upvotes: 0,
               downvotes: 0,
@@ -197,7 +196,6 @@ void main() {
             ),
             createdAt: DateTime(2024),
             indexedAt: DateTime(2024),
-            text: '',
             stats: PostStats(
               upvotes: 0,
               downvotes: 0,
@@ -235,7 +233,7 @@ void main() {
             ),
             createdAt: DateTime(2024),
             indexedAt: DateTime(2024),
-            text: 'Just body text',
+            record: PostRecord(content: 'Just body text'),
             stats: PostStats(
               upvotes: 0,
               downvotes: 0,
@@ -265,7 +263,6 @@ void main() {
             ),
             createdAt: DateTime(2024),
             indexedAt: DateTime(2024),
-            text: '',
             stats: PostStats(
               upvotes: 0,
               downvotes: 0,
@@ -298,7 +295,6 @@ void main() {
             ),
             createdAt: DateTime(2024),
             indexedAt: DateTime(2024),
-            text: '',
             stats: PostStats(
               upvotes: 0,
               downvotes: 0,
@@ -354,7 +350,6 @@ void main() {
               ),
               createdAt: DateTime(2024),
               indexedAt: DateTime(2024),
-              text: '',
               stats: PostStats(
                 upvotes: 0,
                 downvotes: 0,
@@ -403,7 +398,6 @@ void main() {
             ),
             createdAt: DateTime(2024),
             indexedAt: DateTime(2024),
-            text: '',
             stats: PostStats(
               upvotes: 0,
               downvotes: 0,

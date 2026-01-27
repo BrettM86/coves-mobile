@@ -68,12 +68,34 @@ class ThreadViewComment {
   final bool hasMore;
 }
 
+/// Record data for a comment, containing the actual content.
+///
+/// This matches the backend's `social.coves.community.comment` record type.
+/// When a comment is deleted, this record will be null in CommentView.
+class CommentRecord {
+  const CommentRecord({
+    required this.content,
+    this.facets,
+  });
+
+  factory CommentRecord.fromJson(Map<String, dynamic> json) {
+    return CommentRecord(
+      content: json['content'] as String,
+      facets: parseFacetsFromRecord(json),
+    );
+  }
+
+  final String content;
+  final List<RichTextFacet>? facets;
+}
+
 class CommentView {
   CommentView({
     required this.uri,
     required this.cid,
-    required this.content,
-    this.contentFacets,
+    this.record,
+    this.isDeleted = false,
+    this.deletionReason,
     required this.createdAt,
     required this.indexedAt,
     required this.author,
@@ -82,17 +104,44 @@ class CommentView {
     required this.stats,
     this.viewer,
     this.embed,
-  });
+  }) : assert(
+         !isDeleted || record == null,
+         'Deleted comments must have null record',
+       );
 
   factory CommentView.fromJson(Map<String, dynamic> json) {
+    // Parse record if present (will be null for deleted comments)
+    CommentRecord? record;
+    if (json['record'] != null && json['record'] is Map<String, dynamic>) {
+      record = CommentRecord.fromJson(json['record'] as Map<String, dynamic>);
+    }
+
+    // Parse dates with error handling for malformed values
+    final DateTime createdAt;
+    final DateTime indexedAt;
+    try {
+      createdAt = DateTime.parse(json['createdAt'] as String);
+    } on FormatException {
+      throw FormatException(
+        'CommentView: Invalid createdAt date format: ${json['createdAt']}',
+      );
+    }
+    try {
+      indexedAt = DateTime.parse(json['indexedAt'] as String);
+    } on FormatException {
+      throw FormatException(
+        'CommentView: Invalid indexedAt date format: ${json['indexedAt']}',
+      );
+    }
+
     return CommentView(
       uri: json['uri'] as String,
       cid: json['cid'] as String,
-      content: json['content'] as String,
-      // Facets are now in record['facets'] per backend update
-      contentFacets: parseFacetsFromRecord(json['record']),
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      indexedAt: DateTime.parse(json['indexedAt'] as String),
+      record: record,
+      isDeleted: json['isDeleted'] as bool? ?? false,
+      deletionReason: json['deletionReason'] as String?,
+      createdAt: createdAt,
+      indexedAt: indexedAt,
       author: AuthorView.fromJson(json['author'] as Map<String, dynamic>),
       post: CommentRef.fromJson(json['post'] as Map<String, dynamic>),
       parent:
@@ -106,14 +155,15 @@ class CommentView {
                 json['viewer'] as Map<String, dynamic>,
               )
               : null,
-      embed: json['embed'],
+      embed: json['embed'] as Map<String, dynamic>?,
     );
   }
 
   final String uri;
   final String cid;
-  final String content;
-  final List<RichTextFacet>? contentFacets;
+  final CommentRecord? record;
+  final bool isDeleted;
+  final String? deletionReason;
   final DateTime createdAt;
   final DateTime indexedAt;
   final AuthorView author;
@@ -121,7 +171,32 @@ class CommentView {
   final CommentRef? parent;
   final CommentStats stats;
   final CommentViewerState? viewer;
-  final dynamic embed;
+
+  /// Raw embed data for comment attachments.
+  ///
+  /// May contain media, link previews, or other embedded content.
+  /// Stored as raw JSON since comment embed structure may vary.
+  final Map<String, dynamic>? embed;
+
+  /// The comment text content.
+  ///
+  /// This is a convenience getter for backwards compatibility after the
+  /// refactor to use nested [CommentRecord]. Previously content was a
+  /// top-level field; now it lives inside [record].
+  ///
+  /// Returns empty string when [record] is null (e.g., for deleted comments).
+  /// Check [isDeleted] to distinguish between deleted comments and comments
+  /// that genuinely have no content.
+  String get content => record?.content ?? '';
+
+  /// Rich text facets for the comment content (links, mentions, hashtags).
+  ///
+  /// This is a convenience getter for backwards compatibility after the
+  /// refactor to use nested [CommentRecord]. Previously facets were a
+  /// top-level field; now they live inside [record].
+  ///
+  /// Returns null when [record] is null or when the comment has no facets.
+  List<RichTextFacet>? get contentFacets => record?.facets;
 }
 
 class CommentRef {

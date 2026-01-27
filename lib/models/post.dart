@@ -93,6 +93,31 @@ class ViewerState {
   final List<String>? tags;
 }
 
+/// Record data for a post, containing the actual content.
+///
+/// This matches the backend's `social.coves.community.post` record type.
+/// When a post is deleted, this record will be null and PostView.isDeleted
+/// will be true.
+class PostRecord {
+  const PostRecord({
+    this.title,
+    this.content,
+    this.facets,
+  });
+
+  factory PostRecord.fromJson(Map<String, dynamic> json) {
+    return PostRecord(
+      title: json['title'] as String?,
+      content: json['content'] as String?,
+      facets: parseFacetsFromRecord(json),
+    );
+  }
+
+  final String? title;
+  final String? content;
+  final List<RichTextFacet>? facets;
+}
+
 class PostView {
   PostView({
     required this.uri,
@@ -102,15 +127,24 @@ class PostView {
     required this.community,
     required this.createdAt,
     required this.indexedAt,
-    required this.text,
-    this.title,
+    this.record,
+    this.isDeleted = false,
+    this.deletionReason,
     required this.stats,
     this.embed,
-    this.facets,
     this.viewer,
-  });
+  }) : assert(
+         !isDeleted || record == null,
+         'Deleted posts must have null record',
+       );
 
   factory PostView.fromJson(Map<String, dynamic> json) {
+    // Parse record if present (will be null for deleted posts)
+    PostRecord? record;
+    if (json['record'] != null && json['record'] is Map<String, dynamic>) {
+      record = PostRecord.fromJson(json['record'] as Map<String, dynamic>);
+    }
+
     return PostView(
       uri: json['uri'] as String,
       cid: json['cid'] as String,
@@ -121,15 +155,14 @@ class PostView {
       ),
       createdAt: DateTime.parse(json['createdAt'] as String),
       indexedAt: DateTime.parse(json['indexedAt'] as String),
-      text: json['text'] as String? ?? '',
-      title: json['title'] as String?,
+      record: record,
+      isDeleted: json['isDeleted'] as bool? ?? false,
+      deletionReason: json['deletionReason'] as String?,
       stats: PostStats.fromJson(json['stats'] as Map<String, dynamic>),
       embed:
           json['embed'] != null
               ? PostEmbed.fromJson(json['embed'] as Map<String, dynamic>)
               : null,
-      // Facets are now in record['facets'] per backend update
-      facets: parseFacetsFromRecord(json['record']),
       viewer:
           json['viewer'] != null
               ? ViewerState.fromJson(json['viewer'] as Map<String, dynamic>)
@@ -143,12 +176,46 @@ class PostView {
   final CommunityRef community;
   final DateTime createdAt;
   final DateTime indexedAt;
-  final String text;
-  final String? title;
+  final PostRecord? record;
+
+  /// Whether this post has been deleted
+  final bool isDeleted;
+
+  /// Reason for deletion (e.g., "author", "moderator"), null if not deleted
+  final String? deletionReason;
   final PostStats stats;
   final PostEmbed? embed;
-  final List<RichTextFacet>? facets;
   final ViewerState? viewer;
+
+  /// The post title.
+  ///
+  /// This is a convenience getter for backwards compatibility after the
+  /// refactor to use nested [PostRecord]. Previously title was a top-level
+  /// field; now it lives inside [record].
+  ///
+  /// Returns null when [record] is null (e.g., for deleted posts) or when
+  /// the post has no title.
+  String? get title => record?.title;
+
+  /// The post text content.
+  ///
+  /// This is a convenience getter for backwards compatibility after the
+  /// refactor to use nested [PostRecord]. Previously content was a top-level
+  /// field; now it lives inside [record].
+  ///
+  /// Returns empty string when [record] is null (e.g., for deleted posts).
+  /// Check [isDeleted] to distinguish between deleted posts and posts that
+  /// genuinely have no content.
+  String get text => record?.content ?? '';
+
+  /// Rich text facets for the post content (links, mentions, hashtags).
+  ///
+  /// This is a convenience getter for backwards compatibility after the
+  /// refactor to use nested [PostRecord]. Previously facets were a top-level
+  /// field; now they live inside [record].
+  ///
+  /// Returns null when [record] is null or when the post has no facets.
+  List<RichTextFacet>? get facets => record?.facets;
 }
 
 class AuthorView {

@@ -505,8 +505,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             community: widget.post.post.community,
             createdAt: widget.post.post.createdAt,
             indexedAt: widget.post.post.indexedAt,
-            text: widget.post.post.text,
-            title: widget.post.post.title,
+            record: widget.post.post.record,
             stats: PostStats(
               upvotes: widget.post.post.stats.upvotes,
               downvotes: widget.post.post.stats.downvotes,
@@ -514,7 +513,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               commentCount: widget.post.post.stats.commentCount,
             ),
             embed: widget.post.post.embed,
-            facets: widget.post.post.facets,
           ),
           reason: widget.post.reason,
         );

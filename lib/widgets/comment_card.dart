@@ -26,6 +26,13 @@ import 'tappable_author.dart';
 /// - Tap-to-reply functionality via [onTap] callback
 /// - Long-press to collapse thread via [onLongPress] callback
 ///
+/// ## Deleted Comments
+///
+/// When the comment's `isDeleted` flag is true, the card displays a
+/// `[deleted]` placeholder instead of the comment content, and hides the
+/// vote button. The author information and timestamp are still displayed
+/// to preserve thread context.
+///
 /// The [currentTime] parameter allows passing the current time for
 /// time-ago calculations, enabling periodic updates and testing.
 ///
@@ -171,14 +178,17 @@ class CommentCard extends StatelessWidget {
                         if (!isCollapsed) ...[
                           const SizedBox(height: 8),
 
-                          // Comment content
-                          if (comment.content.isNotEmpty) ...[
+                          // Comment content (handle deleted comments)
+                          if (comment.isDeleted) ...[
+                            _buildDeletedPlaceholder(),
+                            const SizedBox(height: 8),
+                          ] else if (comment.content.isNotEmpty) ...[
                             _buildCommentContent(comment),
                             const SizedBox(height: 8),
                           ],
 
                           // Action buttons (just vote for now)
-                          _buildActionButtons(context),
+                          if (!comment.isDeleted) _buildActionButtons(context),
                         ],
                       ],
                     ),
@@ -254,6 +264,18 @@ class CommentCard extends StatelessWidget {
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
+      ),
+    );
+  }
+
+  /// Builds the placeholder text for deleted comments
+  Widget _buildDeletedPlaceholder() {
+    return Text(
+      '[deleted]',
+      style: TextStyle(
+        color: AppColors.textPrimary.withValues(alpha: 0.5),
+        fontSize: 14,
+        fontStyle: FontStyle.italic,
       ),
     );
   }

@@ -25,7 +25,7 @@ void main() {
     return CommentView(
       uri: uri,
       cid: 'cid-$uri',
-      content: content,
+      record: CommentRecord(content: content),
       createdAt: DateTime(2025),
       indexedAt: DateTime(2025),
       author: AuthorView(did: 'did:plc:author', handle: handle),

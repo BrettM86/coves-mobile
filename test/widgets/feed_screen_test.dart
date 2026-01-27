@@ -292,15 +292,17 @@ void main() {
           ),
           createdAt: DateTime.now(),
           indexedAt: DateTime.now(),
-          text: 'Test body',
-          title: 'Test Post',
+          record: PostRecord(
+            content: 'Test body',
+            title: 'Test Post',
+            facets: [],
+          ),
           stats: PostStats(
             score: 42,
             upvotes: 50,
             downvotes: 8,
             commentCount: 5,
           ),
-          facets: [],
         ),
       );
 
@@ -407,10 +409,8 @@ FeedViewPost _createMockPost(String title) {
       ),
       createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
       indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
-      text: 'Test body',
-      title: title,
+      record: PostRecord(content: 'Test body', title: title, facets: []),
       stats: PostStats(score: 42, upvotes: 50, downvotes: 8, commentCount: 5),
-      facets: [],
     ),
   );
 }

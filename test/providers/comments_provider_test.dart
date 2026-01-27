@@ -1498,7 +1498,7 @@ ThreadViewComment _createMockThreadComment(String uri) {
     comment: CommentView(
       uri: uri,
       cid: 'cid-$uri',
-      content: 'Test comment content',
+      record: CommentRecord(content: 'Test comment content'),
       createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
       indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
       author: AuthorView(
@@ -1526,7 +1526,7 @@ ThreadViewComment _createMockThreadCommentWithViewer({
     comment: CommentView(
       uri: uri,
       cid: 'cid-$uri',
-      content: 'Test comment content',
+      record: CommentRecord(content: 'Test comment content'),
       createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
       indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
       author: AuthorView(

@@ -4,6 +4,8 @@
 // mentions, or hashtags. They use byte indices (UTF-8) rather than character
 // indices (UTF-16) to ensure cross-platform compatibility with the backend.
 
+import 'package:flutter/foundation.dart';
+
 /// Byte range for a text segment
 ///
 /// Uses UTF-8 byte offsets, not UTF-16 character positions.
@@ -269,6 +271,10 @@ class RichTextFacet {
 ///
 /// Backend returns facets inside `record['facets']` rather than at the top level.
 /// This helper safely extracts and parses them, returning null if missing/invalid.
+///
+/// Note: Parsing failures are logged in debug mode but return null to prevent
+/// a single malformed facet from breaking the entire content. Users will see
+/// plain text instead of rich links when facet parsing fails.
 List<RichTextFacet>? parseFacetsFromRecord(Object? record) {
   if (record == null || record is! Map<String, dynamic>) {
     return null;
@@ -284,7 +290,10 @@ List<RichTextFacet>? parseFacetsFromRecord(Object? record) {
           .map(RichTextFacet.fromJson)
           .toList(),
     );
-  } on Exception {
+  } on Exception catch (e) {
+    if (kDebugMode) {
+      debugPrint('⚠️ Facet parsing failed: $e');
+    }
     return null;
   }
 }

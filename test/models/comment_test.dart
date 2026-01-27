@@ -12,7 +12,7 @@ void main() {
             'comment': {
               'uri': 'at://did:plc:test/comment/1',
               'cid': 'cid1',
-              'content': 'Test comment',
+              'record': {'content': 'Test comment'},
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
               'author': {'did': 'did:plc:author', 'handle': 'test.user'},
@@ -66,7 +66,7 @@ void main() {
             'comment': {
               'uri': 'at://did:plc:test/comment/1',
               'cid': 'cid1',
-              'content': 'Test',
+              'record': {'content': 'Test'},
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
               'author': {'did': 'did:plc:author', 'handle': 'test.user'},
@@ -113,7 +113,7 @@ void main() {
         'comment': {
           'uri': 'at://did:plc:test/comment/1',
           'cid': 'cid1',
-          'content': 'Parent comment',
+          'record': {'content': 'Parent comment'},
           'createdAt': '2025-01-01T12:00:00Z',
           'indexedAt': '2025-01-01T12:00:00Z',
           'author': {'did': 'did:plc:author', 'handle': 'test.user'},
@@ -125,7 +125,7 @@ void main() {
             'comment': {
               'uri': 'at://did:plc:test/comment/2',
               'cid': 'cid2',
-              'content': 'Reply comment',
+              'record': {'content': 'Reply comment'},
               'createdAt': '2025-01-01T13:00:00Z',
               'indexedAt': '2025-01-01T13:00:00Z',
               'author': {'did': 'did:plc:author2', 'handle': 'test.user2'},
@@ -173,9 +173,9 @@ void main() {
       final json = {
         'uri': 'at://did:plc:test/comment/1',
         'cid': 'cid1',
-        'content': 'Test comment content',
-        // Facets are now in record['facets'] per backend update
+        // Content and facets are now in record per backend update
         'record': {
+          'content': 'Test comment content',
           'facets': [
             {
               'index': {'byteStart': 0, 'byteEnd': 10},
@@ -202,7 +202,7 @@ void main() {
         },
         'stats': {'upvotes': 10, 'downvotes': 2, 'score': 8},
         'viewer': {'vote': 'upvote'},
-        'embed': {'type': 'social.coves.embed.external', 'data': {}},
+        'embed': <String, dynamic>{'type': 'social.coves.embed.external', 'data': {}},
       };
 
       final comment = CommentView.fromJson(json);
@@ -228,7 +228,7 @@ void main() {
       final json = {
         'uri': 'at://did:plc:test/comment/1',
         'cid': 'cid1',
-        'content': 'Test',
+        'record': {'content': 'Test'},
         'createdAt': '2025-01-01T12:00:00Z',
         'indexedAt': '2025-01-01T12:00:00Z',
         'author': {'did': 'did:plc:author', 'handle': 'test.user'},
@@ -250,8 +250,7 @@ void main() {
       final json = {
         'uri': 'at://did:plc:test/comment/1',
         'cid': 'cid1',
-        'content': 'Test',
-        'record': null, // No record means no facets
+        'record': {'content': 'Test'}, // No facets in record
         'createdAt': '2025-01-01T12:00:00Z',
         'indexedAt': '2025-01-01T12:00:00Z',
         'author': {'did': 'did:plc:author', 'handle': 'test.user'},
@@ -264,6 +263,7 @@ void main() {
 
       final comment = CommentView.fromJson(json);
 
+      expect(comment.content, 'Test');
       expect(comment.contentFacets, null);
       expect(comment.parent, null);
       expect(comment.viewer, null);
@@ -274,7 +274,7 @@ void main() {
       final json = {
         'uri': 'at://did:plc:test/comment/1',
         'cid': 'cid1',
-        'content': 'Test',
+        'record': {'content': 'Test'},
         'createdAt': '2025-01-15T14:30:45.123Z',
         'indexedAt': '2025-01-15T14:30:50.456Z',
         'author': {'did': 'did:plc:author', 'handle': 'test.user'},
@@ -380,13 +380,93 @@ void main() {
     });
   });
 
-  group('Edge cases', () {
-    test('should handle deeply nested comment threads', () {
+  group('Deleted comments', () {
+    test('should parse deleted comment with isDeleted flag', () {
+      final json = {
+        'uri': 'at://did:plc:test/comment/1',
+        'cid': 'cid1',
+        'isDeleted': true,
+        'deletionReason': 'author',
+        'createdAt': '2025-01-01T12:00:00Z',
+        'indexedAt': '2025-01-01T12:00:00Z',
+        'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+        'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+        'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
+      };
+
+      final comment = CommentView.fromJson(json);
+
+      expect(comment.isDeleted, true);
+      expect(comment.deletionReason, 'author');
+      expect(comment.record, isNull);
+      expect(comment.content, ''); // Falls back to empty string
+    });
+
+    test('should parse deleted comment with null record', () {
+      final json = {
+        'uri': 'at://did:plc:test/comment/1',
+        'cid': 'cid1',
+        'record': null,
+        'isDeleted': true,
+        'createdAt': '2025-01-01T12:00:00Z',
+        'indexedAt': '2025-01-01T12:00:00Z',
+        'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+        'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+        'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
+      };
+
+      final comment = CommentView.fromJson(json);
+
+      expect(comment.isDeleted, true);
+      expect(comment.record, isNull);
+      expect(comment.content, '');
+      expect(comment.contentFacets, isNull);
+    });
+
+    test('should default isDeleted to false when not present', () {
+      final json = {
+        'uri': 'at://did:plc:test/comment/1',
+        'cid': 'cid1',
+        'record': {'content': 'Test'},
+        'createdAt': '2025-01-01T12:00:00Z',
+        'indexedAt': '2025-01-01T12:00:00Z',
+        'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+        'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+        'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
+      };
+
+      final comment = CommentView.fromJson(json);
+
+      expect(comment.isDeleted, false);
+      expect(comment.deletionReason, isNull);
+    });
+
+    test('should handle deleted comment with moderator reason', () {
+      final json = {
+        'uri': 'at://did:plc:test/comment/1',
+        'cid': 'cid1',
+        'isDeleted': true,
+        'deletionReason': 'moderator',
+        'createdAt': '2025-01-01T12:00:00Z',
+        'indexedAt': '2025-01-01T12:00:00Z',
+        'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+        'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+        'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
+      };
+
+      final comment = CommentView.fromJson(json);
+
+      expect(comment.isDeleted, true);
+      expect(comment.deletionReason, 'moderator');
+    });
+
+    test('should parse deleted comment in thread', () {
       final json = {
         'comment': {
           'uri': 'at://did:plc:test/comment/1',
           'cid': 'cid1',
-          'content': 'Level 1',
+          'isDeleted': true,
+          'deletionReason': 'author',
           'createdAt': '2025-01-01T12:00:00Z',
           'indexedAt': '2025-01-01T12:00:00Z',
           'author': {'did': 'did:plc:author', 'handle': 'test.user'},
@@ -398,7 +478,50 @@ void main() {
             'comment': {
               'uri': 'at://did:plc:test/comment/2',
               'cid': 'cid2',
-              'content': 'Level 2',
+              'record': {'content': 'Reply to deleted'},
+              'createdAt': '2025-01-01T13:00:00Z',
+              'indexedAt': '2025-01-01T13:00:00Z',
+              'author': {'did': 'did:plc:author2', 'handle': 'test.user2'},
+              'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+              'parent': {'uri': 'at://did:plc:test/comment/1', 'cid': 'cid1'},
+              'stats': {'upvotes': 1, 'downvotes': 0, 'score': 1},
+            },
+            'hasMore': false,
+          },
+        ],
+        'hasMore': false,
+      };
+
+      final thread = ThreadViewComment.fromJson(json);
+
+      expect(thread.comment.isDeleted, true);
+      expect(thread.comment.content, '');
+      expect(thread.replies, isNotNull);
+      expect(thread.replies!.length, 1);
+      expect(thread.replies![0].comment.isDeleted, false);
+      expect(thread.replies![0].comment.content, 'Reply to deleted');
+    });
+  });
+
+  group('Edge cases', () {
+    test('should handle deeply nested comment threads', () {
+      final json = {
+        'comment': {
+          'uri': 'at://did:plc:test/comment/1',
+          'cid': 'cid1',
+          'record': {'content': 'Level 1'},
+          'createdAt': '2025-01-01T12:00:00Z',
+          'indexedAt': '2025-01-01T12:00:00Z',
+          'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+          'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+          'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
+        },
+        'replies': [
+          {
+            'comment': {
+              'uri': 'at://did:plc:test/comment/2',
+              'cid': 'cid2',
+              'record': {'content': 'Level 2'},
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
               'author': {'did': 'did:plc:author', 'handle': 'test.user'},
@@ -410,7 +533,7 @@ void main() {
                 'comment': {
                   'uri': 'at://did:plc:test/comment/3',
                   'cid': 'cid3',
-                  'content': 'Level 3',
+                  'record': {'content': 'Level 3'},
                   'createdAt': '2025-01-01T12:00:00Z',
                   'indexedAt': '2025-01-01T12:00:00Z',
                   'author': {'did': 'did:plc:author', 'handle': 'test.user'},
@@ -440,7 +563,7 @@ void main() {
       final json = {
         'uri': 'at://did:plc:test/comment/1',
         'cid': 'cid1',
-        'content': '',
+        'record': {'content': ''},
         'createdAt': '2025-01-01T12:00:00Z',
         'indexedAt': '2025-01-01T12:00:00Z',
         'author': {'did': 'did:plc:author', 'handle': 'test.user'},
@@ -458,7 +581,7 @@ void main() {
       final json = {
         'uri': 'at://did:plc:test/comment/1',
         'cid': 'cid1',
-        'content': longContent,
+        'record': {'content': longContent},
         'createdAt': '2025-01-01T12:00:00Z',
         'indexedAt': '2025-01-01T12:00:00Z',
         'author': {'did': 'did:plc:author', 'handle': 'test.user'},
@@ -479,6 +602,54 @@ void main() {
       expect(stats.upvotes, 5);
       expect(stats.downvotes, 20);
       expect(stats.score, -15);
+    });
+
+    test('should throw FormatException for invalid createdAt date', () {
+      final json = {
+        'uri': 'at://did:plc:test/comment/1',
+        'cid': 'cid1',
+        'record': {'content': 'Test'},
+        'createdAt': 'not-a-date',
+        'indexedAt': '2025-01-01T12:00:00Z',
+        'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+        'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+        'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
+      };
+
+      expect(
+        () => CommentView.fromJson(json),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('Invalid createdAt date format'),
+          ),
+        ),
+      );
+    });
+
+    test('should throw FormatException for invalid indexedAt date', () {
+      final json = {
+        'uri': 'at://did:plc:test/comment/1',
+        'cid': 'cid1',
+        'record': {'content': 'Test'},
+        'createdAt': '2025-01-01T12:00:00Z',
+        'indexedAt': 'invalid-date',
+        'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+        'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+        'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
+      };
+
+      expect(
+        () => CommentView.fromJson(json),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('Invalid indexedAt date format'),
+          ),
+        ),
+      );
     });
   });
 }
