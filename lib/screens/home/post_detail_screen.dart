@@ -850,7 +850,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 // Comments header with sort dropdown
                                 CommentsHeader(
                                   key: _commentsHeaderKey,
-                                  commentCount: comments.length,
+                                  commentCount: widget.post.post.stats.commentCount,
                                   currentSort: commentsProvider.sort,
                                   onSortChanged: _onSortChanged,
                                 ),
@@ -886,6 +886,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 commentsProvider.collapsedComments,
                             onCollapseToggle: commentsProvider.toggleCollapsed,
                             onContinueThread: _onContinueThread,
+                            onDelete: (uri) =>
+                                commentsProvider.deleteComment(commentUri: uri),
                           );
                         },
                         childCount:
@@ -944,6 +946,7 @@ class _CommentItem extends StatelessWidget {
     this.collapsedComments = const {},
     this.onCollapseToggle,
     this.onContinueThread,
+    this.onDelete,
   });
 
   final ThreadViewComment comment;
@@ -953,6 +956,7 @@ class _CommentItem extends StatelessWidget {
   final void Function(String uri)? onCollapseToggle;
   final void Function(ThreadViewComment, List<ThreadViewComment>)?
   onContinueThread;
+  final Future<void> Function(String commentUri)? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -967,6 +971,7 @@ class _CommentItem extends StatelessWidget {
           collapsedComments: collapsedComments,
           onCollapseToggle: onCollapseToggle,
           onContinueThread: onContinueThread,
+          onDelete: onDelete,
         );
       },
     );

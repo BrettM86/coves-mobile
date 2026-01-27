@@ -516,6 +516,42 @@ class CovesApiService {
     }
   }
 
+  /// Delete a post
+  ///
+  /// Deletes a post from the community. Only the post author can delete.
+  /// Requires authentication.
+  ///
+  /// Parameters:
+  /// - [uri]: AT-URI of the post to delete
+  ///
+  /// Throws:
+  /// - AuthenticationException if not authenticated
+  /// - ApiException with 'NotAuthorized' if not the post author
+  /// - NotFoundException if post doesn't exist
+  Future<void> deletePost({required String uri}) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('🗑️ Deleting post: $uri');
+      }
+
+      await _dio.post(
+        '/xrpc/social.coves.community.post.delete',
+        data: {'uri': uri},
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Post deleted successfully');
+      }
+    } on DioException catch (e) {
+      _handleDioException(e, 'delete post');
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Delete post failed with unexpected error: $e');
+      }
+      throw ApiException('Failed to delete post: $e', originalError: e);
+    }
+  }
+
   /// Create a new community
   ///
   /// Creates a new community with the given name, display name, and description.

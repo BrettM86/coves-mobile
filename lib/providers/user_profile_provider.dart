@@ -5,6 +5,7 @@ import '../models/feed_state.dart';
 import '../models/post.dart';
 import '../models/user_profile.dart';
 import '../services/api_exceptions.dart';
+import '../services/comment_service.dart';
 import '../services/coves_api_service.dart';
 import 'auth_provider.dart';
 import 'vote_provider.dart';
@@ -22,6 +23,7 @@ class UserProfileProvider with ChangeNotifier {
     AuthProvider authProvider, {
     CovesApiService? apiService,
     VoteProvider? voteProvider,
+    CommentService? commentService,
   }) : _authProvider = authProvider,
        _voteProvider = voteProvider {
     _apiService =
@@ -32,12 +34,22 @@ class UserProfileProvider with ChangeNotifier {
           signOutHandler: _authProvider.signOut,
         );
 
+    // Create CommentService if not provided (for delete functionality)
+    _commentService =
+        commentService ??
+        CommentService(
+          sessionGetter: () async => _authProvider.session,
+          tokenRefresher: _authProvider.refreshToken,
+          signOutHandler: _authProvider.signOut,
+        );
+
     // Listen to auth state changes
     _authProvider.addListener(_onAuthChanged);
   }
 
   AuthProvider _authProvider;
   final VoteProvider? _voteProvider;
+  late final CommentService _commentService;
 
   /// Update auth provider reference (called by ChangeNotifierProxyProvider)
   ///
@@ -492,6 +504,45 @@ class UserProfileProvider with ChangeNotifier {
   /// Load more comments (pagination)
   Future<void> loadMoreComments() async {
     await loadComments(refresh: false);
+  }
+
+  /// Delete a comment from the user's profile comments
+  ///
+  /// Deletes a comment and removes it from the local comments list.
+  /// Only the comment author can delete their comments.
+  ///
+  /// Parameters:
+  /// - [commentUri]: AT-URI of the comment to delete
+  ///
+  /// Throws:
+  /// - AuthenticationException if not authenticated
+  /// - ApiException for API errors (including 403 for non-owner)
+  Future<void> deleteComment({required String commentUri}) async {
+    if (kDebugMode) {
+      debugPrint('🗑️ Deleting comment from profile: $commentUri');
+    }
+
+    try {
+      await _commentService.deleteComment(uri: commentUri);
+
+      // Remove the comment from local state
+      final updatedComments =
+          _commentsState.comments
+              .where((c) => c.uri != commentUri)
+              .toList();
+
+      _commentsState = _commentsState.copyWith(comments: updatedComments);
+      notifyListeners();
+
+      if (kDebugMode) {
+        debugPrint('✅ Comment deleted from profile');
+      }
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Failed to delete comment: $e');
+      }
+      rethrow;
+    }
   }
 
   /// Initialize vote state for a comment from viewer data.

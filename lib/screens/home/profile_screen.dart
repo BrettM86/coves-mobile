@@ -716,9 +716,14 @@ class _ProfileCommentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final profileProvider = context.read<UserProfileProvider>();
+
     return CommentCard(
       comment: comment,
       depth: 0,
+      onDelete: (commentUri) async {
+        await profileProvider.deleteComment(commentUri: commentUri);
+      },
     );
   }
 }

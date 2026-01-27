@@ -10,6 +10,7 @@ import '../models/comment.dart';
 import '../models/post.dart';
 import '../providers/auth_provider.dart';
 import '../providers/vote_provider.dart';
+import '../services/api_exceptions.dart';
 import '../utils/date_time_utils.dart';
 import 'icons/animated_heart_icon.dart';
 import 'rich_text_renderer.dart';
@@ -38,7 +39,7 @@ import 'tappable_author.dart';
 ///
 /// When [isCollapsed] is true, displays a badge showing [collapsedCount]
 /// hidden replies on the threading indicator bar.
-class CommentCard extends StatelessWidget {
+class CommentCard extends StatefulWidget {
   const CommentCard({
     required this.comment,
     this.depth = 0,
@@ -47,6 +48,7 @@ class CommentCard extends StatelessWidget {
     this.onLongPress,
     this.isCollapsed = false,
     this.collapsedCount = 0,
+    this.onDelete,
     super.key,
   });
 
@@ -65,6 +67,25 @@ class CommentCard extends StatelessWidget {
 
   /// Number of replies hidden when collapsed
   final int collapsedCount;
+
+  /// Callback when the comment is deleted
+  final Future<void> Function(String commentUri)? onDelete;
+
+  @override
+  State<CommentCard> createState() => _CommentCardState();
+}
+
+class _CommentCardState extends State<CommentCard> {
+  bool _isDeleting = false;
+
+  CommentView get comment => widget.comment;
+  int get depth => widget.depth;
+  DateTime? get currentTime => widget.currentTime;
+  VoidCallback? get onTap => widget.onTap;
+  VoidCallback? get onLongPress => widget.onLongPress;
+  bool get isCollapsed => widget.isCollapsed;
+  int get collapsedCount => widget.collapsedCount;
+  Future<void> Function(String commentUri)? get onDelete => widget.onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -87,8 +108,14 @@ class CommentCard extends StatelessWidget {
       child: GestureDetector(
         onLongPress:
             onLongPress != null
-                ? () {
-                  HapticFeedback.mediumImpact();
+                ? () async {
+                  try {
+                    await HapticFeedback.mediumImpact();
+                  } on PlatformException catch (e) {
+                    if (kDebugMode) {
+                      debugPrint('Haptics not supported: $e');
+                    }
+                  }
                   onLongPress!();
                 }
                 : null,
@@ -122,9 +149,9 @@ class CommentCard extends StatelessWidget {
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(
                       leftPadding,
-                      isCollapsed ? 10 : 12,
+                      isCollapsed || comment.isDeleted ? 12 : 12,
                       16,
-                      isCollapsed ? 10 : 8,
+                      isCollapsed || comment.isDeleted ? 12 : 8,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,28 +159,44 @@ class CommentCard extends StatelessWidget {
                         // Author info row
                         Row(
                           children: [
-                            // Author avatar and handle (tappable for profile)
-                            TappableAuthor(
-                              authorDid: comment.author.did,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // Author avatar
-                                  _buildAuthorAvatar(comment.author),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '@${comment.author.handle}',
-                                    style: TextStyle(
-                                      color: AppColors.textPrimary.withValues(
-                                        alpha: isCollapsed ? 0.7 : 0.5,
-                                      ),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                            // Author avatar and handle (or placeholder for deleted)
+                            if (comment.isDeleted)
+                              // Show deletion reason as placeholder
+                              Text(
+                                comment.deletionReason == 'moderator'
+                                    ? '[removed by moderator]'
+                                    : '[deleted by user]',
+                                style: TextStyle(
+                                  color: AppColors.textPrimary.withValues(
+                                    alpha: 0.5,
                                   ),
-                                ],
+                                  fontSize: 13,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              )
+                            else
+                              // Show tappable author for active comments
+                              TappableAuthor(
+                                authorDid: comment.author.did,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Author avatar
+                                    _buildAuthorAvatar(comment.author),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '@${comment.author.handle}',
+                                      style: TextStyle(
+                                        color: AppColors.textPrimary.withValues(
+                                          alpha: isCollapsed ? 0.7 : 0.5,
+                                        ),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
                             const Spacer(),
                             // Show collapsed count OR time ago
                             if (isCollapsed && collapsedCount > 0)
@@ -174,21 +217,18 @@ class CommentCard extends StatelessWidget {
                           ],
                         ),
 
-                        // Only show content and actions when expanded
-                        if (!isCollapsed) ...[
+                        // Only show content and actions when expanded (skip for deleted)
+                        if (!isCollapsed && !comment.isDeleted) ...[
                           const SizedBox(height: 8),
 
-                          // Comment content (handle deleted comments)
-                          if (comment.isDeleted) ...[
-                            _buildDeletedPlaceholder(),
-                            const SizedBox(height: 8),
-                          ] else if (comment.content.isNotEmpty) ...[
+                          // Comment content
+                          if (comment.content.isNotEmpty) ...[
                             _buildCommentContent(comment),
                             const SizedBox(height: 8),
                           ],
 
                           // Action buttons (just vote for now)
-                          if (!comment.isDeleted) _buildActionButtons(context),
+                          _buildActionButtons(context),
                         ],
                       ],
                     ),
@@ -268,18 +308,6 @@ class CommentCard extends StatelessWidget {
     );
   }
 
-  /// Builds the placeholder text for deleted comments
-  Widget _buildDeletedPlaceholder() {
-    return Text(
-      '[deleted]',
-      style: TextStyle(
-        color: AppColors.textPrimary.withValues(alpha: 0.5),
-        fontSize: 14,
-        fontStyle: FontStyle.italic,
-      ),
-    );
-  }
-
   /// Builds the comment content with support for facets
   Widget _buildCommentContent(CommentView comment) {
     return RichTextRenderer(
@@ -293,11 +321,155 @@ class CommentCard extends StatelessWidget {
     );
   }
 
-  /// Builds the action buttons row (vote button)
+  /// Handles menu action selection (delete)
+  Future<void> _handleMenuAction(BuildContext context, String action) async {
+    if (action == 'delete') {
+      // Prevent multiple taps
+      if (_isDeleting) return;
+
+      // Only proceed if onDelete callback is available
+      if (onDelete == null) {
+        if (kDebugMode) {
+          debugPrint('Delete action triggered but onDelete callback is null');
+        }
+        return;
+      }
+
+      // Show confirmation dialog
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Delete Comment'),
+          content: const Text(
+            'Are you sure you want to delete this comment? This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true || !context.mounted) return;
+
+      try {
+        await HapticFeedback.lightImpact();
+      } on PlatformException catch (e) {
+        if (kDebugMode) {
+          debugPrint('Haptics not supported: $e');
+        }
+      }
+
+      if (!context.mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+
+      setState(() => _isDeleting = true);
+
+      try {
+        await onDelete!(comment.uri);
+
+        if (context.mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Comment deleted'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } on ApiException catch (e) {
+        if (kDebugMode) {
+          debugPrint('Failed to delete comment: $e');
+        }
+        if (context.mounted) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                e.statusCode == 403
+                    ? 'You can only delete your own comments'
+                    : 'Could not delete comment. Please try again.',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } on Exception catch (e) {
+        if (kDebugMode) {
+          debugPrint('Failed to delete comment: $e');
+        }
+        if (context.mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Could not delete comment. Please try again.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isDeleting = false);
+        }
+      }
+    }
+  }
+
+  /// Builds the three-dots menu for comment actions (only shown for author)
+  Widget _buildCommentMenu(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        if (!authProvider.isAuthenticated ||
+            authProvider.did != comment.author.did) {
+          return const SizedBox.shrink();
+        }
+
+        return PopupMenuButton<String>(
+          icon: Icon(
+            Icons.more_horiz,
+            size: 18,
+            color: AppColors.textPrimary.withValues(alpha: 0.6),
+          ),
+          tooltip: 'Comment options',
+          color: AppColors.backgroundSecondary,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          onSelected: (action) => _handleMenuAction(context, action),
+          itemBuilder: (context) => [
+            const PopupMenuItem<String>(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.delete_outline,
+                    size: 20,
+                    color: Colors.red,
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    'Delete comment',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Builds the action buttons row (menu and vote button)
   Widget _buildActionButtons(BuildContext context) {
     return Consumer<VoteProvider>(
       builder: (context, voteProvider, child) {
-        // Get optimistic vote state from provider
         final isLiked = voteProvider.isLiked(comment.uri);
         final adjustedScore = voteProvider.getAdjustedScore(
           comment.uri,
@@ -307,7 +479,7 @@ class CommentCard extends StatelessWidget {
         return Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            // Heart vote button
+            _buildCommentMenu(context),
             Semantics(
               button: true,
               label:
@@ -333,10 +505,14 @@ class CommentCard extends StatelessWidget {
                     return;
                   }
 
-                  // Light haptic feedback
-                  await HapticFeedback.lightImpact();
+                  try {
+                    await HapticFeedback.lightImpact();
+                  } on PlatformException catch (e) {
+                    if (kDebugMode) {
+                      debugPrint('Haptics not supported: $e');
+                    }
+                  }
 
-                  // Toggle vote with optimistic update via VoteProvider
                   try {
                     await voteProvider.toggleVote(
                       postUri: comment.uri,
