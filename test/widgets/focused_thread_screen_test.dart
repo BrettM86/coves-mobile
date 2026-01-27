@@ -59,7 +59,7 @@ void main() {
   Widget createTestWidget({
     required ThreadViewComment thread,
     List<ThreadViewComment> ancestors = const [],
-    Future<void> Function(String, ThreadViewComment)? onReply,
+    Future<void> Function(String, List<RichTextFacet>, ThreadViewComment)? onReply,
   }) {
     return MultiProvider(
       providers: [
@@ -70,7 +70,7 @@ void main() {
         home: FocusedThreadScreen(
           thread: thread,
           ancestors: ancestors,
-          onReply: onReply ?? (content, parent) async {},
+          onReply: onReply ?? (content, facets, parent) async {},
           // Note: Using mock cast - tests are skipped so this won't actually run
           commentsProvider: mockCommentsProvider as CommentsProvider,
         ),

@@ -89,12 +89,8 @@ class CommentView {
       uri: json['uri'] as String,
       cid: json['cid'] as String,
       content: json['content'] as String,
-      contentFacets:
-          json['contentFacets'] != null
-              ? (json['contentFacets'] as List<dynamic>)
-                  .map((f) => PostFacet.fromJson(f as Map<String, dynamic>))
-                  .toList()
-              : null,
+      // Facets are now in record['facets'] per backend update
+      contentFacets: parseFacetsFromRecord(json['record']),
       createdAt: DateTime.parse(json['createdAt'] as String),
       indexedAt: DateTime.parse(json['indexedAt'] as String),
       author: AuthorView.fromJson(json['author'] as Map<String, dynamic>),
@@ -117,7 +113,7 @@ class CommentView {
   final String uri;
   final String cid;
   final String content;
-  final List<PostFacet>? contentFacets;
+  final List<RichTextFacet>? contentFacets;
   final DateTime createdAt;
   final DateTime indexedAt;
   final AuthorView author;

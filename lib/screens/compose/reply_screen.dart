@@ -12,6 +12,7 @@ import '../../models/comment.dart';
 import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
+import '../../utils/facet_detector.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/post_card.dart';
 
@@ -49,7 +50,7 @@ class ReplyScreen extends StatefulWidget {
   final ThreadViewComment? comment;
 
   /// Callback when user submits reply
-  final Future<void> Function(String content) onSubmit;
+  final Future<void> Function(String content, List<RichTextFacet> facets) onSubmit;
 
   /// CommentsProvider for draft save/restore and time updates
   final CommentsProvider commentsProvider;
@@ -105,8 +106,12 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   void _setupAuthListener() {
     try {
       context.read<AuthProvider>().addListener(_onAuthChanged);
-    } on Exception {
-      // AuthProvider may not be available (e.g., tests)
+    } on ProviderNotFoundException {
+      // Expected in tests - AuthProvider may not be available
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('ERROR: Failed to setup auth listener: $e');
+      }
     }
   }
 
@@ -121,8 +126,12 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
           Navigator.of(context).pop();
         }
       }
-    } on Exception {
-      // AuthProvider may not be available
+    } on ProviderNotFoundException {
+      // Expected in tests - AuthProvider may not be available
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('ERROR: Failed to check auth state: $e');
+      }
     }
   }
 
@@ -236,7 +245,10 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     });
 
     try {
-      await widget.onSubmit(content);
+      // Detect link facets in the content
+      final facets = FacetDetector.detectLinks(content);
+
+      await widget.onSubmit(content, facets);
       // Clear draft on success
       try {
         if (mounted) {

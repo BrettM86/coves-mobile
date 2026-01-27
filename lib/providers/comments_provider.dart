@@ -3,6 +3,7 @@ import 'dart:async' show Timer, unawaited;
 import 'package:characters/characters.dart';
 import 'package:flutter/foundation.dart';
 import '../models/comment.dart';
+import '../models/post.dart';
 import '../services/api_exceptions.dart';
 import '../services/comment_service.dart';
 import '../services/coves_api_service.dart';
@@ -428,6 +429,7 @@ class CommentsProvider with ChangeNotifier {
   /// - ApiException for API errors
   Future<void> createComment({
     required String content,
+    List<RichTextFacet>? contentFacets,
     ThreadViewComment? parentComment,
   }) async {
     // Validate content
@@ -481,6 +483,7 @@ class CommentsProvider with ChangeNotifier {
         parentUri: parentUri,
         parentCid: parentCid,
         content: trimmedContent,
+        contentFacets: contentFacets,
       );
 
       if (kDebugMode) {

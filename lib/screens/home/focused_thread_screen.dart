@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
 import '../../models/comment.dart';
+import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
 import '../../widgets/comment_card.dart';
@@ -46,7 +47,7 @@ class FocusedThreadScreen extends StatelessWidget {
   final List<ThreadViewComment> ancestors;
 
   /// Callback when user replies to a comment
-  final Future<void> Function(String content, ThreadViewComment parent) onReply;
+  final Future<void> Function(String content, List<RichTextFacet> facets, ThreadViewComment parent) onReply;
 
   /// Parent's CommentsProvider for draft preservation and vote state
   final CommentsProvider commentsProvider;
@@ -77,7 +78,7 @@ class _FocusedThreadBody extends StatefulWidget {
 
   final ThreadViewComment thread;
   final List<ThreadViewComment> ancestors;
-  final Future<void> Function(String content, ThreadViewComment parent) onReply;
+  final Future<void> Function(String content, List<RichTextFacet> facets, ThreadViewComment parent) onReply;
 
   @override
   State<_FocusedThreadBody> createState() => _FocusedThreadBodyState();
@@ -141,7 +142,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
       MaterialPageRoute<void>(
         builder: (navigatorContext) => ReplyScreen(
           comment: comment,
-          onSubmit: (content) => widget.onReply(content, comment),
+          onSubmit: (content, facets) => widget.onReply(content, facets, comment),
           commentsProvider: context.read<CommentsProvider>(),
         ),
       ),

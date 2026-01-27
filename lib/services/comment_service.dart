@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../config/environment_config.dart';
 import '../models/coves_session.dart';
+import '../models/post.dart';
 import 'api_exceptions.dart';
 import 'auth_interceptor.dart';
 import 'retry_interceptor.dart';
@@ -92,6 +93,7 @@ class CommentService {
     required String parentUri,
     required String parentCid,
     required String content,
+    List<RichTextFacet>? contentFacets,
   }) async {
     try {
       final session = await _sessionGetter?.call();
@@ -111,6 +113,7 @@ class CommentService {
 
       // Send comment request to backend
       // Note: Authorization header is added by the interceptor
+      // Note: Use 'facets' field name to match atProto lexicon convention
       final response = await _dio.post<Map<String, dynamic>>(
         '/xrpc/social.coves.community.comment.create',
         data: {
@@ -119,6 +122,8 @@ class CommentService {
             'parent': {'uri': parentUri, 'cid': parentCid},
           },
           'content': content,
+          if (contentFacets != null && contentFacets.isNotEmpty)
+            'facets': contentFacets.map((f) => f.toJson()).toList(),
         },
       );
 

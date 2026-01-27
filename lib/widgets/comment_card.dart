@@ -12,6 +12,7 @@ import '../providers/auth_provider.dart';
 import '../providers/vote_provider.dart';
 import '../utils/date_time_utils.dart';
 import 'icons/animated_heart_icon.dart';
+import 'rich_text_renderer.dart';
 import 'sign_in_dialog.dart';
 import 'tappable_author.dart';
 
@@ -259,10 +260,9 @@ class CommentCard extends StatelessWidget {
 
   /// Builds the comment content with support for facets
   Widget _buildCommentContent(CommentView comment) {
-    // TODO: Add facet support for links and mentions like PostCard does
-    // For now, just render plain text
-    return Text(
-      comment.content,
+    return RichTextRenderer(
+      text: comment.content,
+      facets: comment.contentFacets,
       style: const TextStyle(
         color: AppColors.textPrimary,
         fontSize: 14,
@@ -306,10 +306,7 @@ class CommentCard extends StatelessWidget {
                     );
 
                     if ((shouldSignIn ?? false) && context.mounted) {
-                      // TODO: Navigate to sign-in screen
-                      if (kDebugMode) {
-                        debugPrint('Navigate to sign-in screen');
-                      }
+                      await Navigator.of(context).pushNamed('/sign-in');
                     }
                     return;
                   }
@@ -327,7 +324,14 @@ class CommentCard extends StatelessWidget {
                     if (kDebugMode) {
                       debugPrint('Failed to vote on comment: $e');
                     }
-                    // TODO: Show error snackbar
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Failed to vote. Please try again.'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
                   }
                 },
                 child: Padding(

@@ -174,18 +174,20 @@ void main() {
         'uri': 'at://did:plc:test/comment/1',
         'cid': 'cid1',
         'content': 'Test comment content',
-        'contentFacets': [
-          {
-            'type': 'mention',
-            'index': {'start': 0, 'end': 10},
-            'features': [
-              {
-                'type': 'app.bsky.richtext.facet#mention',
-                'did': 'did:plc:mentioned',
-              },
-            ],
-          },
-        ],
+        // Facets are now in record['facets'] per backend update
+        'record': {
+          'facets': [
+            {
+              'index': {'byteStart': 0, 'byteEnd': 10},
+              'features': [
+                {
+                  r'$type': 'social.coves.richtext.facet#link',
+                  'uri': 'https://example.com',
+                },
+              ],
+            },
+          ],
+        },
         'createdAt': '2025-01-01T12:00:00Z',
         'indexedAt': '2025-01-01T12:05:00Z',
         'author': {
@@ -249,7 +251,7 @@ void main() {
         'uri': 'at://did:plc:test/comment/1',
         'cid': 'cid1',
         'content': 'Test',
-        'contentFacets': null,
+        'record': null, // No record means no facets
         'createdAt': '2025-01-01T12:00:00Z',
         'indexedAt': '2025-01-01T12:00:00Z',
         'author': {'did': 'did:plc:author', 'handle': 'test.user'},

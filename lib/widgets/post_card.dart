@@ -13,6 +13,7 @@ import 'bluesky_post_card.dart';
 import 'external_link_bar.dart';
 import 'fullscreen_video_player.dart';
 import 'post_card_actions.dart';
+import 'rich_text_renderer.dart';
 import 'source_link_bar.dart';
 import 'tappable_author.dart';
 
@@ -274,8 +275,9 @@ class PostCard extends StatelessWidget {
       // Detail view: no container, better readability
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Text(
-          post.post.text,
+        child: RichTextRenderer(
+          text: post.post.text,
+          facets: post.post.facets,
           style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: textFontSize,
@@ -295,8 +297,9 @@ class PostCard extends StatelessWidget {
             width: 0.5,
           ),
         ),
-        child: Text(
-          post.post.text,
+        child: RichTextRenderer(
+          text: post.post.text,
+          facets: post.post.facets,
           style: TextStyle(
             color: AppColors.textPrimary.withValues(alpha: 0.85),
             fontSize: textFontSize,

@@ -8,6 +8,7 @@ import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
+import '../../utils/facet_detector.dart';
 import '../compose/community_picker_screen.dart';
 import 'post_detail_screen.dart';
 
@@ -202,15 +203,20 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         labels = const SelfLabels(values: [SelfLabel(val: 'nsfw')]);
       }
 
+      // Detect link facets in the body content
+      final bodyContent = _bodyController.text.trim();
+      final facets = bodyContent.isNotEmpty
+          ? FacetDetector.detectLinks(bodyContent)
+          : null;
+
       // Create post
       final response = await apiService.createPost(
         community: _selectedCommunity!.did,
         title: _titleController.text.trim().isNotEmpty
             ? _titleController.text.trim()
             : null,
-        content: _bodyController.text.trim().isNotEmpty
-            ? _bodyController.text.trim()
-            : null,
+        content: bodyContent.isNotEmpty ? bodyContent : null,
+        facets: facets,
         embed: embed,
         langs: [_language],
         labels: labels,

@@ -459,6 +459,7 @@ class CovesApiService {
     required String community,
     String? title,
     String? content,
+    List<RichTextFacet>? facets,
     ExternalEmbedInput? embed,
     List<String>? langs,
     SelfLabels? labels,
@@ -477,6 +478,10 @@ class CovesApiService {
 
       if (content != null) {
         requestBody['content'] = content;
+      }
+
+      if (facets != null && facets.isNotEmpty) {
+        requestBody['facets'] = facets.map((f) => f.toJson()).toList();
       }
 
       if (embed != null) {

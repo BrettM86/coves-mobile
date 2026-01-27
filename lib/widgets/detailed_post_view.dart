@@ -11,6 +11,7 @@ import '../utils/url_launcher.dart';
 import 'bluesky_post_card.dart';
 import 'external_link_bar.dart';
 import 'fullscreen_video_player.dart';
+import 'rich_text_renderer.dart';
 import 'source_link_bar.dart';
 import 'tappable_author.dart';
 
@@ -493,8 +494,9 @@ class _DetailedPostViewState extends State<DetailedPostView> {
   Widget _buildBodyText() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Text(
-        widget.post.post.text,
+      child: RichTextRenderer(
+        text: widget.post.post.text,
+        facets: widget.post.post.facets,
         style: GoogleFonts.inter(
           fontSize: 12.5,
           fontWeight: FontWeight.w400,

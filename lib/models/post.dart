@@ -8,6 +8,9 @@ import 'package:flutter/foundation.dart';
 
 import '../constants/embed_types.dart';
 import 'bluesky_post.dart';
+import 'facet.dart';
+
+export 'facet.dart' show RichTextFacet, parseFacetsFromRecord;
 
 class TimelineResponse {
   TimelineResponse({required this.feed, this.cursor});
@@ -125,12 +128,8 @@ class PostView {
           json['embed'] != null
               ? PostEmbed.fromJson(json['embed'] as Map<String, dynamic>)
               : null,
-      facets:
-          json['facets'] != null
-              ? (json['facets'] as List<dynamic>)
-                  .map((f) => PostFacet.fromJson(f as Map<String, dynamic>))
-                  .toList()
-              : null,
+      // Facets are now in record['facets'] per backend update
+      facets: parseFacetsFromRecord(json['record']),
       viewer:
           json['viewer'] != null
               ? ViewerState.fromJson(json['viewer'] as Map<String, dynamic>)
@@ -148,7 +147,7 @@ class PostView {
   final String? title;
   final PostStats stats;
   final PostEmbed? embed;
-  final List<PostFacet>? facets;
+  final List<RichTextFacet>? facets;
   final ViewerState? viewer;
 }
 
@@ -404,15 +403,6 @@ class EmbedSource {
 
   @override
   int get hashCode => Object.hash(uri, title, domain);
-}
-
-class PostFacet {
-  PostFacet({required this.data});
-
-  factory PostFacet.fromJson(Map<String, dynamic> json) {
-    return PostFacet(data: json);
-  }
-  final Map<String, dynamic> data;
 }
 
 class FeedReason {

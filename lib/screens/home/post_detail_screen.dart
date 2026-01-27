@@ -617,11 +617,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   /// Handle comment submission (reply to post)
-  Future<void> _handleCommentSubmit(String content) async {
+  Future<void> _handleCommentSubmit(String content, List<RichTextFacet> facets) async {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      await _commentsProvider.createComment(content: content);
+      await _commentsProvider.createComment(content: content, contentFacets: facets);
 
       if (mounted) {
         messenger.showSnackBar(
@@ -649,6 +649,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   /// Handle reply to a comment (nested reply)
   Future<void> _handleCommentReply(
     String content,
+    List<RichTextFacet> facets,
     ThreadViewComment parentComment,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -656,6 +657,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     try {
       await _commentsProvider.createComment(
         content: content,
+        contentFacets: facets,
         parentComment: parentComment,
       );
 
@@ -702,7 +704,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         builder:
             (context) => ReplyScreen(
               comment: comment,
-              onSubmit: (content) => _handleCommentReply(content, comment),
+              onSubmit: (content, facets) => _handleCommentReply(content, facets, comment),
               commentsProvider: _commentsProvider,
             ),
       ),
