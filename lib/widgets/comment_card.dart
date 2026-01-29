@@ -13,6 +13,7 @@ import '../providers/vote_provider.dart';
 import '../services/api_exceptions.dart';
 import '../utils/date_time_utils.dart';
 import 'icons/animated_heart_icon.dart';
+import 'report_dialog.dart';
 import 'rich_text_renderer.dart';
 import 'sign_in_dialog.dart';
 import 'tappable_author.dart';
@@ -322,9 +323,30 @@ class _CommentCardState extends State<CommentCard> {
     );
   }
 
-  /// Handles menu action selection (delete)
+  /// Handles menu action selection (report or delete).
+  ///
+  /// Menu is only visible to authenticated users, so no auth check needed here.
   Future<void> _handleMenuAction(BuildContext context, String action) async {
-    if (action == 'delete') {
+    if (action == 'report') {
+      if (!context.mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+
+      // Show report dialog
+      final reported = await ReportDialog.show(
+        context,
+        targetUri: comment.uri,
+        contentType: 'comment',
+      );
+
+      if (reported == true && context.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Report submitted. Thank you for helping keep our community safe.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else if (action == 'delete') {
       // Prevent multiple taps - set flag immediately before dialog
       if (_isDeleting) return;
       setState(() => _isDeleting = true);
@@ -449,14 +471,19 @@ class _CommentCardState extends State<CommentCard> {
     }
   }
 
-  /// Builds the three-dots menu for comment actions (only shown for author)
+  /// Builds the three-dots menu for comment actions.
+  ///
+  /// Shows either a report option (for non-authors) or a delete option
+  /// (for the comment author). Only visible when authenticated.
   Widget _buildCommentMenu(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
-        if (!authProvider.isAuthenticated ||
-            authProvider.did != comment.author.did) {
+        // Only show menu for authenticated users
+        if (!authProvider.isAuthenticated) {
           return const SizedBox.shrink();
         }
+
+        final isCommentAuthor = authProvider.did == comment.author.did;
 
         return PopupMenuButton<String>(
           icon: Icon(
@@ -473,23 +500,40 @@ class _CommentCardState extends State<CommentCard> {
           ),
           onSelected: (action) => _handleMenuAction(context, action),
           itemBuilder: (context) => [
-            const PopupMenuItem<String>(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.delete_outline,
-                    size: 20,
-                    color: Colors.red,
-                  ),
-                  SizedBox(width: 12),
-                  Text(
-                    'Delete comment',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ],
+            // Report option (for non-authors)
+            if (!isCommentAuthor)
+              const PopupMenuItem<String>(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.flag_outlined,
+                      size: 20,
+                    ),
+                    SizedBox(width: 12),
+                    Text('Report comment'),
+                  ],
+                ),
               ),
-            ),
+            // Delete option (only for comment author)
+            if (isCommentAuthor)
+              const PopupMenuItem<String>(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.delete_outline,
+                      size: 20,
+                      color: Colors.red,
+                    ),
+                    SizedBox(width: 12),
+                    Text(
+                      'Delete comment',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ],
+                ),
+              ),
           ],
         );
       },

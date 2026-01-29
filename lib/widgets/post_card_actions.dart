@@ -13,6 +13,7 @@ import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
 import '../utils/date_time_utils.dart';
 import 'icons/animated_heart_icon.dart';
+import 'report_dialog.dart';
 import 'share_button.dart';
 import 'sign_in_dialog.dart';
 
@@ -48,7 +49,7 @@ class _PostCardActionsState extends State<PostCardActions> {
     final communityName = post.post.community.name;
 
     if (action == 'subscribe') {
-      // Check authentication
+      // Check authentication - subscribe requires sign-in
       final authProvider = context.read<AuthProvider>();
       if (!authProvider.isAuthenticated) {
         if (!context.mounted) return;
@@ -56,10 +57,13 @@ class _PostCardActionsState extends State<PostCardActions> {
           context,
           message: 'You need to sign in to subscribe to communities.',
         );
-        if ((shouldSignIn ?? false) && context.mounted) {
-          if (kDebugMode) {
-            debugPrint('Navigate to sign-in screen');
-          }
+        if (shouldSignIn != true && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Sign in required to subscribe'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
         }
         return;
       }
@@ -105,6 +109,44 @@ class _PostCardActionsState extends State<PostCardActions> {
             ),
           );
         }
+      }
+    } else if (action == 'report') {
+      // Check authentication - report requires sign-in
+      final authProvider = context.read<AuthProvider>();
+      if (!authProvider.isAuthenticated) {
+        if (!context.mounted) return;
+        final shouldSignIn = await SignInDialog.show(
+          context,
+          message: 'You need to sign in to report content.',
+        );
+        if (shouldSignIn != true && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Sign in required to report content'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
+      if (!context.mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+
+      // Show report dialog
+      final reported = await ReportDialog.show(
+        context,
+        targetUri: post.post.uri,
+        contentType: 'post',
+      );
+
+      if (reported == true && context.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Report submitted. Thank you for helping keep our community safe.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } else if (action == 'delete') {
       // Prevent multiple taps - set flag immediately before dialog
@@ -313,6 +355,21 @@ class _PostCardActionsState extends State<PostCardActions> {
                         ],
                       ),
                     ),
+                    // Report option (for all authenticated users, except own posts)
+                    if (!isPostAuthor)
+                      const PopupMenuItem<String>(
+                        value: 'report',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.flag_outlined,
+                              size: 20,
+                            ),
+                            SizedBox(width: 12),
+                            Text('Report post'),
+                          ],
+                        ),
+                      ),
                     // Delete option (only for post author)
                     if (isPostAuthor)
                       const PopupMenuItem<String>(

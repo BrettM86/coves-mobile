@@ -1269,6 +1269,91 @@ class CovesApiService {
     }
   }
 
+  /// Submit a report for content moderation
+  ///
+  /// Reports a post or comment to administrators for review.
+  /// Requires authentication.
+  ///
+  /// Parameters:
+  /// - [targetUri]: AT-URI of the content being reported (post or comment)
+  /// - [reason]: Category of the report. Must be one of:
+  ///   'spam', 'harassment', 'doxing', 'illegal', 'csam', 'other'
+  /// - [explanation]: Optional description (max 1000 characters)
+  ///
+  /// Returns the report ID on success.
+  ///
+  /// Throws:
+  /// - [AuthenticationException] if not authenticated
+  /// - [ApiException] if validation fails or server error
+  Future<int> submitReport({
+    required String targetUri,
+    required String reason,
+    String? explanation,
+  }) async {
+    // Validate inputs before making API call
+    const validReasons = {
+      'spam',
+      'harassment',
+      'doxing',
+      'illegal',
+      'csam',
+      'other',
+    };
+
+    if (targetUri.isEmpty || !targetUri.startsWith('at://')) {
+      throw ApiException('Invalid target URI');
+    }
+
+    if (!validReasons.contains(reason)) {
+      throw ApiException('Invalid report reason: $reason');
+    }
+
+    if (explanation != null && explanation.length > 1000) {
+      throw ApiException('Explanation exceeds maximum length of 1000 characters');
+    }
+
+    try {
+      if (kDebugMode) {
+        debugPrint('🚨 Submitting report for: $targetUri (reason: $reason)');
+      }
+
+      final requestBody = <String, dynamic>{
+        'targetUri': targetUri,
+        'reason': reason,
+      };
+
+      if (explanation != null && explanation.isNotEmpty) {
+        requestBody['explanation'] = explanation;
+      }
+
+      final response = await _dio.post(
+        '/xrpc/social.coves.admin.submitReport',
+        data: requestBody,
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Report submitted successfully');
+      }
+
+      final data = response.data as Map<String, dynamic>;
+      final reportId = data['reportId'] as int?;
+      if (reportId == null) {
+        throw ApiException('Server returned invalid report response');
+      }
+      return reportId;
+    } on DioException catch (e) {
+      throw _handleDioException(e, 'submit report');
+    } catch (e) {
+      if (e is ApiException) {
+        rethrow;
+      }
+      if (kDebugMode) {
+        debugPrint('❌ Error submitting report: $e');
+      }
+      throw ApiException('Failed to submit report', originalError: e);
+    }
+  }
+
   /// Dispose resources
   void dispose() {
     _dio.close();
