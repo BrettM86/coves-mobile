@@ -5,8 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
-
 import '../../constants/app_colors.dart';
 import '../../models/community.dart';
 import '../../models/post.dart';
@@ -20,6 +18,7 @@ import '../../utils/error_messages.dart';
 import '../../widgets/community_header.dart';
 import '../../widgets/loading_error_states.dart';
 import '../../widgets/post_card.dart';
+import '../../widgets/share_button.dart';
 
 /// Screen displaying a community's feed with header info
 ///
@@ -390,32 +389,6 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     await _loadFeed(refresh: true);
   }
 
-  Future<void> _handleShare() async {
-    if (_community == null) return;
-
-    final handle = _community!.handle;
-    final communityUrl = 'https://coves.social/community/$handle';
-    final subject =
-        'Check out ${_community!.displayName ?? _community!.name} on Coves';
-
-    try {
-      await Share.share(communityUrl, subject: subject);
-    } on Exception catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error sharing community: $e');
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to share. Please try again.'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: AppColors.primary,
-          ),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     // Loading community info
@@ -463,9 +436,9 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
               ),
               actions: [
                 _buildSubscribeButton(),
-                IconButton(
-                  icon: const Icon(Icons.share_outlined),
-                  onPressed: _handleShare,
+                const ShareButton(
+                  useIconButton: true,
+                  color: AppColors.textPrimary,
                   tooltip: 'Share Community',
                 ),
               ],

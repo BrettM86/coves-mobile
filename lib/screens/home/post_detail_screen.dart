@@ -15,7 +15,7 @@ import '../../utils/display_utils.dart';
 import '../../utils/error_messages.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/comments_header.dart';
-import '../../widgets/icons/share_icon.dart';
+import '../../widgets/share_button.dart';
 import '../../widgets/detailed_post_view.dart';
 import '../../widgets/loading_error_states.dart';
 import '../../widgets/post_action_bar.dart';
@@ -413,25 +413,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
-  /// Handle share button tap
-  Future<void> _handleShare() async {
-    // Haptic feedback is non-essential, silently fail if unsupported
-    try {
-      await HapticFeedback.lightImpact();
-    } on PlatformException {
-      // Haptics not supported on this platform - ignore
-    }
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Share feature coming soon!'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
   /// Handle menu action selection
   Future<void> _handleMenuAction(String action) async {
     // Haptic feedback is non-essential, silently fail if unsupported
@@ -776,9 +757,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     elevation: 0,
                     pinned: true,
                     actions: [
-                      IconButton(
-                        icon: const ShareIcon(color: AppColors.textPrimary),
-                        onPressed: _handleShare,
+                      const ShareButton(
+                        useIconButton: true,
+                        color: AppColors.textPrimary,
                         tooltip: 'Share',
                       ),
                       PopupMenuButton<String>(

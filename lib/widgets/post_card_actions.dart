@@ -13,7 +13,7 @@ import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
 import '../utils/date_time_utils.dart';
 import 'icons/animated_heart_icon.dart';
-import 'icons/share_icon.dart';
+import 'share_button.dart';
 import 'sign_in_dialog.dart';
 
 /// Action buttons row for post cards
@@ -338,39 +338,7 @@ class _PostCardActionsState extends State<PostCardActions> {
             ),
 
             // Share button
-            Semantics(
-              button: true,
-              label: 'Share post',
-              child: InkWell(
-                onTap: () async {
-                  try {
-                    await HapticFeedback.lightImpact();
-                  } on PlatformException {
-                    // Haptics not supported on this platform - ignore
-                  }
-
-                  if (!context.mounted) {
-                    return;
-                  }
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Share feature coming soon!'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 10,
-                  ),
-                  child: ShareIcon(
-                    color: AppColors.textPrimary.withValues(alpha: 0.6),
-                  ),
-                ),
-              ),
-            ),
+            const ShareButton(tooltip: 'Share post'),
           ],
         ),
 

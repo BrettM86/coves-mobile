@@ -3,8 +3,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
-
 import '../../constants/app_colors.dart';
 import '../../models/comment.dart';
 import '../../models/user_profile.dart';
@@ -15,6 +13,7 @@ import '../../widgets/loading_error_states.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/profile_header.dart';
+import '../../widgets/share_button.dart';
 import 'edit_profile_screen.dart';
 
 /// Profile screen displaying user profile with header and posts
@@ -139,16 +138,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _handleShare() {
-    final profile = context.read<UserProfileProvider>().profile;
-    if (profile == null) return;
-
-    final handle = profile.handle;
-    final profileUrl = 'https://coves.social/profile/$handle';
-    final subject = 'Check out ${profile.displayNameOrHandle} on Coves';
-    Share.share(profileUrl, subject: subject);
-  }
-
   Future<void> _handleSignOut() async {
     final authProvider = context.read<AuthProvider>();
     await authProvider.signOut();
@@ -254,9 +243,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           tooltip: 'Edit Profile',
                         ),
-                      IconButton(
-                        icon: const Icon(Icons.share_outlined),
-                        onPressed: _handleShare,
+                      const ShareButton(
+                        useIconButton: true,
+                        color: AppColors.textPrimary,
                         tooltip: 'Share Profile',
                       ),
                       IconButton(
