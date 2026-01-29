@@ -16,6 +16,7 @@ import 'post_card_actions.dart';
 import 'rich_text_renderer.dart';
 import 'source_link_bar.dart';
 import 'tappable_author.dart';
+import 'tappable_community.dart';
 
 /// Post card widget for displaying feed posts
 ///
@@ -95,15 +96,22 @@ class PostCard extends StatelessWidget {
             if (showHeader) ...[
               Row(
                 children: [
-                  // Community avatar
-                  _buildCommunityAvatar(post.post.community),
+                  // Community avatar (tappable for community navigation)
+                  TappableCommunity(
+                    communityDid: post.post.community.did,
+                    child: _buildCommunityAvatar(post.post.community),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Community handle with styled parts
-                        _buildCommunityHandle(post.post.community),
+                        // Community handle with styled parts (tappable)
+                        TappableCommunity(
+                          communityDid: post.post.community.did,
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: _buildCommunityHandle(post.post.community),
+                        ),
                         // Author handle (tappable for profile navigation)
                         TappableAuthor(
                           authorDid: post.post.author.did,

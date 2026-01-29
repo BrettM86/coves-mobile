@@ -321,6 +321,71 @@ class CovesApiService {
     }
   }
 
+  /// Get community feed (public, no auth required)
+  ///
+  /// Fetches posts from a specific community.
+  /// Does not require authentication but optionally includes voter state
+  /// when authenticated.
+  ///
+  /// Parameters:
+  /// - [community]: Community DID or handle (required)
+  /// - [sort]: 'hot', 'top', or 'new' (default: 'hot')
+  /// - [timeframe]: 'hour', 'day', 'week', 'month', 'year', 'all'
+  ///   (default: 'day' for top sort)
+  /// - [limit]: Number of posts per page (default: 15, max: 50)
+  /// - [cursor]: Pagination cursor from previous response
+  Future<TimelineResponse> getCommunityFeed({
+    required String community,
+    String sort = 'hot',
+    String? timeframe,
+    int limit = 15,
+    String? cursor,
+  }) async {
+    try {
+      if (kDebugMode) {
+        debugPrint(
+          '📡 Fetching community feed: community=$community, '
+          'sort=$sort, limit=$limit',
+        );
+      }
+
+      final queryParams = <String, dynamic>{
+        'community': community,
+        'sort': sort,
+        'limit': limit,
+      };
+
+      if (timeframe != null) {
+        queryParams['timeframe'] = timeframe;
+      }
+
+      if (cursor != null) {
+        queryParams['cursor'] = cursor;
+      }
+
+      final response = await _dio.get(
+        '/xrpc/social.coves.communityFeed.getCommunity',
+        queryParameters: queryParams,
+      );
+
+      if (kDebugMode) {
+        debugPrint(
+          '✅ Community feed fetched: '
+          '${response.data['feed']?.length ?? 0} posts',
+        );
+      }
+
+      return TimelineResponse.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      _handleDioException(e, 'community feed');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error parsing community feed response: $e');
+      }
+      throw ApiException('Failed to parse server response', originalError: e);
+    }
+  }
+
   /// Get comments for a post (authenticated)
   ///
   /// Fetches threaded comments for a specific post.
@@ -438,6 +503,39 @@ class CovesApiService {
     } catch (e) {
       if (kDebugMode) {
         debugPrint('❌ Error parsing communities response: $e');
+      }
+      throw ApiException('Failed to parse server response', originalError: e);
+    }
+  }
+
+  /// Get a single community by identifier
+  ///
+  /// Fetches community details by DID or handle.
+  /// Does not require authentication.
+  ///
+  /// Parameters:
+  /// - [community]: Community DID or handle (required)
+  Future<CommunityView> getCommunity({required String community}) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Fetching community: $community');
+      }
+
+      final response = await _dio.get(
+        '/xrpc/social.coves.community.get',
+        queryParameters: {'community': community},
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Community fetched: ${response.data['name']}');
+      }
+
+      return CommunityView.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      _handleDioException(e, 'community');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error parsing community response: $e');
       }
       throw ApiException('Failed to parse server response', originalError: e);
     }

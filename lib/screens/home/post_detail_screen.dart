@@ -11,6 +11,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
 import '../../providers/vote_provider.dart';
 import '../../services/comments_provider_cache.dart';
+import '../../utils/display_utils.dart';
 import '../../utils/error_messages.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/comments_header.dart';
@@ -386,21 +387,24 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     return _buildFallbackAvatar(community, size);
   }
 
-  /// Build fallback avatar with first letter
+  /// Build fallback avatar with first letter and hash-based color
   Widget _buildFallbackAvatar(CommunityRef community, double size) {
-    final firstLetter = community.name.isNotEmpty ? community.name[0] : '?';
+    final name = community.name;
+    final firstLetter = name.isNotEmpty ? name[0].toUpperCase() : 'C';
+    final bgColor = DisplayUtils.getFallbackColor(name);
+
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: AppColors.communityName.withValues(alpha: 0.2),
+        color: bgColor,
         shape: BoxShape.circle,
       ),
       child: Center(
         child: Text(
-          firstLetter.toUpperCase(),
+          firstLetter,
           style: TextStyle(
-            color: AppColors.communityName,
+            color: Colors.white,
             fontSize: size * 0.45,
             fontWeight: FontWeight.bold,
           ),

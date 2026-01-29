@@ -9,6 +9,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'config/oauth_config.dart';
 import 'constants/app_colors.dart';
+import 'models/community.dart';
 import 'models/post.dart';
 import 'providers/auth_provider.dart';
 import 'providers/community_subscription_provider.dart';
@@ -16,6 +17,7 @@ import 'providers/multi_feed_provider.dart';
 import 'providers/user_profile_provider.dart';
 import 'providers/vote_provider.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/community/community_feed_screen.dart';
 import 'screens/home/main_shell_screen.dart';
 import 'screens/home/post_detail_screen.dart';
 import 'screens/home/profile_screen.dart';
@@ -205,6 +207,17 @@ GoRouter _createRouter(AuthProvider authProvider) {
         builder: (context, state) {
           final actor = state.pathParameters['actor']!;
           return ProfileScreen(actor: actor);
+        },
+      ),
+      GoRoute(
+        path: '/community/:identifier',
+        builder: (context, state) {
+          final identifier = state.pathParameters['identifier']!;
+          final community = state.extra as CommunityView?;
+          return CommunityFeedScreen(
+            identifier: identifier,
+            community: community,
+          );
         },
       ),
       GoRoute(
