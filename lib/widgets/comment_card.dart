@@ -485,56 +485,62 @@ class _CommentCardState extends State<CommentCard> {
 
         final isCommentAuthor = authProvider.did == comment.author.did;
 
-        return PopupMenuButton<String>(
-          icon: Icon(
-            Icons.more_horiz,
-            size: 18,
-            color: AppColors.textPrimary.withValues(alpha: 0.6),
+        return MenuAnchor(
+          style: MenuStyle(
+            backgroundColor: const WidgetStatePropertyAll(
+              AppColors.backgroundSecondary,
+            ),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
           ),
-          tooltip: 'Comment options',
-          color: AppColors.backgroundSecondary,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          onSelected: (action) => _handleMenuAction(context, action),
-          itemBuilder: (context) => [
+          menuChildren: [
             // Report option (for non-authors)
             if (!isCommentAuthor)
-              const PopupMenuItem<String>(
-                value: 'report',
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.flag_outlined,
-                      size: 20,
-                    ),
-                    SizedBox(width: 12),
-                    Text('Report comment'),
-                  ],
+              MenuItemButton(
+                onPressed: () => _handleMenuAction(context, 'report'),
+                leadingIcon: const Icon(
+                  Icons.flag_outlined,
+                  size: 20,
                 ),
+                child: const Text('Report comment'),
               ),
             // Delete option (only for comment author)
             if (isCommentAuthor)
-              const PopupMenuItem<String>(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.delete_outline,
-                      size: 20,
-                      color: Colors.red,
-                    ),
-                    SizedBox(width: 12),
-                    Text(
-                      'Delete comment',
-                      style: TextStyle(color: Colors.red),
-                    ),
-                  ],
+              MenuItemButton(
+                onPressed: () => _handleMenuAction(context, 'delete'),
+                leadingIcon: const Icon(
+                  Icons.delete_outline,
+                  size: 20,
+                  color: Colors.red,
+                ),
+                child: const Text(
+                  'Delete comment',
+                  style: TextStyle(color: Colors.red),
                 ),
               ),
           ],
+          builder: (context, controller, child) {
+            return IconButton(
+              icon: Icon(
+                Icons.more_horiz,
+                size: 18,
+                color: AppColors.textPrimary.withValues(alpha: 0.6),
+              ),
+              tooltip: 'Comment options',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: () {
+                if (controller.isOpen) {
+                  controller.close();
+                } else {
+                  controller.open();
+                }
+              },
+            );
+          },
         );
       },
     );

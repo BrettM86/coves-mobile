@@ -301,95 +301,95 @@ class _PostCardActionsState extends State<PostCardActions> {
                 final isPostAuthor =
                     authProvider.did == post.post.author.did;
 
-                return PopupMenuButton<String>(
-                  icon: Icon(
-                    Icons.more_horiz,
-                    size: 20,
-                    color: AppColors.textPrimary.withValues(alpha: 0.6),
+                return MenuAnchor(
+                  style: MenuStyle(
+                    backgroundColor: const WidgetStatePropertyAll(
+                      AppColors.backgroundSecondary,
+                    ),
+                    shape: WidgetStatePropertyAll(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
-                  tooltip: 'Post options',
-                  color: AppColors.backgroundSecondary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  onSelected: (action) => _handleMenuAction(context, action),
-                  itemBuilder: (context) => [
-                    PopupMenuItem<String>(
-                      value: 'subscribe',
-                      enabled: !isPending,
-                      child: Row(
-                        children: [
-                          if (isPending)
-                            const SizedBox(
+                  menuChildren: [
+                    MenuItemButton(
+                      onPressed: isPending
+                          ? null
+                          : () => _handleMenuAction(context, 'subscribe'),
+                      leadingIcon: isPending
+                          ? const SizedBox(
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                               ),
                             )
-                          else
-                            Icon(
+                          : Icon(
                               isSubscribed
                                   ? Icons.remove_circle_outline
                                   : Icons.add_circle_outline,
                               size: 20,
                             ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              isPending
-                                  ? (isSubscribed
-                                      ? 'Unsubscribing...'
-                                      : 'Subscribing...')
-                                  : (isSubscribed
-                                      ? 'Unsubscribe from !$communityName'
-                                      : 'Subscribe to !$communityName'),
-                            ),
-                          ),
-                          if (isSubscribed && !isPending)
-                            const Icon(
+                      trailingIcon: isSubscribed && !isPending
+                          ? const Icon(
                               Icons.check,
                               color: AppColors.primary,
                               size: 20,
-                            ),
-                        ],
+                            )
+                          : null,
+                      child: Text(
+                        isPending
+                            ? (isSubscribed
+                                ? 'Unsubscribing...'
+                                : 'Subscribing...')
+                            : (isSubscribed
+                                ? 'Unsubscribe from !$communityName'
+                                : 'Subscribe to !$communityName'),
                       ),
                     ),
                     // Report option (for all authenticated users, except own posts)
                     if (!isPostAuthor)
-                      const PopupMenuItem<String>(
-                        value: 'report',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.flag_outlined,
-                              size: 20,
-                            ),
-                            SizedBox(width: 12),
-                            Text('Report post'),
-                          ],
+                      MenuItemButton(
+                        onPressed: () => _handleMenuAction(context, 'report'),
+                        leadingIcon: const Icon(
+                          Icons.flag_outlined,
+                          size: 20,
                         ),
+                        child: const Text('Report post'),
                       ),
                     // Delete option (only for post author)
                     if (isPostAuthor)
-                      const PopupMenuItem<String>(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.delete_outline,
-                              size: 20,
-                              color: Colors.red,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Delete post',
-                              style: TextStyle(color: Colors.red),
-                            ),
-                          ],
+                      MenuItemButton(
+                        onPressed: () => _handleMenuAction(context, 'delete'),
+                        leadingIcon: const Icon(
+                          Icons.delete_outline,
+                          size: 20,
+                          color: Colors.red,
+                        ),
+                        child: const Text(
+                          'Delete post',
+                          style: TextStyle(color: Colors.red),
                         ),
                       ),
                   ],
+                  builder: (context, controller, child) {
+                    return IconButton(
+                      icon: Icon(
+                        Icons.more_horiz,
+                        size: 20,
+                        color: AppColors.textPrimary.withValues(alpha: 0.6),
+                      ),
+                      tooltip: 'Post options',
+                      onPressed: () {
+                        if (controller.isOpen) {
+                          controller.close();
+                        } else {
+                          controller.open();
+                        }
+                      },
+                    );
+                  },
                 );
               },
             ),
