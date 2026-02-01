@@ -11,6 +11,7 @@ import '../models/post.dart';
 import '../providers/auth_provider.dart';
 import '../providers/vote_provider.dart';
 import '../services/api_exceptions.dart';
+import '../utils/error_messages.dart';
 import '../utils/date_time_utils.dart';
 import 'icons/animated_heart_icon.dart';
 import 'report_dialog.dart';
@@ -604,9 +605,9 @@ class _CommentCardState extends State<CommentCard> {
                     }
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Failed to vote. Please try again.'),
-                          duration: Duration(seconds: 2),
+                        SnackBar(
+                          content: Text(ErrorMessage.vote(e)),
+                          duration: const Duration(seconds: 2),
                         ),
                       );
                     }

@@ -539,7 +539,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               if (mounted) {
                 messenger.showSnackBar(
                   SnackBar(
-                    content: Text('Failed to vote: $e'),
+                    content: Text(ErrorMessage.vote(e)),
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
@@ -619,7 +619,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text('Failed to post comment: $e'),
+            content: Text(ErrorMessage.comment(e)),
             behavior: SnackBarBehavior.floating,
             backgroundColor: AppColors.primary,
           ),
@@ -657,7 +657,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text('Failed to post reply: $e'),
+            content: Text(ErrorMessage.comment(e)),
             behavior: SnackBarBehavior.floating,
             backgroundColor: AppColors.primary,
           ),
@@ -731,7 +731,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         if (error != null && comments.isEmpty) {
           return FullScreenError(
             title: 'Failed to load comments',
-            message: ErrorMessages.getUserFriendly(error),
+            message: getErrorMessage(error),
             onRetry: commentsProvider.retry,
           );
         }
@@ -850,7 +850,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             }
                             if (error != null) {
                               return InlineError(
-                                message: ErrorMessages.getUserFriendly(error),
+                                message: getErrorMessage(error),
                                 onRetry: () {
                                   commentsProvider
                                     ..clearError()

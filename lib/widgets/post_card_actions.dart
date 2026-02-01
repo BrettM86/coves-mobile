@@ -11,6 +11,7 @@ import '../providers/community_subscription_provider.dart';
 import '../providers/vote_provider.dart';
 import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
+import '../utils/error_messages.dart';
 import '../utils/date_time_utils.dart';
 import 'icons/animated_heart_icon.dart';
 import 'report_dialog.dart';
@@ -512,10 +513,8 @@ class _PostCardActionsState extends State<PostCardActions> {
                         }
                         if (context.mounted) {
                           messenger.showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Could not update your vote. Please try again.',
-                              ),
+                            SnackBar(
+                              content: Text(ErrorMessage.vote(e)),
                               behavior: SnackBarBehavior.floating,
                             ),
                           );

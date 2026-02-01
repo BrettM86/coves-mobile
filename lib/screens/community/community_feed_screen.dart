@@ -11,7 +11,6 @@ import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/community_subscription_provider.dart';
 import '../../providers/vote_provider.dart';
-import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../utils/display_utils.dart';
 import '../../utils/error_messages.dart';
@@ -58,6 +57,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   CommunityView? _community;
   bool _isLoadingCommunity = false;
   String? _communityError;
+  bool _communityIsAuthError = false;
 
   // Feed state
   List<FeedViewPost> _posts = [];
@@ -137,6 +137,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     setState(() {
       _isLoadingCommunity = true;
       _communityError = null;
+      _communityIsAuthError = false;
     });
 
     try {
@@ -163,53 +164,14 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
           );
         }
       }
-    } on NetworkException catch (e) {
-      if (kDebugMode) {
-        debugPrint('Network error loading community: $e');
-      }
-      if (mounted) {
-        setState(() {
-          _communityError = 'Please check your internet connection';
-          _isLoadingCommunity = false;
-        });
-      }
-    } on NotFoundException catch (e) {
-      if (kDebugMode) {
-        debugPrint('Community not found: $e');
-      }
-      if (mounted) {
-        setState(() {
-          _communityError = 'Community not found';
-          _isLoadingCommunity = false;
-        });
-      }
-    } on ServerException catch (e) {
-      if (kDebugMode) {
-        debugPrint('Server error loading community: $e');
-      }
-      if (mounted) {
-        setState(() {
-          _communityError = 'Server error. Please try again later';
-          _isLoadingCommunity = false;
-        });
-      }
-    } on ApiException catch (e) {
-      if (kDebugMode) {
-        debugPrint('API error loading community: $e');
-      }
-      if (mounted) {
-        setState(() {
-          _communityError = e.message;
-          _isLoadingCommunity = false;
-        });
-      }
-    } on Exception catch (e) {
+    } catch (e) {
       if (kDebugMode) {
         debugPrint('Error loading community: $e');
       }
       if (mounted) {
         setState(() {
-          _communityError = ErrorMessages.getUserFriendly(e.toString());
+          _communityError = ErrorMessage.community(e);
+          _communityIsAuthError = isAuthError(e);
           _isLoadingCommunity = false;
         });
       }
@@ -251,43 +213,13 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
 
         _syncViewerStates(response.feed);
       }
-    } on NetworkException catch (e) {
-      if (kDebugMode) {
-        debugPrint('Network error loading feed: $e');
-      }
-      if (mounted) {
-        setState(() {
-          _feedError = 'Please check your internet connection';
-          _isLoadingFeed = false;
-        });
-      }
-    } on ServerException catch (e) {
-      if (kDebugMode) {
-        debugPrint('Server error loading feed: $e');
-      }
-      if (mounted) {
-        setState(() {
-          _feedError = 'Server error. Please try again later';
-          _isLoadingFeed = false;
-        });
-      }
-    } on ApiException catch (e) {
-      if (kDebugMode) {
-        debugPrint('API error loading feed: $e');
-      }
-      if (mounted) {
-        setState(() {
-          _feedError = e.message;
-          _isLoadingFeed = false;
-        });
-      }
-    } on Exception catch (e) {
+    } catch (e) {
       if (kDebugMode) {
         debugPrint('Error loading community feed: $e');
       }
       if (mounted) {
         setState(() {
-          _feedError = ErrorMessages.getUserFriendly(e.toString());
+          _feedError = ErrorMessage.loadFeed(e);
           _isLoadingFeed = false;
         });
       }
@@ -320,34 +252,14 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
 
         _syncViewerStates(response.feed);
       }
-    } on NetworkException catch (e) {
-      if (kDebugMode) {
-        debugPrint('Network error loading more posts: $e');
-      }
-      if (mounted) {
-        setState(() {
-          _isLoadingMore = false;
-          _loadMoreError = 'Please check your internet connection';
-        });
-      }
-    } on ApiException catch (e) {
-      if (kDebugMode) {
-        debugPrint('API error loading more posts: $e');
-      }
-      if (mounted) {
-        setState(() {
-          _isLoadingMore = false;
-          _loadMoreError = e.message;
-        });
-      }
-    } on Exception catch (e) {
+    } catch (e) {
       if (kDebugMode) {
         debugPrint('Error loading more posts: $e');
       }
       if (mounted) {
         setState(() {
           _isLoadingMore = false;
-          _loadMoreError = ErrorMessages.getUserFriendly(e.toString());
+          _loadMoreError = ErrorMessage.loadFeed(e);
         });
       }
     }
@@ -409,6 +321,9 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
           title: 'Community not found',
           message: _communityError!,
           onRetry: _loadCommunity,
+          secondaryActionLabel: _communityIsAuthError ? 'Sign In' : null,
+          onSecondaryAction:
+              _communityIsAuthError ? () => context.push('/login') : null,
         ),
       );
     }
@@ -713,7 +628,6 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                     borderRadius: BorderRadius.circular(14),
                     child: InkWell(
                       onTap: () async {
-                        final wasSubscribed = isSubscribed;
                         try {
                           await provider.toggleSubscription(
                             communityDid: _community!.did,
@@ -724,12 +638,9 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                             debugPrint('Error toggling subscription: $e');
                           }
                           if (mounted) {
-                            final action = wasSubscribed ? 'leave' : 'join';
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text(
-                                  'Failed to $action community. Please try again.',
-                                ),
+                                content: Text(ErrorMessage.subscription(e)),
                                 behavior: SnackBarBehavior.floating,
                                 backgroundColor: AppColors.primary,
                               ),
