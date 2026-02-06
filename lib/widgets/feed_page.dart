@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../models/post.dart';
 import '../providers/multi_feed_provider.dart';
+import '../utils/responsive_utils.dart';
 import 'post_card.dart';
 
 /// FeedPage widget for rendering a single feed's content
@@ -213,7 +214,7 @@ class _FeedPageState extends State<FeedPage>
           // ValueKey on RepaintBoundary ensures Flutter correctly identifies
           // and reuses the entire isolated subtree during list updates,
           // preserving both identity and paint optimization.
-          return RepaintBoundary(
+          final postCard = RepaintBoundary(
             key: ValueKey(post.post.uri),
             child: Semantics(
               label:
@@ -224,6 +225,20 @@ class _FeedPageState extends State<FeedPage>
               child: PostCard(post: post, currentTime: widget.currentTime),
             ),
           );
+
+          // Constrain width on tablets for better readability
+          if (ResponsiveUtils.isTablet(context)) {
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: ResponsiveUtils.maxContentWidth,
+                ),
+                child: postCard,
+              ),
+            );
+          }
+
+          return postCard;
           },
           childCount: widget.posts.length + (_shouldShowFooter ? 1 : 0),
           // findChildIndexCallback enables Flutter to track items by key

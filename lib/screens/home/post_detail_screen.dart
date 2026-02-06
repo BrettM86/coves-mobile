@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
+import '../../utils/responsive_utils.dart';
 import '../../models/comment.dart';
 import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
@@ -811,68 +812,81 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         (context, index) {
                           // Post card (index 0)
                           if (index == 0) {
-                            return Column(
-                              children: [
-                                // Reuse PostCard (hide comment button in
-                                // detail view)
-                                // Use ValueListenableBuilder to only rebuild
-                                // when time changes
-                                _PostHeader(
-                                  post: widget.post,
-                                  currentTimeNotifier:
-                                      commentsProvider.currentTimeNotifier,
-                                ),
-
-                                // Visual divider before comments section
-                                Container(
-                                  margin: const EdgeInsets.symmetric(
-                                    vertical: 16,
+                            return ResponsiveUtils.wrapForTablet(
+                              context,
+                              Column(
+                                children: [
+                                  // Reuse PostCard (hide comment button in
+                                  // detail view)
+                                  // Use ValueListenableBuilder to only rebuild
+                                  // when time changes
+                                  _PostHeader(
+                                    post: widget.post,
+                                    currentTimeNotifier:
+                                        commentsProvider.currentTimeNotifier,
                                   ),
-                                  height: 1,
-                                  color: AppColors.border,
-                                ),
 
-                                // Comments header with sort dropdown
-                                CommentsHeader(
-                                  key: _commentsHeaderKey,
-                                  commentCount: widget.post.post.stats.commentCount,
-                                  currentSort: commentsProvider.sort,
-                                  onSortChanged: _onSortChanged,
-                                ),
-                              ],
+                                  // Visual divider before comments section
+                                  Container(
+                                    margin: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                    ),
+                                    height: 1,
+                                    color: AppColors.border,
+                                  ),
+
+                                  // Comments header with sort dropdown
+                                  CommentsHeader(
+                                    key: _commentsHeaderKey,
+                                    commentCount:
+                                        widget.post.post.stats.commentCount,
+                                    currentSort: commentsProvider.sort,
+                                    onSortChanged: _onSortChanged,
+                                  ),
+                                ],
+                              ),
                             );
                           }
 
                           // Loading indicator or error at the end
                           if (index == comments.length + 1) {
                             if (isLoadingMore) {
-                              return const InlineLoading();
+                              return ResponsiveUtils.wrapForTablet(
+                                context,
+                                const InlineLoading(),
+                              );
                             }
                             if (error != null) {
-                              return InlineError(
-                                message: getErrorMessage(error),
-                                onRetry: () {
-                                  commentsProvider
-                                    ..clearError()
-                                    ..loadMoreComments();
-                                },
+                              return ResponsiveUtils.wrapForTablet(
+                                context,
+                                InlineError(
+                                  message: getErrorMessage(error),
+                                  onRetry: () {
+                                    commentsProvider
+                                      ..clearError()
+                                      ..loadMoreComments();
+                                  },
+                                ),
                               );
                             }
                           }
 
                           // Comment item - use existing CommentThread widget
                           final comment = comments[index - 1];
-                          return _CommentItem(
-                            comment: comment,
-                            currentTimeNotifier:
-                                commentsProvider.currentTimeNotifier,
-                            onCommentTap: _openReplyToComment,
-                            collapsedComments:
-                                commentsProvider.collapsedComments,
-                            onCollapseToggle: commentsProvider.toggleCollapsed,
-                            onContinueThread: _onContinueThread,
-                            onDelete: (uri) =>
-                                commentsProvider.deleteComment(commentUri: uri),
+                          return ResponsiveUtils.wrapForTablet(
+                            context,
+                            _CommentItem(
+                              comment: comment,
+                              currentTimeNotifier:
+                                  commentsProvider.currentTimeNotifier,
+                              onCommentTap: _openReplyToComment,
+                              collapsedComments:
+                                  commentsProvider.collapsedComments,
+                              onCollapseToggle: commentsProvider.toggleCollapsed,
+                              onContinueThread: _onContinueThread,
+                              onDelete: (uri) =>
+                                  commentsProvider.deleteComment(commentUri: uri),
+                            ),
                           );
                         },
                         childCount:

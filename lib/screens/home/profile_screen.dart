@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
+import '../../utils/responsive_utils.dart';
 import '../../models/comment.dart';
 import '../../models/user_profile.dart';
 import '../../providers/auth_provider.dart';
@@ -454,7 +455,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
 
         final feedViewPost = postsState.posts[index];
-        return PostCard(post: feedViewPost);
+        final postCard = PostCard(post: feedViewPost);
+
+        // Constrain width on tablets for better readability
+        if (ResponsiveUtils.isTablet(context)) {
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: ResponsiveUtils.maxContentWidth,
+              ),
+              child: postCard,
+            ),
+          );
+        }
+        return postCard;
       }, childCount: postsState.posts.length + (showLoadingSlot ? 1 : 0)),
     );
   }
@@ -522,7 +536,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
 
         final comment = commentsState.comments[index];
-        return _ProfileCommentCard(comment: comment);
+        final commentCard = _ProfileCommentCard(comment: comment);
+
+        // Constrain width on tablets for better readability
+        if (ResponsiveUtils.isTablet(context)) {
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: ResponsiveUtils.maxContentWidth,
+              ),
+              child: commentCard,
+            ),
+          );
+        }
+        return commentCard;
       }, childCount: commentsState.comments.length + (showLoadingSlot ? 1 : 0)),
     );
   }

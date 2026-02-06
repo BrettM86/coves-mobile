@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../constants/app_colors.dart';
+import '../../utils/responsive_utils.dart';
 import '../../widgets/icons/bluesky_icons.dart';
 import 'communities_screen.dart';
 import 'create_post_screen.dart';
@@ -44,17 +45,96 @@ class _MainShellScreenState extends State<MainShellScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = ResponsiveUtils.isTablet(context);
+
+    final body = IndexedStack(
+      index: _selectedIndex,
+      children: [
+        FeedScreen(key: _feedScreenKey, onSearchTap: _onCommunitiesTap),
+        const CommunitiesScreen(),
+        CreatePostScreen(onNavigateToFeed: _onNavigateToFeed),
+        const NotificationsScreen(),
+        const ProfileScreen(),
+      ],
+    );
+
+    // Tablet layout: NavigationRail on the left
+    if (isTablet) {
+      return Scaffold(
+        body: Row(
+          children: [
+            // Wrap NavigationRail in a colored container that extends to
+            // status bar, preventing content from bleeding behind it
+            Container(
+              color: const Color(0xFF0B0F14),
+              child: SafeArea(
+                right: false,
+                bottom: false,
+                child: NavigationRail(
+                  selectedIndex: _selectedIndex,
+                  onDestinationSelected: _onItemTapped,
+                  backgroundColor: const Color(0xFF0B0F14),
+                  indicatorColor: AppColors.primary.withValues(alpha: 0.2),
+                  labelType: NavigationRailLabelType.all,
+                  destinations: [
+                NavigationRailDestination(
+                  icon: BlueSkyIcon.homeSimple(
+                    color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                  ),
+                  selectedIcon:
+                      BlueSkyIcon.homeSimple(color: AppColors.primary),
+                  label: const Text('Home'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(
+                    Icons.workspaces_outlined,
+                    color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                  ),
+                  selectedIcon:
+                      const Icon(Icons.workspaces, color: AppColors.primary),
+                  label: const Text('Communities'),
+                ),
+                NavigationRailDestination(
+                  icon: BlueSkyIcon.plus(
+                    color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                  ),
+                  selectedIcon: BlueSkyIcon.plus(color: AppColors.primary),
+                  label: const Text('Create'),
+                ),
+                NavigationRailDestination(
+                  icon: BlueSkyIcon.bellOutline(
+                    color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                  ),
+                  selectedIcon:
+                      BlueSkyIcon.bellFilled(color: AppColors.primary),
+                  label: const Text('Notifications'),
+                ),
+                NavigationRailDestination(
+                  icon: BlueSkyIcon.personSimple(
+                    color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                  ),
+                  selectedIcon:
+                      BlueSkyIcon.personSimple(color: AppColors.primary),
+                  label: const Text('Me'),
+                ),
+              ],
+                ),
+              ),
+            ),
+            const VerticalDivider(
+              width: 1,
+              thickness: 1,
+              color: Color(0xFF1A2433),
+            ),
+            Expanded(child: body),
+          ],
+        ),
+      );
+    }
+
+    // Phone layout: Bottom navigation bar
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: [
-          FeedScreen(key: _feedScreenKey, onSearchTap: _onCommunitiesTap),
-          const CommunitiesScreen(),
-          CreatePostScreen(onNavigateToFeed: _onNavigateToFeed),
-          const NotificationsScreen(),
-          const ProfileScreen(),
-        ],
-      ),
+      body: body,
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: Color(0xFF0B0F14),

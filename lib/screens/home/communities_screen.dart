@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
+import '../../utils/responsive_utils.dart';
 import '../../providers/auth_provider.dart';
 import 'communities_admin_panel.dart';
 
@@ -47,31 +48,43 @@ class _CommunitiesPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.workspaces_outlined, size: 64, color: AppColors.primary),
-            SizedBox(height: 24),
-            Text(
-              'Communities',
-              style: TextStyle(
-                fontSize: 28,
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
+    const content = Padding(
+      padding: EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.workspaces_outlined, size: 64, color: AppColors.primary),
+          SizedBox(height: 24),
+          Text(
+            'Communities',
+            style: TextStyle(
+              fontSize: 28,
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
             ),
-            SizedBox(height: 16),
-            Text(
-              'Discover and join communities',
-              style: TextStyle(fontSize: 16, color: Color(0xFFB6C2D2)),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+          ),
+          SizedBox(height: 16),
+          Text(
+            'Discover and join communities',
+            style: TextStyle(fontSize: 16, color: Color(0xFFB6C2D2)),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
+
+    // Constrain width on tablets for better readability
+    if (ResponsiveUtils.isTablet(context)) {
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: ResponsiveUtils.maxContentWidth,
+          ),
+          child: content,
+        ),
+      );
+    }
+
+    return Center(child: content);
   }
 }

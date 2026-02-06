@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
+import '../../utils/responsive_utils.dart';
 import '../../models/community.dart';
 import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
@@ -751,7 +752,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
           }
 
           final post = _posts[index];
-          return RepaintBoundary(
+          final postCard = RepaintBoundary(
             key: ValueKey(post.post.uri),
             child: PostCard(
               post: post,
@@ -759,6 +760,19 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
               showHeader: true,
             ),
           );
+
+          // Constrain width on tablets for better readability
+          if (ResponsiveUtils.isTablet(context)) {
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: ResponsiveUtils.maxContentWidth,
+                ),
+                child: postCard,
+              ),
+            );
+          }
+          return postCard;
         },
         childCount: _posts.length + (showLoadingSlot || !_hasMore ? 1 : 0),
       ),
