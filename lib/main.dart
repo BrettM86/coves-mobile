@@ -12,6 +12,7 @@ import 'constants/app_colors.dart';
 import 'models/community.dart';
 import 'models/post.dart';
 import 'providers/auth_provider.dart';
+import 'providers/block_provider.dart';
 import 'providers/community_subscription_provider.dart';
 import 'providers/multi_feed_provider.dart';
 import 'providers/user_profile_provider.dart';
@@ -24,6 +25,7 @@ import 'screens/home/profile_screen.dart';
 import 'screens/landing_screen.dart';
 import 'services/comment_service.dart';
 import 'services/comments_provider_cache.dart';
+import 'services/coves_api_service.dart';
 import 'services/streamable_service.dart';
 import 'services/vote_service.dart';
 import 'widgets/loading_error_states.dart';
@@ -99,6 +101,16 @@ Future<void> main() async {
             ),
             ChangeNotifierProvider(
               create: (_) => CommunitySubscriptionProvider(
+                authProvider: authProvider,
+              ),
+            ),
+            ChangeNotifierProvider(
+              create: (_) => BlockProvider(
+                apiService: CovesApiService(
+                  tokenGetter: () async => authProvider.session?.token,
+                  tokenRefresher: authProvider.refreshToken,
+                  signOutHandler: authProvider.signOut,
+                ),
                 authProvider: authProvider,
               ),
             ),

@@ -113,6 +113,12 @@ abstract final class ErrorMessage {
     fallback: 'Could not update subscription. Please try again.',
   );
 
+  /// Error message for block operations
+  static String block(Object error) => getErrorMessage(
+    error,
+    fallback: 'Could not update block. Please try again.',
+  );
+
   /// Error message for report operations
   static String report(Object error) => getErrorMessage(
     error,

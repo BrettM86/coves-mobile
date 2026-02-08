@@ -7,12 +7,14 @@ import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
 import '../models/post.dart';
 import '../providers/auth_provider.dart';
+import '../providers/block_provider.dart';
 import '../providers/community_subscription_provider.dart';
 import '../providers/vote_provider.dart';
 import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
 import '../utils/error_messages.dart';
 import '../utils/date_time_utils.dart';
+import 'block_action_helpers.dart';
 import 'icons/animated_heart_icon.dart';
 import 'report_dialog.dart';
 import 'share_button.dart';
@@ -111,6 +113,18 @@ class _PostCardActionsState extends State<PostCardActions> {
           );
         }
       }
+    } else if (action == 'blockCommunity') {
+      await handleBlockCommunity(
+        context: context,
+        communityDid: communityDid,
+        communityName: communityName,
+      );
+    } else if (action == 'blockUser') {
+      await handleBlockUser(
+        context: context,
+        authorDid: post.post.author.did,
+        authorHandle: post.post.author.handle,
+      );
     } else if (action == 'report') {
       // Check authentication - report requires sign-in
       final authProvider = context.read<AuthProvider>();
@@ -292,8 +306,8 @@ class _PostCardActionsState extends State<PostCardActions> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Three dots menu button
-            Consumer2<CommunitySubscriptionProvider, AuthProvider>(
-              builder: (context, subscriptionProvider, authProvider, child) {
+            Consumer3<CommunitySubscriptionProvider, AuthProvider, BlockProvider>(
+              builder: (context, subscriptionProvider, authProvider, blockProvider, child) {
                 final communityDid = post.post.community.did;
                 final communityName = post.post.community.name;
                 final isSubscribed =
@@ -301,6 +315,16 @@ class _PostCardActionsState extends State<PostCardActions> {
                 final isPending = subscriptionProvider.isPending(communityDid);
                 final isPostAuthor =
                     authProvider.did == post.post.author.did;
+                final authorDid = post.post.author.did;
+                final authorHandle = post.post.author.handle;
+                final isUserBlocked = blockProvider.isUserBlocked(authorDid);
+                final isUserBlockPending = blockProvider.isUserBlockPending(authorDid);
+                final isCommunityBlocked = blockProvider.isCommunityBlocked(communityDid);
+                final isCommunityBlockPending = blockProvider.isCommunityBlockPending(communityDid);
+                // TODO: Set to true when the user is the community owner.
+                // CommunityRef currently lacks an owner/creator DID field,
+                // so we cannot determine ownership from post data alone.
+                const isCommunityOwner = false;
 
                 return MenuAnchor(
                   style: MenuStyle(
@@ -349,6 +373,28 @@ class _PostCardActionsState extends State<PostCardActions> {
                                 : 'Subscribe to !$communityName'),
                       ),
                     ),
+                    // Block community option (hidden for community owners)
+                    if (!isCommunityOwner)
+                      buildBlockMenuItem(
+                        isBlocked: isCommunityBlocked,
+                        isPending: isCommunityBlockPending,
+                        label: isCommunityBlocked
+                            ? 'Unblock !$communityName'
+                            : 'Block !$communityName',
+                        onPressed: () =>
+                            _handleMenuAction(context, 'blockCommunity'),
+                      ),
+                    // Block user option (except own posts)
+                    if (!isPostAuthor)
+                      buildBlockMenuItem(
+                        isBlocked: isUserBlocked,
+                        isPending: isUserBlockPending,
+                        label: isUserBlocked
+                            ? 'Unblock @$authorHandle'
+                            : 'Block @$authorHandle',
+                        onPressed: () =>
+                            _handleMenuAction(context, 'blockUser'),
+                      ),
                     // Report option (for all authenticated users, except own posts)
                     if (!isPostAuthor)
                       MenuItemButton(

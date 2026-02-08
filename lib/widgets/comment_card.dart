@@ -9,10 +9,12 @@ import '../constants/threading_colors.dart';
 import '../models/comment.dart';
 import '../models/post.dart';
 import '../providers/auth_provider.dart';
+import '../providers/block_provider.dart';
 import '../providers/vote_provider.dart';
 import '../services/api_exceptions.dart';
 import '../utils/error_messages.dart';
 import '../utils/date_time_utils.dart';
+import 'block_action_helpers.dart';
 import 'icons/animated_heart_icon.dart';
 import 'report_dialog.dart';
 import 'rich_text_renderer.dart';
@@ -123,7 +125,18 @@ class _CommentCardState extends State<CommentCard> {
                 }
                 : null,
         child: InkWell(
-          onTap: onTap,
+          onTap: onTap != null
+              ? () async {
+                  try {
+                    await HapticFeedback.mediumImpact();
+                  } on PlatformException catch (e) {
+                    if (kDebugMode) {
+                      debugPrint('Haptics not supported: $e');
+                    }
+                  }
+                  onTap!();
+                }
+              : null,
           child: Container(
             decoration: const BoxDecoration(color: AppColors.background),
             child: Stack(
@@ -328,7 +341,13 @@ class _CommentCardState extends State<CommentCard> {
   ///
   /// Menu is only visible to authenticated users, so no auth check needed here.
   Future<void> _handleMenuAction(BuildContext context, String action) async {
-    if (action == 'report') {
+    if (action == 'blockUser') {
+      await handleBlockUser(
+        context: context,
+        authorDid: comment.author.did,
+        authorHandle: comment.author.handle,
+      );
+    } else if (action == 'report') {
       if (!context.mounted) return;
       final messenger = ScaffoldMessenger.of(context);
 
@@ -477,14 +496,18 @@ class _CommentCardState extends State<CommentCard> {
   /// Shows either a report option (for non-authors) or a delete option
   /// (for the comment author). Only visible when authenticated.
   Widget _buildCommentMenu(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, authProvider, child) {
+    return Consumer2<AuthProvider, BlockProvider>(
+      builder: (context, authProvider, blockProvider, child) {
         // Only show menu for authenticated users
         if (!authProvider.isAuthenticated) {
           return const SizedBox.shrink();
         }
 
         final isCommentAuthor = authProvider.did == comment.author.did;
+        final authorDid = comment.author.did;
+        final authorHandle = comment.author.handle;
+        final isUserBlocked = blockProvider.isUserBlocked(authorDid);
+        final isUserBlockPending = blockProvider.isUserBlockPending(authorDid);
 
         return MenuAnchor(
           style: MenuStyle(
@@ -498,6 +521,16 @@ class _CommentCardState extends State<CommentCard> {
             ),
           ),
           menuChildren: [
+            // Block user option (for non-authors)
+            if (!isCommentAuthor)
+              buildBlockMenuItem(
+                isBlocked: isUserBlocked,
+                isPending: isUserBlockPending,
+                label: isUserBlocked
+                    ? 'Unblock @$authorHandle'
+                    : 'Block @$authorHandle',
+                onPressed: () => _handleMenuAction(context, 'blockUser'),
+              ),
             // Report option (for non-authors)
             if (!isCommentAuthor)
               MenuItemButton(
@@ -533,6 +566,9 @@ class _CommentCardState extends State<CommentCard> {
               tooltip: 'Comment options',
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
+              style: const ButtonStyle(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               onPressed: () {
                 if (controller.isOpen) {
                   controller.close();
@@ -558,9 +594,9 @@ class _CommentCardState extends State<CommentCard> {
         );
 
         return Row(
-          mainAxisAlignment: MainAxisAlignment.end,
           children: [
             _buildCommentMenu(context),
+            const Spacer(),
             Semantics(
               button: true,
               label:

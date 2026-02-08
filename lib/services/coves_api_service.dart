@@ -966,6 +966,115 @@ class CovesApiService {
     }
   }
 
+  /// Block a user by DID. Returns the block record URI.
+  Future<String> blockUser({required String actor}) => _performBlock(
+        did: actor,
+        didLabel: 'user',
+        endpoint: '/xrpc/social.coves.actor.blockUser',
+        dataKey: 'subject',
+      );
+
+  /// Unblock a user by DID.
+  Future<void> unblockUser({required String actor}) => _performUnblock(
+        did: actor,
+        didLabel: 'user',
+        endpoint: '/xrpc/social.coves.actor.unblockUser',
+        dataKey: 'subject',
+      );
+
+  /// Block a community by DID. Returns the block record URI.
+  Future<String> blockCommunity({required String community}) => _performBlock(
+        did: community,
+        didLabel: 'community',
+        endpoint: '/xrpc/social.coves.community.blockCommunity',
+        dataKey: 'community',
+      );
+
+  /// Unblock a community by DID.
+  Future<void> unblockCommunity({required String community}) =>
+      _performUnblock(
+        did: community,
+        didLabel: 'community',
+        endpoint: '/xrpc/social.coves.community.unblockCommunity',
+        dataKey: 'community',
+      );
+
+  /// Shared helper for block operations that return a record URI.
+  Future<String> _performBlock({
+    required String did,
+    required String didLabel,
+    required String endpoint,
+    required String dataKey,
+  }) async {
+    if (did.isEmpty || !did.startsWith('did:')) {
+      throw ApiException('Invalid $didLabel DID');
+    }
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Blocking $didLabel: $did');
+      }
+
+      final response = await _dio.post(
+        endpoint,
+        data: {dataKey: did},
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Blocked $didLabel: $did');
+      }
+
+      final data = response.data as Map<String, dynamic>;
+      final recordUri =
+          (data['block'] as Map<String, dynamic>)['recordUri'] as String?;
+      if (recordUri == null || recordUri.isEmpty) {
+        throw ApiException('Server returned invalid block response');
+      }
+      return recordUri;
+    } on DioException catch (e) {
+      _handleDioException(e, 'block $didLabel');
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      if (kDebugMode) {
+        debugPrint('❌ Error blocking $didLabel: $e');
+      }
+      throw ApiException('Failed to block $didLabel', originalError: e);
+    }
+  }
+
+  /// Shared helper for unblock operations.
+  Future<void> _performUnblock({
+    required String did,
+    required String didLabel,
+    required String endpoint,
+    required String dataKey,
+  }) async {
+    if (did.isEmpty || !did.startsWith('did:')) {
+      throw ApiException('Invalid $didLabel DID');
+    }
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Unblocking $didLabel: $did');
+      }
+
+      await _dio.post(
+        endpoint,
+        data: {dataKey: did},
+      );
+
+      if (kDebugMode) {
+        debugPrint('✅ Unblocked $didLabel: $did');
+      }
+    } on DioException catch (e) {
+      _handleDioException(e, 'unblock $didLabel');
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      if (kDebugMode) {
+        debugPrint('❌ Error unblocking $didLabel: $e');
+      }
+      throw ApiException('Failed to unblock $didLabel', originalError: e);
+    }
+  }
+
   /// Update a community's profile (e.g., avatar)
   ///
   /// Updates a community's profile with a new avatar image.
