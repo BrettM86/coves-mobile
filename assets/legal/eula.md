@@ -50,7 +50,7 @@ You agree not to post, upload, or share any content that:
 - Contains malware, spam, or other harmful material
 - Violates any applicable law or regulation
 
-We reserve the right to remove any content and terminate accounts that violate these terms. Confirmed CSAM is reported to NCMEC and relevant law enforcement as required by law.
+**Coves maintains a zero-tolerance policy for objectionable content and abusive users.** Any user found posting objectionable content or engaging in abusive behavior will have their account terminated and content removed. Users can block abusive users at any time, which immediately removes that user's content from their experience. Users can also report objectionable content directly through the App, which notifies the Coves Team for review and action. Confirmed CSAM is reported to NCMEC and relevant law enforcement as required by law.
 
 ## 6. Open Source License and Restrictions
 
