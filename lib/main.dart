@@ -14,10 +14,12 @@ import 'models/post.dart';
 import 'providers/auth_provider.dart';
 import 'providers/block_provider.dart';
 import 'providers/community_subscription_provider.dart';
+import 'providers/eula_provider.dart';
 import 'providers/multi_feed_provider.dart';
 import 'providers/user_profile_provider.dart';
 import 'providers/vote_provider.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/eula_screen.dart';
 import 'screens/community/community_feed_screen.dart';
 import 'screens/home/main_shell_screen.dart';
 import 'screens/home/post_detail_screen.dart';
@@ -70,6 +72,11 @@ Future<void> main() async {
         );
       }
 
+      // Initialize EULA acceptance provider
+      // Note: initialize() handles errors internally (fail-closed design)
+      final eulaProvider = EulaProvider();
+      await eulaProvider.initialize();
+
       // Initialize vote service with auth callbacks
       // Votes go through the Coves backend (which proxies to PDS with DPoP)
       // Includes token refresh and sign-out handlers for automatic 401 recovery
@@ -92,6 +99,7 @@ Future<void> main() async {
         MultiProvider(
           providers: [
             ChangeNotifierProvider.value(value: authProvider),
+            ChangeNotifierProvider.value(value: eulaProvider),
             ChangeNotifierProvider(
               create:
                   (_) => VoteProvider(
@@ -187,6 +195,7 @@ class CovesApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final eulaProvider = Provider.of<EulaProvider>(context, listen: false);
 
     return MaterialApp.router(
       title: 'Coves',
@@ -197,7 +206,7 @@ class CovesApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      routerConfig: _createRouter(authProvider),
+      routerConfig: _createRouter(authProvider, eulaProvider),
       restorationScopeId: 'app',
       debugShowCheckedModeBanner: false,
     );
@@ -205,11 +214,18 @@ class CovesApp extends StatelessWidget {
 }
 
 // GoRouter configuration factory
-GoRouter _createRouter(AuthProvider authProvider) {
+GoRouter _createRouter(AuthProvider authProvider, EulaProvider eulaProvider) {
   return GoRouter(
     routes: [
       GoRoute(path: '/', builder: (context, state) => const LandingScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/eula',
+        builder: (context, state) {
+          final viewOnly = state.uri.queryParameters['viewOnly'] == 'true';
+          return EulaScreen(viewOnly: viewOnly);
+        },
+      ),
       GoRoute(
         path: '/feed',
         builder: (context, state) => const MainShellScreen(),
@@ -260,15 +276,29 @@ GoRouter _createRouter(AuthProvider authProvider) {
         },
       ),
     ],
-    refreshListenable: authProvider,
+    refreshListenable: Listenable.merge([authProvider, eulaProvider]),
     redirect: (context, state) {
       final isAuthenticated = authProvider.isAuthenticated;
-      final isLoading = authProvider.isLoading;
+      final isAuthLoading = authProvider.isLoading;
+      final eulaAccepted = eulaProvider.hasAccepted;
+      final isEulaLoading = eulaProvider.isLoading;
       final currentPath = state.uri.path;
 
-      // Don't redirect while loading initial auth state
-      if (isLoading) {
+      // Don't redirect while loading initial state
+      if (isAuthLoading || isEulaLoading) {
         return null;
+      }
+
+      // EULA must be accepted before accessing any other route
+      if (!eulaAccepted && currentPath != '/eula') {
+        return '/eula';
+      }
+
+      // Prevent navigating to /eula accept mode after already accepting
+      if (eulaAccepted &&
+          currentPath == '/eula' &&
+          state.uri.queryParameters['viewOnly'] != 'true') {
+        return '/';
       }
 
       // If authenticated and on landing/login screen, redirect to feed

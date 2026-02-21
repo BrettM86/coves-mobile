@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../utils/responsive_utils.dart';
@@ -113,6 +114,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              // View EULA
+              ListTile(
+                leading: const Icon(
+                  Icons.description_outlined,
+                  color: AppColors.textSecondary,
+                ),
+                title: Text(
+                  'End User License Agreement',
+                  style: GoogleFonts.nunito(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  context.push('/eula?viewOnly=true');
+                },
+              ),
+              const Divider(color: AppColors.border, height: 1),
               // Sign out option
               ListTile(
                 leading: Icon(

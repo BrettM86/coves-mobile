@@ -721,7 +721,7 @@ class CovesApiService {
       }
 
       final response = await _dio.get(
-        '/xrpc/social.coves.actor.getprofile',
+        '/xrpc/social.coves.actor.getProfile',
         queryParameters: {'actor': actor},
       );
 

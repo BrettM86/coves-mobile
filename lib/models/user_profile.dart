@@ -1,7 +1,7 @@
 // User profile data models for Coves
 //
 // These models match the backend response structure from:
-// /xrpc/social.coves.actor.getprofile
+// /xrpc/social.coves.actor.getProfile
 
 /// User profile with display information and stats
 class UserProfile {
