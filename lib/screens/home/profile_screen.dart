@@ -133,6 +133,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 },
               ),
               const Divider(color: AppColors.border, height: 1),
+              // View Community Guidelines
+              ListTile(
+                leading: const Icon(
+                  Icons.groups_outlined,
+                  color: AppColors.textSecondary,
+                ),
+                title: Text(
+                  'Community Guidelines',
+                  style: GoogleFonts.nunito(
+                    color: AppColors.textPrimary,
+                    fontSize: 16,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  context.push('/community-guidelines?viewOnly=true');
+                },
+              ),
+              const Divider(color: AppColors.border, height: 1),
               // Sign out option
               ListTile(
                 leading: Icon(

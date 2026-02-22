@@ -8,28 +8,30 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../constants/app_colors.dart';
-import '../providers/eula_provider.dart';
+import '../providers/community_guidelines_provider.dart';
 
-class EulaScreen extends StatefulWidget {
-  const EulaScreen({this.viewOnly = false, super.key});
+class CommunityGuidelinesScreen extends StatefulWidget {
+  const CommunityGuidelinesScreen({this.viewOnly = false, super.key});
 
   final bool viewOnly;
 
   @override
-  State<EulaScreen> createState() => _EulaScreenState();
+  State<CommunityGuidelinesScreen> createState() =>
+      _CommunityGuidelinesScreenState();
 }
 
-class _EulaScreenState extends State<EulaScreen> {
+class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _hasScrolledToBottom = false;
   bool _hasAgreed = false;
   bool _isAccepting = false;
-  late Future<String> _eulaFuture;
+  late Future<String> _contentFuture;
 
   @override
   void initState() {
     super.initState();
-    _eulaFuture = rootBundle.loadString('assets/legal/eula.md');
+    _contentFuture =
+        rootBundle.loadString('assets/legal/community-guidelines.md');
     if (!widget.viewOnly) {
       _scrollController.addListener(_onScroll);
     }
@@ -46,7 +48,6 @@ class _EulaScreenState extends State<EulaScreen> {
     if (_hasScrolledToBottom) return;
     final maxScroll = _scrollController.position.maxScrollExtent;
     final currentScroll = _scrollController.position.pixels;
-    // Trigger when user is within 40px of the bottom
     if (currentScroll >= maxScroll - 40) {
       setState(() => _hasScrolledToBottom = true);
     }
@@ -54,13 +55,13 @@ class _EulaScreenState extends State<EulaScreen> {
 
   Future<void> _handleAccept() async {
     setState(() => _isAccepting = true);
-    final eulaProvider = context.read<EulaProvider>();
-    await eulaProvider.acceptEula();
+    final provider = context.read<CommunityGuidelinesProvider>();
+    await provider.accept();
     if (!mounted) return;
-    if (eulaProvider.error != null) {
+    if (provider.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(eulaProvider.error!),
+          content: Text(provider.error!),
           backgroundColor: AppColors.error,
         ),
       );
@@ -77,7 +78,7 @@ class _EulaScreenState extends State<EulaScreen> {
               backgroundColor: AppColors.background,
               surfaceTintColor: Colors.transparent,
               title: Text(
-                'End User License Agreement',
+                'Community Guidelines',
                 style: GoogleFonts.nunito(
                   color: AppColors.textPrimary,
                   fontSize: 18,
@@ -96,7 +97,7 @@ class _EulaScreenState extends State<EulaScreen> {
           children: [
             if (!widget.viewOnly) _buildHeader(),
             Expanded(
-              child: _buildAgreementBody(),
+              child: _buildContentBody(),
             ),
             if (!widget.viewOnly) _buildBottomBar(),
           ],
@@ -118,7 +119,7 @@ class _EulaScreenState extends State<EulaScreen> {
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
-              Icons.gavel_rounded,
+              Icons.groups_rounded,
               color: AppColors.teal,
               size: 22,
             ),
@@ -129,7 +130,7 @@ class _EulaScreenState extends State<EulaScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'License Agreement',
+                  'Community Guidelines',
                   style: GoogleFonts.nunito(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
@@ -138,7 +139,7 @@ class _EulaScreenState extends State<EulaScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Please read the agreement before continuing',
+                  'Please read our community standards',
                   style: GoogleFonts.nunito(
                     fontSize: 13,
                     color: AppColors.textSecondary,
@@ -152,9 +153,10 @@ class _EulaScreenState extends State<EulaScreen> {
     );
   }
 
-  void _retryLoadEula() {
+  void _retryLoad() {
     setState(() {
-      _eulaFuture = rootBundle.loadString('assets/legal/eula.md');
+      _contentFuture =
+          rootBundle.loadString('assets/legal/community-guidelines.md');
     });
   }
 
@@ -194,7 +196,7 @@ class _EulaScreenState extends State<EulaScreen> {
     }
   }
 
-  Widget _buildAgreementBody() {
+  Widget _buildContentBody() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
@@ -205,7 +207,7 @@ class _EulaScreenState extends State<EulaScreen> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: FutureBuilder<String>(
-          future: _eulaFuture,
+          future: _contentFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
@@ -218,18 +220,18 @@ class _EulaScreenState extends State<EulaScreen> {
 
             if (snapshot.hasError) {
               debugPrint(
-                  'Error loading EULA: ${snapshot.error}');
+                  'Error loading community guidelines: ${snapshot.error}');
               return Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Error loading agreement',
+                      'Error loading guidelines',
                       style: GoogleFonts.nunito(color: AppColors.error),
                     ),
                     const SizedBox(height: 12),
                     TextButton.icon(
-                      onPressed: _retryLoadEula,
+                      onPressed: _retryLoad,
                       icon: const Icon(Icons.refresh, size: 18),
                       label: Text(
                         'Retry',
@@ -250,12 +252,12 @@ class _EulaScreenState extends State<EulaScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Agreement content unavailable',
+                      'Guidelines content unavailable',
                       style: GoogleFonts.nunito(color: AppColors.error),
                     ),
                     const SizedBox(height: 12),
                     TextButton.icon(
-                      onPressed: _retryLoadEula,
+                      onPressed: _retryLoad,
                       icon: const Icon(Icons.refresh, size: 18),
                       label: Text(
                         'Retry',
@@ -277,7 +279,6 @@ class _EulaScreenState extends State<EulaScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                   onTapLink: (text, href, title) => _handleLinkTap(href),
                 ),
-                // Scroll hint at the bottom when user hasn't scrolled down yet
                 if (!widget.viewOnly && !_hasScrolledToBottom)
                   Positioned(
                     left: 0,
@@ -318,7 +319,7 @@ class _EulaScreenState extends State<EulaScreen> {
           ),
           const SizedBox(width: 6),
           Text(
-            'Scroll to read full agreement',
+            'Scroll to read full guidelines',
             style: GoogleFonts.nunito(
               fontSize: 12,
               color: AppColors.textMuted,
@@ -348,7 +349,6 @@ class _EulaScreenState extends State<EulaScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Checkbox row
               GestureDetector(
                 onTap: _hasScrolledToBottom
                     ? () => setState(() => _hasAgreed = !_hasAgreed)
@@ -362,7 +362,7 @@ class _EulaScreenState extends State<EulaScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'I have read and agree to the End User License Agreement',
+                          'I have read and agree to the Community Guidelines',
                           style: GoogleFonts.nunito(
                             fontSize: 13,
                             color: _hasScrolledToBottom
@@ -377,7 +377,6 @@ class _EulaScreenState extends State<EulaScreen> {
                   ),
                 ),
               ),
-              // Accept button
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -437,9 +436,7 @@ class _EulaScreenState extends State<EulaScreen> {
       height: 22,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(6),
-        color: _hasAgreed
-            ? AppColors.coral
-            : Colors.transparent,
+        color: _hasAgreed ? AppColors.coral : Colors.transparent,
         border: Border.all(
           color: _hasAgreed
               ? AppColors.coral

@@ -14,11 +14,13 @@ import 'models/post.dart';
 import 'providers/auth_provider.dart';
 import 'providers/block_provider.dart';
 import 'providers/community_subscription_provider.dart';
+import 'providers/community_guidelines_provider.dart';
 import 'providers/eula_provider.dart';
 import 'providers/multi_feed_provider.dart';
 import 'providers/user_profile_provider.dart';
 import 'providers/vote_provider.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/community_guidelines_screen.dart';
 import 'screens/eula_screen.dart';
 import 'screens/community/community_feed_screen.dart';
 import 'screens/home/main_shell_screen.dart';
@@ -75,7 +77,32 @@ Future<void> main() async {
       // Initialize EULA acceptance provider
       // Note: initialize() handles errors internally (fail-closed design)
       final eulaProvider = EulaProvider();
-      await eulaProvider.initialize();
+      try {
+        await eulaProvider.initialize();
+      } on Exception catch (error, stackTrace) {
+        await Sentry.captureException(
+          error,
+          stackTrace: stackTrace,
+          withScope: (scope) {
+            scope.setTag('phase', 'eula_initialization');
+          },
+        );
+      }
+
+      // Initialize community guidelines acceptance provider
+      // Note: initialize() handles errors internally (fail-closed design)
+      final communityGuidelinesProvider = CommunityGuidelinesProvider();
+      try {
+        await communityGuidelinesProvider.initialize();
+      } on Exception catch (error, stackTrace) {
+        await Sentry.captureException(
+          error,
+          stackTrace: stackTrace,
+          withScope: (scope) {
+            scope.setTag('phase', 'community_guidelines_initialization');
+          },
+        );
+      }
 
       // Initialize vote service with auth callbacks
       // Votes go through the Coves backend (which proxies to PDS with DPoP)
@@ -100,6 +127,7 @@ Future<void> main() async {
           providers: [
             ChangeNotifierProvider.value(value: authProvider),
             ChangeNotifierProvider.value(value: eulaProvider),
+            ChangeNotifierProvider.value(value: communityGuidelinesProvider),
             ChangeNotifierProvider(
               create:
                   (_) => VoteProvider(
@@ -196,6 +224,8 @@ class CovesApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final eulaProvider = Provider.of<EulaProvider>(context, listen: false);
+    final guidelinesProvider =
+        Provider.of<CommunityGuidelinesProvider>(context, listen: false);
 
     return MaterialApp.router(
       title: 'Coves',
@@ -206,7 +236,7 @@ class CovesApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      routerConfig: _createRouter(authProvider, eulaProvider),
+      routerConfig: _createRouter(authProvider, eulaProvider, guidelinesProvider),
       restorationScopeId: 'app',
       debugShowCheckedModeBanner: false,
     );
@@ -214,7 +244,11 @@ class CovesApp extends StatelessWidget {
 }
 
 // GoRouter configuration factory
-GoRouter _createRouter(AuthProvider authProvider, EulaProvider eulaProvider) {
+GoRouter _createRouter(
+  AuthProvider authProvider,
+  EulaProvider eulaProvider,
+  CommunityGuidelinesProvider guidelinesProvider,
+) {
   return GoRouter(
     routes: [
       GoRoute(path: '/', builder: (context, state) => const LandingScreen()),
@@ -224,6 +258,13 @@ GoRouter _createRouter(AuthProvider authProvider, EulaProvider eulaProvider) {
         builder: (context, state) {
           final viewOnly = state.uri.queryParameters['viewOnly'] == 'true';
           return EulaScreen(viewOnly: viewOnly);
+        },
+      ),
+      GoRoute(
+        path: '/community-guidelines',
+        builder: (context, state) {
+          final viewOnly = state.uri.queryParameters['viewOnly'] == 'true';
+          return CommunityGuidelinesScreen(viewOnly: viewOnly);
         },
       ),
       GoRoute(
@@ -276,29 +317,48 @@ GoRouter _createRouter(AuthProvider authProvider, EulaProvider eulaProvider) {
         },
       ),
     ],
-    refreshListenable: Listenable.merge([authProvider, eulaProvider]),
+    refreshListenable: Listenable.merge([
+      authProvider,
+      eulaProvider,
+      guidelinesProvider,
+    ]),
     redirect: (context, state) {
       final isAuthenticated = authProvider.isAuthenticated;
       final isAuthLoading = authProvider.isLoading;
       final eulaAccepted = eulaProvider.hasAccepted;
       final isEulaLoading = eulaProvider.isLoading;
+      final guidelinesAccepted = guidelinesProvider.hasAccepted;
+      final isGuidelinesLoading = guidelinesProvider.isLoading;
       final currentPath = state.uri.path;
 
       // Don't redirect while loading initial state
-      if (isAuthLoading || isEulaLoading) {
+      if (isAuthLoading || isEulaLoading || isGuidelinesLoading) {
         return null;
       }
 
-      // EULA must be accepted before accessing any other route
+      // EULA must be accepted first before anything else
       if (!eulaAccepted && currentPath != '/eula') {
         return '/eula';
       }
 
-      // Prevent navigating to /eula accept mode after already accepting
+      // Community guidelines must be accepted after EULA
       if (eulaAccepted &&
-          currentPath == '/eula' &&
-          state.uri.queryParameters['viewOnly'] != 'true') {
-        return '/';
+          !guidelinesAccepted &&
+          currentPath != '/community-guidelines' &&
+          currentPath != '/eula') {
+        return '/community-guidelines';
+      }
+
+      // Prevent navigating to acceptance screens in accept mode after already accepting
+      final isViewOnly = state.uri.queryParameters['viewOnly'] == 'true';
+      if (!isViewOnly) {
+        if (eulaAccepted && currentPath == '/eula') {
+          // Go straight to community guidelines if not yet accepted
+          return guidelinesAccepted ? '/' : '/community-guidelines';
+        }
+        if (guidelinesAccepted && currentPath == '/community-guidelines') {
+          return '/';
+        }
       }
 
       // If authenticated and on landing/login screen, redirect to feed
