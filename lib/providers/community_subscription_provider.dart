@@ -11,14 +11,13 @@ import 'auth_provider.dart';
 /// Tracks local subscription state keyed by community DID for instant feedback.
 /// Automatically clears state when user signs out.
 class CommunitySubscriptionProvider with ChangeNotifier {
-  CommunitySubscriptionProvider({
-    required AuthProvider authProvider,
-  }) : _authProvider = authProvider,
-       _apiService = CovesApiService(
-         tokenGetter: () async => authProvider.session?.token,
-         tokenRefresher: authProvider.refreshToken,
-         signOutHandler: authProvider.signOut,
-       ) {
+  CommunitySubscriptionProvider({required AuthProvider authProvider})
+    : _authProvider = authProvider,
+      _apiService = CovesApiService(
+        tokenGetter: () async => authProvider.session?.token,
+        tokenRefresher: authProvider.refreshToken,
+        signOutHandler: authProvider.signOut,
+      ) {
     // Listen to auth state changes and clear subscriptions on sign-out
     _authProvider.addListener(_onAuthChanged);
   }
@@ -60,10 +59,12 @@ class CommunitySubscriptionProvider with ChangeNotifier {
   String? _error;
 
   /// Check if user is subscribed to a community
-  bool isSubscribed(String communityDid) => _subscriptions[communityDid] ?? false;
+  bool isSubscribed(String communityDid) =>
+      _subscriptions[communityDid] ?? false;
 
   /// Check if a request is pending for a community
-  bool isPending(String communityDid) => _pendingRequests[communityDid] ?? false;
+  bool isPending(String communityDid) =>
+      _pendingRequests[communityDid] ?? false;
 
   /// Check if initial subscription load is in progress
   bool get isLoading => _isLoading;
@@ -91,7 +92,9 @@ class CommunitySubscriptionProvider with ChangeNotifier {
     // Prevent concurrent requests for the same community
     if (_pendingRequests[communityDid] ?? false) {
       if (kDebugMode) {
-        debugPrint('⚠️ Subscription request already in progress for $communityDid');
+        debugPrint(
+          '⚠️ Subscription request already in progress for $communityDid',
+        );
       }
       return _subscriptions[communityDid] ?? false;
     }
@@ -131,8 +134,8 @@ class CommunitySubscriptionProvider with ChangeNotifier {
       notifyListeners();
 
       rethrow;
-    } catch (e, stackTrace) {
-      // Catch non-ApiException errors (StateError, TypeError, etc.)
+    } on Exception catch (e, stackTrace) {
+      // Catch non-ApiException errors (network, serialization, etc.)
       if (kDebugMode) {
         debugPrint('❌ Unexpected error toggling subscription: $e');
       }
@@ -145,10 +148,7 @@ class CommunitySubscriptionProvider with ChangeNotifier {
       await Sentry.captureException(e, stackTrace: stackTrace);
 
       // Wrap and rethrow as ApiException
-      throw ApiException(
-        'Unexpected error: ${e.toString()}',
-        statusCode: 500,
-      );
+      throw ApiException('Unexpected error: ${e.toString()}', statusCode: 500);
     } finally {
       _pendingRequests.remove(communityDid);
     }

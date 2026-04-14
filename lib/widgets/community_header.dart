@@ -1,16 +1,15 @@
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
 import '../models/community.dart';
 import '../utils/community_handle_utils.dart';
 import '../utils/display_utils.dart';
+import 'community_avatar.dart';
 
 /// Community header widget displaying banner, avatar, and community info
 ///
 /// Layout matches the profile header design pattern:
-/// - Full-width banner image with gradient overlay
+/// - Full-width generated gradient banner with geometric pattern overlay
 /// - Circular avatar with shadow
 /// - Community name, handle, and description
 /// - Stats row showing subscriber/member counts
@@ -30,8 +29,8 @@ class CommunityHeader extends StatelessWidget {
 
     return Stack(
       children: [
-        // Banner image (or decorative fallback)
-        _buildBannerImage(),
+        // Decorative banner pattern
+        _buildDefaultBanner(),
         // Gradient overlay for text readability
         Positioned.fill(
           child: Container(
@@ -99,30 +98,44 @@ class CommunityHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildBannerImage() {
-    // Communities don't have banners yet, so we use a decorative pattern
-    // that varies based on community name for visual distinction
-    return _buildDefaultBanner();
-  }
-
   Widget _buildDefaultBanner() {
     // Use hash-based color matching the fallback avatar
     final name = community?.name ?? '';
     final baseColor = DisplayUtils.getFallbackColor(name);
+    // Generate a secondary accent by shifting the hash
+    final secondaryColor = DisplayUtils.getFallbackColor('${name}alt');
 
-    return Container(
-      height: bannerHeight,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            baseColor.withValues(alpha: 0.6),
-            baseColor.withValues(alpha: 0.3),
-          ],
+    return Stack(
+      children: [
+        // Base gradient with two-tone effect
+        Container(
+          height: bannerHeight,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                baseColor.withValues(alpha: 0.6),
+                secondaryColor.withValues(alpha: 0.3),
+                baseColor.withValues(alpha: 0.2),
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+          ),
         ),
-      ),
+        // Subtle circle pattern overlay for texture
+        SizedBox(
+          height: bannerHeight,
+          width: double.infinity,
+          child: CustomPaint(
+            painter: _BannerPatternPainter(
+              color: Colors.white.withValues(alpha: 0.04),
+              seed: name.hashCode,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -153,8 +166,11 @@ class CommunityHeader extends StatelessWidget {
                 ),
               ],
             ),
-            child: ClipOval(
-              child: _buildAvatar(avatarSize - 6),
+            child: CommunityAvatar(
+              name: community?.name ?? '',
+              avatarUrl: community?.avatar,
+              size: avatarSize - 6,
+              showLoadingIndicator: true,
             ),
           ),
           const SizedBox(width: 12),
@@ -199,59 +215,6 @@ class CommunityHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatar(double size) {
-    if (community?.avatar != null && community!.avatar!.isNotEmpty) {
-      return CachedNetworkImage(
-        imageUrl: community!.avatar!,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        fadeInDuration: Duration.zero,
-        fadeOutDuration: Duration.zero,
-        placeholder: (context, url) => _buildAvatarLoading(size),
-        errorWidget: (context, url, error) {
-          if (kDebugMode) {
-            debugPrint(
-              'Error loading community avatar for ${community?.name}: $error',
-            );
-          }
-          return _buildFallbackAvatar(size);
-        },
-      );
-    }
-    return _buildFallbackAvatar(size);
-  }
-
-  Widget _buildAvatarLoading(double size) {
-    return Container(
-      width: size,
-      height: size,
-      color: AppColors.backgroundSecondary,
-    );
-  }
-
-  Widget _buildFallbackAvatar(double size) {
-    final name = community?.name ?? '';
-    final bgColor = DisplayUtils.getFallbackColor(name);
-
-    return Container(
-      width: size,
-      height: size,
-      color: bgColor,
-      child: Center(
-        child: Text(
-          name.isNotEmpty ? name[0].toUpperCase() : 'C',
-          style: TextStyle(
-            fontSize: size * 0.45,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            letterSpacing: -1,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildStatsRow() {
     return Wrap(
       spacing: 16,
@@ -271,6 +234,46 @@ class CommunityHeader extends StatelessWidget {
     );
   }
 
+}
+
+/// Paints a subtle geometric pattern on community banners for differentiation.
+///
+/// Uses the community name hash as a seed to produce different circle layouts
+/// per community, making each banner visually distinct.
+class _BannerPatternPainter extends CustomPainter {
+  _BannerPatternPainter({required this.color, required this.seed});
+
+  final Color color;
+  final int seed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width < 1 || size.height < 1) {
+      return;
+    }
+
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    // Generate deterministic circle positions from seed
+    final rng = seed.abs();
+    final circleCount = 5 + (rng % 4);
+
+    for (var i = 0; i < circleCount; i++) {
+      final hash = (rng * (i + 1) * 7919) % 10000;
+      final x = (hash % size.width.toInt()).toDouble();
+      final y = (hash ~/ 3 % size.height.toInt()).toDouble();
+      final r = 20.0 + (hash % 60);
+      canvas.drawCircle(Offset(x, y), r, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BannerPatternPainter oldDelegate) {
+    return oldDelegate.seed != seed || oldDelegate.color != color;
+  }
 }
 
 /// Stats item showing label and value (matches profile pattern)

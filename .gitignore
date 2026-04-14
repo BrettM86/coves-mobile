@@ -55,3 +55,6 @@ windows/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Impeccable design context
+.impeccable.md

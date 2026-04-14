@@ -3,15 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
-import '../../utils/responsive_utils.dart';
 import '../../providers/auth_provider.dart';
 import 'communities_admin_panel.dart';
+import 'communities_discovery_screen.dart';
 
 /// Communities Screen
 ///
 /// Shows different UI based on user role:
 /// - Admin (kAdminHandles): Full admin panel for community management
-/// - Regular users: Placeholder with coming soon message
+/// - Regular users: Sectioned discovery layout with search
 class CommunitiesScreen extends StatelessWidget {
   const CommunitiesScreen({super.key});
 
@@ -34,57 +34,27 @@ class CommunitiesScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         foregroundColor: Colors.white,
-        title: const Text('Communities'),
         automaticallyImplyLeading: false,
-      ),
-      body: const _CommunitiesPlaceholder(),
-    );
-  }
-}
-
-/// Placeholder UI for non-admin users
-class _CommunitiesPlaceholder extends StatelessWidget {
-  const _CommunitiesPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    const content = Padding(
-      padding: EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.workspaces_outlined, size: 64, color: AppColors.primary),
-          SizedBox(height: 24),
-          Text(
-            'Communities',
-            style: TextStyle(
-              fontSize: 28,
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
+        title: const Row(
+          children: [
+            Icon(
+              Icons.workspaces_rounded,
+              size: 22,
+              color: AppColors.coral,
             ),
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Discover and join communities',
-            style: TextStyle(fontSize: 16, color: Color(0xFFB6C2D2)),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-
-    // Constrain width on tablets for better readability
-    if (ResponsiveUtils.isTablet(context)) {
-      return Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: ResponsiveUtils.maxContentWidth,
-          ),
-          child: content,
+            SizedBox(width: 10),
+            Text(
+              'Communities',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ],
         ),
-      );
-    }
-
-    return Center(child: content);
+      ),
+      body: const CommunitiesDiscoveryScreen(),
+    );
   }
 }

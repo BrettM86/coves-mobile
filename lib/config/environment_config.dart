@@ -33,17 +33,22 @@ class EnvironmentConfig {
   );
 
   /// Local development configuration
-  /// Uses localhost via adb reverse port forwarding
+  /// Uses localhost via adb reverse port forwarding through Caddy proxy
   ///
-  /// IMPORTANT: Before testing, run these commands to forward ports:
+  /// IMPORTANT: Before testing, run `make mobile-setup` in the Coves backend,
+  /// or manually forward ports:
   ///   adb reverse tcp:3001 tcp:3001  # PDS
   ///   adb reverse tcp:3002 tcp:3002  # PLC
+  ///   adb reverse tcp:8080 tcp:8080  # Caddy proxy (OAuth callbacks)
   ///   adb reverse tcp:8081 tcp:8081  # AppView
+  ///
+  /// Note: `adb reverse` is Android-only. iOS Simulator connects to
+  /// localhost directly without port forwarding.
   ///
   /// Note: For physical devices not connected via USB, use ngrok URLs instead
   static const local = EnvironmentConfig(
     environment: Environment.local,
-    apiUrl: 'http://localhost:8081',
+    apiUrl: 'http://localhost:8080',
     handleResolverUrl:
         'http://localhost:3001/xrpc/com.atproto.identity.resolveHandle',
     plcDirectoryUrl: 'http://localhost:3002',
