@@ -24,6 +24,7 @@ import 'screens/community_guidelines_screen.dart';
 import 'screens/eula_screen.dart';
 import 'screens/community/community_feed_screen.dart';
 import 'screens/home/main_shell_screen.dart';
+import 'screens/home/post_detail_loader.dart';
 import 'screens/home/post_detail_screen.dart';
 import 'screens/home/profile_screen.dart';
 import 'screens/landing_screen.dart';
@@ -236,7 +237,11 @@ class CovesApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      routerConfig: _createRouter(authProvider, eulaProvider, guidelinesProvider),
+      routerConfig: createRouter(
+        authProvider,
+        eulaProvider,
+        guidelinesProvider,
+      ),
       restorationScopeId: 'app',
       debugShowCheckedModeBanner: false,
     );
@@ -244,7 +249,8 @@ class CovesApp extends StatelessWidget {
 }
 
 // GoRouter configuration factory
-GoRouter _createRouter(
+@visibleForTesting
+GoRouter createRouter(
   AuthProvider authProvider,
   EulaProvider eulaProvider,
   CommunityGuidelinesProvider guidelinesProvider,
@@ -292,13 +298,19 @@ GoRouter _createRouter(
       GoRoute(
         path: '/post/:postUri',
         builder: (context, state) {
-          // Extract post from state.extra
+          // Fast path: post passed via state.extra (in-app navigation)
           final post = state.extra as FeedViewPost?;
+          if (post != null) {
+            return PostDetailScreen(post: post);
+          }
 
-          // If no post provided via extra, show user-friendly error
-          if (post == null) {
+          // Cold path: no extra (state restoration, deep links) - load the
+          // post by its AT-URI from the path parameter. go_router has
+          // already percent-decoded path parameters, so use it as-is.
+          final postUri = state.pathParameters['postUri'];
+          if (postUri == null || postUri.isEmpty) {
             if (kDebugMode) {
-              print('⚠️ PostDetailScreen: No post provided in route extras');
+              debugPrint('⚠️ PostDetailScreen: No post URI in route');
             }
             // Show not found screen with option to go back
             return NotFoundError(
@@ -313,7 +325,10 @@ GoRouter _createRouter(
             );
           }
 
-          return PostDetailScreen(post: post);
+          if (kDebugMode) {
+            debugPrint('🔄 PostDetailScreen: Cold-loading post from URI');
+          }
+          return PostDetailLoader(postUri: postUri);
         },
       ),
     ],

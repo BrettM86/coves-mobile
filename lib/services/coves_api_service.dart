@@ -7,6 +7,7 @@ import '../config/environment_config.dart';
 import '../models/comment.dart';
 import '../models/community.dart';
 import '../models/post.dart';
+import '../models/post_get_result.dart';
 import '../models/user_profile.dart';
 import 'api_exceptions.dart';
 import 'retry_interceptor.dart';
@@ -213,6 +214,10 @@ class CovesApiService {
       );
     }
   }
+  /// Maximum number of URIs per [getPosts] call, per the
+  /// social.coves.community.post.get lexicon (`uris` has `maxLength: 25`).
+  static const int maxPostGetUris = 25;
+
   late final Dio _dio;
   final Future<String?> Function()? _tokenGetter;
   final Future<bool> Function()? _tokenRefresher;
@@ -447,6 +452,98 @@ class CovesApiService {
       }
       throw ApiException('Failed to parse server response', originalError: e);
     }
+  }
+
+  /// Get posts by AT-URI (public, optional auth)
+  ///
+  /// Batch-fetches post views for feed hydration and permalink/cold-load
+  /// rendering. The social.coves.community.post.get lexicon guarantees the
+  /// server returns posts in the same order as the input URIs.
+  /// Posts that are deleted or never indexed come back as [PostGetNotFound]
+  /// and blocked posts as [PostGetBlocked] instead of failing the whole
+  /// batch. (Malformed URIs are rejected by the server with a 400
+  /// InvalidRequest error, surfaced as an [ApiException].) Entries that fail
+  /// to parse are likewise degraded to [PostGetNotFound].
+  ///
+  /// Parameters:
+  /// - [uris]: 1 to [maxPostGetUris] post AT-URIs (throws [ArgumentError]
+  ///   otherwise)
+  Future<List<PostGetResult>> getPosts({required List<String> uris}) async {
+    if (uris.isEmpty) {
+      throw ArgumentError.value(uris, 'uris', 'must not be empty');
+    }
+    if (uris.length > maxPostGetUris) {
+      throw ArgumentError.value(
+        uris,
+        'uris',
+        'must not contain more than $maxPostGetUris URIs',
+      );
+    }
+
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Fetching posts: ${uris.length} URIs');
+      }
+
+      // atproto expects repeated `uris=a&uris=b` params; pin ListFormat.multi
+      // explicitly so the required encoding can't change with Dio defaults.
+      final response = await _dio.get(
+        '/xrpc/social.coves.community.post.get',
+        queryParameters: {'uris': uris},
+        options: Options(listFormat: ListFormat.multi),
+      );
+
+      final data = response.data as Map<String, dynamic>;
+      final posts = data['posts'] as List<dynamic>? ?? [];
+
+      final results = <PostGetResult>[];
+      for (var i = 0; i < posts.length; i++) {
+        final item = posts[i];
+        try {
+          results.add(PostGetResult.fromJson(item as Map<String, dynamic>));
+        } on Object catch (e) {
+          // Degrade a single malformed entry to notFound instead of failing
+          // the whole batch. Read the uri defensively; fall back to the
+          // corresponding input URI (server guarantees order).
+          final fallbackUri =
+              (item is Map && item['uri'] is String)
+                  ? item['uri'] as String
+                  : (i < uris.length ? uris[i] : '');
+          if (kDebugMode) {
+            debugPrint('⚠️ Failed to parse post entry $i ($fallbackUri): $e');
+          }
+          results.add(PostGetNotFound(fallbackUri));
+        }
+      }
+
+      if (kDebugMode) {
+        debugPrint('✅ Posts fetched: ${results.length} results');
+      }
+
+      return results;
+    } on DioException catch (e) {
+      _handleDioException(e, 'posts');
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error parsing posts response: $e');
+      }
+      throw ApiException('Failed to parse server response', originalError: e);
+    }
+  }
+
+  /// Get a single post by AT-URI (public, optional auth)
+  ///
+  /// Convenience wrapper around [getPosts] for permalink/cold-load rendering.
+  /// Returns the first result whose uri matches [uri], or [PostGetNotFound]
+  /// if the server response contains no entry for it.
+  Future<PostGetResult> getPost(String uri) async {
+    final results = await getPosts(uris: [uri]);
+    for (final result in results) {
+      if (result.uri == uri) {
+        return result;
+      }
+    }
+    return PostGetNotFound(uri);
   }
 
   /// List communities with optional filtering
