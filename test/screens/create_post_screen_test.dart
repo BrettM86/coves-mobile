@@ -176,11 +176,13 @@ void main() {
       expect(switchAfter.value, true);
     });
 
-    testWidgets('should show thumbnail field when URL is entered', (tester) async {
+    testWidgets(
+        'should not show a thumbnail field when URL is entered '
+        '(thumb removed from ExternalEmbedInput in 746df36)', (tester) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
-      // Initially no thumbnail field
+      // No thumbnail field before entering a URL
       expect(find.widgetWithText(TextField, 'Thumbnail URL'), findsNothing);
 
       // Enter a URL
@@ -190,28 +192,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Thumbnail field should now be visible
-      expect(find.widgetWithText(TextField, 'Thumbnail URL'), findsOneWidget);
-    });
-
-    testWidgets('should hide thumbnail field when URL is cleared', (tester) async {
-      await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
-
-      // Enter a URL
-      final urlField = find.widgetWithText(TextField, 'URL');
-      await tester.enterText(urlField, 'https://example.com');
-      await tester.pumpAndSettle();
-
-      // Thumbnail field should be visible
-      expect(find.widgetWithText(TextField, 'Thumbnail URL'), findsOneWidget);
-
-      // Clear the URL
-      await tester.enterText(urlField, '');
-      await tester.pumpAndSettle();
-
-      // Thumbnail field should be hidden
+      // Still no thumbnail field — the backend derives thumbnails itself
       expect(find.widgetWithText(TextField, 'Thumbnail URL'), findsNothing);
+      // The URL text was accepted into the URL field
+      expect(find.text('https://example.com'), findsOneWidget);
     });
 
     testWidgets('should display close button', (tester) async {
