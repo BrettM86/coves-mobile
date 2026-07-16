@@ -930,6 +930,9 @@ class _CommunitiesDiscoveryScreenState
             Semantics(
               label: 'See all $title',
               button: true,
+              // Own semantics boundary so screen readers and UI tests see the
+              // button separately from the section title row.
+              container: true,
               child: Material(
                 color: AppColors.teal.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(100),

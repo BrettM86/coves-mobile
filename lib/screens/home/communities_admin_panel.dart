@@ -262,6 +262,10 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
 
   @override
   Widget build(BuildContext context) {
+    // NOTE: system back is intercepted shell-wide by CreatePostScreen's
+    // PopScope (alive in MainShellScreen's IndexedStack), which switches to
+    // the Home tab on every back press. Adding a PopScope here cannot
+    // override that — use the in-app Back arrow to return to the menu.
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -272,6 +276,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
         leading: _currentPage != AdminPage.menu
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
+                tooltip: 'Back',
                 onPressed: _navigateBack,
               )
             : null,
