@@ -1,9 +1,12 @@
 import 'package:coves_flutter/models/feed_state.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
+import 'package:coves_flutter/providers/block_provider.dart';
+import 'package:coves_flutter/providers/community_subscription_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/feed_screen.dart';
+import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -50,6 +53,16 @@ class FakeVoteProvider extends VoteProvider {
   void setLiked(String postUri, {required bool value}) {
     _likes[postUri] = value;
     notifyListeners();
+  }
+}
+
+// Fake CommunitySubscriptionProvider that never touches the network
+class FakeCommunitySubscriptionProvider extends CommunitySubscriptionProvider {
+  FakeCommunitySubscriptionProvider({required super.authProvider});
+
+  @override
+  Future<void> loadSubscribedCommunities() async {
+    // No-op for testing - avoids network calls and pending timers
   }
 }
 
@@ -127,11 +140,20 @@ void main() {
     late FakeAuthProvider fakeAuthProvider;
     late FakeMultiFeedProvider fakeFeedProvider;
     late FakeVoteProvider fakeVoteProvider;
+    late CommunitySubscriptionProvider subscriptionProvider;
+    late BlockProvider blockProvider;
 
     setUp(() {
       fakeAuthProvider = FakeAuthProvider();
       fakeFeedProvider = FakeMultiFeedProvider();
       fakeVoteProvider = FakeVoteProvider();
+      subscriptionProvider = FakeCommunitySubscriptionProvider(
+        authProvider: fakeAuthProvider,
+      );
+      blockProvider = BlockProvider(
+        apiService: CovesApiService(),
+        authProvider: fakeAuthProvider,
+      );
     });
 
     Widget createTestWidget() {
@@ -142,6 +164,10 @@ void main() {
             value: fakeFeedProvider,
           ),
           ChangeNotifierProvider<VoteProvider>.value(value: fakeVoteProvider),
+          ChangeNotifierProvider<CommunitySubscriptionProvider>.value(
+            value: subscriptionProvider,
+          ),
+          ChangeNotifierProvider<BlockProvider>.value(value: blockProvider),
         ],
         child: const MaterialApp(home: FeedScreen()),
       );
