@@ -103,12 +103,10 @@ class CommunitySubscriptionProvider with ChangeNotifier {
     final wasSubscribed = _subscriptions[communityDid] ?? false;
     final willSubscribe = !wasSubscribed;
 
-    // Optimistic update
+    // Optimistic update + mark request as pending
     _subscriptions[communityDid] = willSubscribe;
-    notifyListeners();
-
-    // Mark request as pending
     _pendingRequests[communityDid] = true;
+    notifyListeners();
 
     try {
       if (willSubscribe) {
@@ -150,7 +148,11 @@ class CommunitySubscriptionProvider with ChangeNotifier {
       // Wrap and rethrow as ApiException
       throw ApiException('Unexpected error: ${e.toString()}', statusCode: 500);
     } finally {
+      // Clear the pending flag AND notify: without this, widgets that
+      // rebuilt during the request (showing the pending spinner) are never
+      // rebuilt on completion and the spinner sticks forever.
       _pendingRequests.remove(communityDid);
+      notifyListeners();
     }
   }
 
