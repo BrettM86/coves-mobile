@@ -196,11 +196,16 @@ class _MainShellScreenState extends State<MainShellScreen> {
     }
 
     return Expanded(
-      child: InkWell(
-        onTap: () => _onItemTapped(index),
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        child: icon,
+      child: Semantics(
+        label: label,
+        button: true,
+        selected: isSelected,
+        child: InkWell(
+          onTap: () => _onItemTapped(index),
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          child: icon,
+        ),
       ),
     );
   }
