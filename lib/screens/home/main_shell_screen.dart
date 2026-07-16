@@ -20,6 +20,22 @@ class _MainShellScreenState extends State<MainShellScreen> {
   int _selectedIndex = 0;
   final _feedScreenKey = GlobalKey<FeedScreenState>();
 
+  /// Tab index of the Create Post composer in the IndexedStack.
+  static const int _createTabIndex = 2;
+
+  /// Whether the composer currently holds unsaved input (reported by
+  /// CreatePostScreen). Used to decide if system back must be intercepted.
+  bool _composeHasDraft = false;
+
+  void _onComposeDirtyChanged(bool dirty) {
+    if (dirty == _composeHasDraft) {
+      return;
+    }
+    setState(() {
+      _composeHasDraft = dirty;
+    });
+  }
+
   void _onItemTapped(int index) {
     // If already on feed tab, scroll to top
     if (index == 0 && _selectedIndex == 0) {
@@ -52,7 +68,10 @@ class _MainShellScreenState extends State<MainShellScreen> {
       children: [
         FeedScreen(key: _feedScreenKey, onSearchTap: _onCommunitiesTap),
         const CommunitiesScreen(),
-        CreatePostScreen(onNavigateToFeed: _onNavigateToFeed),
+        CreatePostScreen(
+          onNavigateToFeed: _onNavigateToFeed,
+          onDirtyChanged: _onComposeDirtyChanged,
+        ),
         const NotificationsScreen(),
         const ProfileScreen(),
       ],
@@ -60,7 +79,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
 
     // Tablet layout: NavigationRail on the left
     if (isTablet) {
-      return Scaffold(
+      return _wrapWithBackGuard(Scaffold(
         body: Row(
           children: [
             // Wrap NavigationRail in a colored container that extends to
@@ -129,11 +148,11 @@ class _MainShellScreenState extends State<MainShellScreen> {
             Expanded(child: body),
           ],
         ),
-      );
+      ));
     }
 
     // Phone layout: Bottom navigation bar
-    return Scaffold(
+    return _wrapWithBackGuard(Scaffold(
       body: body,
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
@@ -156,6 +175,27 @@ class _MainShellScreenState extends State<MainShellScreen> {
           ),
         ),
       ),
+    ));
+  }
+
+  /// Shell-level back handling.
+  ///
+  /// Only intercepts system back when the Create tab is active AND the
+  /// composer has unsaved input — in that case back switches to the Home tab
+  /// so the draft stays alive in the IndexedStack instead of the app being
+  /// backgrounded mid-compose. Everywhere else back behaves normally
+  /// (backgrounds the app / pops the route).
+  Widget _wrapWithBackGuard(Widget child) {
+    final protectDraft =
+        _selectedIndex == _createTabIndex && _composeHasDraft;
+    return PopScope(
+      canPop: !protectDraft,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          _onNavigateToFeed();
+        }
+      },
+      child: child,
     );
   }
 

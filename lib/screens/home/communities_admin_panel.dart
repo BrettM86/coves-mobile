@@ -262,10 +262,9 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
 
   @override
   Widget build(BuildContext context) {
-    // NOTE: system back is intercepted shell-wide by CreatePostScreen's
-    // PopScope (alive in MainShellScreen's IndexedStack), which switches to
-    // the Home tab on every back press. Adding a PopScope here cannot
-    // override that — use the in-app Back arrow to return to the menu.
+    // NOTE: system back is handled at the shell level (MainShellScreen) and
+    // only intercepted when the Create tab has a draft; here it backgrounds
+    // the app as usual — use the in-app Back arrow to return to the menu.
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(

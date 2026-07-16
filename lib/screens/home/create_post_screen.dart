@@ -41,10 +41,14 @@ const int kContentMaxLength = 10000;
 /// - Loading states and error handling
 /// - Keyboard handling with scroll support
 class CreatePostScreen extends StatefulWidget {
-  const CreatePostScreen({this.onNavigateToFeed, super.key});
+  const CreatePostScreen({this.onNavigateToFeed, this.onDirtyChanged, super.key});
 
   /// Callback to navigate to feed tab (used when in tab navigation)
   final VoidCallback? onNavigateToFeed;
+
+  /// Notifies the shell when the composer gains/loses unsaved input, so the
+  /// shell can decide whether system back needs to protect a draft.
+  final ValueChanged<bool>? onDirtyChanged;
 
   @override
   State<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -72,10 +76,14 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
   // Computed state
   bool get _isFormValid {
-    return _selectedCommunity != null &&
-        (_titleController.text.trim().isNotEmpty ||
-            _bodyController.text.trim().isNotEmpty ||
-            _urlController.text.trim().isNotEmpty);
+    return _selectedCommunity != null && _hasUnsavedInput;
+  }
+
+  /// True when any text field holds user input (a draft worth protecting).
+  bool get _hasUnsavedInput {
+    return _titleController.text.trim().isNotEmpty ||
+        _bodyController.text.trim().isNotEmpty ||
+        _urlController.text.trim().isNotEmpty;
   }
 
   @override
@@ -129,6 +137,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   void _onTextChanged() {
     // Force rebuild to update Post button state
     setState(() {});
+    widget.onDirtyChanged?.call(_hasUnsavedInput);
   }
 
   Future<void> _selectCommunity() async {
@@ -359,14 +368,11 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     final authProvider = context.watch<AuthProvider>();
     final userHandle = authProvider.handle ?? 'Unknown';
 
-    return PopScope(
-      canPop: widget.onNavigateToFeed == null,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && widget.onNavigateToFeed != null) {
-          widget.onNavigateToFeed!();
-        }
-      },
-      child: Scaffold(
+    // NOTE: no PopScope here. When embedded in MainShellScreen's IndexedStack
+    // this widget stays alive on every tab, so a local PopScope would hijack
+    // system back shell-wide. The shell owns back handling and only intercepts
+    // when this tab is active with unsaved input (see onDirtyChanged).
+    return Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
         backgroundColor: AppColors.background,
@@ -493,7 +499,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
             ],
           ),
         ),
-      ),
       ),
     );
   }
