@@ -1,0 +1,91 @@
+# Section C — checks 3 + 4 + 6 (keyboard): post a top-level comment, reply to
+# it (nesting), verify the composer stays visible with the keyboard open,
+# then collapse/expand the parent thread via long-press.
+# Assumes a signed-in session (suite order: after a1/b-flows).
+# Comment text is timestamped so repeated runs never collide.
+# NOTE: comment-card semantics are MERGED and multiline
+# ("<age>\n<content>, Double tap and hold to collapse thread"), so comment
+# text selectors are always wrapped in [\s\S].
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    index: 0
+- extendedWaitUntil:
+    visible: "NASA delays[\\s\\S]*"
+    timeout: 15000
+# --- Check 4a: post a top-level comment ---
+- evalScript: ${output.c2Comment = 'QA c2 comment ' + Date.now()}
+- tapOn: "Comment"
+- extendedWaitUntil:
+    visible: "Send comment[\\s\\S]*"
+    timeout: 15000
+# The field autofocuses ~300ms after build; let the keyboard settle. On very
+# long posts the field starts below the fold — typing auto-scrolls the caret
+# into view, so no hint-text assertion here.
+- waitForAnimationToEnd:
+    timeout: 5000
+- inputText: ${output.c2Comment}
+# Check 6 (keyboard): the send button must stay visible above the keyboard
+- assertVisible: "Send comment[\\s\\S]*"
+- takeScreenshot: build/maestro/c2_composer_keyboard
+- tapOn: "Send comment[\\s\\S]*"
+# Back on detail — jump to the comments section; the new comment appears
+- extendedWaitUntil:
+    visible: "View [0-9]+ comments?[\\s\\S]*"
+    timeout: 20000
+- tapOn: "View [0-9]+ comments?[\\s\\S]*"
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*${output.c2Comment}[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: build/maestro/c2_comment_posted
+# --- Check 4b: reply to the comment (correct nesting) ---
+- evalScript: ${output.c2Reply = 'QA c2 reply ' + Date.now()}
+- tapOn: "[\\s\\S]*${output.c2Comment}[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Send comment[\\s\\S]*"
+    timeout: 15000
+# The field autofocuses ~300ms after build; let the keyboard settle. On very
+# long posts the field starts below the fold — typing auto-scrolls the caret
+# into view, so no hint-text assertion here.
+- waitForAnimationToEnd:
+    timeout: 5000
+- inputText: ${output.c2Reply}
+- tapOn: "Send comment[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*${output.c2Reply}[\\s\\S]*"
+    timeout: 20000
+# Parent and nested reply both render
+- assertVisible: "[\\s\\S]*${output.c2Comment}[\\s\\S]*"
+- takeScreenshot: build/maestro/c2_reply_nested
+# --- Check 3: collapse via long-press hides the reply, badge shows +1 ---
+- longPressOn: "[\\s\\S]*${output.c2Comment}[\\s\\S]*"
+# Collapsed card keeps the author row and shows the "+1" badge; its hint
+# flips to "expand thread"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*expand thread[\\s\\S]*"
+    timeout: 10000
+- assertNotVisible: "[\\s\\S]*${output.c2Reply}[\\s\\S]*"
+- takeScreenshot: build/maestro/c2_collapsed
+# Expand again via long-press on the collapsed card
+- longPressOn: "[\\s\\S]*expand thread[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*${output.c2Reply}[\\s\\S]*"
+    timeout: 10000
+- takeScreenshot: build/maestro/c2_expanded
+- back

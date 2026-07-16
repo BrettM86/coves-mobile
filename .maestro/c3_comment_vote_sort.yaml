@@ -1,0 +1,71 @@
+# Section C — check 6: vote on a comment (optimistic like/unlike) and switch
+# the comment sort (Hot -> New).
+# Assumes a signed-in session and runs after c2 (which seeds "QA c2 ..."
+# comments used to verify the New sort).
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    index: 0
+- extendedWaitUntil:
+    visible: "NASA delays[\\s\\S]*"
+    timeout: 15000
+# Jump to the comments section via the action-bar comment count button
+- tapOn: "View [0-9]+ comments?[\\s\\S]*"
+# --- Comment voting ---
+- scrollUntilVisible:
+    element:
+      text: "Like comment[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+# Normalize: un-like any comment likes left over from a previous run
+- repeat:
+    while:
+      visible: "Unlike comment[\\s\\S]*"
+    commands:
+      - tapOn:
+          text: "Unlike comment[\\s\\S]*"
+          index: 0
+- assertNotVisible: "Unlike comment[\\s\\S]*"
+# Like the first visible comment — optimistic flip
+- tapOn:
+    text: "Like comment[\\s\\S]*"
+    index: 0
+- assertVisible: "Unlike comment[\\s\\S]*"
+- takeScreenshot: build/maestro/c3_comment_liked
+# Un-like again
+- tapOn:
+    text: "Unlike comment[\\s\\S]*"
+    index: 0
+- assertNotVisible: "Unlike comment[\\s\\S]*"
+# --- Comment sort: Hot -> New ---
+- scrollUntilVisible:
+    element:
+      text: "[0-9]+ Comments?"
+    direction: UP
+    timeout: 20000
+- tapOn: "[0-9]+ Comments?"
+- extendedWaitUntil:
+    visible: "New"
+    timeout: 10000
+- tapOn: "New"
+# Newest-first: the timestamped QA comments from c2 surface near the top
+# (comment-card semantics are merged/multiline, so wrap with [\s\S])
+- extendedWaitUntil:
+    visible: "[\\s\\S]*QA c2 [\\s\\S]*"
+    timeout: 20000
+- takeScreenshot: build/maestro/c3_sort_new
+- back

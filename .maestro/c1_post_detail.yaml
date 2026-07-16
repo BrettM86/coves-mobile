@@ -1,0 +1,46 @@
+# Section C — checks 1 + 5: tapping a feed post opens the detail screen with
+# full content and comments, and deleted comments with an absent author
+# render the "[deleted by user]" placeholder (regression: 652f075).
+# Assumes a signed-in session (suite order: after a1/b-flows).
+# Target post: the seeded "NASA delays ..." aggregator post, which carries a
+# comment thread that includes deleted comments.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 30000
+# Open the NASA post (post card semantics are multiline — use [\s\S])
+- scrollUntilVisible:
+    element:
+      text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    index: 0
+# Detail renders the full post content
+- extendedWaitUntil:
+    visible: "NASA delays[\\s\\S]*"
+    timeout: 15000
+- takeScreenshot: build/maestro/c1_post_detail
+# Jump to the comments section via the action-bar comment count button
+- tapOn: "View [0-9]+ comments?[\\s\\S]*"
+# Comments header (count + sort dropdown) renders
+- extendedWaitUntil:
+    visible: "[0-9]+ Comments?"
+    timeout: 15000
+# Regression 652f075: deleted comment with absent author renders a
+# placeholder instead of crashing. Comment-card semantics are merged and
+# multiline ("[deleted by user]\n13d, ..."), so wrap with [\s\S].
+- scrollUntilVisible:
+    element:
+      text: "\\[deleted by user\\][\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: build/maestro/c1_deleted_placeholder
+- back

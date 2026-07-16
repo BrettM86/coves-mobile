@@ -12,20 +12,31 @@ appId: social.coves.dev
 - extendedWaitUntil:
     visible: "Sign in|Discover feed.*"
     timeout: 30000
-# Self-recovery: if a previous run left us signed in, sign out first
-- runFlow:
-    when:
-      visible: "Discover feed.*"
+# Let the semantics tree settle: in suite mode the when-check below
+# intermittently read a stale/empty tree right after the splash resolved
+# and skipped the sign-out recovery.
+- waitForAnimationToEnd:
+    timeout: 5000
+# Self-recovery: if a previous run left us signed in, sign out first.
+# Wrapped in retry so a misfired when-check (stale tree -> recovery
+# skipped -> landing screen never appears) re-evaluates instead of
+# failing the flow.
+- retry:
+    maxRetries: 2
     commands:
-      - tapOn: "Me"
+      - runFlow:
+          when:
+            visible: "Discover feed.*|Me"
+          commands:
+            - tapOn: "Me"
+            - extendedWaitUntil:
+                visible: "Menu"
+                timeout: 15000
+            - tapOn: "Menu"
+            - tapOn: "Sign Out"
       - extendedWaitUntil:
-          visible: "Menu"
-          timeout: 15000
-      - tapOn: "Menu"
-      - tapOn: "Sign Out"
-- extendedWaitUntil:
-    visible: "Sign in"
-    timeout: 30000
+          visible: "Sign in"
+          timeout: 30000
 - tapOn: "Sign in"
 - extendedWaitUntil:
     visible: "Welcome back"
