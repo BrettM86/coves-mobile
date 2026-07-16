@@ -41,7 +41,7 @@ class CovesAuthService {
               accessibility: KeychainAccessibility.first_unlock,
             ),
           ),
-      _injectedDio = dio;
+      _dio = dio;
 
   static CovesAuthService? _instance;
 
@@ -69,7 +69,6 @@ class CovesAuthService {
       'coves_session_${EnvironmentConfig.current.environment.name}';
 
   // HTTP client for API calls - injected for testing or created in initialize()
-  final Dio? _injectedDio;
   Dio? _dio;
 
   // Current session (cached in memory)
@@ -87,30 +86,26 @@ class CovesAuthService {
 
   /// Initialize the auth service
   Future<void> initialize() async {
-    // Use injected Dio (for testing) or create a new one
+    // Use injected Dio (set in the constructor, for testing) or create one
     if (_dio == null) {
-      if (_injectedDio != null) {
-        _dio = _injectedDio;
-      } else {
-        final dio = Dio(
-          BaseOptions(
-            baseUrl: EnvironmentConfig.current.apiUrl,
-            // Shorter timeout with retries for mobile network resilience
-            connectTimeout: const Duration(seconds: 10),
-            receiveTimeout: const Duration(seconds: 30),
-          ),
-        );
-        // Add retry interceptor for transient network errors
-        // Critical for token refresh - don't sign out user on transient failure
-        dio.interceptors.add(
-          RetryInterceptor(
-            dio: dio,
-            maxRetries: 2,
-            serviceName: 'CovesAuthService',
-          ),
-        );
-        _dio = dio;
-      }
+      final dio = Dio(
+        BaseOptions(
+          baseUrl: EnvironmentConfig.current.apiUrl,
+          // Shorter timeout with retries for mobile network resilience
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 30),
+        ),
+      );
+      // Add retry interceptor for transient network errors
+      // Critical for token refresh - don't sign out user on transient failure
+      dio.interceptors.add(
+        RetryInterceptor(
+          dio: dio,
+          maxRetries: 2,
+          serviceName: 'CovesAuthService',
+        ),
+      );
+      _dio = dio;
     }
 
     if (kDebugMode) {
