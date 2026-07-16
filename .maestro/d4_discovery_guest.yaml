@@ -1,0 +1,76 @@
+# Section D — checks 1 + 2 + 5 (guest): the discovery screen renders its
+# browse sections and search, search shows results / no-results / recovers on
+# clear, and the "See all" screen renders the full community list.
+# PRECONDITION: signed out (run after a2_signout_landing). Reaches the
+# discovery screen via the landing page's "Explore communities" link, since
+# the admin test account (mari) sees the admin panel instead when signed in.
+# Leaves the app signed out.
+appId: social.coves.dev
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Sign in"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: "Explore communities"
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- tapOn: "Communities"
+# Let the semantics tree settle after the tab switch (see a1 flow note)
+- waitForAnimationToEnd:
+    timeout: 5000
+# Check 1: browse sections render (no "Your Communities" when signed out)
+- retry:
+    maxRetries: 2
+    commands:
+      - extendedWaitUntil:
+          visible: "Popular[\\s\\S]*"
+          timeout: 15000
+      - extendedWaitUntil:
+          visible: "Recently Created"
+          timeout: 15000
+# Hero cards (Popular) and list tiles (Recently Created) render communities
+- extendedWaitUntil:
+    visible: "[\\s\\S]*community[\\s\\S]*"
+    timeout: 15000
+- takeScreenshot: build/maestro/d4_discovery_sections
+# Check 2: search returns results
+- tapOn: "Explore communities..."
+- inputText: "science"
+- extendedWaitUntil:
+    visible: "[0-9]+ results?[\\s\\S]*"
+    timeout: 15000
+- assertVisible: "[\\s\\S]*Science[\\s\\S]*community[\\s\\S]*"
+- takeScreenshot: build/maestro/d4_search_results
+# Check 2: no-results state
+- tapOn: "Clear search"
+- inputText: "zzzqxv"
+- extendedWaitUntil:
+    visible: "No communities match[\\s\\S]*"
+    timeout: 15000
+- takeScreenshot: build/maestro/d4_search_noresults
+# Check 2: clearing the query restores the browse sections
+- tapOn: "Clear search"
+- hideKeyboard
+- extendedWaitUntil:
+    visible: "Popular[\\s\\S]*"
+    timeout: 15000
+# Check 5: See all -> full paginated list screen renders and scrolls
+- tapOn: "[\\s\\S]*See all Popular[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Popular Communities"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "[\\s\\S]*community[\\s\\S]*"
+    timeout: 15000
+- swipe:
+    start: 50%, 80%
+    end: 50%, 30%
+    duration: 400
+- takeScreenshot: build/maestro/d4_see_all
+- back
+- extendedWaitUntil:
+    visible: "Popular[\\s\\S]*"
+    timeout: 15000

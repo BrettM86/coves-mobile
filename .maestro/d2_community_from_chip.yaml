@@ -1,0 +1,55 @@
+# Section D — checks 3 + 6: tapping a post's community handle in the home
+# feed navigates to that community's feed screen; the header (avatar, display
+# name, handle, subscriber/member stats), Feed/About tabs, and sort chips all
+# render; the About tab shows stats and info. Assumes a signed-in session.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+# Let the semantics tree settle after the splash (see a1 flow note), then
+# retry the tap in case the first read hit a stale/empty tree.
+- waitForAnimationToEnd:
+    timeout: 5000
+- retry:
+    maxRetries: 2
+    commands:
+      - extendedWaitUntil:
+          visible: "Feed post in [\\s\\S]*"
+          timeout: 15000
+      # The community handle row inside the post card is its own tappable node
+      - tapOn:
+          text: "!science@coves.social"
+          index: 0
+      # Community feed screen header renders (display name + stats)
+      - extendedWaitUntil:
+          visible: "[\\s\\S]*Science[\\s\\S]*"
+          timeout: 15000
+- assertVisible: "[\\s\\S]*Subscribers[\\s\\S]*"
+- assertVisible: "[\\s\\S]*About[\\s\\S]*"
+- assertVisible: "[\\s\\S]*Hot[\\s\\S]*"
+# Community feed shows posts from that community. NOTE: the "Feed post in
+# ..." semantics label is added by the HOME feed wrapper (feed_page.dart);
+# community-feed post cards expose raw merged text, so match a seeded title.
+- extendedWaitUntil:
+    visible: "[\\s\\S]*NASA delays[\\s\\S]*"
+    timeout: 15000
+- takeScreenshot: build/maestro/d2_community_feed
+# About tab: description/stats/info sections render
+- tapOn: "About"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*Community Stats[\\s\\S]*"
+    timeout: 10000
+- assertVisible: "[\\s\\S]*Visibility[\\s\\S]*"
+- takeScreenshot: build/maestro/d2_community_about
+# Back to the Feed tab, then leave the community screen
+- tapOn: "Feed"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*Hot[\\s\\S]*"
+    timeout: 10000
+- back
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000

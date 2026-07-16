@@ -1,0 +1,50 @@
+# Section D — check 5 (admin panel): as an admin account (mari is in
+# kAdminHandles) the Communities tab shows the admin panel and both subpages
+# (Create Community, Change Profile Pic) open without crashing; the in-app
+# "Back" arrow returns to the admin menu. Assumes a signed-in session.
+# KNOWN QUIRK: the SYSTEM back button switches to the Home tab from anywhere
+# in the shell (CreatePostScreen's PopScope in the IndexedStack) — use the
+# in-app Back arrow, not `- back`, inside the admin panel.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+# Let the semantics tree settle after the splash (see a1 flow note)
+- waitForAnimationToEnd:
+    timeout: 5000
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Communities"
+      - extendedWaitUntil:
+          visible: "Admin Tools"
+          timeout: 15000
+- takeScreenshot: build/maestro/d1_admin_menu
+# Create Community subpage renders its form
+- tapOn: "Create Community[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Display Name"
+    timeout: 10000
+- takeScreenshot: build/maestro/d1_admin_create
+# In-app back arrow (labeled "Back") returns to the admin menu
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: "Admin Tools"
+    timeout: 10000
+# Change Profile Pic subpage loads the community list
+- tapOn: "Change Profile Pic[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Select Community"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "[\\s\\S]*@c-[\\s\\S]*"
+    timeout: 15000
+- takeScreenshot: build/maestro/d1_admin_profilepic
+# In-app back arrow (labeled "Back") returns to the menu
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: "Admin Tools"
+    timeout: 10000

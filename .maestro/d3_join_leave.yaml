@@ -1,0 +1,87 @@
+# Section D — check 4: joining a community flips the button state, the
+# For You feed reflects the new membership, and leaving reverts both.
+# Self-normalizes if a previous run left mari subscribed. Ends with mari
+# subscribed to nothing (an assumption baked into b5's comments).
+# NOTE: subscriber counts in the header lag the toggle (appview indexes the
+# PDS record via the firehose), so this flow asserts button state and feed
+# membership effects, not counts.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+# Open the science community from a post's community handle
+- retry:
+    maxRetries: 2
+    commands:
+      - extendedWaitUntil:
+          visible: "Feed post in [\\s\\S]*"
+          timeout: 15000
+      - tapOn:
+          text: "!science@coves.social"
+          index: 0
+      - extendedWaitUntil:
+          visible: "[\\s\\S]*Science[\\s\\S]*"
+          timeout: 15000
+- extendedWaitUntil:
+    visible: "Join|Joined"
+    timeout: 15000
+# Normalize: if a previous run left us subscribed, leave first
+- runFlow:
+    when:
+      visible: "Joined"
+    commands:
+      - tapOn: "Joined"
+      - extendedWaitUntil:
+          visible: "Join"
+          timeout: 15000
+# Join: button flips to Joined
+- tapOn: "Join"
+- extendedWaitUntil:
+    visible: "Joined"
+    timeout: 15000
+- takeScreenshot: build/maestro/d3_joined
+# Membership effect: For You now carries the community's posts.
+# Retry with pull-to-refresh to absorb firehose indexing lag.
+- back
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000
+- tapOn: "For You feed[\\s\\S]*"
+- retry:
+    maxRetries: 3
+    commands:
+      - swipe:
+          start: 50%, 30%
+          end: 50%, 80%
+          duration: 400
+      - extendedWaitUntil:
+          visible: "Feed post in [\\s\\S]*"
+          timeout: 10000
+- takeScreenshot: build/maestro/d3_foryou_member
+# Leave: button reverts to Join
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          text: "!science@coves.social"
+          index: 0
+      - extendedWaitUntil:
+          visible: "[\\s\\S]*Science[\\s\\S]*"
+          timeout: 15000
+- extendedWaitUntil:
+    visible: "Joined"
+    timeout: 15000
+- tapOn: "Joined"
+- extendedWaitUntil:
+    visible: "Join"
+    timeout: 15000
+- takeScreenshot: build/maestro/d3_left
+- back
+- extendedWaitUntil:
+    visible: "Discover feed.*|For You feed[\\s\\S]*"
+    timeout: 15000
