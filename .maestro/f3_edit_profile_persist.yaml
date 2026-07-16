@@ -1,0 +1,122 @@
+# Section F — check 3: editing display name + bio on the Edit Profile
+# screen saves, and the change persists across a full app restart.
+# mari's canonical state is NO display name and NO bio, so the flow
+# restores both to empty at the end.
+# Values carry a per-run timestamp suffix so a leftover value from a
+# crashed previous run can never equal this run's value (a same-value
+# save would leave the Save button disabled: _hasChanges == false).
+# NOTE: never use hideKeyboard here (BACK press on Android); the Save
+# button lives in the app bar and is tappable with the keyboard open.
+# NOTE: fields are cleared via longPress > "Select all" > eraseText —
+# a plain tap can drop the cursor mid-text and eraseText then only
+# deletes the characters before the cursor, leaving a remnant.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- evalScript: ${output.f3 = String(Date.now())}
+- tapOn: "Me"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*did:plc:[\\s\\S]*"
+    timeout: 15000
+- tapOn: "Edit Profile"
+- extendedWaitUntil:
+    visible: "Display Name"
+    timeout: 15000
+# --- Set display name (guards: leftover QA value from a crashed run,
+# --- otherwise the field is empty and shows its hint) ---
+- runFlow:
+    when:
+      visible: "QA F3 name.*"
+    commands:
+      - longPressOn: "QA F3 name.*"
+      - tapOn: "Select all"
+      - eraseText
+- runFlow:
+    when:
+      visible: "How your name appears"
+    commands:
+      - tapOn: "How your name appears"
+- inputText: "QA F3 name ${output.f3}"
+# --- Set bio ---
+- runFlow:
+    when:
+      visible: "QA F3 bio.*"
+    commands:
+      - longPressOn: "QA F3 bio.*"
+      - tapOn: "Select all"
+      - eraseText
+- runFlow:
+    when:
+      visible: "Tell people about yourself"
+    commands:
+      - tapOn: "Tell people about yourself"
+- inputText: "QA F3 bio ${output.f3}"
+# --- Save ---
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible: "Profile updated successfully"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "[\\s\\S]*did:plc:[\\s\\S]*"
+    timeout: 15000
+- takeScreenshot: build/maestro/f3_saved
+# --- Full restart: kill and relaunch ---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: "Me"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*did:plc:[\\s\\S]*"
+    timeout: 15000
+# Bio persisted into the profile header (regression: backend serializes
+# the bio as "description"; UserProfile.fromJson must accept it)
+- assertVisible: "[\\s\\S]*QA F3 bio ${output.f3}[\\s\\S]*"
+- takeScreenshot: build/maestro/f3_persisted_header
+# Display name persisted into the edit form (header shows handle only)
+- tapOn: "Edit Profile"
+- extendedWaitUntil:
+    visible: "QA F3 name ${output.f3}"
+    timeout: 15000
+- takeScreenshot: build/maestro/f3_persisted_fields
+# --- Restore canonical empty display name + bio ---
+- longPressOn: "QA F3 name ${output.f3}"
+- tapOn: "Select all"
+- eraseText
+- longPressOn: "QA F3 bio ${output.f3}"
+- tapOn: "Select all"
+- eraseText
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible: "Profile updated successfully"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "[\\s\\S]*did:plc:[\\s\\S]*"
+    timeout: 15000
+# The appview indexes the profile record via the firehose, so the app's
+# post-save refresh can race the cleared record — poll via pull-to-refresh
+# instead of asserting immediately.
+- retry:
+    maxRetries: 3
+    commands:
+      - swipe:
+          start: 50%, 40%
+          end: 50%, 85%
+          duration: 400
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - assertNotVisible: "[\\s\\S]*QA F3 bio ${output.f3}[\\s\\S]*"
+- takeScreenshot: build/maestro/f3_restored
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000

@@ -1,0 +1,33 @@
+# Section F — check 2: tapping an author handle on a feed post opens that
+# author's profile screen (header with handle, DID and stats renders).
+# Taps the first visible author handle, so it works regardless of which
+# posts currently top the Discover feed.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          text: "@[a-z0-9.\\-]+\\.local\\.coves\\.dev"
+          index: 0
+      # Profile header is the only screen showing the DID + stats row
+      # (header semantics can merge into multi-line nodes — wrap in [\s\S]*)
+      - extendedWaitUntil:
+          visible: "[\\s\\S]*did:plc:[\\s\\S]*"
+          timeout: 15000
+- assertVisible: "[\\s\\S]*@[a-z0-9.\\-]+\\.local\\.coves\\.dev[\\s\\S]*"
+- assertVisible: "[\\s\\S]*\\d+ Posts[\\s\\S]*"
+- assertVisible: "[\\s\\S]*\\d+ Memberships[\\s\\S]*"
+- takeScreenshot: build/maestro/f2_author_profile
+# Back returns to the feed
+- back
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000

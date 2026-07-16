@@ -1,0 +1,33 @@
+# Section F — check 1: own profile tab (Me) renders the header (avatar
+# banner area, handle, DID, stats row) and the authored-posts list.
+# Requires a signed-in mari session (mari has authored posts).
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: "Me"
+# Header: handle, DID, stats row. Header semantics can merge into
+# multi-line nodes, so wrap everything in [\s\S]* (documented quirk).
+- extendedWaitUntil:
+    visible: "[\\s\\S]*@mari.local.coves.dev[\\s\\S]*"
+    timeout: 15000
+- assertVisible: "[\\s\\S]*did:plc:[\\s\\S]*"
+- assertVisible: "[\\s\\S]*\\d+ Posts[\\s\\S]*"
+- assertVisible: "[\\s\\S]*\\d+ Comments[\\s\\S]*"
+- assertVisible: "[\\s\\S]*\\d+ Memberships[\\s\\S]*"
+- takeScreenshot: build/maestro/f1_profile_header
+# Posts tab content: mari's authored posts render
+- extendedWaitUntil:
+    visible: "QA E1 post[\\s\\S]*"
+    timeout: 15000
+- takeScreenshot: build/maestro/f1_profile_posts
+# Return to the home feed to keep suite state predictable
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000

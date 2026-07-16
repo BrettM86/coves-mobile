@@ -1,0 +1,19 @@
+# Section F — check 5: a profile with no posts shows a sane empty state.
+# kai.local.coves.dev has no posts (and no comments).
+# NOT in config.yaml's flowsOrder: MainActivity has no VIEW intent filter,
+# so the profile deep link must be fired via adb BEFORE running this flow
+# (this flow intentionally has no launchApp):
+#   adb shell am start -n social.coves.dev/social.coves.MainActivity \
+#     -a android.intent.action.VIEW \
+#     -d 'social.coves:///profile/kai.local.coves.dev'
+appId: social.coves.dev
+---
+- extendedWaitUntil:
+    visible: "[\\s\\S]*@kai.local.coves.dev[\\s\\S]*"
+    timeout: 30000
+- assertVisible: "[\\s\\S]*did:plc:[\\s\\S]*"
+- assertVisible: "[\\s\\S]*0 Posts[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "No posts yet"
+    timeout: 15000
+- takeScreenshot: build/maestro/f5_empty_profile

@@ -1,0 +1,72 @@
+# Section F — check 4: avatar change via the gallery path (the emulator
+# has no camera): Change Avatar > Choose from Gallery > Android photo
+# picker opens without crash > pick image > uCrop > NEW badge staged >
+# back out (change discarded).
+# The flow deliberately does NOT save: on the local stack the PDS rejects
+# com.atproto.repo.uploadBlob with ScopeMissingError (blob:*/*) even
+# though the appview requests and validates that scope — a backend/PDS
+# integration issue (OPEN, QA loop 2026-07-16). The backend maps it to a
+# 401 AuthExpired, which makes the app sign the user out after its
+# refresh-and-retry also 401s.
+# PREREQUISITE: at least one image must exist in the emulator gallery:
+#   adb push qa_avatar_test.png /sdcard/Pictures/
+#   adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
+#     -d file:///sdcard/Pictures/qa_avatar_test.png
+# NOTE: the avatar tap target is Semantics(label: 'Change Avatar'); when a
+# new image is staged the node reads "Change Avatar\nNEW" (merged
+# multiline), hence the [\s\S]* wrappers.
+appId: social.coves.dev
+---
+# Cold start can flake on stale semantics when the previous run ended on
+# the edit screen — retry the launch once (documented quirk).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: "Me"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*did:plc:[\\s\\S]*"
+    timeout: 15000
+- tapOn: "Edit Profile"
+- extendedWaitUntil:
+    visible: "Display Name"
+    timeout: 15000
+- tapOn: "Change Avatar[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Select Image Source"
+    timeout: 15000
+- tapOn: "Choose from Gallery[\\s\\S]*"
+# Native Android photo picker opening without a crash is the core check
+- extendedWaitUntil:
+    visible: "Photo taken on .*"
+    timeout: 20000
+- takeScreenshot: build/maestro/f4_photo_picker
+- tapOn:
+    text: "Photo taken on .*"
+    index: 0
+- tapOn: "Done"
+# uCrop crop screen; the confirm action is labeled "Crop"
+- extendedWaitUntil:
+    visible: "Crop"
+    timeout: 20000
+- tapOn: "Crop"
+# Back on the edit screen with the new avatar staged (NEW badge)
+- extendedWaitUntil:
+    visible: "Change Avatar[\\s\\S]*NEW[\\s\\S]*"
+    timeout: 20000
+- takeScreenshot: build/maestro/f4_avatar_staged
+# Discard the staged change; no crash and the profile renders again
+- back
+- extendedWaitUntil:
+    visible: "[\\s\\S]*did:plc:[\\s\\S]*"
+    timeout: 15000
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000

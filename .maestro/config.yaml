@@ -6,6 +6,10 @@
 # d4_discovery_guest requires a signed-OUT state (the admin test account
 # sees the admin panel instead of the discovery screen), so it runs after
 # a2_signout_landing.
+# f4_avatar_gallery requires an image in the emulator gallery (see the
+# prerequisite adb push recipe in that flow's header comment).
+# f5_empty_profile is NOT in the order: it needs an adb-fired deep link
+# first (MainActivity has no VIEW intent filter) — see its header comment.
 executionOrder:
   continueOnFailure: false
   flowsOrder:
@@ -26,6 +30,10 @@ executionOrder:
     - e3_community_picker
     - e4_reply_draft
     - e5_kill_mid_compose
+    - f1_own_profile
+    - f2_author_profile
+    - f3_edit_profile_persist
+    - f4_avatar_gallery
     - a2_signout_landing
     - d4_discovery_guest
     - a3_wrong_password
