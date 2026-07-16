@@ -383,6 +383,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         automaticallyImplyLeading: false,
         leading: IconButton(
           icon: const Icon(Icons.close),
+          tooltip: 'Close',
           onPressed: () {
             // Use callback if available (tab navigation), otherwise pop
             if (widget.onNavigateToFeed != null) {

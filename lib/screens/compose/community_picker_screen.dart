@@ -217,6 +217,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close),
+          tooltip: 'Close',
           onPressed: () => Navigator.pop(context),
         ),
       ),
