@@ -490,14 +490,39 @@ class CommentsProvider with ChangeNotifier {
         debugPrint('✅ Comment created: ${response.uri}');
       }
 
-      // Refresh comments to show the new comment
+      // Refresh comments to show the new comment. The AppView indexes new
+      // comments asynchronously (firehose), so the first refresh can race
+      // indexing and miss the comment we just created — retry briefly until
+      // it shows up. Bounded so a comment that legitimately falls outside
+      // the first page (deep pagination) can't loop forever.
       await refreshComments();
+      var attempt = 0;
+      while (attempt < 3 && !_treeContainsUri(_comments, response.uri)) {
+        attempt++;
+        await Future<void>.delayed(Duration(milliseconds: 400 * attempt));
+        await refreshComments();
+      }
     } on Exception catch (e) {
       if (kDebugMode) {
         debugPrint('❌ Failed to create comment: $e');
       }
       rethrow;
     }
+  }
+
+  /// Whether [nodes] (or any of their nested replies) contain a comment
+  /// with the given [uri].
+  bool _treeContainsUri(List<ThreadViewComment> nodes, String uri) {
+    for (final node in nodes) {
+      if (node.comment.uri == uri) {
+        return true;
+      }
+      final replies = node.replies;
+      if (replies != null && _treeContainsUri(replies, uri)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Delete a comment

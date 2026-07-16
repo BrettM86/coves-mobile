@@ -1413,6 +1413,26 @@ void main() {
           ),
         );
 
+        // The refreshed response contains the newly created comment (the
+        // AppView has indexed it), so no extra retries are needed.
+        final refreshedResponse = CommentsResponse(
+          post: {},
+          comments: [
+            _createMockThreadComment('at://did:plc:test/comment/abc'),
+            _createMockThreadComment('comment1'),
+          ],
+        );
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+          ),
+        ).thenAnswer((_) async => refreshedResponse);
+
         await providerWithCommentService.createComment(content: 'Test comment');
 
         // Should have called getComments twice - once for initial load,
@@ -1428,6 +1448,46 @@ void main() {
           ),
         ).called(2);
       });
+
+      test(
+        'should retry refresh when created comment is not yet indexed',
+        () async {
+          await providerWithCommentService.loadComments(refresh: true);
+
+          when(
+            mockCommentService.createComment(
+              rootUri: anyNamed('rootUri'),
+              rootCid: anyNamed('rootCid'),
+              parentUri: anyNamed('parentUri'),
+              parentCid: anyNamed('parentCid'),
+              content: anyNamed('content'),
+            ),
+          ).thenAnswer(
+            (_) async => const CreateCommentResponse(
+              uri: 'at://did:plc:test/comment/abc',
+              cid: 'cid123',
+            ),
+          );
+
+          // The default stub never returns the new comment (AppView
+          // indexing lag), so the provider retries a bounded number of
+          // times: 1 initial load + 1 refresh + 3 retries = 5 calls.
+          await providerWithCommentService.createComment(
+            content: 'Test comment',
+          );
+
+          verify(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: anyNamed('cursor'),
+            ),
+          ).called(5);
+        },
+      );
 
       test('should rethrow exception from CommentService', () async {
         await providerWithCommentService.loadComments(refresh: true);
