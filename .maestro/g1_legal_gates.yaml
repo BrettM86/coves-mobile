@@ -1,0 +1,95 @@
+# Section G — checks 1 + 2: EULA and Community Guidelines gates on a fresh
+# install: shown before anything else, un-accepted state persists across a
+# restart, accepting requires scrolling the FULL document, each acceptance
+# persists across a restart, and after both gates the landing screen shows.
+# NOT in config.yaml's flowsOrder: `clearState` wipes ALL app data (legal
+# acceptances AND the signed-in session), which would break every stateful
+# flow that follows. Run standalone, then re-run a1_login_session to restore
+# the signed-in-as-mari end state:
+#   maestro test .maestro/g1_legal_gates.yaml && \
+#   maestro test .maestro/a1_login_session.yaml
+appId: social.coves.dev
+---
+# Fresh-install state: wipe app data so both gates are un-accepted.
+- launchApp:
+    clearState: true
+# Check 1: EULA gate is the first thing shown.
+- extendedWaitUntil:
+    visible: "License Agreement"
+    timeout: 60000
+- assertVisible: "Scroll to read full agreement"
+- assertVisible: "Accept & Continue"
+# Un-accepted state persists across a restart (still gated after relaunch).
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "License Agreement"
+    timeout: 60000
+# Accept requires the full scroll: read to the last EULA section, then a
+# few extra swipes to land on the hard bottom (the checkbox only unlocks
+# within 40px of maxScrollExtent; the last heading becoming visible is not
+# enough — that stayed-locked state is itself asserted by the failed 100%
+# tap otherwise).
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*22. Contact Information[\\s\\S]*"
+    direction: DOWN
+    timeout: 60000
+    speed: 40
+- repeat:
+    times: 3
+    commands:
+      - swipe:
+          start: 50%, 70%
+          end: 50%, 30%
+          duration: 500
+- waitForAnimationToEnd:
+    timeout: 3000
+# The scroll hint disappears only once the true bottom was reached.
+- assertNotVisible: "Scroll to read full agreement"
+- tapOn: "I have read and agree to the End User License Agreement"
+- tapOn: "Accept & Continue"
+# Check 2: Community Guidelines gate follows the EULA.
+- extendedWaitUntil:
+    visible: "Community Guidelines"
+    timeout: 30000
+- assertVisible: "Scroll to read full guidelines"
+# EULA acceptance persists across a restart; guidelines gate remains.
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Community Guidelines"
+    timeout: 60000
+- assertNotVisible: "License Agreement"
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*Thanks for being part of Coves![\\s\\S]*"
+    direction: DOWN
+    timeout: 60000
+    speed: 40
+- repeat:
+    times: 3
+    commands:
+      - swipe:
+          start: 50%, 70%
+          end: 50%, 30%
+          duration: 500
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertNotVisible: "Scroll to read full guidelines"
+- tapOn: "I have read and agree to the Community Guidelines"
+- tapOn: "Accept & Continue"
+# Both gates cleared: landing screen shows.
+- extendedWaitUntil:
+    visible: "Sign in"
+    timeout: 30000
+- takeScreenshot: build/maestro/g1_gates_accepted
+# Both acceptances persist across a final restart (no gate re-shown).
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Sign in"
+    timeout: 60000
+- assertNotVisible: "License Agreement"
+- assertNotVisible: "Scroll to read full guidelines"
+- takeScreenshot: build/maestro/g1_gates_persisted

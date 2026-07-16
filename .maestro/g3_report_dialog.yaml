@@ -1,0 +1,56 @@
+# Section G — check 3 (suite-safe half): the report dialog opens from a
+# post's options menu, all reason categories render and are selectable, and
+# Cancel dismisses without submitting. The actual SUBMIT path is exercised
+# manually (it writes an admin_reports row on every run — verified server
+# receipt in the 2026-07-16 Section G iteration, admin_reports id 13), so
+# this flow deliberately stops at Cancel to keep the suite idempotent.
+# Assumes a signed-in session (suite order: after a1). Target: the seeded
+# NASA aggregator post (reporting is hidden on the viewer's own posts).
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 30000
+# Open the NASA post detail (only one "More options" menu lives there,
+# so the report entry point is unambiguous).
+- scrollUntilVisible:
+    element:
+      text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    index: 0
+- extendedWaitUntil:
+    visible: "NASA delays[\\s\\S]*"
+    timeout: 15000
+- tapOn: "More options"
+- tapOn: "Report"
+# Report dialog renders with every reason category
+- extendedWaitUntil:
+    visible: "Report post"
+    timeout: 15000
+- assertVisible: "Why are you reporting this?"
+- assertVisible: "Spam[\\s\\S]*"
+- assertVisible: "Harassment[\\s\\S]*"
+- assertVisible: "Doxing[\\s\\S]*"
+- assertVisible: "Illegal Content[\\s\\S]*"
+- assertVisible: "Child Safety[\\s\\S]*"
+- assertVisible: "Other[\\s\\S]*"
+- assertVisible: "Submit Report"
+# Reasons are selectable
+- tapOn: "Spam[\\s\\S]*"
+- takeScreenshot: build/maestro/g3_report_reason_selected
+# Cancel dismisses the dialog without submitting
+- tapOn: "Cancel"
+- assertNotVisible: "Why are you reporting this?"
+- assertVisible: "NASA delays[\\s\\S]*"
+- back
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000
