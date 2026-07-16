@@ -1,0 +1,65 @@
+# Section A — checks 2 + 3: OAuth sign-in with the local test account lands
+# on the home feed, and the session persists across an app restart.
+# PRECONDITIONS: local backend up, `adb reverse` applied for ports
+# 3001/3002/8080/8081, legal gates accepted/bypassed, and Chrome first-run
+# already dismissed on the emulator. Recovers from a signed-in start by
+# signing out first. Leaves the app signed in on the home feed.
+appId: social.coves.dev
+---
+- launchApp
+# Wait out the splash screen: either the landing screen (signed out) or the
+# feed (signed in) appears
+- extendedWaitUntil:
+    visible: "Sign in|Discover feed.*"
+    timeout: 30000
+# Self-recovery: if a previous run left us signed in, sign out first
+- runFlow:
+    when:
+      visible: "Discover feed.*"
+    commands:
+      - tapOn: "Me"
+      - extendedWaitUntil:
+          visible: "Menu"
+          timeout: 15000
+      - tapOn: "Menu"
+      - tapOn: "Sign Out"
+- extendedWaitUntil:
+    visible: "Sign in"
+    timeout: 30000
+- tapOn: "Sign in"
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 15000
+- tapOn: "alice.bsky.social"
+- inputText: "mari.local.coves.dev"
+- hideKeyboard
+- tapOn: "Sign in"
+# Chrome custom tab: PDS OAuth password page (localhost:3001)
+- extendedWaitUntil:
+    visible: "Password"
+    timeout: 30000
+- tapOn: "Password"
+- inputText: "password"
+- hideKeyboard
+# The web page has a "Sign in" heading and a "Sign in" button; the button is
+# the last match in the tree.
+- tapOn:
+    text: "Sign in"
+    index: 1
+# Consent page
+- extendedWaitUntil:
+    visible: "Authorize"
+    timeout: 30000
+- tapOn: "Authorize"
+# Check 2: back in the app on the home feed
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 60000
+- takeScreenshot: build/maestro/a_login_feed
+# Check 3: session persists across a full restart (no re-login)
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- takeScreenshot: build/maestro/a_session_persisted

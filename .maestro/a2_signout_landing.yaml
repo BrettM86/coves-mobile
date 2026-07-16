@@ -1,0 +1,29 @@
+# Section A — checks 5 + 1: sign out clears the session and the landing
+# screen renders. PRECONDITION: app signed in (run a1_login_session.yaml
+# first if needed). Leaves the app signed out on the landing screen.
+appId: social.coves.dev
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- tapOn: "Me"
+- extendedWaitUntil:
+    visible: "@mari.local.coves.dev"
+    timeout: 15000
+- tapOn: "Menu"
+- assertVisible: "Sign Out"
+- tapOn: "Sign Out"
+# Check 5: back on the auth/landing surface, no authed UI left
+- extendedWaitUntil:
+    visible: "Sign in"
+    timeout: 15000
+# Check 1: landing screen renders after restart when signed out
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Sign in"
+    timeout: 30000
+- assertVisible: "Create account"
+- assertVisible: "Sign in with Bluesky"
+- takeScreenshot: build/maestro/a_signout_landing
