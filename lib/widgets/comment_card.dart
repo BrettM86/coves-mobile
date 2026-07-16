@@ -94,6 +94,10 @@ class _CommentCardState extends State<CommentCard> {
 
   @override
   Widget build(BuildContext context) {
+    // Author is null for deleted comments (backend omits it to preserve
+    // privacy). Capture locally so Dart can promote it to non-null below.
+    final author = comment.author;
+
     // All comments get at least 1 threading line (depth + 1)
     final threadingLineCount = depth + 1;
     // Calculate left padding: (6px per line) + 14px base padding
@@ -176,7 +180,7 @@ class _CommentCardState extends State<CommentCard> {
                         Row(
                           children: [
                             // Author avatar and handle (or placeholder for deleted)
-                            if (comment.isDeleted)
+                            if (comment.isDeleted || author == null)
                               // Show deletion reason as placeholder
                               Text(
                                 comment.deletionReason == 'moderator'
@@ -193,15 +197,15 @@ class _CommentCardState extends State<CommentCard> {
                             else
                               // Show tappable author for active comments
                               TappableAuthor(
-                                authorDid: comment.author.did,
+                                authorDid: author.did,
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     // Author avatar
-                                    _buildAuthorAvatar(comment.author),
+                                    _buildAuthorAvatar(author),
                                     const SizedBox(width: 8),
                                     Text(
-                                      '@${comment.author.handle}',
+                                      '@${author.handle}',
                                       style: TextStyle(
                                         color: AppColors.textPrimary.withValues(
                                           alpha: isCollapsed ? 0.7 : 0.5,
@@ -342,10 +346,15 @@ class _CommentCardState extends State<CommentCard> {
   /// Menu is only visible to authenticated users, so no auth check needed here.
   Future<void> _handleMenuAction(BuildContext context, String action) async {
     if (action == 'blockUser') {
+      // Deleted comments have no author to block.
+      final author = comment.author;
+      if (author == null) {
+        return;
+      }
       await handleBlockUser(
         context: context,
-        authorDid: comment.author.did,
-        authorHandle: comment.author.handle,
+        authorDid: author.did,
+        authorHandle: author.handle,
       );
     } else if (action == 'report') {
       if (!context.mounted) return;
@@ -503,9 +512,16 @@ class _CommentCardState extends State<CommentCard> {
           return const SizedBox.shrink();
         }
 
-        final isCommentAuthor = authProvider.did == comment.author.did;
-        final authorDid = comment.author.did;
-        final authorHandle = comment.author.handle;
+        // Deleted comments have no author, so there is nobody to block,
+        // report, or match against for delete permissions.
+        final author = comment.author;
+        if (author == null) {
+          return const SizedBox.shrink();
+        }
+
+        final isCommentAuthor = authProvider.did == author.did;
+        final authorDid = author.did;
+        final authorHandle = author.handle;
         final isUserBlocked = blockProvider.isUserBlocked(authorDid);
         final isUserBlockPending = blockProvider.isUserBlockPending(authorDid);
 

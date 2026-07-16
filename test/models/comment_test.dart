@@ -214,7 +214,8 @@ void main() {
       expect(comment.contentFacets!.length, 1);
       expect(comment.createdAt, DateTime.parse('2025-01-01T12:00:00Z'));
       expect(comment.indexedAt, DateTime.parse('2025-01-01T12:05:00Z'));
-      expect(comment.author.did, 'did:plc:author');
+      expect(comment.author, isNotNull);
+      expect(comment.author!.did, 'did:plc:author');
       expect(comment.post.uri, 'at://did:plc:test/post/123');
       expect(comment.parent, isNotNull);
       expect(comment.parent!.uri, 'at://did:plc:test/comment/parent');
@@ -422,6 +423,41 @@ void main() {
       expect(comment.content, '');
       expect(comment.contentFacets, isNull);
     });
+
+    test(
+      'should parse deleted comment with absent author and record keys',
+      () {
+        // New backend shape: for deleted comments the `author` and `record`
+        // keys are omitted entirely (not just null) to avoid leaking the
+        // author's DID.
+        final json = {
+          'uri': 'at://did:plc:test/comment/1',
+          'cid': 'cid1',
+          'isDeleted': true,
+          'deletionReason': 'author',
+          'deletedAt': '2025-01-02T12:00:00Z',
+          'createdAt': '2025-01-01T12:00:00Z',
+          'indexedAt': '2025-01-01T12:00:00Z',
+          'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+          'stats': {
+            'upvotes': 0,
+            'downvotes': 0,
+            'score': 0,
+            'replyCount': 2,
+          },
+        };
+
+        final comment = CommentView.fromJson(json);
+
+        expect(comment.isDeleted, true);
+        expect(comment.deletionReason, 'author');
+        expect(comment.author, isNull);
+        expect(comment.record, isNull);
+        expect(comment.content, '');
+        expect(comment.contentFacets, isNull);
+        expect(comment.stats.replyCount, 2);
+      },
+    );
 
     test('should default isDeleted to false when not present', () {
       final json = {

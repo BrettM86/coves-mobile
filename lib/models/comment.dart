@@ -98,7 +98,7 @@ class CommentView {
     this.deletionReason,
     required this.createdAt,
     required this.indexedAt,
-    required this.author,
+    this.author,
     required this.post,
     this.parent,
     required this.stats,
@@ -142,7 +142,12 @@ class CommentView {
       deletionReason: json['deletionReason'] as String?,
       createdAt: createdAt,
       indexedAt: indexedAt,
-      author: AuthorView.fromJson(json['author'] as Map<String, dynamic>),
+      // Author is absent for deleted comments (backend omits the key
+      // entirely to avoid leaking the author's DID).
+      author:
+          json['author'] != null
+              ? AuthorView.fromJson(json['author'] as Map<String, dynamic>)
+              : null,
       post: CommentRef.fromJson(json['post'] as Map<String, dynamic>),
       parent:
           json['parent'] != null
@@ -166,7 +171,13 @@ class CommentView {
   final String? deletionReason;
   final DateTime createdAt;
   final DateTime indexedAt;
-  final AuthorView author;
+
+  /// The comment author.
+  ///
+  /// Null for deleted comments: the backend omits the `author` key entirely
+  /// so the author's identity (DID/handle) is never exposed for deleted
+  /// content. Check [isDeleted] before rendering author info.
+  final AuthorView? author;
   final CommentRef post;
   final CommentRef? parent;
   final CommentStats stats;

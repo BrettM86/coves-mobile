@@ -19,7 +19,10 @@ void main() {
       deletionReason: deletionReason,
       createdAt: DateTime(2025),
       indexedAt: DateTime(2025),
-      author: AuthorView(did: 'did:plc:author', handle: handle),
+      // Backend omits author entirely for deleted comments to avoid
+      // leaking the author's identity.
+      author:
+          isDeleted ? null : AuthorView(did: 'did:plc:author', handle: handle),
       post: CommentRef(uri: 'at://did:plc:test/post/123', cid: 'post-cid'),
       stats: CommentStats(upvotes: 5, downvotes: 1, score: 4),
     );
@@ -46,13 +49,12 @@ void main() {
       expect(normalComment.content, 'Hello, world!');
     });
 
-    test('deleted comment still has author info', () {
-      final deletedComment = createComment(
-        isDeleted: true,
-        handle: 'deleted.user',
-      );
+    test('deleted comment has no author info', () {
+      // The backend omits the author for deleted comments so the UI can
+      // never link to the author's profile or expose their DID.
+      final deletedComment = createComment(isDeleted: true);
 
-      expect(deletedComment.author.handle, 'deleted.user');
+      expect(deletedComment.author, isNull);
     });
 
     test('empty content string is different from deleted', () {
