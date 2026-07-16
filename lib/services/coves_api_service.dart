@@ -203,16 +203,26 @@ class CovesApiService {
     );
 
     // Add logging interceptor AFTER auth (so it can see the
-    // Authorization header)
+    // Authorization header). Tokens are redacted before printing —
+    // credentials must never reach the logs, even in debug builds.
     if (kDebugMode) {
       _dio.interceptors.add(
         LogInterceptor(
           requestBody: true,
           responseBody: true,
-          logPrint: (obj) => debugPrint(obj.toString()),
+          logPrint: (obj) => debugPrint(_redactBearerTokens(obj.toString())),
         ),
       );
     }
+  }
+
+  /// Replaces bearer token values with a placeholder so credentials never
+  /// appear in logs.
+  static String _redactBearerTokens(String line) {
+    return line.replaceAll(
+      RegExp('Bearer [A-Za-z0-9._~+/=-]+'),
+      'Bearer [REDACTED]',
+    );
   }
   /// Maximum number of URIs per [getPosts] call, per the
   /// social.coves.community.post.get lexicon (`uris` has `maxLength: 25`).
