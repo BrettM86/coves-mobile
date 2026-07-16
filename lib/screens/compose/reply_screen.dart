@@ -136,25 +136,21 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   }
 
   /// Restore draft text if available for this reply context
+  ///
+  /// Uses [widget.commentsProvider] directly — this screen is pushed on the
+  /// root navigator, so `context.read<CommentsProvider>()` would look above
+  /// the route and find nothing (the provider lives in the detail screen).
   void _restoreDraft() {
-    try {
-      final commentsProvider = context.read<CommentsProvider>();
-      final ourParentUri = widget.comment?.comment.uri;
+    final ourParentUri = widget.comment?.comment.uri;
 
-      // Get draft for this specific parent URI
-      final draft = commentsProvider.getDraft(parentUri: ourParentUri);
+    // Get draft for this specific parent URI
+    final draft = widget.commentsProvider.getDraft(parentUri: ourParentUri);
 
-      if (draft.isNotEmpty) {
-        _textController.text = draft;
-        setState(() {
-          _hasText = true;
-        });
-      }
-    } on Exception catch (e) {
-      // CommentsProvider might not be available (e.g., during testing)
-      if (kDebugMode) {
-        debugPrint('📝 Draft not restored: $e');
-      }
+    if (draft.isNotEmpty) {
+      _textController.text = draft;
+      setState(() {
+        _hasText = true;
+      });
     }
   }
 
@@ -249,18 +245,11 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
       final facets = FacetDetector.detectLinks(content);
 
       await widget.onSubmit(content, facets);
-      // Clear draft on success
-      try {
-        if (mounted) {
-          final parentUri = widget.comment?.comment.uri;
-          context.read<CommentsProvider>().clearDraft(parentUri: parentUri);
-        }
-      } on Exception catch (e) {
-        // CommentsProvider might not be available
-        if (kDebugMode) {
-          debugPrint('📝 Draft not cleared: $e');
-        }
-      }
+      // Clear draft on success (widget.commentsProvider, not context.read —
+      // the provider is not an ancestor of this pushed route)
+      widget.commentsProvider.clearDraft(
+        parentUri: widget.comment?.comment.uri,
+      );
       // Pop screen after successful submission
       if (mounted) {
         Navigator.of(context).pop();
@@ -327,20 +316,13 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     Navigator.of(context).pop();
   }
 
-  /// Save current text as draft
+  /// Save current text as draft (widget.commentsProvider, not context.read —
+  /// the provider is not an ancestor of this pushed route)
   void _saveDraft() {
-    try {
-      final commentsProvider = context.read<CommentsProvider>();
-      commentsProvider.saveDraft(
-        _textController.text,
-        parentUri: widget.comment?.comment.uri,
-      );
-    } on Exception catch (e) {
-      // CommentsProvider might not be available
-      if (kDebugMode) {
-        debugPrint('📝 Draft not saved: $e');
-      }
-    }
+    widget.commentsProvider.saveDraft(
+      _textController.text,
+      parentUri: widget.comment?.comment.uri,
+    );
   }
 
   @override
