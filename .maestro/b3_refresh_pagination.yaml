@@ -1,0 +1,33 @@
+# Section B — check 3: pull-to-refresh reloads page 1, and scrolling to the
+# bottom fetches the next page (watch logcat for
+# "✅ Discover loaded: N posts total" 15 -> 30 as external evidence).
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 15000
+# Pull-to-refresh from the top of the list
+- swipe:
+    start: 50%, 30%
+    end: 50%, 80%
+    duration: 400
+# Feed survives the refresh and still shows posts
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 15000
+- takeScreenshot: build/maestro/b3_after_refresh
+# Scroll far enough to cross the first page boundary (15 posts/page)
+- repeat:
+    times: 10
+    commands:
+      - swipe:
+          start: 50%, 80%
+          end: 50%, 20%
+          duration: 400
+- assertVisible: "Feed post in [\\s\\S]*"
+- takeScreenshot: build/maestro/b3_paginated

@@ -1,0 +1,46 @@
+# Section B — check 5: switching Discover <-> For You keeps each tab's
+# scroll position/state. Anchors on whatever post card is at the top after
+# scrolling, so it does not depend on specific seeded content.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 15000
+# Scroll a few screens into Discover
+- repeat:
+    times: 3
+    commands:
+      - swipe:
+          start: 50%, 80%
+          end: 50%, 20%
+          duration: 400
+# Remember the second fully-visible post card (the top one may be partially
+# clipped). NOTE: regex literals inside evalScript break Maestro's ${}
+# parser, so compare copied text with == instead of assertVisible-by-regex.
+- copyTextFrom:
+    text: "Feed post in [\\s\\S]*"
+    index: 1
+- evalScript: ${output.anchor = maestro.copiedText}
+# Switch to For You (mari is subscribed to nothing -> empty state; either
+# posts or the empty state is acceptable, crash/blank is not)
+- tapOn: "For You feed[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "No posts yet|Feed post in [\\s\\S]*"
+    timeout: 15000
+- takeScreenshot: build/maestro/b5_for_you_tab
+# Switch back to Discover: the same post must still be on screen at the
+# same list position (scroll retained, not reset to top)
+- tapOn: "Discover feed[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 10000
+- copyTextFrom:
+    text: "Feed post in [\\s\\S]*"
+    index: 1
+- assertTrue: ${maestro.copiedText == output.anchor}
+- takeScreenshot: build/maestro/b5_discover_scroll_retained

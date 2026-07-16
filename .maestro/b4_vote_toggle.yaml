@@ -1,0 +1,52 @@
+# Section B — check 4: like a post (optimistic update), verify it survives a
+# pull-to-refresh, then un-like and verify that persists too.
+# Self-recovering: first un-likes anything visible so the starting state is
+# deterministic.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 15000
+# Normalize: un-like every liked post currently on screen
+- repeat:
+    while:
+      visible: "Unlike post[\\s\\S]*"
+    commands:
+      - tapOn:
+          text: "Unlike post[\\s\\S]*"
+          index: 0
+- assertNotVisible: "Unlike post[\\s\\S]*"
+# Like the topmost post — optimistic UI must flip immediately
+- tapOn:
+    text: "Like post[\\s\\S]*"
+    index: 0
+- assertVisible: "Unlike post[\\s\\S]*"
+- takeScreenshot: build/maestro/b4_liked_optimistic
+# Pull-to-refresh: the like must survive a server round-trip
+- swipe:
+    start: 50%, 30%
+    end: 50%, 80%
+    duration: 400
+- extendedWaitUntil:
+    visible: "Unlike post[\\s\\S]*"
+    timeout: 15000
+- takeScreenshot: build/maestro/b4_liked_after_refresh
+# Un-like and confirm it also survives a refresh
+- tapOn:
+    text: "Unlike post[\\s\\S]*"
+    index: 0
+- assertNotVisible: "Unlike post[\\s\\S]*"
+- swipe:
+    start: 50%, 30%
+    end: 50%, 80%
+    duration: 400
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 15000
+- assertNotVisible: "Unlike post[\\s\\S]*"
+- takeScreenshot: build/maestro/b4_unliked_after_refresh

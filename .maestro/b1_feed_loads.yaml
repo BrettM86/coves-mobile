@@ -1,0 +1,17 @@
+# Section B — check 1: cold launch shows the Discover feed with posts
+# rendered (no blank screen after the splash). Assumes a signed-in session
+# (run a1_login_session first if signed out).
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+# Splash → feed. The feed tab bar carries the "Discover feed" semantics.
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+# Posts rendered: every post card exposes "Feed post in <community> by
+# <author>". The semantics text is multiline, so use [\s\S] instead of "."
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 15000
+- takeScreenshot: build/maestro/b1_feed_loaded

@@ -1,8 +1,15 @@
 # Maestro workspace config for the QA loop regression suite.
 # Flows are stateful (login/signout) — run them in this order.
+# Section B flows require a signed-in session, so they run after
+# a1_login_session (which ends signed in) and before a2_signout_landing.
 executionOrder:
   continueOnFailure: false
   flowsOrder:
     - a1_login_session
+    - b1_feed_loads
+    - b2_feed_scroll
+    - b3_refresh_pagination
+    - b4_vote_toggle
+    - b5_tab_state_retention
     - a2_signout_landing
     - a3_wrong_password

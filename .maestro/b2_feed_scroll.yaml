@@ -1,0 +1,23 @@
+# Section B — check 2: scroll deep into the Discover feed (30+ posts) —
+# list recycles, images load, no crash, feed stays responsive.
+# Assumes a signed-in session on the feed (b1 runs first).
+appId: social.coves.dev
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+# ~2 posts per screen; 20 swipes covers well past 30 posts and forces
+# at least one pagination fetch.
+- repeat:
+    times: 20
+    commands:
+      - swipe:
+          start: 50%, 80%
+          end: 50%, 20%
+          duration: 400
+- takeScreenshot: build/maestro/b2_scrolled_deep
+# Feed is still alive: post cards still render after deep scroll
+- assertVisible: "Feed post in [\\s\\S]*"
+# And the app hasn't crashed back to the launcher
+- assertVisible: "Home"
