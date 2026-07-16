@@ -1,0 +1,85 @@
+# Section E — check 1: create a post end-to-end: pick a community via the
+# picker, enter title + body, submit; the optimistic post detail renders;
+# the post then appears on the home Discover feed (firehose indexing lag
+# absorbed with pull-to-refresh retries).
+# Deep-link cold load of the created post is driven by adb (playbook §6) —
+# no http intent filters exist, so that half stays outside Maestro.
+# Assumes a signed-in session. Title is timestamped so reruns never collide.
+# NOTE: never use hideKeyboard on the compose screen — Maestro implements it
+# as a BACK press, which the shell's dirty-draft guard redirects to Home.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+# stale-semantics flake guard (same pattern as the d-flows)
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Create"
+      - extendedWaitUntil:
+          visible: "Create Post"
+          timeout: 15000
+# --- pick community ---
+- tapOn: "Select a community"
+- extendedWaitUntil:
+    visible: "Post to"
+    timeout: 15000
+- tapOn: "Search for a community"
+# lowercase on purpose: the Science tile regex below is case-sensitive, so it
+# can never accidentally match the search field's own value
+- inputText: "scien"
+- extendedWaitUntil:
+    visible: "Science[\\s\\S]*"
+    timeout: 15000
+- tapOn: "Science[\\s\\S]*"
+# back on Create Post with the community filled in
+- extendedWaitUntil:
+    visible: "Create Post"
+    timeout: 15000
+- assertVisible: "Science"
+# --- title + body ---
+- evalScript: ${output.e1Title = 'QA E1 post ' + Date.now()}
+- tapOn: "Title"
+- inputText: ${output.e1Title}
+- tapOn: "What are your thoughts?"
+- inputText: "Body written by the Section E QA flow."
+- takeScreenshot: build/maestro/e1_filled
+# --- submit ---
+- tapOn: "Post"
+# optimistic post detail renders the new title
+- extendedWaitUntil:
+    visible: "[\\s\\S]*${output.e1Title}[\\s\\S]*"
+    timeout: 20000
+- takeScreenshot: build/maestro/e1_optimistic_detail
+- back
+# form reset after successful submit
+- extendedWaitUntil:
+    visible: "Create Post"
+    timeout: 15000
+- assertVisible: "Select a community"
+# --- post shows up on the home Discover feed (eventual consistency) ---
+# Relaunch instead of tapping the Home tab: popping back from the detail
+# screen re-focuses the title field, and the reopened keyboard covers the
+# bottom nav. A fresh launch also proves the post persisted server-side
+# rather than just optimistically.
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- retry:
+    maxRetries: 4
+    commands:
+      - swipe:
+          start: 50%, 30%
+          end: 50%, 80%
+          duration: 400
+      - extendedWaitUntil:
+          visible: "Feed post in [\\s\\S]*${output.e1Title}[\\s\\S]*"
+          timeout: 10000
+- takeScreenshot: build/maestro/e1_in_feed

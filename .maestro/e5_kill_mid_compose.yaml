@@ -1,0 +1,34 @@
+# Section E — check 6: killing the app mid-compose must not crash the next
+# launch (draft loss is acceptable, a crash is not).
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+# stale-semantics flake guard (same pattern as the d-flows)
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Create"
+      - extendedWaitUntil:
+          visible: "Create Post"
+          timeout: 15000
+- tapOn: "Title"
+- inputText: "killed mid compose"
+- tapOn: "What are your thoughts?"
+- inputText: "this draft dies with the process"
+# kill + relaunch in one step
+- launchApp:
+    stopApp: true
+# clean relaunch: session intact, feed renders, no crash screen
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 30000
+- takeScreenshot: build/maestro/e5_relaunch_ok

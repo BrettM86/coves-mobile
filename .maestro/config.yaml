@@ -21,6 +21,11 @@ executionOrder:
     - d1_admin_panel
     - d2_community_from_chip
     - d3_join_leave
+    - e1_create_post
+    - e2_compose_validation
+    - e3_community_picker
+    - e4_reply_draft
+    - e5_kill_mid_compose
     - a2_signout_landing
     - d4_discovery_guest
     - a3_wrong_password

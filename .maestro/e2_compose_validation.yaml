@@ -1,0 +1,70 @@
+# Section E — checks 2 + 5: compose validation and keyboard behavior.
+# - Post button stays disabled while the form is incomplete (empty fields,
+#   or text without a community) — that IS the empty-input block, the
+#   screen deliberately has no snackbar for it.
+# - Over-length title input is clamped at the 300-grapheme lexicon limit
+#   (counter reads 300/300).
+# - An invalid URL is rejected on submit with a clear snackbar.
+# - With the keyboard open the app bar (Post button) stays visible.
+# Leaves a dirty composer behind; every flow relaunches with stopApp: true.
+# NOTE: never use hideKeyboard on the compose screen — Maestro implements it
+# as a BACK press, which the shell's dirty-draft guard redirects to Home.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+# stale-semantics flake guard (same pattern as the d-flows)
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Create"
+      - extendedWaitUntil:
+          visible: "Create Post"
+          timeout: 15000
+# empty form: Post disabled
+- assertVisible:
+    text: "Post"
+    enabled: false
+# text but no community: still disabled
+- tapOn: "Title"
+- inputText: "QA E2 validation"
+- assertVisible:
+    text: "Post"
+    enabled: false
+# keyboard is open right now — the app bar action must still be visible
+- takeScreenshot: build/maestro/e2_keyboard_open
+# over-length title: clamped to the 300 limit
+- evalScript: ${output.e2Long = 'x'.repeat(320)}
+- inputText: ${output.e2Long}
+# the visual counter reads 300/300; its semantics label is the remaining count
+- assertVisible: "No characters remaining"
+- takeScreenshot: build/maestro/e2_title_clamped
+# invalid URL: form is valid (community + title) but submit is rejected
+- tapOn: "Select a community"
+- extendedWaitUntil:
+    visible: "Post to"
+    timeout: 15000
+- tapOn: "Search for a community"
+- inputText: "scien"
+- extendedWaitUntil:
+    visible: "Science[\\s\\S]*"
+    timeout: 15000
+- tapOn: "Science[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Create Post"
+    timeout: 15000
+- tapOn: "URL"
+- inputText: "notaurl"
+- assertVisible:
+    text: "Post"
+    enabled: true
+- tapOn: "Post"
+- extendedWaitUntil:
+    visible: "Please enter a valid URL (http or https)"
+    timeout: 10000
+- takeScreenshot: build/maestro/e2_bad_url_snackbar

@@ -1,0 +1,60 @@
+# Section E — check 4: reply screen open / cancel-with-draft / submit.
+# Cancel saves the draft (keyed by parent URI in CommentsProvider); reopening
+# the composer on the same post restores it; Send posts it into the thread.
+# Reply text is timestamped so repeated runs never collide.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    direction: DOWN
+    timeout: 20000
+- tapOn:
+    text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    index: 0
+- extendedWaitUntil:
+    visible: "NASA delays[\\s\\S]*"
+    timeout: 15000
+# --- open composer, type, cancel ---
+- evalScript: ${output.e4Draft = 'QA e4 draft ' + Date.now()}
+- tapOn: "Comment"
+- extendedWaitUntil:
+    visible: "Send comment[\\s\\S]*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- inputText: ${output.e4Draft}
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "NASA delays[\\s\\S]*"
+    timeout: 15000
+# --- reopen: draft restored ---
+- tapOn: "Comment"
+- extendedWaitUntil:
+    visible: "Send comment[\\s\\S]*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "[\\s\\S]*${output.e4Draft}[\\s\\S]*"
+- takeScreenshot: build/maestro/e4_draft_restored
+# --- submit: reply lands in the thread ---
+- tapOn: "Send comment[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "View [0-9]+ comments?[\\s\\S]*"
+    timeout: 20000
+- tapOn: "View [0-9]+ comments?[\\s\\S]*"
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*${output.e4Draft}[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: build/maestro/e4_reply_posted
+- back

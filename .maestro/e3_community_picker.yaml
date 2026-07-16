@@ -1,0 +1,66 @@
+# Section E — check 3: community picker search / select / cancel, with the
+# Create Post screen state staying consistent after each.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+# stale-semantics flake guard (same pattern as the d-flows)
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Create"
+      - extendedWaitUntil:
+          visible: "Create Post"
+          timeout: 15000
+# --- search: no-results and restored list ---
+- tapOn: "Select a community"
+- extendedWaitUntil:
+    visible: "Post to"
+    timeout: 15000
+- tapOn: "Search for a community"
+- inputText: "zzzznope"
+- extendedWaitUntil:
+    visible: "No communities match your search"
+    timeout: 10000
+- takeScreenshot: build/maestro/e3_no_results
+- eraseText
+- extendedWaitUntil:
+    visible: "Science[\\s\\S]*"
+    timeout: 10000
+# --- cancel: nothing selected afterwards ---
+- tapOn: "Close"
+- extendedWaitUntil:
+    visible: "Create Post"
+    timeout: 15000
+- assertVisible: "Select a community"
+# --- select ---
+- tapOn: "Select a community"
+- extendedWaitUntil:
+    visible: "Post to"
+    timeout: 15000
+- tapOn: "Search for a community"
+- inputText: "scien"
+- extendedWaitUntil:
+    visible: "Science[\\s\\S]*"
+    timeout: 15000
+- tapOn: "Science[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Create Post"
+    timeout: 15000
+- assertVisible: "Science"
+- takeScreenshot: build/maestro/e3_selected
+# --- reopen then cancel: selection retained ---
+- tapOn: "Science"
+- extendedWaitUntil:
+    visible: "Post to"
+    timeout: 15000
+- tapOn: "Close"
+- extendedWaitUntil:
+    visible: "Create Post"
+    timeout: 15000
+- assertVisible: "Science"
