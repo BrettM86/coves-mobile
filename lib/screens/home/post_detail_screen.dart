@@ -20,6 +20,8 @@ import '../../widgets/share_button.dart';
 import '../../widgets/detailed_post_view.dart';
 import '../../widgets/loading_error_states.dart';
 import '../../widgets/post_action_bar.dart';
+import '../../widgets/report_dialog.dart';
+import '../../widgets/sign_in_dialog.dart';
 import '../../widgets/status_bar_overlay.dart';
 import '../compose/reply_screen.dart';
 import 'focused_thread_screen.dart';
@@ -449,15 +451,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           }
         }
       case 'report':
-        // TODO: Implement report functionality
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Report feature coming soon!'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
+        await _handleReport();
       case 'hide':
         // TODO: Implement hide functionality
         if (mounted) {
@@ -468,6 +462,54 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             ),
           );
         }
+    }
+  }
+
+  /// Report the post via the shared report dialog (mirrors the feed card's
+  /// report action — regression: the menu item used to be a dead
+  /// "coming soon" stub while ReportDialog already existed).
+  Future<void> _handleReport() async {
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.isAuthenticated) {
+      if (!mounted) {
+        return;
+      }
+      final shouldSignIn = await SignInDialog.show(
+        context,
+        message: 'You need to sign in to report content.',
+      );
+      if (shouldSignIn != true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sign in required to report content'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+
+    final reported = await ReportDialog.show(
+      context,
+      targetUri: widget.post.post.uri,
+      contentType: 'post',
+    );
+
+    if ((reported ?? false) && mounted) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Report submitted. Thank you for helping keep our '
+            'community safe.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -779,16 +821,20 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               ],
                             ),
                           ),
-                          const PopupMenuItem(
-                            value: 'report',
-                            child: Row(
-                              children: [
-                                Icon(Icons.flag_outlined, size: 20),
-                                SizedBox(width: 12),
-                                Text('Report'),
-                              ],
+                          // Report is hidden on the viewer's own posts
+                          // (parity with the feed card menu).
+                          if (context.read<AuthProvider>().did !=
+                              widget.post.post.author.did)
+                            const PopupMenuItem(
+                              value: 'report',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.flag_outlined, size: 20),
+                                  SizedBox(width: 12),
+                                  Text('Report'),
+                                ],
+                              ),
                             ),
-                          ),
                           const PopupMenuItem(
                             value: 'hide',
                             child: Row(
