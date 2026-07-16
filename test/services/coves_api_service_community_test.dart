@@ -215,13 +215,23 @@ void main() {
     });
 
     test('should handle network timeout', () async {
+      // requestOptions must match the mocked route so the RetryInterceptor's
+      // retries re-hit this mock (and keep failing with the same error type).
+      final requestOptions = RequestOptions(
+        path: '/xrpc/social.coves.community.list',
+        queryParameters: {
+          'limit': 50,
+          'sort': 'popular',
+        },
+      );
+
       dioAdapter.onGet(
         '/xrpc/social.coves.community.list',
         (server) => server.throws(
           408,
           DioException.connectionTimeout(
             timeout: const Duration(seconds: 30),
-            requestOptions: RequestOptions(),
+            requestOptions: requestOptions,
           ),
         ),
         queryParameters: {
@@ -337,7 +347,8 @@ void main() {
         data: {
           'community': 'did:plc:community1',
           'embed': {
-            'uri': 'https://example.com/article',
+            r'$type': 'social.coves.embed.external',
+            'external': {'uri': 'https://example.com/article'},
           },
         },
       );
@@ -439,13 +450,24 @@ void main() {
     });
 
     test('should handle network timeout', () async {
+      // requestOptions must match the mocked route so the RetryInterceptor's
+      // retries re-hit this mock (and keep failing with the same error type).
+      final requestOptions = RequestOptions(
+        path: '/xrpc/social.coves.community.post.create',
+        method: 'POST',
+        data: {
+          'community': 'did:plc:community1',
+          'title': 'Test',
+        },
+      );
+
       dioAdapter.onPost(
         '/xrpc/social.coves.community.post.create',
         (server) => server.throws(
           408,
           DioException.connectionTimeout(
             timeout: const Duration(seconds: 30),
-            requestOptions: RequestOptions(),
+            requestOptions: requestOptions,
           ),
         ),
         data: {

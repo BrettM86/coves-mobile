@@ -37,7 +37,7 @@ void main() {
             'comment': {
               'uri': 'at://did:plc:test/comment/1',
               'cid': 'cid1',
-              'content': 'Test comment 1',
+              'record': {'content': 'Test comment 1'},
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
               'author': {
@@ -54,7 +54,7 @@ void main() {
             'comment': {
               'uri': 'at://did:plc:test/comment/2',
               'cid': 'cid2',
-              'content': 'Test comment 2',
+              'record': {'content': 'Test comment 2'},
               'createdAt': '2025-01-01T13:00:00Z',
               'indexedAt': '2025-01-01T13:00:00Z',
               'author': {'did': 'did:plc:author2', 'handle': 'user2.test'},
@@ -149,7 +149,7 @@ void main() {
             'comment': {
               'uri': 'at://did:plc:test/comment/1',
               'cid': 'cid1',
-              'content': 'Newest comment',
+              'record': {'content': 'Newest comment'},
               'createdAt': '2025-01-01T15:00:00Z',
               'indexedAt': '2025-01-01T15:00:00Z',
               'author': {'did': 'did:plc:author', 'handle': 'user.test'},
@@ -223,7 +223,7 @@ void main() {
             'comment': {
               'uri': 'at://did:plc:test/comment/10',
               'cid': 'cid10',
-              'content': 'Paginated comment',
+              'record': {'content': 'Paginated comment'},
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
               'author': {'did': 'did:plc:author', 'handle': 'user.test'},
@@ -334,13 +334,25 @@ void main() {
     test('should handle network timeout', () async {
       const postUri = 'at://did:plc:test/social.coves.post.record/123';
 
+      // requestOptions must match the mocked route so the RetryInterceptor's
+      // retries re-hit this mock (and keep failing with the same error type).
+      final requestOptions = RequestOptions(
+        path: '/xrpc/social.coves.community.comment.getComments',
+        queryParameters: {
+          'post': postUri,
+          'sort': 'hot',
+          'depth': 10,
+          'limit': 50,
+        },
+      );
+
       dioAdapter.onGet(
         '/xrpc/social.coves.community.comment.getComments',
         (server) => server.throws(
           408,
           DioException.connectionTimeout(
             timeout: const Duration(seconds: 30),
-            requestOptions: RequestOptions(),
+            requestOptions: requestOptions,
           ),
         ),
         queryParameters: {
@@ -360,13 +372,25 @@ void main() {
     test('should handle network connection error', () async {
       const postUri = 'at://did:plc:test/social.coves.post.record/123';
 
+      // requestOptions must match the mocked route so the RetryInterceptor's
+      // retries re-hit this mock (and keep failing with the same error type).
+      final requestOptions = RequestOptions(
+        path: '/xrpc/social.coves.community.comment.getComments',
+        queryParameters: {
+          'post': postUri,
+          'sort': 'hot',
+          'depth': 10,
+          'limit': 50,
+        },
+      );
+
       dioAdapter.onGet(
         '/xrpc/social.coves.community.comment.getComments',
         (server) => server.throws(
           503,
           DioException.connectionError(
             reason: 'Connection refused',
-            requestOptions: RequestOptions(),
+            requestOptions: requestOptions,
           ),
         ),
         queryParameters: {
@@ -413,7 +437,7 @@ void main() {
             'comment': {
               'uri': 'at://did:plc:test/comment/1',
               // Missing required 'cid' field
-              'content': 'Test',
+              'record': {'content': 'Test'},
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
               'author': {'did': 'did:plc:author', 'handle': 'user.test'},
@@ -453,7 +477,7 @@ void main() {
             'comment': {
               'uri': 'at://did:plc:test/comment/1',
               'cid': 'cid1',
-              'content': 'Parent comment',
+              'record': {'content': 'Parent comment'},
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
               'author': {'did': 'did:plc:author1', 'handle': 'user1.test'},
@@ -465,7 +489,7 @@ void main() {
                 'comment': {
                   'uri': 'at://did:plc:test/comment/2',
                   'cid': 'cid2',
-                  'content': 'Reply comment',
+                  'record': {'content': 'Reply comment'},
                   'createdAt': '2025-01-01T13:00:00Z',
                   'indexedAt': '2025-01-01T13:00:00Z',
                   'author': {'did': 'did:plc:author2', 'handle': 'user2.test'},
@@ -515,7 +539,7 @@ void main() {
             'comment': {
               'uri': 'at://did:plc:test/comment/1',
               'cid': 'cid1',
-              'content': 'Voted comment',
+              'record': {'content': 'Voted comment'},
               'createdAt': '2025-01-01T12:00:00Z',
               'indexedAt': '2025-01-01T12:00:00Z',
               'author': {'did': 'did:plc:author', 'handle': 'user.test'},
