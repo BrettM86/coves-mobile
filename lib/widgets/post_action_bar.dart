@@ -90,30 +90,39 @@ class PostActionBar extends StatelessWidget {
             const SizedBox(width: 16),
 
             // Vote button with animated heart icon
-            GestureDetector(
-              onTap: onVoteTap,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AnimatedHeartIcon(
-                    isLiked: isVoted,
-                    color: AppColors.textPrimary.withValues(alpha: 0.7),
-                    likedColor: const Color(0xFFFF0033),
-                    size: 24,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    DateTimeUtils.formatCount(post.post.stats.score),
-                    style: TextStyle(
-                      color:
-                          isVoted
-                              ? const Color(0xFFFF0033)
-                              : AppColors.textPrimary.withValues(alpha: 0.7),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
+            Semantics(
+              button: true,
+              label:
+                  isVoted
+                      ? 'Unlike post, ${post.post.stats.score} '
+                          '${post.post.stats.score == 1 ? "like" : "likes"}'
+                      : 'Like post, ${post.post.stats.score} '
+                          '${post.post.stats.score == 1 ? "like" : "likes"}',
+              child: GestureDetector(
+                onTap: onVoteTap,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedHeartIcon(
+                      isLiked: isVoted,
+                      color: AppColors.textPrimary.withValues(alpha: 0.7),
+                      likedColor: const Color(0xFFFF0033),
+                      size: 24,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Text(
+                      DateTimeUtils.formatCount(post.post.stats.score),
+                      style: TextStyle(
+                        color:
+                            isVoted
+                                ? const Color(0xFFFF0033)
+                                : AppColors.textPrimary.withValues(alpha: 0.7),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(width: 16),
@@ -124,6 +133,7 @@ class PostActionBar extends StatelessWidget {
               count: 0, // TODO: Add save count when backend supports it
               color: isSaved ? AppColors.primary : null,
               onTap: onSaveTap,
+              semanticLabel: isSaved ? 'Unsave post' : 'Save post',
             ),
             const SizedBox(width: 16),
 
@@ -132,6 +142,9 @@ class PostActionBar extends StatelessWidget {
               icon: Icons.chat_bubble_outline,
               count: post.post.stats.commentCount,
               onTap: onCommentCountTap ?? onCommentTap,
+              semanticLabel:
+                  'View ${post.post.stats.commentCount} '
+                  '${post.post.stats.commentCount == 1 ? "comment" : "comments"}',
             ),
           ],
         ),
@@ -147,6 +160,7 @@ class _ActionButton extends StatelessWidget {
     required this.count,
     this.color,
     this.onTap,
+    this.semanticLabel,
   });
 
   final IconData icon;
@@ -154,27 +168,35 @@ class _ActionButton extends StatelessWidget {
   final Color? color;
   final VoidCallback? onTap;
 
+  /// Accessibility label announced by screen readers (the visual button is
+  /// an icon plus a bare number, which is meaningless on its own).
+  final String? semanticLabel;
+
   @override
   Widget build(BuildContext context) {
     final effectiveColor =
         color ?? AppColors.textPrimary.withValues(alpha: 0.7);
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 24, color: effectiveColor),
-          const SizedBox(width: 4),
-          Text(
-            DateTimeUtils.formatCount(count),
-            style: TextStyle(
-              color: effectiveColor,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 24, color: effectiveColor),
+            const SizedBox(width: 4),
+            Text(
+              DateTimeUtils.formatCount(count),
+              style: TextStyle(
+                color: effectiveColor,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
