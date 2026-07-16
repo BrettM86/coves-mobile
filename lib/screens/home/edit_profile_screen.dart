@@ -396,93 +396,97 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           children: [
             GestureDetector(
               onTap: _pickAvatar,
-              child: Stack(
-                children: [
-                  // Avatar container
-                  Container(
-                    width: avatarSize,
-                    height: avatarSize,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppColors.background,
-                        width: 4,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
+              child: Semantics(
+                label: 'Change Avatar',
+                button: true,
+                child: Stack(
+                  children: [
+                    // Avatar container
+                    Container(
+                      width: avatarSize,
+                      height: avatarSize,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.background,
+                          width: 4,
                         ),
-                      ],
-                    ),
-                    child: ClipOval(
-                      child: Stack(
-                        children: [
-                          // Avatar image
-                          SizedBox(
-                            width: avatarSize - 8,
-                            height: avatarSize - 8,
-                            child: _selectedAvatar != null
-                                ? Image.file(
-                                    _selectedAvatar!.file,
-                                    fit: BoxFit.cover,
-                                  )
-                                : (widget.profile.avatar != null)
-                                    ? CachedNetworkImage(
-                                        imageUrl: widget.profile.avatar!,
-                                        fit: BoxFit.cover,
-                                        fadeInDuration: Duration.zero,
-                                        fadeOutDuration: Duration.zero,
-                                        errorWidget: (context, url, error) =>
-                                            _buildFallbackAvatar(
-                                          avatarSize - 8,
-                                        ),
-                                      )
-                                    : _buildFallbackAvatar(avatarSize - 8),
-                          ),
-                          // Edit overlay
-                          Positioned.fill(
-                            child: Container(
-                              color: Colors.black.withValues(alpha: 0.4),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.camera_alt,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                              ),
-                            ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  // "New" indicator if avatar changed
-                  if (_selectedAvatar != null)
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'NEW',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      child: ClipOval(
+                        child: Stack(
+                          children: [
+                            // Avatar image
+                            SizedBox(
+                              width: avatarSize - 8,
+                              height: avatarSize - 8,
+                              child: _selectedAvatar != null
+                                  ? Image.file(
+                                      _selectedAvatar!.file,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : (widget.profile.avatar != null)
+                                      ? CachedNetworkImage(
+                                          imageUrl: widget.profile.avatar!,
+                                          fit: BoxFit.cover,
+                                          fadeInDuration: Duration.zero,
+                                          fadeOutDuration: Duration.zero,
+                                          errorWidget: (context, url, error) =>
+                                              _buildFallbackAvatar(
+                                            avatarSize - 8,
+                                          ),
+                                        )
+                                      : _buildFallbackAvatar(avatarSize - 8),
+                            ),
+                            // Edit overlay
+                            Positioned.fill(
+                              child: Container(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.camera_alt,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                ],
+                    // "New" indicator if avatar changed
+                    if (_selectedAvatar != null)
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'NEW',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ],
