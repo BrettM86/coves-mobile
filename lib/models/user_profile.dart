@@ -66,7 +66,9 @@ class UserProfile {
       did: did,
       handle: handle,
       displayName: json['displayName'] as String?,
-      bio: json['bio'] as String?,
+      // The backend serializes the bio as "description" (atProto profile
+      // convention, see users/user.go ProfileView) — accept both keys.
+      bio: (json['bio'] ?? json['description']) as String?,
       avatar: json['avatar'] as String?,
       banner: json['banner'] as String?,
       createdAt: createdAtStr != null ? DateTime.tryParse(createdAtStr) : null,
