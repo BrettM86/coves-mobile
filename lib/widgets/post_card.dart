@@ -647,32 +647,36 @@ class _EmbedCardState extends State<_EmbedCard> {
 
     // If this is a Streamable video, add play button overlay and tap handler
     if (_isStreamableVideo) {
-      return GestureDetector(
-        onTap: _isLoadingVideo ? null : () => _showVideoPlayer(context),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            thumbnailWidget,
-            // Semi-transparent play button or loading indicator overlay
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: AppColors.background.withValues(alpha: 0.7),
-                shape: BoxShape.circle,
+      return Semantics(
+        button: true,
+        label: 'Play video',
+        child: GestureDetector(
+          onTap: _isLoadingVideo ? null : () => _showVideoPlayer(context),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              thumbnailWidget,
+              // Semi-transparent play button or loading indicator overlay
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AppColors.background.withValues(alpha: 0.7),
+                  shape: BoxShape.circle,
+                ),
+                child:
+                    _isLoadingVideo
+                        ? const CircularProgressIndicator(
+                          color: AppColors.loadingIndicator,
+                        )
+                        : const Icon(
+                          Icons.play_arrow,
+                          color: AppColors.textPrimary,
+                          size: 48,
+                        ),
               ),
-              child:
-                  _isLoadingVideo
-                      ? const CircularProgressIndicator(
-                        color: AppColors.loadingIndicator,
-                      )
-                      : const Icon(
-                        Icons.play_arrow,
-                        color: AppColors.textPrimary,
-                        size: 48,
-                      ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }

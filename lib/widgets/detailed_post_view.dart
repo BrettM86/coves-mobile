@@ -699,66 +699,70 @@ class _VideoEmbedState extends State<_VideoEmbed> {
   Widget build(BuildContext context) {
     if (widget.embed.thumb == null) return const SizedBox.shrink();
 
-    return GestureDetector(
-      onTap: _isLoading ? null : _playVideo,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Video thumbnail - full width
-          CachedNetworkImage(
-            imageUrl: widget.embed.thumb!,
-            width: double.infinity,
-            height: 240,
-            fit: BoxFit.cover,
-            fadeInDuration: Duration.zero,
-            fadeOutDuration: Duration.zero,
-            placeholder: (context, url) => Container(
+    return Semantics(
+      button: true,
+      label: 'Play video',
+      child: GestureDetector(
+        onTap: _isLoading ? null : _playVideo,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Video thumbnail - full width
+            CachedNetworkImage(
+              imageUrl: widget.embed.thumb!,
+              width: double.infinity,
               height: 240,
-              color: AppColors.backgroundSecondary,
-            ),
-            errorWidget: (context, url, error) => Container(
-              height: 240,
-              color: AppColors.backgroundSecondary,
-              child: const Center(
-                child: Icon(
-                  Icons.broken_image,
-                  color: AppColors.textMuted,
-                  size: 40,
+              fit: BoxFit.cover,
+              fadeInDuration: Duration.zero,
+              fadeOutDuration: Duration.zero,
+              placeholder: (context, url) => Container(
+                height: 240,
+                color: AppColors.backgroundSecondary,
+              ),
+              errorWidget: (context, url, error) => Container(
+                height: 240,
+                color: AppColors.backgroundSecondary,
+                child: const Center(
+                  child: Icon(
+                    Icons.broken_image,
+                    color: AppColors.textMuted,
+                    size: 40,
+                  ),
                 ),
               ),
             ),
-          ),
 
-          // Darkening overlay
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withValues(alpha: 0.3),
+            // Darkening overlay
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.3),
+              ),
             ),
-          ),
 
-          // Play button - simple and clean
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: AppColors.textPrimary.withValues(alpha: 0.9),
-              shape: BoxShape.circle,
-            ),
-            child: _isLoading
-                ? const Padding(
-                    padding: EdgeInsets.all(18),
-                    child: CircularProgressIndicator(
+            // Play button - simple and clean
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.textPrimary.withValues(alpha: 0.9),
+                shape: BoxShape.circle,
+              ),
+              child: _isLoading
+                  ? const Padding(
+                      padding: EdgeInsets.all(18),
+                      child: CircularProgressIndicator(
+                        color: AppColors.background,
+                        strokeWidth: 2.5,
+                      ),
+                    )
+                  : const Icon(
+                      Icons.play_arrow_rounded,
                       color: AppColors.background,
-                      strokeWidth: 2.5,
+                      size: 36,
                     ),
-                  )
-                : const Icon(
-                    Icons.play_arrow_rounded,
-                    color: AppColors.background,
-                    size: 36,
-                  ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
