@@ -463,6 +463,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                 hintText: 'URL',
                 maxLines: 1,
                 keyboardType: TextInputType.url,
+                // URLs must never be auto-capitalized ("Https://..." breaks
+                // backend unfurling and external link handling)
+                textCapitalization: TextCapitalization.none,
               ),
 
               const SizedBox(height: 16),
@@ -583,6 +586,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     int? maxLength,
     TextInputType? keyboardType,
     TextInputAction? textInputAction,
+    TextCapitalization textCapitalization = TextCapitalization.sentences,
   }) {
     // For multiline fields, use newline action and multiline keyboard
     final isMultiline = minLines != null && minLines > 1;
@@ -599,7 +603,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       maxLength: maxLength,
       keyboardType: effectiveKeyboardType,
       textInputAction: effectiveTextInputAction,
-      textCapitalization: TextCapitalization.sentences,
+      textCapitalization: textCapitalization,
       style: const TextStyle(
         color: AppColors.textPrimary,
         fontSize: 16,
