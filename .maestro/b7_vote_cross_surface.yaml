@@ -1,0 +1,77 @@
+# Section B — check 7 (added round 2): vote state consistency across surfaces.
+# Like in feed -> detail shows liked; unlike in detail -> feed card updated.
+# Targets the seeded "NASA delays" post (known-good navigation, c1 pattern).
+appId: social.coves.dev
+---
+# Cold start can flake on stale semantics when the previous flow ended on
+# another screen — retry the launch once (documented quirk).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+          direction: DOWN
+          timeout: 30000
+          centerElement: true
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - assertVisible: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+# Normalize: if the NASA card is already liked, un-like it first
+- runFlow:
+    when:
+      visible:
+        text: "Unlike post[\\s\\S]*"
+        below: "[\\s\\S]*NASA delays[\\s\\S]*"
+    commands:
+      - tapOn:
+          text: "Unlike post[\\s\\S]*"
+          below: "[\\s\\S]*NASA delays[\\s\\S]*"
+# Like the NASA card in the FEED
+- tapOn:
+    text: "Like post[\\s\\S]*"
+    below: "[\\s\\S]*NASA delays[\\s\\S]*"
+- assertVisible:
+    text: "Unlike post[\\s\\S]*"
+    below: "[\\s\\S]*NASA delays[\\s\\S]*"
+- takeScreenshot: build/maestro/b7_feed_liked
+# Open its detail — the liked state must carry over
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+          index: 0
+      - extendedWaitUntil:
+          visible: "View [0-9]+ comments?[\\s\\S]*|No comments yet[\\s\\S]*|Comment"
+          timeout: 15000
+- assertVisible: "Unlike post[\\s\\S]*"
+- takeScreenshot: build/maestro/b7_detail_liked_state
+# Unlike in detail
+- tapOn:
+    text: "Unlike post[\\s\\S]*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Like post[\\s\\S]*"
+    timeout: 10000
+# Back to the feed — the card must reflect the un-like
+- back
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000
+- assertVisible: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+- assertVisible:
+    text: "Like post[\\s\\S]*"
+    below: "[\\s\\S]*NASA delays[\\s\\S]*"
+- takeScreenshot: build/maestro/b7_feed_after_detail_unlike

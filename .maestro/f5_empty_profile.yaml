@@ -6,7 +6,11 @@
 #   adb shell am start -n social.coves.dev/social.coves.MainActivity \
 #     -a android.intent.action.VIEW \
 #     -d 'social.coves:///profile/kai.local.coves.dev'
+# The `standalone` tag is excluded in config.yaml — being absent from
+# flowsOrder does NOT stop a workspace run from executing a flow.
 appId: social.coves.dev
+tags:
+  - standalone
 ---
 - extendedWaitUntil:
     visible: "[\\s\\S]*@kai.local.coves.dev[\\s\\S]*"

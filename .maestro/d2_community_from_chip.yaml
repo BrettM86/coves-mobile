@@ -33,10 +33,25 @@ appId: social.coves.dev
 # Community feed shows posts from that community. NOTE: the "Feed post in
 # ..." semantics label is added by the HOME feed wrapper (feed_page.dart);
 # community-feed post cards expose raw merged text, so match a seeded title.
-- extendedWaitUntil:
-    visible: "[\\s\\S]*NASA delays[\\s\\S]*"
-    timeout: 15000
+# e1/h1 seed a post into !science every suite run, so the aggregator post
+# drifts below the fold — scroll to it instead of asserting in place.
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*NASA delays[\\s\\S]*"
+    direction: DOWN
+    timeout: 60000
 - takeScreenshot: build/maestro/d2_community_feed
+# Scroll back up so the Feed/About tab bar is on screen again
+- repeat:
+    times: 3
+    commands:
+      - swipe:
+          start: 50%, 30%
+          end: 50%, 80%
+          duration: 300
+- extendedWaitUntil:
+    visible: "About"
+    timeout: 10000
 # About tab: description/stats/info sections render
 - tapOn: "About"
 - extendedWaitUntil:

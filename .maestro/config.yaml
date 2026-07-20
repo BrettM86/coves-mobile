@@ -16,6 +16,11 @@
 # install), wiping the legal acceptances AND the signed-in session every
 # stateful flow depends on. Run it standalone, then a1_login_session —
 # see its header comment.
+# NOTE (2026-07-19 round 2): flows absent from flowsOrder STILL RUN at the
+# end of a workspace run — f5 and g1 are therefore tagged `standalone` and
+# excluded here. Tag any future precursor-dependent flow the same way.
+excludeTags:
+  - standalone
 executionOrder:
   continueOnFailure: false
   flowsOrder:
@@ -25,6 +30,8 @@ executionOrder:
     - b3_refresh_pagination
     - b4_vote_toggle
     - b5_tab_state_retention
+    - b6_foryou_sub_cycle
+    - b7_vote_cross_surface
     - c1_post_detail
     - c2_comment_reply_collapse
     - c3_comment_vote_sort

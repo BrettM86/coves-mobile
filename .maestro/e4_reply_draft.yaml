@@ -12,17 +12,28 @@ appId: social.coves.dev
 - extendedWaitUntil:
     visible: "Feed post in [\\s\\S]*"
     timeout: 30000
-- scrollUntilVisible:
-    element:
-      text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
-    direction: DOWN
-    timeout: 20000
-- tapOn:
-    text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
-    index: 0
-- extendedWaitUntil:
-    visible: "NASA delays[\\s\\S]*"
-    timeout: 15000
+# centerElement matters: without it the scroll stops with the card barely
+# peeking over the bottom edge and the tap resolves to the card's centre —
+# which is OFF-screen, so it hits the bottom nav instead of the card
+# (observed 2026-07-19 once enough seed posts accumulated above it).
+# The retry additionally absorbs stale-tree flakes after the scroll.
+- retry:
+    maxRetries: 2
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+          direction: DOWN
+          timeout: 30000
+          centerElement: true
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+          index: 0
+      - extendedWaitUntil:
+          visible: "NASA delays[\\s\\S]*"
+          timeout: 15000
 # --- open composer, type, cancel ---
 - evalScript: ${output.e4Draft = 'QA e4 draft ' + Date.now()}
 - tapOn: "Comment"

@@ -1,0 +1,98 @@
+# Section B — check 6 (added round 2): For You populates after subscribing to a
+# community with content (science) and empties gracefully after
+# unsubscribing. Ends unsubscribed (suite assumption).
+appId: social.coves.dev
+---
+# Cold start can flake on stale semantics when the previous flow ended on
+# another screen — retry the launch once (documented quirk).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- retry:
+    maxRetries: 2
+    commands:
+      - extendedWaitUntil:
+          visible: "Feed post in [\\s\\S]*"
+          timeout: 15000
+      - tapOn:
+          text: "!science@coves.social"
+          index: 0
+      - extendedWaitUntil:
+          visible: "[\\s\\S]*Science[\\s\\S]*"
+          timeout: 15000
+- extendedWaitUntil:
+    visible: "Join|Joined"
+    timeout: 15000
+# Subscribe (normalize: only tap if not already joined)
+- runFlow:
+    when:
+      visible: "Join"
+    commands:
+      - tapOn: "Join"
+- extendedWaitUntil:
+    visible: "Joined"
+    timeout: 15000
+- back
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000
+- tapOn: "For You feed[\\s\\S]*"
+# For You must populate (poll refresh to absorb firehose lag)
+- retry:
+    maxRetries: 4
+    commands:
+      - swipe:
+          start: 50%, 30%
+          end: 50%, 80%
+          duration: 400
+      - extendedWaitUntil:
+          visible: "Feed post in [\\s\\S]*"
+          timeout: 10000
+- takeScreenshot: build/maestro/b6_foryou_populated
+# Unsubscribe via a science post's community chip
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn:
+          text: "!science@coves.social"
+          index: 0
+      - extendedWaitUntil:
+          visible: "[\\s\\S]*Science[\\s\\S]*"
+          timeout: 15000
+- extendedWaitUntil:
+    visible: "Joined"
+    timeout: 15000
+- tapOn: "Joined"
+- extendedWaitUntil:
+    visible: "Join"
+    timeout: 15000
+- back
+- extendedWaitUntil:
+    visible: "Discover feed.*|For You feed[\\s\\S]*"
+    timeout: 15000
+- tapOn: "For You feed[\\s\\S]*"
+# For You must empty gracefully — empty state, not a crash/blank
+- retry:
+    maxRetries: 4
+    commands:
+      - swipe:
+          start: 50%, 30%
+          end: 50%, 80%
+          duration: 400
+      - extendedWaitUntil:
+          visible: "No posts yet"
+          timeout: 10000
+- assertNotVisible: "Feed post in [\\s\\S]*"
+- takeScreenshot: build/maestro/b6_foryou_empty_after_unsub
+# Leave the app back on Discover
+- tapOn: "Discover feed[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 15000
