@@ -7,6 +7,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../../constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/coves_auth_service.dart';
 import '../../widgets/primary_button.dart';
 
 /// Login screen with Coves design language.
@@ -150,6 +151,24 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (mounted) {
         context.go('/feed');
+      }
+    } on SignInCancelledException {
+      // The user backed out of the OAuth flow (closed the tab, hit Cancel
+      // on the PDS sign-in page, or denied consent). Not an error: no
+      // Sentry capture, just a quiet confirmation they're back in the app.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Sign in cancelled.',
+              style: GoogleFonts.nunito(fontWeight: FontWeight.w500),
+            ),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
       }
     } on Exception catch (e, stackTrace) {
       // Log all sign-in errors to Sentry with categorization

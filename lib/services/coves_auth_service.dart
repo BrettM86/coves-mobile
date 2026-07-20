@@ -10,6 +10,16 @@ import '../config/oauth_config.dart';
 import '../models/coves_session.dart';
 import 'retry_interceptor.dart';
 
+/// Thrown when the user backs out of the OAuth flow without completing it:
+/// closing the browser tab, cancelling on the PDS sign-in page, or denying
+/// the authorization request. Not an error — no tokens were ever issued.
+class SignInCancelledException implements Exception {
+  const SignInCancelledException();
+
+  @override
+  String toString() => 'Sign in cancelled by user';
+}
+
 /// Coves Authentication Service
 ///
 /// Simplified OAuth service that uses the Coves backend's mobile OAuth flow.
@@ -156,8 +166,7 @@ class CovesAuthService {
       }
 
       // Parse the callback URL to extract session data
-      final callbackUri = Uri.parse(resultUrl);
-      final session = CovesSession.fromCallbackUri(callbackUri);
+      final session = parseCallbackUrl(resultUrl);
 
       if (kDebugMode) {
         print('Session created: $session');
@@ -176,19 +185,54 @@ class CovesAuthService {
       }
 
       return session;
+    } on SignInCancelledException {
+      // User backed out of the flow — propagate untouched so callers can
+      // treat it as a non-error (no scary message, no crash reporting).
+      rethrow;
     } on Exception catch (e) {
       if (kDebugMode) {
         print('Sign-in failed: $e');
       }
 
-      // Check for user cancellation
+      // Check for user cancellation (browser tab closed / system CANCELED)
       if (e.toString().contains('CANCELED') ||
           e.toString().contains('cancelled')) {
-        throw Exception('Sign in cancelled by user');
+        throw const SignInCancelledException();
       }
 
       throw Exception('Sign in failed: $e');
     }
+  }
+
+  /// Parse an OAuth callback URL into a session.
+  ///
+  /// The authorization server may redirect back with an error instead of
+  /// token parameters — e.g. `error=access_denied` when the user cancels
+  /// on the PDS sign-in page or denies the consent screen. That case is
+  /// surfaced as [SignInCancelledException]; other server-reported errors
+  /// and missing/malformed parameters throw a descriptive [Exception] /
+  /// [FormatException].
+  @visibleForTesting
+  static CovesSession parseCallbackUrl(String resultUrl) {
+    final callbackUri = Uri.parse(resultUrl);
+
+    final oauthError = callbackUri.queryParameters['error'];
+    if (oauthError != null && oauthError.isNotEmpty) {
+      if (kDebugMode) {
+        // Error codes/descriptions contain no secrets — safe to log.
+        print('OAuth callback returned error: $oauthError');
+      }
+      if (oauthError == 'access_denied') {
+        throw const SignInCancelledException();
+      }
+      final description = callbackUri.queryParameters['error_description'];
+      final detail = (description == null || description.isEmpty)
+          ? ''
+          : ' ($description)';
+      throw Exception('Authorization server error: $oauthError$detail');
+    }
+
+    return CovesSession.fromCallbackUri(callbackUri);
   }
 
   /// Restore a previous session from secure storage
