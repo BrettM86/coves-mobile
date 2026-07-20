@@ -1,0 +1,88 @@
+# Section G — check 4: block/unblock a user end-to-end from a feed card's
+# "Post options" menu (backend block consumption + unblock endpoint fixed
+# 2026-07-19; re-verified on-device the same day).
+#
+# Self-contained round-trip in ONE session: block (confirm dialog +
+# snackbar) > the same card menu now reads Unblock > unblock (snackbar).
+# The flow ends UNBLOCKED, so the suite stays idempotent.
+#
+# Feed FILTERING after a refresh is deliberately not asserted here: once
+# feeds filter the blocked user's content there is no in-app surface left
+# to unblock from except their profile, which is only reachable by adb
+# deep link (the social.coves scheme routes to the OAuth CallbackActivity,
+# so Maestro openLink cannot target MainActivity). Filtering + the
+# profile-menu Unblock surface were verified in the 2026-07-19 re-verify
+# run (see docs/QA_LOOP_LOG.md).
+#
+# Target: the seeded test-aggregator posts. "Rubin Observatory" is the
+# SECOND aggregator post, so once it is on screen the surrounding cards
+# are all aggregator-authored; "Post options" index 1 belongs to one of
+# them (index 0 can be a partially-visible card above). The menu-content
+# assertion guards against opening the wrong card's menu.
+appId: social.coves.dev
+---
+# Cold start can flake on stale semantics when the previous flow ended on
+# another screen — retry the launch once (documented quirk).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Feed post in [\\s\\S]*Rubin Observatory[\\s\\S]*"
+    direction: DOWN
+    timeout: 60000
+- tapOn:
+    text: "Post options"
+    index: 1
+# Guard: only proceed if this menu belongs to a test-aggregator card.
+- extendedWaitUntil:
+    visible: "Block @test-aggregator.local.coves.dev"
+    timeout: 10000
+- tapOn: "Block @test-aggregator.local.coves.dev"
+# Confirmation dialog, then success snackbar
+- extendedWaitUntil:
+    visible: "Block User"
+    timeout: 10000
+- tapOn: "Block"
+- extendedWaitUntil:
+    visible: "Blocked @test-aggregator.local.coves.dev"
+    timeout: 15000
+- takeScreenshot: build/maestro/g4_blocked_snackbar
+# The card is still on screen (feeds only filter on refresh) — its menu
+# must now offer Unblock (optimistic block state).
+- tapOn:
+    text: "Post options"
+    index: 1
+- extendedWaitUntil:
+    visible: "Unblock @test-aggregator.local.coves.dev"
+    timeout: 10000
+- takeScreenshot: build/maestro/g4_unblock_menu
+- tapOn: "Unblock @test-aggregator.local.coves.dev"
+# No confirmation dialog on unblock — straight to the snackbar.
+- extendedWaitUntil:
+    visible: "Unblocked @test-aggregator.local.coves.dev"
+    timeout: 15000
+- takeScreenshot: build/maestro/g4_unblocked_snackbar
+# Restored end state: refresh and confirm aggregator content is present.
+- swipe:
+    start: "50%, 25%"
+    end: "50%, 75%"
+- waitForAnimationToEnd:
+    timeout: 10000
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    direction: DOWN
+    timeout: 60000
+- takeScreenshot: build/maestro/g4_feed_restored

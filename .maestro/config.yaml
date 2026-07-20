@@ -41,6 +41,7 @@ executionOrder:
     - f3_edit_profile_persist
     - f4_avatar_gallery
     - g3_report_dialog
+    - g4_block_unblock
     - h1_video_post
     - h2_rich_text_linkbars
     - a2_signout_landing

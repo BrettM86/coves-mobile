@@ -1,13 +1,16 @@
 # Section F — check 4: avatar change via the gallery path (the emulator
 # has no camera): Change Avatar > Choose from Gallery > Android photo
 # picker opens without crash > pick image > uCrop > NEW badge staged >
-# back out (change discarded).
-# The flow deliberately does NOT save: on the local stack the PDS rejects
-# com.atproto.repo.uploadBlob with ScopeMissingError (blob:*/*) even
-# though the appview requests and validates that scope — a backend/PDS
-# integration issue (OPEN, QA loop 2026-07-16). The backend maps it to a
-# 401 AuthExpired, which makes the app sign the user out after its
-# refresh-and-retry also 401s.
+# SAVE > "Profile updated successfully" snackbar, still signed in.
+# The Save leg became possible after the backend uploadBlob fix (0feddc1,
+# re-verified end-to-end on-device 2026-07-19); the earlier
+# ScopeMissingError/forced-sign-out issue (QA loop 2026-07-16) is fixed.
+# Each run uploads a fresh avatar blob — mutating but idempotent for the
+# suite (same precedent as e1/h1, which seed a post per run).
+# NOTE: the avatar shown immediately after save can be the PREVIOUS one:
+# the app refetches the profile right away, but the appview only sees the
+# new record after firehose indexing — it appears on the next profile
+# load.
 # PREREQUISITE: at least one image must exist in the emulator gallery:
 #   adb push qa_avatar_test.png /sdcard/Pictures/
 #   adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
@@ -61,11 +64,17 @@ appId: social.coves.dev
     visible: "Change Avatar[\\s\\S]*NEW[\\s\\S]*"
     timeout: 20000
 - takeScreenshot: build/maestro/f4_avatar_staged
-# Discard the staged change; no crash and the profile renders again
-- back
+# Save: upload must succeed (no 403, no forced sign-out) and pop back to
+# the profile with a success snackbar.
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible: "Profile updated successfully"
+    timeout: 30000
 - extendedWaitUntil:
     visible: "[\\s\\S]*did:plc:[\\s\\S]*"
     timeout: 15000
+- assertNotVisible: "Sign in"
+- takeScreenshot: build/maestro/f4_avatar_saved
 - tapOn: "Home"
 - extendedWaitUntil:
     visible: "Discover feed.*"
