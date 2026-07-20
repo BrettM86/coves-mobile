@@ -102,7 +102,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(NotFoundError), findsOneWidget);
-    expect(find.text('Post Not Found'), findsOneWidget);
+    expect(find.text('Post Not Found'), findsNWidgets(2));
   });
 
   testWidgets('renders PostDetailScreen on successful fetch', (tester) async {
@@ -164,7 +164,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Post Unavailable'), findsOneWidget);
+    expect(find.text('Post Unavailable'), findsNWidgets(2));
     expect(
       find.text("This post is from an account you've blocked."),
       findsOneWidget,
@@ -184,7 +184,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Post Unavailable'), findsOneWidget);
+    expect(find.text('Post Unavailable'), findsNWidgets(2));
     expect(find.text('This post was removed by moderators.'), findsOneWidget);
   });
 
@@ -199,7 +199,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Post Unavailable'), findsOneWidget);
+    expect(find.text('Post Unavailable'), findsNWidgets(2));
     expect(
       find.text("This post is unavailable because it's from a blocked "
           'source.'),
@@ -234,7 +234,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fetchCount, 2);
-    expect(find.text('Post Not Found'), findsOneWidget);
+    expect(find.text('Post Not Found'), findsNWidgets(2));
   });
 
   testWidgets('5xx from the server shows error state with retry', (
@@ -283,7 +283,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Post Not Found'), findsOneWidget);
+    expect(find.text('Post Not Found'), findsNWidgets(2));
     expect(find.byType(FullScreenError), findsNothing);
   });
 
@@ -302,7 +302,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fetchCount, 0);
-    expect(find.text('Post Not Found'), findsOneWidget);
+    expect(find.text('Post Not Found'), findsNWidgets(2));
   });
 
   testWidgets('navigating to a new postUri refetches (didUpdateWidget)', (
@@ -350,7 +350,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fetchedUris, [testUri, secondUri]);
-    expect(find.text('Post Not Found'), findsOneWidget);
+    expect(find.text('Post Not Found'), findsNWidgets(2));
 
     // Stale first fetch completing late must NOT overwrite the newer result
     firstFetch.complete(
@@ -358,7 +358,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Post Not Found'), findsOneWidget);
+    expect(find.text('Post Not Found'), findsNWidgets(2));
     expect(find.text('Post Unavailable'), findsNothing);
   });
 

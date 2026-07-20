@@ -172,7 +172,7 @@ class NotFoundError extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         foregroundColor: AppColors.textPrimary,
-        title: const Text('Not Found'),
+        title: Text(title),
         elevation: 0,
       ),
       body: Center(
