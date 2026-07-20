@@ -35,6 +35,8 @@ executionOrder:
     - c1_post_detail
     - c2_comment_reply_collapse
     - c3_comment_vote_sort
+    - c4_wide_level
+    - c5_deep_chain_focused
     - d1_admin_panel
     - d2_community_from_chip
     - d3_join_leave

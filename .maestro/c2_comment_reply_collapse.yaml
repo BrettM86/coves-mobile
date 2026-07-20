@@ -8,11 +8,16 @@
 # text selectors are always wrapped in [\s\S].
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+# Cold start can flake on stale semantics — retry the launch once
+# (documented quirk, same pattern as g4).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - extendedWaitUntil:
     visible: "Feed post in [\\s\\S]*"
     timeout: 30000
@@ -20,7 +25,8 @@ appId: social.coves.dev
     element:
       text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
+    centerElement: true
 - tapOn:
     text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
     index: 0

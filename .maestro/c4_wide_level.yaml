@@ -1,0 +1,89 @@
+# Section C — check 7 (WIDE dimension): a single parent with 10 direct
+# replies ("QA deep chain fixture" post, permanent seed:
+# at://did:plc:7qijxb47zixbu3xqgdmruaui/social.coves.community.post/3mr2pxaxgq422).
+#
+# Verifies:
+# - the per-parent sibling cap (5) truncates the wide level and shows the
+#   per-node "Load more replies" button (wired 2026-07-20 — it fetches the
+#   parentRkey subtree; before that fix the button was dead),
+# - loading reveals ALL 10 siblings in correct (newest-first) order,
+# - collapse of the wide parent hides all 10 (+10 badge), expand restores,
+# - the wide level coexists with the deep chains in the same thread.
+#
+# The thread also contains a user-seeded 10-deep chain ("wide reply 10:
+# horizontal direct replies" x10 — records are chain-parented) and the
+# 20-deep alternating chain used by c5.
+# Assumes a signed-in session (suite order: after a1/b-flows).
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Feed post in [\\s\\S]*QA deep chain fixture[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    text: "Feed post in [\\s\\S]*QA deep chain fixture[\\s\\S]*"
+    index: 0
+- extendedWaitUntil:
+    visible: "QA deep chain fixture[\\s\\S]*"
+    timeout: 15000
+# The user-seeded chain coexists at the top of the thread
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*wide reply 10: horizontal direct replies[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+# --- Wide level: capped at 5 of 10, newest-first ---
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*wide reply 06 of 7[\\s\\S]*"
+    direction: DOWN
+    timeout: 60000
+    centerElement: true
+# Newest three are the topup replies 10/09/08
+- assertVisible: "[\\s\\S]*wide reply 09 of 10 \\(topup\\)[\\s\\S]*"
+# The capped tail (01..05) is NOT rendered yet
+- assertNotVisible: "[\\s\\S]*wide reply 01 of 7[\\s\\S]*"
+- takeScreenshot: build/maestro/c4_wide_capped
+# --- Load more replies reveals the remaining 5 siblings ---
+- tapOn:
+    text: "Load more replies"
+    index: 0
+- extendedWaitUntil:
+    visible: "[\\s\\S]*wide reply 02 of 7[\\s\\S]*"
+    timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*wide reply 01 of 7[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: build/maestro/c4_wide_all10
+# --- Collapse the wide parent: all 10 hidden behind the +10 badge ---
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*WIDE parent: 7 direct replies below[\\s\\S]*"
+    direction: UP
+    timeout: 30000
+    centerElement: true
+- longPressOn: "[\\s\\S]*WIDE parent: 7 direct replies below[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*expand thread[\\s\\S]*"
+    timeout: 10000
+- assertNotVisible: "[\\s\\S]*wide reply 10 of 10 \\(topup\\)[\\s\\S]*"
+- assertNotVisible: "[\\s\\S]*wide reply 01 of 7[\\s\\S]*"
+- takeScreenshot: build/maestro/c4_wide_collapsed
+# --- Expand restores the wide level ---
+- longPressOn: "[\\s\\S]*expand thread[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*wide reply 10 of 10 \\(topup\\)[\\s\\S]*"
+    timeout: 10000
+- takeScreenshot: build/maestro/c4_wide_expanded
+- back

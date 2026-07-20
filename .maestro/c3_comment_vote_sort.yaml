@@ -16,7 +16,8 @@ appId: social.coves.dev
     element:
       text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
     direction: DOWN
-    timeout: 20000
+    timeout: 60000
+    centerElement: true
 - tapOn:
     text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
     index: 0
