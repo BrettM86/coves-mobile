@@ -1,0 +1,57 @@
+# Section A — OAuth cancel handling: denying the authorization request on
+# the PDS consent page redirects back into the app with error=access_denied
+# (Coves backend cc98f26). The app must treat it as a user cancel — no
+# crash, no stuck "signing in" state, a quiet "Sign in cancelled." snackbar
+# on the login screen (regression for the SignInCancelledException path in
+# coves_auth_service.dart). The sign-in-page Cancel variant of the same
+# redirect is covered by a3_wrong_password.
+# PRECONDITION: app signed out (run after a2_signout_landing / a3).
+# Leaves the app signed out on the login screen.
+# QUIRK: Chrome's "Save password?" sheet may float over the consent page;
+# it does not cover the Deny/Authorize buttons — tap through it. Do NOT
+# press BACK to dismiss it: BACK closes the whole custom tab.
+appId: social.coves.dev
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Sign in|Welcome back"
+    timeout: 30000
+# launchApp normally resets to the landing screen; tolerate starting on the
+# login screen too.
+- runFlow:
+    when:
+      notVisible: "Welcome back"
+    commands:
+      - tapOn: "Sign in"
+      - extendedWaitUntil:
+          visible: "Welcome back"
+          timeout: 15000
+- tapOn: "alice.bsky.social"
+- inputText: "mari.local.coves.dev"
+- hideKeyboard
+- tapOn: "Sign in"
+# Chrome custom tab: PDS OAuth password page (localhost:3001)
+- extendedWaitUntil:
+    visible: "Password"
+    timeout: 30000
+- tapOn: "Password"
+- inputText: "password"
+- hideKeyboard
+# The web page has a "Sign in" heading and a "Sign in" button; the button is
+# the last match in the tree.
+- tapOn:
+    text: "Sign in"
+    index: 1
+# Consent page: deny instead of authorize
+- extendedWaitUntil:
+    visible: "Authorize"
+    timeout: 30000
+- tapOn: "Deny access"
+# Back in the app: quiet cancel message, login screen intact, no crash
+- extendedWaitUntil:
+    visible: "Sign in cancelled.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 15000
+- takeScreenshot: build/maestro/a_oauth_cancel_deny

@@ -46,3 +46,4 @@ executionOrder:
     - a2_signout_landing
     - d4_discovery_guest
     - a3_wrong_password
+    - a4_oauth_cancel
