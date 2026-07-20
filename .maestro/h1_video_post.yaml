@@ -1,0 +1,122 @@
+# Section H — check 1: video post playback. Seeds its own video post (compose
+# with a Streamable URL; the backend unfurls it to embedType=video +
+# provider=streamable + thumb), then from post detail taps the "Play video"
+# overlay (Semantics label added for a11y/testability), asserts the fullscreen
+# player renders its scrubber time labels, and BACK-exits back to the detail
+# screen cleanly.
+# Requires: emulator internet access (api.streamable.com + CDN) and a live
+# Streamable shortcode below — replace the URL if the clip ever expires
+# (verify with: curl https://api.streamable.com/videos/<code>).
+# Assumes a signed-in session (suite order: after a1).
+# NOTE: never use hideKeyboard on the compose screen — it's a BACK press.
+appId: social.coves.dev
+---
+# --- seed: create a video post via compose ---
+# The whole entry is inside the retry: the semantics tree is sometimes
+# partial right after launch (nav-bar nodes missing) and only a full app
+# restart reliably rebuilds it.
+- retry:
+    maxRetries: 3
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - tapOn: "Create"
+      - extendedWaitUntil:
+          visible: "Create Post"
+          timeout: 15000
+- tapOn: "Select a community"
+- extendedWaitUntil:
+    visible: "Post to"
+    timeout: 15000
+- tapOn: "Search for a community"
+- inputText: "scien"
+- extendedWaitUntil:
+    visible: "Science[\\s\\S]*"
+    timeout: 15000
+- tapOn: "Science[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Create Post"
+    timeout: 15000
+- evalScript: ${output.h1Title = 'QA H1 video ' + Date.now()}
+- tapOn: "Title"
+- inputText: ${output.h1Title}
+- tapOn: "URL"
+- inputText: "https://streamable.com/c4tyc7"
+- takeScreenshot: build/maestro/h1_filled
+- tapOn: "Post"
+# optimistic detail renders (no video yet — embed is hydrated server-side)
+- extendedWaitUntil:
+    visible: "[\\s\\S]*${output.h1Title}[\\s\\S]*"
+    timeout: 20000
+# (skip backing out of the optimistic detail — the keyboard can eat the
+#  first BACK; the relaunch below resets navigation anyway)
+# --- relaunch; poll the feed until the indexed post appears ---
+# Relaunch-per-attempt: the semantics tree can come up partial (nav nodes
+# missing) and the discover feed can be transiently empty if the appview is
+# mid-restart — a fresh launch retries both.
+- retry:
+    maxRetries: 3
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+- retry:
+    maxRetries: 5
+    commands:
+      - swipe:
+          start: 50%, 30%
+          end: 50%, 80%
+          duration: 400
+      - extendedWaitUntil:
+          visible: "Feed post in [\\s\\S]*${output.h1Title}[\\s\\S]*"
+          timeout: 10000
+# feed card carries the video play overlay once unfurled
+- extendedWaitUntil:
+    visible: "Play video"
+    timeout: 15000
+- takeScreenshot: build/maestro/h1_feed_card
+# --- play straight from the feed card ---
+- tapOn:
+    text: "Play video"
+    index: 0
+# fullscreen player: scrubber time labels render once initialized
+- extendedWaitUntil:
+    visible: "[0-9]+:[0-9]{2}"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: build/maestro/h1_player_from_feed
+# back exits the player cleanly; feed is intact
+- back
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000
+- assertVisible: "Play video"
+# --- open post detail (via the comment-count button, which never overlaps
+#     the embed) and play from there too ---
+- tapOn:
+    text: "View [0-9]+ comments?[\\s\\S]*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Play video"
+    timeout: 15000
+- takeScreenshot: build/maestro/h1_detail_thumb
+- tapOn: "Play video"
+- extendedWaitUntil:
+    visible: "[0-9]+:[0-9]{2}"
+    timeout: 30000
+- takeScreenshot: build/maestro/h1_player_from_detail
+# --- back exits the player cleanly, detail is intact ---
+- back
+- extendedWaitUntil:
+    visible: "Play video"
+    timeout: 15000
+- takeScreenshot: build/maestro/h1_after_exit
+- back

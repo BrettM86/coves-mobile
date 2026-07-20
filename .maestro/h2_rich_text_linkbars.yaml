@@ -1,0 +1,51 @@
+# Section H — checks 2 + 3 (render halves): rich text facets and link bars.
+# - Feed: post-card external link bars render with an "Open link to <domain>
+#   in external browser" semantics label (ExternalLinkBar) — the aggregator
+#   posts guarantee at least one is always present.
+# - NASA aggregator post detail: body facets render as individual tappable
+#   link nodes ("[dawn.com]" etc. — RichTextRenderer creates one semantics
+#   node per recognizer span) and the detail link bar shows the source URL.
+# Tap-through (link opens Chrome on the right URL) is verified manually via
+# adb in the QA loop — keeping Chrome out of this flow keeps it hermetic.
+# Assumes a signed-in session.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+# --- feed-card external link bar (favicon + domain, labeled button) ---
+- scrollUntilVisible:
+    element:
+      text: "Open link to [\\s\\S]* in external browser[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: build/maestro/h2_feed_linkbar
+# --- NASA post: rich text facets ---
+- scrollUntilVisible:
+    element:
+      text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    index: 0
+- extendedWaitUntil:
+    visible: "NASA delays[\\s\\S]*"
+    timeout: 15000
+# link bar under the title shows the source domain
+- assertVisible: "kite\\.kagi\\.com[\\s\\S]*"
+# body facets render as separate link nodes
+- assertVisible:
+    text: "\\[dawn\\.com\\]"
+- assertVisible:
+    text: "\\[aawsat\\.com\\]"
+- takeScreenshot: build/maestro/h2_nasa_facets
+- back
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000
+# (The two-bar case — external URL bar + source domain bar on one detail,
+#  seeded Telegraph post — sits ~45 posts deep with no scheme intent filter
+#  for deep-linking from Maestro; the QA loop's adb pass covers it.)
