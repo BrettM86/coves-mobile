@@ -51,4 +51,38 @@ void main() {
       );
     });
   });
+
+  group('ProfileViewerState.fromJson', () {
+    const uri = 'at://did:plc:viewer/social.coves.actor.block/3abc';
+
+    test('parses backend "blocking" record-URI shape as blocked', () {
+      final viewer = ProfileViewerState.fromJson(const {'blocking': uri});
+
+      expect(viewer.blocked, isTrue);
+      expect(viewer.blockUri, uri);
+    });
+
+    test('parses legacy blocked/blockUri shape', () {
+      final viewer = ProfileViewerState.fromJson(const {
+        'blocked': true,
+        'blockUri': uri,
+      });
+
+      expect(viewer.blocked, isTrue);
+      expect(viewer.blockUri, uri);
+    });
+
+    test('not blocked when no block keys present', () {
+      final viewer = ProfileViewerState.fromJson(const {'blockedBy': false});
+
+      expect(viewer.blocked, isFalse);
+      expect(viewer.blockUri, isNull);
+    });
+
+    test('blocked without any URI is treated as not blocked (defensive)', () {
+      final viewer = ProfileViewerState.fromJson(const {'blocked': true});
+
+      expect(viewer.blocked, isFalse);
+    });
+  });
 }

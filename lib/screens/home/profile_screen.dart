@@ -9,6 +9,7 @@ import '../../utils/responsive_utils.dart';
 import '../../models/comment.dart';
 import '../../models/user_profile.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/block_provider.dart';
 import '../../providers/user_profile_provider.dart';
 import '../../widgets/comment_card.dart';
 import '../../widgets/loading_error_states.dart';
@@ -84,6 +85,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     // Check mounted after async gap (CLAUDE.md requirement)
     if (!mounted) return;
+
+    // Seed block state from the profile's viewer data so block/unblock
+    // menus reflect the server-side block after an app restart (the
+    // seed never clobbers fresher in-session optimistic state).
+    final profile = profileProvider.profile;
+    if (profile != null && profile.did != authProvider.did) {
+      context.read<BlockProvider>().setInitialUserBlockState(
+        userDid: profile.did,
+        isBlocked: profile.viewer?.blocked ?? false,
+      );
+    }
 
     // Only load posts if profile loaded successfully (no error)
     if (profileProvider.profileError == null) {

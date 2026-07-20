@@ -140,12 +140,22 @@ class BlockProvider with ChangeNotifier {
     }
   }
 
-  /// Initialize user block state from profile data
+  /// Initialize user block state from server data (e.g. profile
+  /// viewer.blocking).
+  ///
+  /// Seed-only: never clobbers existing local state — an optimistic
+  /// toggle already in memory (or in flight) is fresher than a possibly
+  /// cached server response.
   void setInitialUserBlockState({
     required String userDid,
     required bool isBlocked,
   }) {
+    if (_userBlocks.containsKey(userDid) ||
+        (_pendingUserBlocks[userDid] ?? false)) {
+      return;
+    }
     _userBlocks[userDid] = isBlocked;
+    notifyListeners();
   }
 
   /// Initialize community block state from community data

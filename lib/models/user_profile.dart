@@ -277,8 +277,11 @@ class ProfileViewerState {
   });
 
   factory ProfileViewerState.fromJson(Map<String, dynamic> json) {
-    final blocked = json['blocked'] as bool? ?? false;
-    final blockUri = json['blockUri'] as String?;
+    // The backend serializes the viewer's block as `blocking` — the block
+    // record URI (see users/user.go ProfileViewerState). Accept the older
+    // `blocked`/`blockUri` shape too.
+    final blockUri = (json['blockUri'] ?? json['blocking']) as String?;
+    final blocked = json['blocked'] as bool? ?? (blockUri != null);
 
     return ProfileViewerState._(
       // If blocked but no blockUri, treat as not blocked (defensive)
