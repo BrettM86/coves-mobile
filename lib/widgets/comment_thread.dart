@@ -29,6 +29,7 @@ class CommentThread extends StatelessWidget {
     this.maxDepth = 5,
     this.currentTime,
     this.onLoadMoreReplies,
+    this.loadingMoreReplies = const {},
     this.onCommentTap,
     this.collapsedComments = const {},
     this.onCollapseToggle,
@@ -42,7 +43,13 @@ class CommentThread extends StatelessWidget {
   final int depth;
   final int maxDepth;
   final DateTime? currentTime;
-  final VoidCallback? onLoadMoreReplies;
+
+  /// Callback when "Load more replies" is tapped for a comment with
+  /// unloaded replies (per-parent sibling cap or depth cutoff)
+  final void Function(ThreadViewComment thread)? onLoadMoreReplies;
+
+  /// Set of comment URIs with an in-flight "load more replies" fetch
+  final Set<String> loadingMoreReplies;
 
   /// Callback when a comment is tapped (for reply functionality)
   final void Function(ThreadViewComment)? onCommentTap;
@@ -104,6 +111,7 @@ class CommentThread extends StatelessWidget {
                       maxDepth: maxDepth,
                       currentTime: currentTime,
                       onLoadMoreReplies: onLoadMoreReplies,
+                      loadingMoreReplies: loadingMoreReplies,
                       onCommentTap: onCommentTap,
                       collapsedComments: collapsedComments,
                       onCollapseToggle: onCollapseToggle,
@@ -275,6 +283,7 @@ class CommentThread extends StatelessWidget {
   Widget _buildLoadMoreButton(BuildContext context) {
     // Calculate left padding based on depth (align with replies)
     final leftPadding = 16.0 + ((depth + 1) * 12.0);
+    final isLoading = loadingMoreReplies.contains(thread.comment.uri);
 
     return Container(
       padding: EdgeInsets.fromLTRB(leftPadding, 8, 16, 8),
@@ -282,27 +291,41 @@ class CommentThread extends StatelessWidget {
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: InkWell(
-        onTap: () {
-          if (onLoadMoreReplies != null) {
-            onLoadMoreReplies!();
-          } else {
-            if (kDebugMode) {
-              debugPrint('Load more replies tapped (no handler provided)');
-            }
-          }
-        },
+        onTap: isLoading
+            ? null
+            : () {
+                if (onLoadMoreReplies != null) {
+                  onLoadMoreReplies!(thread);
+                } else {
+                  if (kDebugMode) {
+                    debugPrint(
+                      'Load more replies tapped (no handler provided)',
+                    );
+                  }
+                }
+              },
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(
             children: [
-              Icon(
-                Icons.add_circle_outline,
-                size: 16,
-                color: AppColors.primary.withValues(alpha: 0.8),
-              ),
+              if (isLoading)
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.primary.withValues(alpha: 0.8),
+                  ),
+                )
+              else
+                Icon(
+                  Icons.add_circle_outline,
+                  size: 16,
+                  color: AppColors.primary.withValues(alpha: 0.8),
+                ),
               const SizedBox(width: 6),
               Text(
-                'Load more replies',
+                isLoading ? 'Loading replies…' : 'Load more replies',
                 style: TextStyle(
                   color: AppColors.primary.withValues(alpha: 0.8),
                   fontSize: 13,

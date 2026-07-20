@@ -413,6 +413,10 @@ class CovesApiService {
   /// - [depth]: Maximum nesting depth for replies (default: 10)
   /// - [limit]: Number of comments per page (default: 50, max: 100)
   /// - [cursor]: Pagination cursor from previous response
+  /// - [parentRkey]: Record key of a comment within the post. When provided,
+  ///   the response contains only the subtree rooted at that comment (the
+  ///   comment itself as the sole top-level entry). Used to load more
+  ///   replies past the per-parent sibling cap or the depth cutoff.
   Future<CommentsResponse> getComments({
     required String postUri,
     String sort = 'hot',
@@ -420,6 +424,7 @@ class CovesApiService {
     int depth = 10,
     int limit = 50,
     String? cursor,
+    String? parentRkey,
   }) async {
     try {
       if (kDebugMode) {
@@ -432,6 +437,10 @@ class CovesApiService {
         'depth': depth,
         'limit': limit,
       };
+
+      if (parentRkey != null) {
+        queryParams['parentRkey'] = parentRkey;
+      }
 
       if (timeframe != null) {
         queryParams['timeframe'] = timeframe;

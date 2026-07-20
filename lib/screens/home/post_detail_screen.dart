@@ -755,6 +755,23 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
+  /// Load hidden replies for a comment (per-parent cap / depth cutoff)
+  Future<void> _onLoadMoreReplies(ThreadViewComment thread) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await _commentsProvider.loadMoreReplies(thread.comment.uri);
+    } on Exception {
+      if (mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Failed to load replies. Please try again.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   /// Build main content area
   Widget _buildContent() {
     // Use Consumer to rebuild when comments provider changes
@@ -930,6 +947,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   commentsProvider.collapsedComments,
                               onCollapseToggle: commentsProvider.toggleCollapsed,
                               onContinueThread: _onContinueThread,
+                              onLoadMoreReplies: _onLoadMoreReplies,
+                              loadingMoreReplies:
+                                  commentsProvider.loadingMoreReplies,
                               onDelete: (uri) =>
                                   commentsProvider.deleteComment(commentUri: uri),
                             ),
@@ -991,6 +1011,8 @@ class _CommentItem extends StatelessWidget {
     this.collapsedComments = const {},
     this.onCollapseToggle,
     this.onContinueThread,
+    this.onLoadMoreReplies,
+    this.loadingMoreReplies = const {},
     this.onDelete,
   });
 
@@ -1001,6 +1023,8 @@ class _CommentItem extends StatelessWidget {
   final void Function(String uri)? onCollapseToggle;
   final void Function(ThreadViewComment, List<ThreadViewComment>)?
   onContinueThread;
+  final void Function(ThreadViewComment)? onLoadMoreReplies;
+  final Set<String> loadingMoreReplies;
   final Future<void> Function(String commentUri)? onDelete;
 
   @override
@@ -1016,6 +1040,8 @@ class _CommentItem extends StatelessWidget {
           collapsedComments: collapsedComments,
           onCollapseToggle: onCollapseToggle,
           onContinueThread: onContinueThread,
+          onLoadMoreReplies: onLoadMoreReplies,
+          loadingMoreReplies: loadingMoreReplies,
           onDelete: onDelete,
         );
       },

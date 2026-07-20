@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -89,13 +90,42 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _anchorKey = GlobalKey();
 
+  /// Live subtree rooted at the anchor comment.
+  ///
+  /// Starts as the snapshot passed from the parent thread (which may be
+  /// truncated by the original fetch depth) and is refreshed from the
+  /// server so deep replies and newly posted replies show up.
+  late ThreadViewComment _thread;
+
   @override
   void initState() {
     super.initState();
-    // Scroll to anchor comment after build
+    _thread = widget.thread;
+    // Scroll to anchor comment after build, then hydrate the full subtree
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToAnchor();
+      _refreshSubtree();
     });
+  }
+
+  /// Re-fetch the anchor's subtree from the server and update the view.
+  ///
+  /// Also merges the subtree into the parent CommentsProvider tree (when
+  /// the anchor is still present there), keeping the full thread in sync.
+  /// Failures are non-fatal: the current (possibly truncated) subtree
+  /// remains visible.
+  Future<void> _refreshSubtree() async {
+    final provider = context.read<CommentsProvider>();
+    try {
+      final subtree = await provider.loadMoreReplies(_thread.comment.uri);
+      if (subtree != null && mounted) {
+        setState(() => _thread = subtree);
+      }
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Failed to refresh focused subtree: $e');
+      }
+    }
   }
 
   @override
@@ -142,11 +172,42 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
       MaterialPageRoute<void>(
         builder: (navigatorContext) => ReplyScreen(
           comment: comment,
-          onSubmit: (content, facets) => widget.onReply(content, facets, comment),
+          onSubmit: (content, facets) async {
+            await widget.onReply(content, facets, comment);
+            // Re-fetch the subtree so the new reply appears in this view
+            await _refreshSubtree();
+          },
           commentsProvider: context.read<CommentsProvider>(),
         ),
       ),
     );
+  }
+
+  /// Load hidden replies for a nested comment inside the focused view
+  Future<void> _onLoadMoreReplies(ThreadViewComment node) async {
+    final provider = context.read<CommentsProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final subtree = await provider.loadMoreReplies(node.comment.uri);
+      if (subtree != null && mounted) {
+        setState(() => _thread = _thread.replaceDescendant(subtree));
+      }
+    } on Exception {
+      if (mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Failed to load replies. Please try again.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Delete a comment, then refresh both the full thread and this subtree
+  Future<void> _onDelete(String uri) async {
+    await context.read<CommentsProvider>().deleteComment(commentUri: uri);
+    await _refreshSubtree();
   }
 
   /// Navigate deeper into a nested thread
@@ -168,6 +229,9 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
 
   @override
   Widget build(BuildContext context) {
+    // Rebuilds on provider changes (e.g. per-node reply-loading spinners)
+    final commentsProvider = context.watch<CommentsProvider>();
+
     // Calculate minimum bottom padding to allow anchor to scroll to top
     final screenHeight = MediaQuery.of(context).size.height;
     final minBottomPadding = screenHeight * 0.6;
@@ -210,9 +274,8 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
                   ),
 
                   // Replies (if any)
-                  if (widget.thread.replies != null &&
-                      widget.thread.replies!.isNotEmpty)
-                    ...widget.thread.replies!.map((reply) {
+                  if (_thread.replies != null && _thread.replies!.isNotEmpty)
+                    ..._thread.replies!.map((reply) {
                       return CommentThread(
                         thread: reply,
                         depth: 1,
@@ -221,16 +284,16 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
                         collapsedComments: _collapsedComments,
                         onCollapseToggle: _toggleCollapsed,
                         onContinueThread: _onContinueThread,
-                        ancestors: [widget.thread],
-                        onDelete: (uri) => context
-                            .read<CommentsProvider>()
-                            .deleteComment(commentUri: uri),
+                        onLoadMoreReplies: _onLoadMoreReplies,
+                        loadingMoreReplies:
+                            commentsProvider.loadingMoreReplies,
+                        ancestors: [_thread],
+                        onDelete: _onDelete,
                       );
                     }),
 
                   // Empty state if no replies
-                  if (widget.thread.replies == null ||
-                      widget.thread.replies!.isEmpty)
+                  if (_thread.replies == null || _thread.replies!.isEmpty)
                     _buildNoReplies(),
 
                   // Bottom padding to allow anchor to scroll to top
@@ -255,8 +318,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
       child: CommentCard(
         comment: ancestor.comment,
         onTap: () => _openReplyScreen(ancestor),
-        onDelete: (uri) =>
-            context.read<CommentsProvider>().deleteComment(commentUri: uri),
+        onDelete: _onDelete,
       ),
     );
   }
@@ -276,15 +338,14 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
         ),
       ),
       child: CommentCard(
-        comment: widget.thread.comment,
-        onTap: () => _openReplyScreen(widget.thread),
-        onLongPress: () => _toggleCollapsed(widget.thread.comment.uri),
-        isCollapsed: _collapsedComments.contains(widget.thread.comment.uri),
-        collapsedCount: _collapsedComments.contains(widget.thread.comment.uri)
-            ? widget.thread.comment.stats.replyCount
+        comment: _thread.comment,
+        onTap: () => _openReplyScreen(_thread),
+        onLongPress: () => _toggleCollapsed(_thread.comment.uri),
+        isCollapsed: _collapsedComments.contains(_thread.comment.uri),
+        collapsedCount: _collapsedComments.contains(_thread.comment.uri)
+            ? _thread.comment.stats.replyCount
             : 0,
-        onDelete: (uri) =>
-            context.read<CommentsProvider>().deleteComment(commentUri: uri),
+        onDelete: _onDelete,
       ),
     );
   }

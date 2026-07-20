@@ -74,6 +74,9 @@ class CommentsProvider with ChangeNotifier {
   // Collapsed thread state - stores URIs of collapsed comments
   final Set<String> _collapsedComments = {};
 
+  // Comment URIs with an in-flight "load more replies" subtree fetch
+  final Set<String> _loadingMoreReplies = {};
+
   // Scroll position state (replaces ScrollStateService for this post)
   double _scrollPosition = 0;
 
@@ -114,6 +117,7 @@ class CommentsProvider with ChangeNotifier {
   String? get timeframe => _timeframe;
   ValueNotifier<DateTime?> get currentTimeNotifier => _currentTimeNotifier;
   Set<String> get collapsedComments => Set.unmodifiable(_collapsedComments);
+  Set<String> get loadingMoreReplies => Set.unmodifiable(_loadingMoreReplies);
   double get scrollPosition => _scrollPosition;
   DateTime? get lastRefreshTime => _lastRefreshTime;
 
@@ -331,6 +335,89 @@ class CommentsProvider with ChangeNotifier {
     await loadComments();
   }
 
+  /// Load more replies for a specific comment ("Load more replies" button)
+  ///
+  /// Fetches the subtree rooted at [commentUri] via the getComments
+  /// `parentRkey` parameter and merges it into the in-memory comment tree.
+  /// This surfaces replies hidden by the per-parent sibling cap or the
+  /// nesting-depth cutoff of the original thread fetch.
+  ///
+  /// Returns the freshly fetched subtree so callers (e.g. the focused
+  /// thread screen) can render it even when the node is no longer present
+  /// in the top-level tree. Returns null if a fetch for the same comment is
+  /// already in flight or the server returned no subtree.
+  ///
+  /// Throws ApiException/AuthenticationException on network or auth errors.
+  Future<ThreadViewComment?> loadMoreReplies(String commentUri) async {
+    if (_loadingMoreReplies.contains(commentUri)) {
+      return null;
+    }
+
+    // rkey is the last path segment of the comment AT-URI. Note: Uri.parse
+    // cannot handle at:// URIs (the DID's colons look like an invalid port).
+    final segments = commentUri.split('/');
+    final rkey = segments.length > 1 ? segments.last : '';
+    if (rkey.isEmpty) {
+      if (kDebugMode) {
+        debugPrint('⚠️ loadMoreReplies: malformed comment URI: $commentUri');
+      }
+      return null;
+    }
+
+    _loadingMoreReplies.add(commentUri);
+    _safeNotifyListeners();
+
+    try {
+      final response = await _apiService.getComments(
+        postUri: _postUri,
+        sort: _sort,
+        timeframe: _timeframe,
+        parentRkey: rkey,
+      );
+
+      if (_isDisposed || response.comments.isEmpty) {
+        return null;
+      }
+
+      // The response contains the subtree rooted at the requested comment as
+      // its sole top-level entry. The cursor paginates the parent's direct
+      // replies; if present there are more direct replies beyond this page.
+      final subtree = response.comments.first.copyWith(
+        hasMore: response.cursor != null,
+      );
+
+      _comments = _replaceNode(_comments, subtree);
+
+      // Initialize vote state for the newly fetched replies
+      if (_authProvider.isAuthenticated && _voteProvider != null) {
+        _initializeCommentVoteState(subtree);
+      }
+
+      if (kDebugMode) {
+        debugPrint(
+          '✅ Loaded replies subtree for $rkey '
+          '(${subtree.replies?.length ?? 0} direct replies)',
+        );
+      }
+
+      return subtree;
+    } finally {
+      if (!_isDisposed) {
+        _loadingMoreReplies.remove(commentUri);
+        _safeNotifyListeners();
+      }
+    }
+  }
+
+  /// Returns a copy of [nodes] with the node matching [replacement]'s URI
+  /// replaced by [replacement]. Leaves the tree untouched when absent.
+  List<ThreadViewComment> _replaceNode(
+    List<ThreadViewComment> nodes,
+    ThreadViewComment replacement,
+  ) {
+    return nodes.map((node) => node.replaceDescendant(replacement)).toList();
+  }
+
   /// Change sort order
   ///
   /// Updates the sort option and triggers a refresh of comments.
@@ -501,6 +588,21 @@ class CommentsProvider with ChangeNotifier {
         attempt++;
         await Future<void>.delayed(Duration(milliseconds: 400 * attempt));
         await refreshComments();
+      }
+
+      // Deep replies can sit past the per-parent sibling cap or the depth
+      // cutoff of the top-level refresh. Pull the parent's subtree so the
+      // new reply is merged into the tree at its correct position.
+      if (parentComment != null && !_treeContainsUri(_comments, response.uri)) {
+        try {
+          await loadMoreReplies(parentComment.comment.uri);
+        } on Exception catch (e) {
+          // The comment was created successfully; failing to hydrate the
+          // subtree is not fatal — the reply is reachable via load-more.
+          if (kDebugMode) {
+            debugPrint('⚠️ Failed to hydrate reply subtree: $e');
+          }
+        }
       }
     } on Exception catch (e) {
       if (kDebugMode) {

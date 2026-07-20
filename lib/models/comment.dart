@@ -66,6 +66,55 @@ class ThreadViewComment {
   final CommentView comment;
   final List<ThreadViewComment>? replies;
   final bool hasMore;
+
+  /// Creates a copy with the given fields replaced.
+  ///
+  /// Used when merging a freshly fetched subtree (load-more replies) into
+  /// an existing comment tree without mutating the original nodes.
+  ThreadViewComment copyWith({
+    CommentView? comment,
+    List<ThreadViewComment>? replies,
+    bool? hasMore,
+  }) {
+    return ThreadViewComment(
+      comment: comment ?? this.comment,
+      replies: replies ?? this.replies,
+      hasMore: hasMore ?? this.hasMore,
+    );
+  }
+
+  /// Returns this subtree with the node whose URI matches [replacement]
+  /// (this node or any descendant) replaced by [replacement]. Returns the
+  /// subtree unchanged when no node matches.
+  ThreadViewComment replaceDescendant(ThreadViewComment replacement) {
+    if (comment.uri == replacement.comment.uri) {
+      return replacement;
+    }
+    final currentReplies = replies;
+    if (currentReplies == null || currentReplies.isEmpty) {
+      return this;
+    }
+    return copyWith(
+      replies:
+          currentReplies
+              .map((reply) => reply.replaceDescendant(replacement))
+              .toList(),
+    );
+  }
+
+  /// Depth-first search for a comment with the given [uri] in this subtree.
+  ThreadViewComment? findByUri(String uri) {
+    if (comment.uri == uri) {
+      return this;
+    }
+    for (final reply in replies ?? const <ThreadViewComment>[]) {
+      final found = reply.findByUri(uri);
+      if (found != null) {
+        return found;
+      }
+    }
+    return null;
+  }
 }
 
 /// Record data for a comment, containing the actual content.
