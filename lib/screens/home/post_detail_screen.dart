@@ -898,11 +898,26 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                     color: AppColors.border,
                                   ),
 
-                                  // Comments header with sort dropdown
+                                  // Comments header with sort dropdown.
+                                  // The server-side commentCount includes
+                                  // comments the viewer never sees (deleted,
+                                  // blocked, filtered). When the thread
+                                  // loaded successfully but nothing is
+                                  // renderable, show the empty state instead
+                                  // of a count over an empty list.
                                   CommentsHeader(
                                     key: _commentsHeaderKey,
                                     commentCount:
-                                        widget.post.post.stats.commentCount,
+                                        (!isLoading &&
+                                                error == null &&
+                                                comments.isEmpty &&
+                                                !commentsProvider.hasMore)
+                                            ? 0
+                                            : widget
+                                                .post
+                                                .post
+                                                .stats
+                                                .commentCount,
                                     currentSort: commentsProvider.sort,
                                     onSortChanged: _onSortChanged,
                                   ),
