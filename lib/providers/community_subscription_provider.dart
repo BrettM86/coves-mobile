@@ -52,6 +52,12 @@ class CommunitySubscriptionProvider with ChangeNotifier {
   // Map of community DID -> in-flight request flag
   final Map<String, bool> _pendingRequests = {};
 
+  // Communities the user explicitly toggled this session. Their local state
+  // is authoritative: viewer snapshots fetched right after a toggle can
+  // predate firehose indexing and would otherwise clobber the fresh state
+  // (e.g. Join flips back to "Join" despite a 200 from subscribe).
+  final Set<String> _userToggled = {};
+
   // Loading state for initial subscription load
   bool _isLoading = false;
 
@@ -103,7 +109,10 @@ class CommunitySubscriptionProvider with ChangeNotifier {
     final wasSubscribed = _subscriptions[communityDid] ?? false;
     final willSubscribe = !wasSubscribed;
 
-    // Optimistic update + mark request as pending
+    // Optimistic update + mark request as pending. From here on, viewer
+    // snapshots (which may lag behind the firehose) must not overwrite
+    // this community's state — see setInitialSubscriptionState.
+    _userToggled.add(communityDid);
     _subscriptions[communityDid] = willSubscribe;
     _pendingRequests[communityDid] = true;
     notifyListeners();
@@ -168,6 +177,13 @@ class CommunitySubscriptionProvider with ChangeNotifier {
     required String communityDid,
     required bool isSubscribed,
   }) {
+    // Never overwrite state the user explicitly set this session: a
+    // refetch racing the appview's firehose indexing can still report the
+    // pre-toggle viewer state (observed: subscribe 200 at t, community.get
+    // at t returns subscribed=false, indexing completes at t+1s).
+    if (_userToggled.contains(communityDid)) {
+      return;
+    }
     _subscriptions[communityDid] = isSubscribed;
     // Don't notify listeners - this is just initial state
   }
@@ -227,6 +243,7 @@ class CommunitySubscriptionProvider with ChangeNotifier {
   void clear() {
     _subscriptions.clear();
     _pendingRequests.clear();
+    _userToggled.clear();
     _error = null;
     _isLoading = false;
     notifyListeners();
