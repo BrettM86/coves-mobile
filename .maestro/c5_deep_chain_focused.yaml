@@ -50,9 +50,14 @@ appId: social.coves.dev
 - tapOn:
     text: "Load more replies"
     index: 0
-- extendedWaitUntil:
-    visible: "[\\s\\S]*wide reply 02 of 7[\\s\\S]*"
-    timeout: 20000
+# Since keyed siblings (ee09a95-era ValueKeys) preserve the scroll anchor,
+# freshly loaded earlier siblings render ABOVE the viewport - scroll up to
+# them instead of expecting them to appear in place.
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*wide reply 02 of 7[\\s\\S]*"
+    direction: UP
+    timeout: 30000
 # --- Chain depth 01: load-more continues the chain past the tombstones ---
 - scrollUntilVisible:
     element:
