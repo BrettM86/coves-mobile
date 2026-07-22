@@ -58,3 +58,6 @@ windows/
 
 # Impeccable design context
 .impeccable.md
+
+# Playwright MCP browser session artifacts
+.playwright-mcp/
