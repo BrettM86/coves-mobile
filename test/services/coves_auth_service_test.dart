@@ -51,8 +51,9 @@ void main() {
       test('should throw appropriate error when user cancels sign-in', () async {
         // Note: FlutterWebAuth2.authenticate is not easily mockable as it's a static method
         // This test documents expected behavior when authentication is cancelled
-        // In practice, this would throw with CANCELED/cancelled in the message
-        // The actual implementation catches this and rethrows with user-friendly message
+        // In practice, flutter_web_auth_2 throws PlatformException(code: 'CANCELED')
+        // on every platform; signIn catches that typed signal (scoped to the
+        // authenticate call only) and throws SignInCancelledException
 
         // This test would require integration testing or a wrapper around FlutterWebAuth2
         // Skipping for now as it requires more complex mocking infrastructure

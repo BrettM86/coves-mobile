@@ -170,6 +170,30 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }
+      // ignore: avoid_catching_errors
+    } on ArgumentError catch (e) {
+      // Handle validation failed (e.g. validateAndNormalizeHandle rejecting
+      // 'alice-.bsky.social', which passes the form validator). ArgumentError
+      // is an Error, not an Exception, so without this branch it would escape
+      // the catch chain below and crash. It's a user-input problem, not an
+      // app fault — show the validation message, skip Sentry.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.message is String
+                  ? e.message as String
+                  : 'Invalid handle. Please check it and try again.',
+              style: GoogleFonts.nunito(fontWeight: FontWeight.w500),
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
     } on Exception catch (e, stackTrace) {
       // Log all sign-in errors to Sentry with categorization
       final errorString = e.toString().toLowerCase();

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 
@@ -151,17 +152,31 @@ class CovesAuthService {
 
       // Open browser for OAuth flow
       // Backend redirects to custom scheme: social.coves:/callback
-      final resultUrl = await FlutterWebAuth2.authenticate(
-        url: loginUrl,
-        callbackUrlScheme: OAuthConfig.callbackScheme,
-        options: const FlutterWebAuth2Options(
-          preferEphemeral: true, // Don't persist browser session
-          timeout: 300, // 5 minutes
-        ),
-      );
+      final String resultUrl;
+      try {
+        resultUrl = await FlutterWebAuth2.authenticate(
+          url: loginUrl,
+          callbackUrlScheme: OAuthConfig.callbackScheme,
+          options: const FlutterWebAuth2Options(
+            preferEphemeral: true, // Don't persist browser session
+            timeout: 300, // 5 minutes
+          ),
+        );
+      } on PlatformException catch (e) {
+        // flutter_web_auth_2 signals user cancellation (browser dismissed,
+        // system auth sheet cancelled) as PlatformException(code: 'CANCELED')
+        // on every platform. Detect it via that typed signal, scoped to the
+        // authenticate call ONLY, so exceptions from parseCallbackUrl —
+        // which can embed server-controlled text like "cancelled" — are
+        // never reclassified as a quiet user cancel.
+        if (e.code == 'CANCELED') {
+          throw const SignInCancelledException();
+        }
+        rethrow;
+      }
 
       if (kDebugMode) {
-        final redactedUrl = _redactSensitiveParams(resultUrl);
+        final redactedUrl = redactSensitiveParams(resultUrl);
         print('Received callback URL: $redactedUrl');
       }
 
@@ -194,12 +209,6 @@ class CovesAuthService {
         print('Sign-in failed: $e');
       }
 
-      // Check for user cancellation (browser tab closed / system CANCELED)
-      if (e.toString().contains('CANCELED') ||
-          e.toString().contains('cancelled')) {
-        throw const SignInCancelledException();
-      }
-
       throw Exception('Sign in failed: $e');
     }
   }
@@ -214,25 +223,73 @@ class CovesAuthService {
   /// [FormatException].
   @visibleForTesting
   static CovesSession parseCallbackUrl(String resultUrl) {
-    final callbackUri = Uri.parse(resultUrl);
+    final Uri callbackUri;
+    final Map<String, String> queryParameters;
+    try {
+      callbackUri = Uri.parse(resultUrl);
+      // Accessing queryParameters forces percent/UTF-8 decoding, which can
+      // throw ArgumentError (an Error, not Exception — it would escape every
+      // `on Exception` chain and crash) or a FormatException whose message
+      // echoes the raw URL (including the token). Convert both to a
+      // FormatException with a safe, fixed message.
+      queryParameters = callbackUri.queryParameters;
+    } on FormatException {
+      throw const FormatException('Malformed callback URL');
+      // Intentional Error->Exception conversion at the untrusted-input
+      // boundary so malformed callbacks can't crash the app:
+      // ignore: avoid_catching_errors
+    } on ArgumentError {
+      throw const FormatException(
+        'Malformed callback URL: invalid percent-encoding',
+      );
+    }
 
-    final oauthError = callbackUri.queryParameters['error'];
-    if (oauthError != null && oauthError.isNotEmpty) {
+    // The error/error_description params are attacker-influenceable (any app
+    // can fire the social.coves custom scheme), so sanitize before embedding
+    // them in exception messages that flow to Sentry/logs.
+    final oauthError = _sanitizeCallbackText(queryParameters['error']);
+    if (oauthError != null) {
       if (kDebugMode) {
-        // Error codes/descriptions contain no secrets — safe to log.
+        // Sanitized error codes contain no secrets — safe to log.
         print('OAuth callback returned error: $oauthError');
       }
       if (oauthError == 'access_denied') {
         throw const SignInCancelledException();
       }
-      final description = callbackUri.queryParameters['error_description'];
-      final detail = (description == null || description.isEmpty)
-          ? ''
-          : ' ($description)';
+      final description = _sanitizeCallbackText(
+        queryParameters['error_description'],
+      );
+      final detail = description == null ? '' : ' ($description)';
       throw Exception('Authorization server error: $oauthError$detail');
     }
 
-    return CovesSession.fromCallbackUri(callbackUri);
+    try {
+      return CovesSession.fromCallbackUri(callbackUri);
+      // ignore: avoid_catching_errors
+    } on ArgumentError {
+      // Uri.decodeComponent inside fromCallbackUri throws ArgumentError on
+      // malformed percent-encoding (e.g. token=%ZZ) — convert it to a
+      // catchable FormatException so it can't crash the app.
+      throw const FormatException(
+        'Malformed callback URL: invalid percent-encoding',
+      );
+    }
+  }
+
+  /// Sanitize attacker-influenceable callback text before it is embedded in
+  /// exception messages: strip control characters (including newlines) and
+  /// cap the length so hostile callbacks can't inject into Sentry/logs.
+  ///
+  /// Returns null for null, empty, or control-character-only input.
+  static String? _sanitizeCallbackText(String? value) {
+    if (value == null) {
+      return null;
+    }
+    var sanitized = value.replaceAll(RegExp(r'[\x00-\x1f\x7f]'), '');
+    if (sanitized.length > 200) {
+      sanitized = '${sanitized.substring(0, 200)}...';
+    }
+    return sanitized.isEmpty ? null : sanitized;
   }
 
   /// Restore a previous session from secure storage
@@ -586,7 +643,8 @@ class CovesAuthService {
   ///
   /// Non-sensitive params like DID, handle, and session_id are preserved
   /// as they're useful for debugging without being security-sensitive.
-  String _redactSensitiveParams(String url) {
+  @visibleForTesting
+  static String redactSensitiveParams(String url) {
     // Replace token=xxx with token=[REDACTED]
     // Matches token= followed by any non-whitespace, non-ampersand characters
     return url.replaceAllMapped(

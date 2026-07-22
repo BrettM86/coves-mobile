@@ -130,6 +130,10 @@ class AuthProvider with ChangeNotifier {
         print('   Handle: ${session.handle ?? trimmedHandle}');
         print('   DID: ${session.did}');
       }
+    } on SignInCancelledException {
+      // Cancel is not an error: don't record _error or flip auth state.
+      // The finally block still clears _isLoading.
+      rethrow;
     } catch (e) {
       _error = e.toString();
       _isAuthenticated = false;

@@ -240,10 +240,16 @@ void main() {
         },
       );
 
-      expect(
-        () => apiService.listCommunities(),
-        throwsA(isA<NetworkException>()),
-      );
+      // Assert retry exhaustion actually happened so fixture drift can't
+      // silently disable the RetryInterceptor again.
+      try {
+        await apiService.listCommunities();
+        fail('Expected NetworkException');
+      } on NetworkException catch (e) {
+        final dioError = e.originalError as DioException;
+        expect(dioError.message, contains('failed after 2 retries'));
+        expect(dioError.requestOptions.extra['retriesExhausted'], isTrue);
+      }
     });
   });
 
@@ -476,13 +482,19 @@ void main() {
         },
       );
 
-      expect(
-        () => apiService.createPost(
+      // Assert retry exhaustion actually happened so fixture drift can't
+      // silently disable the RetryInterceptor again.
+      try {
+        await apiService.createPost(
           community: 'did:plc:community1',
           title: 'Test',
-        ),
-        throwsA(isA<NetworkException>()),
-      );
+        );
+        fail('Expected NetworkException');
+      } on NetworkException catch (e) {
+        final dioError = e.originalError as DioException;
+        expect(dioError.message, contains('failed after 2 retries'));
+        expect(dioError.requestOptions.extra['retriesExhausted'], isTrue);
+      }
     });
   });
 }

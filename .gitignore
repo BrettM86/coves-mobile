@@ -61,3 +61,6 @@ windows/
 
 # Playwright MCP browser session artifacts
 .playwright-mcp/
+
+# Subagent persistent memory (local only)
+.claude/agent-memory/

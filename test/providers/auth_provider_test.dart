@@ -95,6 +95,32 @@ void main() {
         expect(authProvider.isAuthenticated, false);
       });
 
+      test(
+        'should rethrow SignInCancelledException without setting error state',
+        () async {
+          when(
+            mockAuthService.signIn('alice.bsky.social'),
+          ).thenThrow(const SignInCancelledException());
+
+          // Record the error value at every notification: no notification
+          // should ever carry an error state for a user cancel.
+          final observedErrors = <String?>[];
+          authProvider.addListener(() {
+            observedErrors.add(authProvider.error);
+          });
+
+          await expectLater(
+            authProvider.signIn('alice.bsky.social'),
+            throwsA(isA<SignInCancelledException>()),
+          );
+
+          expect(authProvider.error, null);
+          expect(authProvider.isLoading, false);
+          expect(authProvider.isAuthenticated, false);
+          expect(observedErrors, everyElement(isNull));
+        },
+      );
+
       test('should handle sign in errors', () async {
         when(
           mockAuthService.signIn('invalid.handle'),

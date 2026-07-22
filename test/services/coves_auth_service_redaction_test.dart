@@ -6,28 +6,22 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// Verifies that sensitive parameters (tokens) are properly redacted
 /// from debug logs while preserving useful debugging information.
+///
+/// Exercises the real production helper
+/// [CovesAuthService.redactSensitiveParams] so regressions in the
+/// production regex are caught here.
 void main() {
-  setUp(() {
-    // Reset singleton state before each test
-    CovesAuthService.resetInstance();
-  });
+  // Reset singleton state around each test
+  setUp(CovesAuthService.resetInstance);
 
-  tearDown(() {
-    CovesAuthService.resetInstance();
-  });
+  tearDown(CovesAuthService.resetInstance);
 
-  group('_redactSensitiveParams', () {
+  group('redactSensitiveParams', () {
     test('should redact token parameter from callback URL', () {
       const testUrl =
           'social.coves:/callback?token=sealed_token_abc123&did=did:plc:test123&session_id=sess-456&handle=alice.bsky.social';
 
-      // Use reflection to call private method
-      // Since we can't directly call private methods, we'll test the behavior
-      // through the public signIn method which logs the redacted URL
-      final redacted = testUrl.replaceAllMapped(
-        RegExp(r'token=([^&\s]+)'),
-        (match) => 'token=[REDACTED]',
-      );
+      final redacted = CovesAuthService.redactSensitiveParams(testUrl);
 
       expect(
         redacted,
@@ -41,10 +35,7 @@ void main() {
         const testUrl =
             'social.coves:/callback?token=sealed_token_abc123&did=did:plc:test123&session_id=sess-456&handle=alice.bsky.social';
 
-        final redacted = testUrl.replaceAllMapped(
-          RegExp(r'token=([^&\s]+)'),
-          (match) => 'token=[REDACTED]',
-        );
+        final redacted = CovesAuthService.redactSensitiveParams(testUrl);
 
         expect(redacted, contains('did=did:plc:test123'));
         expect(redacted, contains('session_id=sess-456'));
@@ -57,10 +48,7 @@ void main() {
       const testUrl =
           'social.coves:/callback?token=first_token&did=did:plc:test';
 
-      final redacted = testUrl.replaceAllMapped(
-        RegExp(r'token=([^&\s]+)'),
-        (match) => 'token=[REDACTED]',
-      );
+      final redacted = CovesAuthService.redactSensitiveParams(testUrl);
 
       expect(
         redacted,
@@ -72,10 +60,7 @@ void main() {
       const testUrl =
           'social.coves:/callback?did=did:plc:test&token=last_token';
 
-      final redacted = testUrl.replaceAllMapped(
-        RegExp(r'token=([^&\s]+)'),
-        (match) => 'token=[REDACTED]',
-      );
+      final redacted = CovesAuthService.redactSensitiveParams(testUrl);
 
       expect(
         redacted,
@@ -86,10 +71,7 @@ void main() {
     test('should handle token as only parameter', () {
       const testUrl = 'social.coves:/callback?token=only_token';
 
-      final redacted = testUrl.replaceAllMapped(
-        RegExp(r'token=([^&\s]+)'),
-        (match) => 'token=[REDACTED]',
-      );
+      final redacted = CovesAuthService.redactSensitiveParams(testUrl);
 
       expect(redacted, 'social.coves:/callback?token=[REDACTED]');
     });
@@ -98,10 +80,7 @@ void main() {
       const testUrl =
           'social.coves:/callback?token=encoded%2Btoken%3D123&did=did:plc:test';
 
-      final redacted = testUrl.replaceAllMapped(
-        RegExp(r'token=([^&\s]+)'),
-        (match) => 'token=[REDACTED]',
-      );
+      final redacted = CovesAuthService.redactSensitiveParams(testUrl);
 
       expect(
         redacted,
@@ -113,13 +92,10 @@ void main() {
     test('should handle long token values', () {
       const longToken =
           'very_long_sealed_token_with_many_characters_1234567890abcdef';
-      final testUrl =
+      const testUrl =
           'social.coves:/callback?token=$longToken&did=did:plc:test';
 
-      final redacted = testUrl.replaceAllMapped(
-        RegExp(r'token=([^&\s]+)'),
-        (match) => 'token=[REDACTED]',
-      );
+      final redacted = CovesAuthService.redactSensitiveParams(testUrl);
 
       expect(
         redacted,
@@ -132,10 +108,7 @@ void main() {
       const testUrl =
           'social.coves:/callback?did=did:plc:test&handle=alice.bsky.social';
 
-      final redacted = testUrl.replaceAllMapped(
-        RegExp(r'token=([^&\s]+)'),
-        (match) => 'token=[REDACTED]',
-      );
+      final redacted = CovesAuthService.redactSensitiveParams(testUrl);
 
       // Should remain unchanged if no token present
       expect(redacted, testUrl);
@@ -144,10 +117,7 @@ void main() {
     test('should handle malformed URLs gracefully', () {
       const testUrl = 'social.coves:/callback?token=';
 
-      final redacted = testUrl.replaceAllMapped(
-        RegExp(r'token=([^&\s]+)'),
-        (match) => 'token=[REDACTED]',
-      );
+      final redacted = CovesAuthService.redactSensitiveParams(testUrl);
 
       // Empty token value - regex won't match, URL stays the same
       expect(redacted, testUrl);

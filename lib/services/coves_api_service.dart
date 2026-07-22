@@ -194,7 +194,10 @@ class CovesApiService {
             debugPrint('❌ API Error: ${error.message}');
             if (error.response != null) {
               debugPrint('   Status: ${error.response?.statusCode}');
-              debugPrint('   Data: ${error.response?.data}');
+              // Response data can echo credentials — redact before printing
+              debugPrint(
+                redactBearerTokens('   Data: ${error.response?.data}'),
+              );
             }
           }
           return handler.next(error);
@@ -210,20 +213,27 @@ class CovesApiService {
         LogInterceptor(
           requestBody: true,
           responseBody: true,
-          logPrint: (obj) => debugPrint(_redactBearerTokens(obj.toString())),
+          logPrint: (obj) => debugPrint(redactBearerTokens(obj.toString())),
         ),
       );
     }
   }
 
+  /// Matches a bearer scheme (case-insensitive) followed by any run of
+  /// non-whitespace characters. Greedy on purpose: a charset-based match
+  /// would leak the tail of tokens containing characters outside the set.
+  static final RegExp _bearerTokenPattern = RegExp(
+    r'Bearer\s+\S+',
+    caseSensitive: false,
+  );
+
   /// Replaces bearer token values with a placeholder so credentials never
   /// appear in logs.
-  static String _redactBearerTokens(String line) {
-    return line.replaceAll(
-      RegExp('Bearer [A-Za-z0-9._~+/=-]+'),
-      'Bearer [REDACTED]',
-    );
+  @visibleForTesting
+  static String redactBearerTokens(String line) {
+    return line.replaceAll(_bearerTokenPattern, 'Bearer [REDACTED]');
   }
+
   /// Maximum number of URIs per [getPosts] call, per the
   /// social.coves.community.post.get lexicon (`uris` has `maxLength: 25`).
   static const int maxPostGetUris = 25;
@@ -438,7 +448,7 @@ class CovesApiService {
         'limit': limit,
       };
 
-      if (parentRkey != null) {
+      if (parentRkey != null && parentRkey.isNotEmpty) {
         queryParams['parentRkey'] = parentRkey;
       }
 
@@ -1282,7 +1292,8 @@ class CovesApiService {
       debugPrint('❌ Failed to fetch $operation: ${e.message}');
       if (e.response != null) {
         debugPrint('   Status: ${e.response?.statusCode}');
-        debugPrint('   Data: ${e.response?.data}');
+        // Response data can echo credentials — redact before printing
+        debugPrint(redactBearerTokens('   Data: ${e.response?.data}'));
       }
     }
 

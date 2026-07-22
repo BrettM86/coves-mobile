@@ -285,6 +285,95 @@ void main() {
       expect(response, isA<CommentsResponse>());
     });
 
+    test('should send parentRkey as a query parameter when provided', () async {
+      const postUri = 'at://did:plc:test/social.coves.post.record/123';
+      const parentRkey = '3kparentrkey';
+
+      final mockResponse = {
+        'post': {'uri': postUri},
+        'cursor': null,
+        'comments': [],
+      };
+
+      // DioAdapter matches the full query-parameter map, so this only
+      // replies if 'parentRkey' actually reaches the wire with this value.
+      dioAdapter.onGet(
+        '/xrpc/social.coves.community.comment.getComments',
+        (server) => server.reply(200, mockResponse),
+        queryParameters: {
+          'post': postUri,
+          'sort': 'hot',
+          'depth': 10,
+          'limit': 50,
+          'parentRkey': parentRkey,
+        },
+      );
+
+      final response = await apiService.getComments(
+        postUri: postUri,
+        parentRkey: parentRkey,
+      );
+
+      expect(response, isA<CommentsResponse>());
+    });
+
+    test('should omit parentRkey from query when null', () async {
+      const postUri = 'at://did:plc:test/social.coves.post.record/123';
+
+      final mockResponse = {
+        'post': {'uri': postUri},
+        'cursor': null,
+        'comments': [],
+      };
+
+      // Mock has no 'parentRkey' key — the request only matches if the
+      // parameter is omitted entirely.
+      dioAdapter.onGet(
+        '/xrpc/social.coves.community.comment.getComments',
+        (server) => server.reply(200, mockResponse),
+        queryParameters: {
+          'post': postUri,
+          'sort': 'hot',
+          'depth': 10,
+          'limit': 50,
+        },
+      );
+
+      final response = await apiService.getComments(postUri: postUri);
+
+      expect(response, isA<CommentsResponse>());
+    });
+
+    test('should omit parentRkey from query when empty', () async {
+      const postUri = 'at://did:plc:test/social.coves.post.record/123';
+
+      final mockResponse = {
+        'post': {'uri': postUri},
+        'cursor': null,
+        'comments': [],
+      };
+
+      // Mock has no 'parentRkey' key — the request only matches if the
+      // empty string is dropped instead of sent as parentRkey=.
+      dioAdapter.onGet(
+        '/xrpc/social.coves.community.comment.getComments',
+        (server) => server.reply(200, mockResponse),
+        queryParameters: {
+          'post': postUri,
+          'sort': 'hot',
+          'depth': 10,
+          'limit': 50,
+        },
+      );
+
+      final response = await apiService.getComments(
+        postUri: postUri,
+        parentRkey: '',
+      );
+
+      expect(response, isA<CommentsResponse>());
+    });
+
     test('should handle 404 error', () async {
       const postUri = 'at://did:plc:test/social.coves.post.record/nonexistent';
 
@@ -363,10 +452,16 @@ void main() {
         },
       );
 
-      expect(
-        () => apiService.getComments(postUri: postUri),
-        throwsA(isA<NetworkException>()),
-      );
+      // Assert retry exhaustion actually happened so fixture drift can't
+      // silently disable the RetryInterceptor again.
+      try {
+        await apiService.getComments(postUri: postUri);
+        fail('Expected NetworkException');
+      } on NetworkException catch (e) {
+        final dioError = e.originalError as DioException;
+        expect(dioError.message, contains('failed after 2 retries'));
+        expect(dioError.requestOptions.extra['retriesExhausted'], isTrue);
+      }
     });
 
     test('should handle network connection error', () async {
@@ -401,10 +496,16 @@ void main() {
         },
       );
 
-      expect(
-        () => apiService.getComments(postUri: postUri),
-        throwsA(isA<NetworkException>()),
-      );
+      // Assert retry exhaustion actually happened so fixture drift can't
+      // silently disable the RetryInterceptor again.
+      try {
+        await apiService.getComments(postUri: postUri);
+        fail('Expected NetworkException');
+      } on NetworkException catch (e) {
+        final dioError = e.originalError as DioException;
+        expect(dioError.message, contains('failed after 2 retries'));
+        expect(dioError.requestOptions.extra['retriesExhausted'], isTrue);
+      }
     });
 
     test('should handle invalid JSON response', () async {
