@@ -64,12 +64,18 @@ void main() {
       expect(emptyComment.content, '');
       expect(emptyComment.record, isNotNull);
     });
+
+    test('isTombstoned is set for deleted comments only', () {
+      // CommentCard renders the tombstone placeholder off this getter.
+      // (The author == null arm is defensive: CommentView asserts that
+      // non-deleted comments always carry an author.)
+      expect(createComment(isDeleted: true).isTombstoned, isTrue);
+      expect(createComment().isTombstoned, isFalse);
+    });
   });
 
-  // Widget tests are skipped due to Provider type compatibility issues.
-  // See comment_thread_test.dart for similar pattern.
-  // The deleted comment UI is verified through:
-  // 1. Model tests above confirming data structure
-  // 2. Manual testing
-  // 3. The CommentCard code that checks isDeleted before rendering
+  // CommentCard rendering (including the tombstone placeholder for deleted
+  // comments) is covered by the widget tests in comment_thread_test.dart,
+  // which drive CommentCard through real providers over shared generated
+  // mocks (test/test_helpers/test_mocks.dart).
 }

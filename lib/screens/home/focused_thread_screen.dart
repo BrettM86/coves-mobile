@@ -9,6 +9,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
 import '../../widgets/comment_card.dart';
 import '../../widgets/comment_thread.dart';
+import '../../widgets/loading_error_states.dart';
 import '../../widgets/status_bar_overlay.dart';
 import '../compose/reply_screen.dart';
 
@@ -90,12 +91,25 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _anchorKey = GlobalKey();
 
-  /// Live subtree rooted at the anchor comment.
+  /// Local fallback subtree rooted at the anchor comment.
   ///
   /// Starts as the snapshot passed from the parent thread (which may be
   /// truncated by the original fetch depth) and is refreshed from the
-  /// server so deep replies and newly posted replies show up.
+  /// server so deep replies and newly posted replies show up. The build
+  /// method prefers the provider's live copy of the anchor node when it is
+  /// still present in the loaded tree; this is the fallback for anchors
+  /// outside it.
   late ThreadViewComment _thread;
+
+  /// Monotonic sequence for subtree fetches so an older in-flight response
+  /// can never overwrite the result of a newer one.
+  int _refreshSeq = 0;
+
+  /// Whether the most recent anchor-subtree hydration failed.
+  ///
+  /// Only surfaced in the UI when the snapshot has no replies to fall back
+  /// on (otherwise the stale-but-usable subtree stays visible silently).
+  bool _hydrationFailed = false;
 
   @override
   void initState() {
@@ -112,19 +126,33 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   ///
   /// Also merges the subtree into the parent CommentsProvider tree (when
   /// the anchor is still present there), keeping the full thread in sync.
-  /// Failures are non-fatal: the current (possibly truncated) subtree
-  /// remains visible.
+  /// Failures are non-fatal when a snapshot with replies is already
+  /// visible; with an empty snapshot a retryable error state is shown.
   Future<void> _refreshSubtree() async {
+    if (!mounted) {
+      return;
+    }
     final provider = context.read<CommentsProvider>();
+    final seq = ++_refreshSeq;
     try {
-      final subtree = await provider.loadMoreReplies(_thread.comment.uri);
-      if (subtree != null && mounted) {
-        setState(() => _thread = subtree);
+      final subtree = await provider.loadMoreReplies(widget.thread.comment.uri);
+      if (!mounted || seq != _refreshSeq) {
+        return;
       }
+      setState(() {
+        _hydrationFailed = false;
+        if (subtree != null) {
+          _thread = subtree;
+        }
+      });
     } on Exception catch (e) {
       if (kDebugMode) {
         debugPrint('⚠️ Failed to refresh focused subtree: $e');
       }
+      if (!mounted || seq != _refreshSeq) {
+        return;
+      }
+      setState(() => _hydrationFailed = true);
     }
   }
 
@@ -174,6 +202,9 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
           comment: comment,
           onSubmit: (content, facets) async {
             await widget.onReply(content, facets, comment);
+            if (!mounted) {
+              return;
+            }
             // Re-fetch the subtree so the new reply appears in this view
             await _refreshSubtree();
           },
@@ -187,9 +218,12 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   Future<void> _onLoadMoreReplies(ThreadViewComment node) async {
     final provider = context.read<CommentsProvider>();
     final messenger = ScaffoldMessenger.of(context);
+    // Skip the local merge when a newer anchor refresh starts while this
+    // fetch is in flight (the refreshed subtree supersedes it).
+    final seq = _refreshSeq;
     try {
       final subtree = await provider.loadMoreReplies(node.comment.uri);
-      if (subtree != null && mounted) {
+      if (subtree != null && mounted && seq == _refreshSeq) {
         setState(() => _thread = _thread.replaceDescendant(subtree));
       }
     } on Exception {
@@ -207,6 +241,9 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   /// Delete a comment, then refresh both the full thread and this subtree
   Future<void> _onDelete(String uri) async {
     await context.read<CommentsProvider>().deleteComment(commentUri: uri);
+    if (!mounted) {
+      return;
+    }
     await _refreshSubtree();
   }
 
@@ -231,6 +268,19 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   Widget build(BuildContext context) {
     // Rebuilds on provider changes (e.g. per-node reply-loading spinners)
     final commentsProvider = context.watch<CommentsProvider>();
+
+    // Prefer the provider's live copy of the anchor node when it is still
+    // present in the loaded tree, so deletes, sort changes, and hydrations
+    // performed elsewhere reach this screen. The local snapshot is the
+    // fallback for anchors outside the provider's loaded tree.
+    var thread = _thread;
+    for (final root in commentsProvider.comments) {
+      final live = root.findByUri(widget.thread.comment.uri);
+      if (live != null) {
+        thread = live;
+        break;
+      }
+    }
 
     // Calculate minimum bottom padding to allow anchor to scroll to top
     final screenHeight = MediaQuery.of(context).size.height;
@@ -270,13 +320,14 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
                   // Anchor comment (the focused comment) - made prominent
                   KeyedSubtree(
                     key: _anchorKey,
-                    child: _buildAnchorComment(),
+                    child: _buildAnchorComment(thread),
                   ),
 
                   // Replies (if any)
-                  if (_thread.replies != null && _thread.replies!.isNotEmpty)
-                    ..._thread.replies!.map((reply) {
+                  if (thread.replies != null && thread.replies!.isNotEmpty)
+                    ...thread.replies!.map((reply) {
                       return CommentThread(
+                        key: ValueKey(reply.comment.uri),
                         thread: reply,
                         depth: 1,
                         maxDepth: 6,
@@ -287,14 +338,31 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
                         onLoadMoreReplies: _onLoadMoreReplies,
                         loadingMoreReplies:
                             commentsProvider.loadingMoreReplies,
-                        ancestors: [_thread],
+                        ancestors: [thread],
                         onDelete: _onDelete,
                       );
                     }),
 
-                  // Empty state if no replies
-                  if (_thread.replies == null || _thread.replies!.isEmpty)
-                    _buildNoReplies(),
+                  // More direct replies to the anchor beyond this page
+                  if (thread.hasMore &&
+                      !_collapsedComments.contains(thread.comment.uri))
+                    LoadMoreRepliesButton(
+                      depth: 0,
+                      isLoading: commentsProvider.loadingMoreReplies
+                          .contains(thread.comment.uri),
+                      onTap: () => _onLoadMoreReplies(thread),
+                    ),
+
+                  // Empty state (or retryable error) if no replies loaded
+                  if (thread.replies == null || thread.replies!.isEmpty) ...[
+                    if (_hydrationFailed)
+                      InlineError(
+                        message: 'Could not load replies. Please try again.',
+                        onRetry: _refreshSubtree,
+                      )
+                    else if (!thread.hasMore)
+                      _buildNoReplies(),
+                  ],
 
                   // Bottom padding to allow anchor to scroll to top
                   SizedBox(height: minBottomPadding),
@@ -324,7 +392,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   }
 
   /// Build the anchor comment (the focused comment) with prominent styling
-  Widget _buildAnchorComment() {
+  Widget _buildAnchorComment(ThreadViewComment thread) {
     // Note: CommentCard has its own Consumer<VoteProvider> for vote state
     return Container(
       decoration: BoxDecoration(
@@ -338,12 +406,12 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
         ),
       ),
       child: CommentCard(
-        comment: _thread.comment,
-        onTap: () => _openReplyScreen(_thread),
-        onLongPress: () => _toggleCollapsed(_thread.comment.uri),
-        isCollapsed: _collapsedComments.contains(_thread.comment.uri),
-        collapsedCount: _collapsedComments.contains(_thread.comment.uri)
-            ? _thread.comment.stats.replyCount
+        comment: thread.comment,
+        onTap: () => _openReplyScreen(thread),
+        onLongPress: () => _toggleCollapsed(thread.comment.uri),
+        isCollapsed: _collapsedComments.contains(thread.comment.uri),
+        collapsedCount: _collapsedComments.contains(thread.comment.uri)
+            ? thread.comment.stats.replyCount
             : 0,
         onDelete: _onDelete,
       ),

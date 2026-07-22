@@ -42,9 +42,10 @@ class CommentsResponse {
 class ThreadViewComment {
   ThreadViewComment({
     required this.comment,
-    this.replies,
+    List<ThreadViewComment>? replies,
     this.hasMore = false,
-  });
+    this.repliesCursor,
+  }) : replies = replies == null ? null : List.unmodifiable(replies);
 
   factory ThreadViewComment.fromJson(Map<String, dynamic> json) {
     return ThreadViewComment(
@@ -64,28 +65,51 @@ class ThreadViewComment {
   }
 
   final CommentView comment;
+
+  /// Direct replies to this comment. Unmodifiable (wrapped at construction)
+  /// so the tree stays immutable-by-convention.
   final List<ThreadViewComment>? replies;
   final bool hasMore;
+
+  /// Pagination cursor for this node's direct replies.
+  ///
+  /// Client-side state (never present in server JSON): set when a
+  /// load-more-replies subtree fetch returns a cursor, and passed back on
+  /// the next fetch so subsequent pages of direct replies can be appended
+  /// rather than refetching page 1 forever. Null when there is no next page.
+  final String? repliesCursor;
 
   /// Creates a copy with the given fields replaced.
   ///
   /// Used when merging a freshly fetched subtree (load-more replies) into
   /// an existing comment tree without mutating the original nodes.
+  ///
+  /// [repliesCursor] uses a sentinel so callers can distinguish "not
+  /// provided" (keep current value) from "explicitly set to null" (clear
+  /// the cursor, e.g. when the last page has been fetched).
   ThreadViewComment copyWith({
     CommentView? comment,
     List<ThreadViewComment>? replies,
     bool? hasMore,
+    Object? repliesCursor = _sentinel,
   }) {
     return ThreadViewComment(
       comment: comment ?? this.comment,
       replies: replies ?? this.replies,
       hasMore: hasMore ?? this.hasMore,
+      repliesCursor:
+          repliesCursor == _sentinel
+              ? this.repliesCursor
+              : repliesCursor as String?,
     );
   }
 
   /// Returns this subtree with the node whose URI matches [replacement]
-  /// (this node or any descendant) replaced by [replacement]. Returns the
-  /// subtree unchanged when no node matches.
+  /// (this node or any descendant) replaced by [replacement].
+  ///
+  /// Preserves reference identity on a miss: when no node matches, returns
+  /// `this` (and untouched sibling branches keep their identity), so callers
+  /// can detect a no-op merge via `identical(result, root)`.
   ThreadViewComment replaceDescendant(ThreadViewComment replacement) {
     if (comment.uri == replacement.comment.uri) {
       return replacement;
@@ -94,12 +118,19 @@ class ThreadViewComment {
     if (currentReplies == null || currentReplies.isEmpty) {
       return this;
     }
-    return copyWith(
-      replies:
-          currentReplies
-              .map((reply) => reply.replaceDescendant(replacement))
-              .toList(),
-    );
+    var changed = false;
+    final mapped = <ThreadViewComment>[];
+    for (final reply in currentReplies) {
+      final result = reply.replaceDescendant(replacement);
+      if (!identical(result, reply)) {
+        changed = true;
+      }
+      mapped.add(result);
+    }
+    if (!changed) {
+      return this;
+    }
+    return copyWith(replies: mapped);
   }
 
   /// Depth-first search for a comment with the given [uri] in this subtree.
@@ -156,6 +187,10 @@ class CommentView {
   }) : assert(
          !isDeleted || record == null,
          'Deleted comments must have null record',
+       ),
+       assert(
+         author != null || isDeleted,
+         'Non-deleted comments must have an author',
        );
 
   factory CommentView.fromJson(Map<String, dynamic> json) {
@@ -257,6 +292,13 @@ class CommentView {
   ///
   /// Returns null when [record] is null or when the comment has no facets.
   List<RichTextFacet>? get contentFacets => record?.facets;
+
+  /// Whether this comment should render as a tombstone (deleted placeholder).
+  ///
+  /// True when the comment is deleted or the backend withheld the author
+  /// (which it only does for deleted content). Prefer this over checking
+  /// [isDeleted] alone when deciding whether author info can be rendered.
+  bool get isTombstoned => isDeleted || author == null;
 }
 
 class CommentRef {

@@ -9,10 +9,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
-// Reuse the generated mockito mocks (real provider types) from the
-// comments provider tests so Consumer<AuthProvider>/Consumer<VoteProvider>
-// lookups inside CommentCard resolve correctly.
-import '../providers/comments_provider_test.mocks.dart';
+// Shared generated mockito mocks (real provider types) so
+// Consumer<AuthProvider>/Consumer<VoteProvider> lookups inside CommentCard
+// resolve correctly.
+import '../test_helpers/test_mocks.dart';
 
 // NOTE: CommentThread.countDescendants was removed in e134a88 — the widget
 // now uses the API-provided `stats.replyCount` for collapsed/continue-thread
@@ -80,6 +80,8 @@ void main() {
     bool isDeleted = false,
     String? deletionReason,
     List<ThreadViewComment>? replies,
+    bool hasMore = false,
+    String? repliesCursor,
   }) {
     return ThreadViewComment(
       comment: createComment(
@@ -90,6 +92,8 @@ void main() {
         deletionReason: deletionReason,
       ),
       replies: replies,
+      hasMore: hasMore,
+      repliesCursor: repliesCursor,
     );
   }
 
@@ -100,6 +104,8 @@ void main() {
     void Function(ThreadViewComment)? onCommentTap,
     void Function(String uri)? onCollapseToggle,
     void Function(ThreadViewComment, List<ThreadViewComment>)? onContinueThread,
+    void Function(ThreadViewComment)? onLoadMoreReplies,
+    Set<String> loadingMoreReplies = const {},
     Set<String> collapsedComments = const {},
     List<ThreadViewComment> ancestors = const [],
   }) {
@@ -119,6 +125,8 @@ void main() {
               onCommentTap: onCommentTap,
               onCollapseToggle: onCollapseToggle,
               onContinueThread: onContinueThread,
+              onLoadMoreReplies: onLoadMoreReplies,
+              loadingMoreReplies: loadingMoreReplies,
               collapsedComments: collapsedComments,
               ancestors: ancestors,
             ),
@@ -302,6 +310,78 @@ void main() {
       // Placeholder shown instead of content; reply still renders
       expect(find.text('[deleted by user]'), findsOneWidget);
       expect(find.text('Surviving reply'), findsOneWidget);
+    });
+  });
+
+  group('Load more replies button', () {
+    testWidgets('renders when the thread has more replies', (tester) async {
+      final thread = createThread(
+        uri: 'comment/1',
+        content: 'Parent',
+        hasMore: true,
+      );
+
+      await tester.pumpWidget(createTestWidget(thread));
+
+      expect(find.text('Load more replies'), findsOneWidget);
+      expect(find.byIcon(Icons.add_circle_outline), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
+
+    testWidgets('does not render without more replies', (tester) async {
+      final thread = createThread(uri: 'comment/1', content: 'Parent');
+
+      await tester.pumpWidget(createTestWidget(thread));
+
+      expect(find.text('Load more replies'), findsNothing);
+    });
+
+    testWidgets('tap invokes onLoadMoreReplies with the thread',
+        (tester) async {
+      ThreadViewComment? tapped;
+      final thread = createThread(
+        uri: 'comment/1',
+        content: 'Parent',
+        hasMore: true,
+      );
+
+      await tester.pumpWidget(createTestWidget(
+        thread,
+        onLoadMoreReplies: (t) => tapped = t,
+      ));
+
+      await tester.tap(find.text('Load more replies'));
+      await tester.pump();
+
+      expect(tapped, isNotNull);
+      expect(tapped!.comment.uri, 'comment/1');
+    });
+
+    testWidgets(
+        'in-flight fetch shows spinner, loading label, and disables tap',
+        (tester) async {
+      var tapCount = 0;
+      final thread = createThread(
+        uri: 'comment/1',
+        content: 'Parent',
+        hasMore: true,
+      );
+
+      await tester.pumpWidget(createTestWidget(
+        thread,
+        onLoadMoreReplies: (_) => tapCount++,
+        loadingMoreReplies: {'comment/1'},
+      ));
+
+      expect(find.text('Loading replies…'), findsOneWidget);
+      expect(find.text('Load more replies'), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byIcon(Icons.add_circle_outline), findsNothing);
+
+      // Tap is disabled while loading
+      await tester.tap(find.text('Loading replies…'), warnIfMissed: false);
+      await tester.pump();
+      expect(tapCount, 0);
     });
   });
 }

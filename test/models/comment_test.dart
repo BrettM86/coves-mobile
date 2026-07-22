@@ -1,4 +1,5 @@
 import 'package:coves_flutter/models/comment.dart';
+import 'package:coves_flutter/models/post.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -165,6 +166,90 @@ void main() {
       final thread = ThreadViewComment.fromJson(json);
 
       expect(thread.hasMore, false);
+      expect(thread.repliesCursor, isNull);
+    });
+
+    test('replies list is unmodifiable', () {
+      final node = _node('parent', replies: [_node('child')]);
+
+      expect(
+        () => node.replies!.add(_node('other')),
+        throwsUnsupportedError,
+      );
+    });
+
+    group('copyWith', () {
+      test('keeps repliesCursor when not provided', () {
+        final node = _node('a', repliesCursor: 'cursor-1');
+
+        final copy = node.copyWith(hasMore: true);
+
+        expect(copy.repliesCursor, 'cursor-1');
+        expect(copy.hasMore, true);
+      });
+
+      test('sets and clears repliesCursor explicitly', () {
+        final node = _node('a', repliesCursor: 'cursor-1');
+
+        expect(node.copyWith(repliesCursor: 'cursor-2').repliesCursor,
+            'cursor-2');
+        // Explicit null clears the cursor (sentinel distinguishes this
+        // from "not provided").
+        expect(node.copyWith(repliesCursor: null).repliesCursor, isNull);
+      });
+    });
+
+    group('replaceDescendant', () {
+      test('replaces a deep descendant and preserves sibling identity', () {
+        final grandchild = _node('c');
+        final child = _node('b', replies: [grandchild]);
+        final sibling = _node('sibling');
+        final root = _node('a', replies: [child, sibling]);
+
+        final replacement = _node('c', replies: [_node('d')]);
+        final result = root.replaceDescendant(replacement);
+
+        expect(identical(result, root), isFalse);
+        expect(
+          result.replies!.first.replies!.single.replies!.single.comment.uri,
+          'd',
+        );
+        // Untouched sibling branch keeps reference identity.
+        expect(identical(result.replies![1], sibling), isTrue);
+      });
+
+      test('returns identical root when the target is absent', () {
+        final root = _node(
+          'a',
+          replies: [
+            _node('b', replies: [_node('c')]),
+          ],
+        );
+
+        final result = root.replaceDescendant(_node('not-in-tree'));
+
+        expect(identical(result, root), isTrue);
+      });
+    });
+
+    group('findByUri', () {
+      test('finds a deeply nested node', () {
+        final target = _node('c');
+        final root = _node(
+          'a',
+          replies: [
+            _node('b', replies: [target]),
+          ],
+        );
+
+        expect(identical(root.findByUri('c'), target), isTrue);
+      });
+
+      test('returns null when absent', () {
+        final root = _node('a', replies: [_node('b')]);
+
+        expect(root.findByUri('missing'), isNull);
+      });
     });
   });
 
@@ -496,6 +581,47 @@ void main() {
       expect(comment.deletionReason, 'moderator');
     });
 
+    test('isTombstoned is true for deleted or author-less comments', () {
+      final deleted = CommentView(
+        uri: 'at://did:plc:test/comment/1',
+        cid: 'cid1',
+        isDeleted: true,
+        createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
+        indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
+        post: CommentRef(uri: 'at://did:plc:test/post/123', cid: 'post-cid'),
+        stats: const CommentStats(),
+      );
+      expect(deleted.isTombstoned, isTrue);
+
+      final normal = CommentView(
+        uri: 'at://did:plc:test/comment/2',
+        cid: 'cid2',
+        record: const CommentRecord(content: 'hello'),
+        createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
+        indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
+        author: AuthorView(did: 'did:plc:author', handle: 'test.user'),
+        post: CommentRef(uri: 'at://did:plc:test/post/123', cid: 'post-cid'),
+        stats: const CommentStats(),
+      );
+      expect(normal.isTombstoned, isFalse);
+    });
+
+    test('asserts that non-deleted comments have an author', () {
+      expect(
+        () => CommentView(
+          uri: 'at://did:plc:test/comment/1',
+          cid: 'cid1',
+          record: const CommentRecord(content: 'hello'),
+          createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
+          indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
+          // author omitted while not deleted violates the invariant
+          post: CommentRef(uri: 'at://did:plc:test/post/123', cid: 'post-cid'),
+          stats: const CommentStats(),
+        ),
+        throwsAssertionError,
+      );
+    });
+
     test('should parse deleted comment in thread', () {
       final json = {
         'comment': {
@@ -688,4 +814,26 @@ void main() {
       );
     });
   });
+}
+
+/// Builds a minimal ThreadViewComment node for tree-manipulation tests.
+ThreadViewComment _node(
+  String uri, {
+  List<ThreadViewComment>? replies,
+  String? repliesCursor,
+}) {
+  return ThreadViewComment(
+    comment: CommentView(
+      uri: uri,
+      cid: 'cid-$uri',
+      record: const CommentRecord(content: 'content'),
+      createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
+      indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
+      author: AuthorView(did: 'did:plc:author', handle: 'test.user'),
+      post: CommentRef(uri: 'at://did:plc:test/post/123', cid: 'post-cid'),
+      stats: const CommentStats(),
+    ),
+    replies: replies,
+    repliesCursor: repliesCursor,
+  );
 }

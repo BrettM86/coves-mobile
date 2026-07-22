@@ -119,7 +119,14 @@ void main() {
         );
         expect(loader.postUri, 'foo%zz');
         expect(find.byType(NotFoundError), findsOneWidget);
-        expect(find.text('Post Not Found'), findsOneWidget);
+        // Title renders in both the app bar (9df9035) and the body.
+        expect(
+          find.descendant(
+            of: find.byType(AppBar),
+            matching: find.text('Post Not Found'),
+          ),
+          findsOneWidget,
+        );
       },
     );
   });

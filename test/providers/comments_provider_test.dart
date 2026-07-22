@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:coves_flutter/models/comment.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
@@ -1167,6 +1169,12 @@ void main() {
           apiService: mockApiService,
           voteProvider: mockVoteProvider,
           commentService: mockCommentService,
+          // Keep the indexing-lag retry schedule but skip the real waits.
+          indexingRetryDelays: const [
+            Duration.zero,
+            Duration.zero,
+            Duration.zero,
+          ],
         );
       });
 
@@ -1526,6 +1534,141 @@ void main() {
         },
       );
 
+      test(
+        'should stop retrying as soon as the created comment is indexed',
+        () async {
+          await providerWithCommentService.loadComments(refresh: true);
+
+          when(
+            mockCommentService.createComment(
+              rootUri: anyNamed('rootUri'),
+              rootCid: anyNamed('rootCid'),
+              parentUri: anyNamed('parentUri'),
+              parentCid: anyNamed('parentCid'),
+              content: anyNamed('content'),
+            ),
+          ).thenAnswer(
+            (_) async => const CreateCommentResponse(
+              uri: 'at://did:plc:test/comment/abc',
+              cid: 'cid123',
+            ),
+          );
+
+          // First post-create refresh misses the comment (indexing lag);
+          // the first retry finds it. No further retries may happen.
+          var fetchCount = 0;
+          final indexedResponse = CommentsResponse(
+            post: {},
+            comments: [
+              _createMockThreadComment('at://did:plc:test/comment/abc'),
+              _createMockThreadComment('comment1'),
+            ],
+          );
+          final notIndexedResponse = CommentsResponse(
+            post: {},
+            comments: [_createMockThreadComment('comment1')],
+          );
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: anyNamed('cursor'),
+            ),
+          ).thenAnswer((_) async {
+            fetchCount++;
+            // Call 1 is the post-create refresh; call 2 is retry 1.
+            return fetchCount >= 2 ? indexedResponse : notIndexedResponse;
+          });
+
+          await providerWithCommentService.createComment(
+            content: 'Test comment',
+          );
+
+          // Refresh + exactly one retry - the remaining schedule is skipped.
+          expect(fetchCount, 2);
+        },
+      );
+
+      test(
+        'should retry the parent subtree (not full refreshes) when the '
+        'parent is below the top-level depth cap',
+        () async {
+          await providerWithCommentService.loadComments(refresh: true);
+
+          const deepParentUri =
+              'at://did:plc:author/social.coves.community.comment/deeprkey';
+          const replyUri = 'at://did:plc:test/comment/deep-reply';
+
+          when(
+            mockCommentService.createComment(
+              rootUri: anyNamed('rootUri'),
+              rootCid: anyNamed('rootCid'),
+              parentUri: anyNamed('parentUri'),
+              parentCid: anyNamed('parentCid'),
+              content: anyNamed('content'),
+            ),
+          ).thenAnswer(
+            (_) async => const CreateCommentResponse(
+              uri: replyUri,
+              cid: 'cid-deep',
+            ),
+          );
+
+          // First subtree fetch misses the reply (indexing lag); the first
+          // retry contains it.
+          var subtreeFetchCount = 0;
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              parentRkey: argThat(equals('deeprkey'), named: 'parentRkey'),
+            ),
+          ).thenAnswer((_) async {
+            subtreeFetchCount++;
+            return CommentsResponse(
+              post: {},
+              comments: [
+                _createMockThreadCommentWithViewer(
+                  uri: deepParentUri,
+                  replies:
+                      subtreeFetchCount >= 2
+                          ? [_createMockThreadComment(replyUri)]
+                          : [],
+                ),
+              ],
+            );
+          });
+
+          // The parent is NOT in the top-level tree (below the depth cap).
+          await providerWithCommentService.createComment(
+            content: 'Deep nested reply',
+            parentComment: _createMockThreadComment(deepParentUri),
+          );
+
+          // Subtree fetched twice: initial attempt + one retry.
+          expect(subtreeFetchCount, 2);
+
+          // No full-tree refreshes beyond the initial load: they can never
+          // surface a reply whose parent sits below the depth cap.
+          verify(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: anyNamed('cursor'),
+            ),
+          ).called(1);
+        },
+      );
+
       test('should rethrow exception from CommentService', () async {
         await providerWithCommentService.loadComments(refresh: true);
 
@@ -1660,11 +1803,330 @@ void main() {
         expect(commentsProvider.loadingMoreReplies, isEmpty);
       });
 
-      test('should keep hasMore when the subtree response has a cursor',
+      test(
+        'should store the cursor, send it on the next page, and append '
+        'deduplicated replies',
+        () async {
+          await commentsProvider.loadComments(refresh: true);
+
+          // Page 1: cursor present -> more direct replies exist.
+          final page1 = _createMockThreadCommentWithViewer(
+            uri: parentUri,
+            replies: [_createMockThreadComment('child-1')],
+          );
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: argThat(isNull, named: 'cursor'),
+              parentRkey: argThat(equals('parentrkey1'), named: 'parentRkey'),
+            ),
+          ).thenAnswer(
+            (_) async => CommentsResponse(
+              post: {},
+              comments: [page1],
+              cursor: 'replies-page-2',
+            ),
+          );
+
+          await commentsProvider.loadMoreReplies(parentUri);
+
+          var merged = commentsProvider.comments.single;
+          expect(merged.hasMore, isTrue);
+          expect(merged.repliesCursor, 'replies-page-2');
+          expect(merged.replies, hasLength(1));
+
+          // Page 2: server may re-send an overlapping reply; it must be
+          // deduplicated. No cursor -> last page.
+          final page2 = _createMockThreadCommentWithViewer(
+            uri: parentUri,
+            replies: [
+              _createMockThreadComment('child-1'), // duplicate
+              _createMockThreadComment('child-2'),
+            ],
+          );
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: 'replies-page-2',
+              parentRkey: argThat(equals('parentrkey1'), named: 'parentRkey'),
+            ),
+          ).thenAnswer(
+            (_) async => CommentsResponse(post: {}, comments: [page2]),
+          );
+
+          await commentsProvider.loadMoreReplies(parentUri);
+
+          // The stored cursor must have been sent on the second fetch.
+          verify(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: 'replies-page-2',
+              parentRkey: argThat(equals('parentrkey1'), named: 'parentRkey'),
+            ),
+          ).called(1);
+
+          merged = commentsProvider.comments.single;
+          // Appended without duplicating child-1, pagination exhausted.
+          expect(
+            merged.replies!.map((r) => r.comment.uri),
+            ['child-1', 'child-2'],
+          );
+          expect(merged.hasMore, isFalse);
+          expect(merged.repliesCursor, isNull);
+        },
+      );
+
+      test(
+        'should preserve deeper hydrated branches when re-fetching an '
+        'ancestor subtree',
+        () async {
+          const childUri =
+              'at://did:plc:author/social.coves.community.comment/childrkey1';
+          await commentsProvider.loadComments(refresh: true);
+
+          // Hydrate the parent: one child that itself has unloaded replies.
+          final parentSubtree = _createMockThreadCommentWithViewer(
+            uri: parentUri,
+            replies: [
+              ThreadViewComment(
+                comment: _createMockThreadComment(childUri).comment,
+                hasMore: true,
+              ),
+            ],
+          );
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              parentRkey: argThat(equals('parentrkey1'), named: 'parentRkey'),
+            ),
+          ).thenAnswer(
+            (_) async => CommentsResponse(post: {}, comments: [parentSubtree]),
+          );
+          await commentsProvider.loadMoreReplies(parentUri);
+
+          // Hydrate the child deep: child -> grandchild.
+          final childSubtree = _createMockThreadCommentWithViewer(
+            uri: childUri,
+            replies: [_createMockThreadComment('grandchild-1')],
+          );
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              parentRkey: argThat(equals('childrkey1'), named: 'parentRkey'),
+            ),
+          ).thenAnswer(
+            (_) async => CommentsResponse(post: {}, comments: [childSubtree]),
+          );
+          await commentsProvider.loadMoreReplies(childUri);
+
+          expect(
+            commentsProvider.comments.single.replies!.single.replies!.single
+                .comment.uri,
+            'grandchild-1',
+          );
+
+          // Re-hydrate the ancestor: the fresh response truncates the child
+          // at the depth cutoff (no replies loaded). The child's hydrated
+          // expansion must survive the merge.
+          await commentsProvider.loadMoreReplies(parentUri);
+
+          final child = commentsProvider.comments.single.replies!.single;
+          expect(child.comment.uri, childUri);
+          expect(child.replies, isNotNull);
+          expect(child.replies!.single.comment.uri, 'grandchild-1');
+        },
+      );
+
+      test('should return the existing future for duplicate in-flight calls',
           () async {
         await commentsProvider.loadComments(refresh: true);
 
-        final subtree = _createMockThreadCommentWithViewer(
+        final completer = Completer<CommentsResponse>();
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            parentRkey: argThat(isNotNull, named: 'parentRkey'),
+          ),
+        ).thenAnswer((_) => completer.future);
+
+        final first = commentsProvider.loadMoreReplies(parentUri);
+        expect(commentsProvider.loadingMoreReplies, contains(parentUri));
+
+        final second = commentsProvider.loadMoreReplies(parentUri);
+        expect(identical(first, second), isTrue);
+
+        completer.complete(
+          CommentsResponse(
+            post: {},
+            comments: [
+              _createMockThreadCommentWithViewer(
+                uri: parentUri,
+                replies: [_createMockThreadComment('child-1')],
+              ),
+            ],
+          ),
+        );
+
+        final results = await Future.wait([first, second]);
+        expect(results[0], isNotNull);
+        expect(identical(results[0], results[1]), isTrue);
+        expect(commentsProvider.loadingMoreReplies, isEmpty);
+
+        // Only one network call despite two callers.
+        verify(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            parentRkey: argThat(isNotNull, named: 'parentRkey'),
+          ),
+        ).called(1);
+      });
+
+      test(
+        'should clear hasMore and cursor when the subtree response is empty',
+        () async {
+          await commentsProvider.loadComments(refresh: true);
+          expect(commentsProvider.comments.single.hasMore, isTrue);
+
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              parentRkey: argThat(isNotNull, named: 'parentRkey'),
+            ),
+          ).thenAnswer((_) async => CommentsResponse(post: {}, comments: []));
+
+          final result = await commentsProvider.loadMoreReplies(parentUri);
+
+          expect(result, isNull);
+          // The load-more affordance must disappear rather than spin forever.
+          expect(commentsProvider.comments.single.hasMore, isFalse);
+          expect(commentsProvider.comments.single.repliesCursor, isNull);
+        },
+      );
+
+      test('should throw ArgumentError for a malformed comment URI', () {
+        expect(
+          () => commentsProvider.loadMoreReplies('no-slashes'),
+          throwsArgumentError,
+        );
+        expect(commentsProvider.loadingMoreReplies, isEmpty);
+      });
+
+      test(
+        'should discard a response anchored at a different comment',
+        () async {
+          await commentsProvider.loadComments(refresh: true);
+
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              parentRkey: argThat(isNotNull, named: 'parentRkey'),
+            ),
+          ).thenAnswer(
+            (_) async => CommentsResponse(
+              post: {},
+              comments: [
+                _createMockThreadCommentWithViewer(
+                  uri: 'some-other-comment',
+                  replies: [_createMockThreadComment('child-1')],
+                ),
+              ],
+            ),
+          );
+
+          final result = await commentsProvider.loadMoreReplies(parentUri);
+
+          expect(result, isNull);
+          // Tree untouched by the mismatched response.
+          expect(commentsProvider.comments.single.replies, isNull);
+          expect(commentsProvider.comments.single.hasMore, isTrue);
+        },
+      );
+
+      test(
+        'should discard a subtree response that completes after a refresh',
+        () async {
+          await commentsProvider.loadComments(refresh: true);
+
+          final completer = Completer<CommentsResponse>();
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              parentRkey: argThat(isNotNull, named: 'parentRkey'),
+            ),
+          ).thenAnswer((_) => completer.future);
+
+          final pending = commentsProvider.loadMoreReplies(parentUri);
+
+          // A full refresh replaces the tree while the subtree fetch is
+          // still in flight.
+          await commentsProvider.refreshComments();
+
+          completer.complete(
+            CommentsResponse(
+              post: {},
+              comments: [
+                _createMockThreadCommentWithViewer(
+                  uri: parentUri,
+                  replies: [_createMockThreadComment('stale-child')],
+                ),
+              ],
+            ),
+          );
+
+          final result = await pending;
+
+          // Stale response: not merged, not returned.
+          expect(result, isNull);
+          expect(commentsProvider.comments.single.replies, isNull);
+        },
+      );
+
+      test('should not clobber vote state of already-visible comments',
+          () async {
+        await commentsProvider.loadComments(refresh: true);
+
+        // First hydration: parent + child-1.
+        final page1 = _createMockThreadCommentWithViewer(
           uri: parentUri,
           replies: [_createMockThreadComment('child-1')],
         );
@@ -1678,16 +2140,56 @@ void main() {
             parentRkey: argThat(isNotNull, named: 'parentRkey'),
           ),
         ).thenAnswer(
-          (_) async => CommentsResponse(
-            post: {},
-            comments: [subtree],
-            cursor: 'more-direct-replies',
-          ),
+          (_) async => CommentsResponse(post: {}, comments: [page1]),
         );
+        await commentsProvider.loadMoreReplies(parentUri);
+        clearInteractions(mockVoteProvider);
 
+        // Second hydration adds child-2; parent and child-1 are already
+        // visible and must NOT be re-initialized (that would revert
+        // optimistic votes).
+        final page2 = _createMockThreadCommentWithViewer(
+          uri: parentUri,
+          replies: [
+            _createMockThreadComment('child-1'),
+            _createMockThreadComment('child-2'),
+          ],
+        );
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            parentRkey: argThat(isNotNull, named: 'parentRkey'),
+          ),
+        ).thenAnswer(
+          (_) async => CommentsResponse(post: {}, comments: [page2]),
+        );
         await commentsProvider.loadMoreReplies(parentUri);
 
-        expect(commentsProvider.comments.single.hasMore, isTrue);
+        verify(
+          mockVoteProvider.setInitialVoteState(
+            postUri: 'child-2',
+            voteDirection: anyNamed('voteDirection'),
+            voteUri: anyNamed('voteUri'),
+          ),
+        ).called(1);
+        verifyNever(
+          mockVoteProvider.setInitialVoteState(
+            postUri: parentUri,
+            voteDirection: anyNamed('voteDirection'),
+            voteUri: anyNamed('voteUri'),
+          ),
+        );
+        verifyNever(
+          mockVoteProvider.setInitialVoteState(
+            postUri: 'child-1',
+            voteDirection: anyNamed('voteDirection'),
+            voteUri: anyNamed('voteUri'),
+          ),
+        );
       });
 
       test('should propagate fetch errors and clear loading state', () async {

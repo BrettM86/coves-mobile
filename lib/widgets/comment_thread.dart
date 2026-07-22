@@ -106,6 +106,10 @@ class CommentThread extends StatelessWidget {
               children:
                   thread.replies!.map((reply) {
                     return CommentThread(
+                      // Keyed by URI: CommentCard is stateful, so merges
+                      // that reorder siblings must not re-associate state
+                      // by index.
+                      key: ValueKey(reply.comment.uri),
                       thread: reply,
                       depth: depth + 1,
                       maxDepth: maxDepth,
@@ -218,7 +222,20 @@ class CommentThread extends StatelessWidget {
           _buildContinueThreadLink(context, replyCount),
 
         // Show "Load more replies" button if there are more (and not collapsed)
-        if (thread.hasMore && !isCollapsed) _buildLoadMoreButton(context),
+        if (thread.hasMore && !isCollapsed)
+          LoadMoreRepliesButton(
+            depth: depth,
+            isLoading: loadingMoreReplies.contains(thread.comment.uri),
+            onTap: () {
+              if (onLoadMoreReplies != null) {
+                onLoadMoreReplies!(thread);
+              } else {
+                if (kDebugMode) {
+                  debugPrint('Load more replies tapped (no handler provided)');
+                }
+              }
+            },
+          ),
       ],
     );
   }
@@ -279,11 +296,33 @@ class CommentThread extends StatelessWidget {
     );
   }
 
-  /// Builds the "Load more replies" button
-  Widget _buildLoadMoreButton(BuildContext context) {
+}
+
+/// "Load more replies" button shared by [CommentThread] (nested levels)
+/// and the focused thread screen (the anchor's own reply pagination).
+///
+/// Shows a spinner and disables taps while [isLoading] is true.
+class LoadMoreRepliesButton extends StatelessWidget {
+  const LoadMoreRepliesButton({
+    required this.depth,
+    this.isLoading = false,
+    this.onTap,
+    super.key,
+  });
+
+  /// Nesting depth of the parent comment (controls left alignment)
+  final int depth;
+
+  /// Whether a "load more replies" fetch is in flight for this comment
+  final bool isLoading;
+
+  /// Callback when the button is tapped (ignored while loading)
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
     // Calculate left padding based on depth (align with replies)
     final leftPadding = 16.0 + ((depth + 1) * 12.0);
-    final isLoading = loadingMoreReplies.contains(thread.comment.uri);
 
     return Container(
       padding: EdgeInsets.fromLTRB(leftPadding, 8, 16, 8),
@@ -291,19 +330,7 @@ class CommentThread extends StatelessWidget {
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: InkWell(
-        onTap: isLoading
-            ? null
-            : () {
-                if (onLoadMoreReplies != null) {
-                  onLoadMoreReplies!(thread);
-                } else {
-                  if (kDebugMode) {
-                    debugPrint(
-                      'Load more replies tapped (no handler provided)',
-                    );
-                  }
-                }
-              },
+        onTap: isLoading ? null : onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(

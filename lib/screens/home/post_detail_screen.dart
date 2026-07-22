@@ -52,6 +52,25 @@ class PostDetailScreen extends StatefulWidget {
   /// When true, skips initial comment load since we know there are no comments
   final bool isOptimistic;
 
+  /// The comment count to display in the comments header.
+  ///
+  /// The server-side [serverCount] includes comments the viewer never sees
+  /// (deleted, blocked, filtered). When the thread resolved successfully but
+  /// nothing is renderable (not loading, no error, no comments, no further
+  /// pages), returns 0 so the header shows its empty state instead of a
+  /// count over an empty list. In every other state the server count stands.
+  @visibleForTesting
+  static int displayedCommentCount({
+    required int serverCount,
+    required bool isLoading,
+    required bool hasError,
+    required bool hasComments,
+    required bool hasMore,
+  }) {
+    final resolvedEmpty = !isLoading && !hasError && !hasComments && !hasMore;
+    return resolvedEmpty ? 0 : serverCount;
+  }
+
   @override
   State<PostDetailScreen> createState() => _PostDetailScreenState();
 }
@@ -908,16 +927,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   CommentsHeader(
                                     key: _commentsHeaderKey,
                                     commentCount:
-                                        (!isLoading &&
-                                                error == null &&
-                                                comments.isEmpty &&
-                                                !commentsProvider.hasMore)
-                                            ? 0
-                                            : widget
-                                                .post
-                                                .post
-                                                .stats
-                                                .commentCount,
+                                        PostDetailScreen.displayedCommentCount(
+                                          serverCount: widget
+                                              .post
+                                              .post
+                                              .stats
+                                              .commentCount,
+                                          isLoading: isLoading,
+                                          hasError: error != null,
+                                          hasComments: comments.isNotEmpty,
+                                          hasMore: commentsProvider.hasMore,
+                                        ),
                                     currentSort: commentsProvider.sort,
                                     onSortChanged: _onSortChanged,
                                   ),

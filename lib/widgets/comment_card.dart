@@ -171,7 +171,7 @@ class _CommentCardState extends State<CommentCard> {
                       leftPadding,
                       12,
                       16,
-                      isCollapsed || comment.isDeleted ? 12 : 8,
+                      isCollapsed || comment.isTombstoned ? 12 : 8,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,8 +179,11 @@ class _CommentCardState extends State<CommentCard> {
                         // Author info row
                         Row(
                           children: [
-                            // Author avatar and handle (or placeholder for deleted)
-                            if (comment.isDeleted || author == null)
+                            // Author avatar and handle (or placeholder for
+                            // deleted). The author == null arm is already
+                            // covered by isTombstoned; spelling it out lets
+                            // Dart promote author to non-null below.
+                            if (author == null || comment.isTombstoned)
                               // Show deletion reason as placeholder
                               Text(
                                 comment.deletionReason == 'moderator'
@@ -238,7 +241,7 @@ class _CommentCardState extends State<CommentCard> {
                         ),
 
                         // Only show content and actions when expanded (skip for deleted)
-                        if (!isCollapsed && !comment.isDeleted) ...[
+                        if (!isCollapsed && !comment.isTombstoned) ...[
                           const SizedBox(height: 8),
 
                           // Comment content

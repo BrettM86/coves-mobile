@@ -34,6 +34,21 @@ class FakeAuthProvider extends AuthProvider {
 void main() {
   const testUri = 'at://did:plc:test/social.coves.community.post/abc123';
 
+  /// Asserts a full-screen terminal state renders [title] in its app bar
+  /// and once more in the body content (NotFoundError shows it in both).
+  void expectScreenTitle(String title) {
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text(title)),
+      findsOneWidget,
+      reason: 'app bar should show "$title"',
+    );
+    expect(
+      find.descendant(of: find.byType(Center), matching: find.text(title)),
+      findsOneWidget,
+      reason: 'body should show "$title"',
+    );
+  }
+
   /// Pumps the loader with an injectable fetcher.
   ///
   /// No providers are needed: the loader only touches AuthProvider when
@@ -102,7 +117,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(NotFoundError), findsOneWidget);
-    expect(find.text('Post Not Found'), findsNWidgets(2));
+    expectScreenTitle('Post Not Found');
   });
 
   testWidgets('renders PostDetailScreen on successful fetch', (tester) async {
@@ -164,7 +179,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Post Unavailable'), findsNWidgets(2));
+    expectScreenTitle('Post Unavailable');
     expect(
       find.text("This post is from an account you've blocked."),
       findsOneWidget,
@@ -184,7 +199,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Post Unavailable'), findsNWidgets(2));
+    expectScreenTitle('Post Unavailable');
     expect(find.text('This post was removed by moderators.'), findsOneWidget);
   });
 
@@ -199,7 +214,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Post Unavailable'), findsNWidgets(2));
+    expectScreenTitle('Post Unavailable');
     expect(
       find.text("This post is unavailable because it's from a blocked "
           'source.'),
@@ -234,7 +249,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fetchCount, 2);
-    expect(find.text('Post Not Found'), findsNWidgets(2));
+    expectScreenTitle('Post Not Found');
   });
 
   testWidgets('5xx from the server shows error state with retry', (
@@ -283,7 +298,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Post Not Found'), findsNWidgets(2));
+    expectScreenTitle('Post Not Found');
     expect(find.byType(FullScreenError), findsNothing);
   });
 
@@ -302,7 +317,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fetchCount, 0);
-    expect(find.text('Post Not Found'), findsNWidgets(2));
+    expectScreenTitle('Post Not Found');
   });
 
   testWidgets('navigating to a new postUri refetches (didUpdateWidget)', (
@@ -350,7 +365,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(fetchedUris, [testUri, secondUri]);
-    expect(find.text('Post Not Found'), findsNWidgets(2));
+    expectScreenTitle('Post Not Found');
 
     // Stale first fetch completing late must NOT overwrite the newer result
     firstFetch.complete(
@@ -358,7 +373,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Post Not Found'), findsNWidgets(2));
+    expectScreenTitle('Post Not Found');
     expect(find.text('Post Unavailable'), findsNothing);
   });
 
@@ -389,5 +404,75 @@ void main() {
     // Unmount to exercise disposal of the lazily created API service
     await tester.pumpWidget(const MaterialApp(home: Scaffold()));
     await tester.pumpAndSettle();
+  });
+
+  group('PostDetailScreen.displayedCommentCount', () {
+    // The server-side commentCount includes comments the viewer never sees
+    // (deleted, blocked, filtered). Only a fully resolved-but-empty thread
+    // may show the header's empty state.
+    test('shows 0 when the thread resolved empty with no more pages', () {
+      expect(
+        PostDetailScreen.displayedCommentCount(
+          serverCount: 7,
+          isLoading: false,
+          hasError: false,
+          hasComments: false,
+          hasMore: false,
+        ),
+        0,
+      );
+    });
+
+    test('keeps the server count while loading', () {
+      expect(
+        PostDetailScreen.displayedCommentCount(
+          serverCount: 7,
+          isLoading: true,
+          hasError: false,
+          hasComments: false,
+          hasMore: false,
+        ),
+        7,
+      );
+    });
+
+    test('keeps the server count when loading errored', () {
+      expect(
+        PostDetailScreen.displayedCommentCount(
+          serverCount: 7,
+          isLoading: false,
+          hasError: true,
+          hasComments: false,
+          hasMore: false,
+        ),
+        7,
+      );
+    });
+
+    test('keeps the server count while more pages may exist', () {
+      expect(
+        PostDetailScreen.displayedCommentCount(
+          serverCount: 7,
+          isLoading: false,
+          hasError: false,
+          hasComments: false,
+          hasMore: true,
+        ),
+        7,
+      );
+    });
+
+    test('keeps the server count when comments rendered', () {
+      expect(
+        PostDetailScreen.displayedCommentCount(
+          serverCount: 7,
+          isLoading: false,
+          hasError: false,
+          hasComments: true,
+          hasMore: false,
+        ),
+        7,
+      );
+    });
   });
 }
