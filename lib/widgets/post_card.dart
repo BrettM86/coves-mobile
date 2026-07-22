@@ -649,6 +649,9 @@ class _EmbedCardState extends State<_EmbedCard> {
     if (_isStreamableVideo) {
       return Semantics(
         button: true,
+        // Reflect the disabled tap handler while the video is loading so
+        // assistive tech doesn't advertise a dead button
+        enabled: !_isLoadingVideo,
         label: 'Play video',
         child: GestureDetector(
           onTap: _isLoadingVideo ? null : () => _showVideoPlayer(context),

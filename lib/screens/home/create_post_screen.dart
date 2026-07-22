@@ -41,7 +41,11 @@ const int kContentMaxLength = 10000;
 /// - Loading states and error handling
 /// - Keyboard handling with scroll support
 class CreatePostScreen extends StatefulWidget {
-  const CreatePostScreen({this.onNavigateToFeed, this.onDirtyChanged, super.key});
+  const CreatePostScreen({
+    this.onNavigateToFeed,
+    this.onDirtyChanged,
+    super.key,
+  });
 
   /// Callback to navigate to feed tab (used when in tab navigation)
   final VoidCallback? onNavigateToFeed;
@@ -80,6 +84,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   }
 
   /// True when any text field holds user input (a draft worth protecting).
+  ///
+  /// Deliberately considers trimmed text only: community, NSFW, and language
+  /// selections are cheap to redo and alone are not worth blocking back for.
   bool get _hasUnsavedInput {
     return _titleController.text.trim().isNotEmpty ||
         _bodyController.text.trim().isNotEmpty ||
@@ -143,9 +150,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   Future<void> _selectCommunity() async {
     final result = await Navigator.push<CommunityView>(
       context,
-      MaterialPageRoute(
-        builder: (context) => const CommunityPickerScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const CommunityPickerScreen()),
     );
 
     if (result != null && mounted) {
@@ -180,9 +185,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       if (url.isNotEmpty) {
         // Validate URL
         final uri = Uri.tryParse(url);
-        if (uri == null ||
-            !uri.hasScheme ||
-            (!uri.scheme.startsWith('http'))) {
+        if (uri == null || !uri.hasScheme || (!uri.scheme.startsWith('http'))) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -200,9 +203,10 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
         embed = ExternalEmbedInput(
           uri: url,
-          title: _titleController.text.trim().isNotEmpty
-              ? _titleController.text.trim()
-              : null,
+          title:
+              _titleController.text.trim().isNotEmpty
+                  ? _titleController.text.trim()
+                  : null,
         );
       }
 
@@ -214,16 +218,18 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
       // Detect link facets in the body content
       final bodyContent = _bodyController.text.trim();
-      final facets = bodyContent.isNotEmpty
-          ? FacetDetector.detectLinks(bodyContent)
-          : null;
+      final facets =
+          bodyContent.isNotEmpty
+              ? FacetDetector.detectLinks(bodyContent)
+              : null;
 
       // Create post
       final response = await apiService.createPost(
         community: _selectedCommunity!.did,
-        title: _titleController.text.trim().isNotEmpty
-            ? _titleController.text.trim()
-            : null,
+        title:
+            _titleController.text.trim().isNotEmpty
+                ? _titleController.text.trim()
+                : null,
         content: bodyContent.isNotEmpty ? bodyContent : null,
         facets: facets,
         embed: embed,
@@ -245,10 +251,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => PostDetailScreen(
-              post: optimisticPost,
-              isOptimistic: true,
-            ),
+            builder:
+                (context) =>
+                    PostDetailScreen(post: optimisticPost, isOptimistic: true),
           ),
         );
       }
@@ -309,9 +314,10 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         type: EmbedTypes.external,
         external: ExternalEmbed(
           uri: url,
-          title: _titleController.text.trim().isNotEmpty
-              ? _titleController.text.trim()
-              : null,
+          title:
+              _titleController.text.trim().isNotEmpty
+                  ? _titleController.text.trim()
+                  : null,
         ),
         data: {
           r'$type': EmbedTypes.external,
@@ -347,16 +353,12 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         indexedAt: now,
         record: PostRecord(
           content: _bodyController.text.trim(),
-          title: _titleController.text.trim().isNotEmpty
-              ? _titleController.text.trim()
-              : null,
+          title:
+              _titleController.text.trim().isNotEmpty
+                  ? _titleController.text.trim()
+                  : null,
         ),
-        stats: PostStats(
-          upvotes: 0,
-          downvotes: 0,
-          score: 0,
-          commentCount: 0,
-        ),
+        stats: PostStats(upvotes: 0, downvotes: 0, score: 0, commentCount: 0),
         embed: embed,
         viewer: ViewerState(),
       ),
@@ -373,8 +375,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     // system back shell-wide. The shell owns back handling and only intercepts
     // when this tab is active with unsaved input (see onDirtyChanged).
     return Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
         backgroundColor: AppColors.background,
         surfaceTintColor: Colors.transparent,
         foregroundColor: AppColors.textPrimary,
@@ -399,9 +401,10 @@ class _CreatePostScreenState extends State<CreatePostScreen>
             child: TextButton(
               onPressed: _isFormValid && !_isSubmitting ? _handleSubmit : null,
               style: TextButton.styleFrom(
-                backgroundColor: _isFormValid && !_isSubmitting
-                    ? AppColors.primary
-                    : AppColors.textSecondary.withValues(alpha: 0.3),
+                backgroundColor:
+                    _isFormValid && !_isSubmitting
+                        ? AppColors.primary
+                        : AppColors.textSecondary.withValues(alpha: 0.3),
                 foregroundColor: AppColors.textPrimary,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -486,16 +489,12 @@ class _CreatePostScreenState extends State<CreatePostScreen>
               Row(
                 children: [
                   // Language dropdown
-                  Expanded(
-                    child: _buildLanguageDropdown(),
-                  ),
+                  Expanded(child: _buildLanguageDropdown()),
 
                   const SizedBox(width: 16),
 
                   // NSFW toggle
-                  Expanded(
-                    child: _buildNsfwToggle(),
-                  ),
+                  Expanded(child: _buildNsfwToggle()),
                 ],
               ),
 
@@ -533,14 +532,13 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                   _selectedCommunity?.displayName ??
                       _selectedCommunity?.name ??
                       'Select a community',
-                  style:
-                      TextStyle(
-                        color:
-                            _selectedCommunity != null
-                                ? AppColors.textPrimary
-                                : AppColors.textSecondary,
-                        fontSize: 16,
-                      ),
+                  style: TextStyle(
+                    color:
+                        _selectedCommunity != null
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
+                    fontSize: 16,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -560,18 +558,11 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   Widget _buildUserInfo(String handle) {
     return Row(
       children: [
-        const Icon(
-          Icons.person,
-          color: AppColors.textSecondary,
-          size: 16,
-        ),
+        const Icon(Icons.person, color: AppColors.textSecondary, size: 16),
         const SizedBox(width: 8),
         Text(
           '@$handle',
-          style: const TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 14,
-          ),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
         ),
       ],
     );
@@ -591,9 +582,11 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     // For multiline fields, use newline action and multiline keyboard
     final isMultiline = minLines != null && minLines > 1;
     final effectiveKeyboardType =
-        keyboardType ?? (isMultiline ? TextInputType.multiline : TextInputType.text);
+        keyboardType ??
+        (isMultiline ? TextInputType.multiline : TextInputType.text);
     final effectiveTextInputAction =
-        textInputAction ?? (isMultiline ? TextInputAction.newline : TextInputAction.next);
+        textInputAction ??
+        (isMultiline ? TextInputAction.newline : TextInputAction.next);
 
     return TextField(
       controller: controller,
@@ -604,10 +597,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       keyboardType: effectiveKeyboardType,
       textInputAction: effectiveTextInputAction,
       textCapitalization: textCapitalization,
-      style: const TextStyle(
-        color: AppColors.textPrimary,
-        fontSize: 16,
-      ),
+      style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: const TextStyle(color: Color(0xFF5A6B7F)),
@@ -624,10 +614,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(
-            color: AppColors.primary,
-            width: 2,
-          ),
+          borderSide: const BorderSide(color: AppColors.primary, width: 2),
         ),
         contentPadding: const EdgeInsets.all(16),
       ),
@@ -646,10 +633,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         child: DropdownButton<String>(
           value: _language,
           dropdownColor: AppColors.backgroundSecondary,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 16,
-          ),
+          style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
           icon: const Icon(
             Icons.arrow_drop_down,
             color: AppColors.textSecondary,
@@ -686,10 +670,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         children: [
           const Text(
             'NSFW',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 16,
-            ),
+            style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
           ),
           Transform.scale(
             scale: 0.8,

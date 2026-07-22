@@ -54,13 +54,19 @@ void main() {
       fakeAuthProvider = FakeAuthProvider();
     });
 
-    Widget createTestWidget({VoidCallback? onNavigateToFeed}) {
+    Widget createTestWidget({
+      VoidCallback? onNavigateToFeed,
+      ValueChanged<bool>? onDirtyChanged,
+    }) {
       return MultiProvider(
         providers: [
           ChangeNotifierProvider<AuthProvider>.value(value: fakeAuthProvider),
         ],
         child: MaterialApp(
-          home: CreatePostScreen(onNavigateToFeed: onNavigateToFeed),
+          home: CreatePostScreen(
+            onNavigateToFeed: onNavigateToFeed,
+            onDirtyChanged: onDirtyChanged,
+          ),
         ),
       );
     }
@@ -217,6 +223,64 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(callbackCalled, true);
+    });
+
+    testWidgets('URL field does not auto-capitalize input', (tester) async {
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      // "Https://..." from auto-capitalization breaks backend unfurling and
+      // external link handling
+      final urlField = tester.widget<TextField>(
+        find.widgetWithText(TextField, 'URL'),
+      );
+      expect(urlField.textCapitalization, TextCapitalization.none);
+    });
+
+    testWidgets('reports dirty on first character and clean when cleared', (
+      tester,
+    ) async {
+      final dirtyLog = <bool>[];
+
+      await tester.pumpWidget(
+        createTestWidget(onDirtyChanged: dirtyLog.add),
+      );
+      await tester.pumpAndSettle();
+
+      // Untouched form never reports dirty
+      expect(dirtyLog.contains(true), isFalse);
+
+      // First character marks the composer dirty
+      await tester.enterText(find.widgetWithText(TextField, 'Title'), 'a');
+      await tester.pumpAndSettle();
+      expect(dirtyLog.last, isTrue);
+
+      // Clearing the only text marks it clean again
+      await tester.enterText(find.widgetWithText(TextField, 'Title'), '');
+      await tester.pumpAndSettle();
+      expect(dirtyLog.last, isFalse);
+    });
+
+    testWidgets('whitespace-only input never reports dirty', (tester) async {
+      final dirtyLog = <bool>[];
+
+      await tester.pumpWidget(
+        createTestWidget(onDirtyChanged: dirtyLog.add),
+      );
+      await tester.pumpAndSettle();
+
+      // Dirty is trimmed-text-only: whitespace is not a draft worth
+      // protecting (and community/NSFW/language selections are deliberately
+      // excluded from dirty tracking entirely)
+      await tester.enterText(find.widgetWithText(TextField, 'Title'), '   ');
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'What are your thoughts?'),
+        '\n\n  ',
+      );
+      await tester.pumpAndSettle();
+
+      expect(dirtyLog.contains(true), isFalse);
     });
 
     testWidgets('should have character limit on title field', (tester) async {

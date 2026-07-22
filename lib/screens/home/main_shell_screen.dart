@@ -76,106 +76,125 @@ class _MainShellScreenState extends State<MainShellScreen> {
         const ProfileScreen(),
       ],
     );
+    // Guard the magic constant: _createTabIndex couples this children list,
+    // the back-guard in _wrapWithBackGuard, and the "plus" nav item indices.
+    assert(
+      body.children[_createTabIndex] is CreatePostScreen,
+      '_createTabIndex must point at CreatePostScreen in the IndexedStack',
+    );
 
     // Tablet layout: NavigationRail on the left
     if (isTablet) {
-      return _wrapWithBackGuard(Scaffold(
-        body: Row(
-          children: [
-            // Wrap NavigationRail in a colored container that extends to
-            // status bar, preventing content from bleeding behind it
-            Container(
-              color: const Color(0xFF0B0F14),
-              child: SafeArea(
-                right: false,
-                bottom: false,
-                child: NavigationRail(
-                  selectedIndex: _selectedIndex,
-                  onDestinationSelected: _onItemTapped,
-                  backgroundColor: const Color(0xFF0B0F14),
-                  indicatorColor: AppColors.primary.withValues(alpha: 0.2),
-                  labelType: NavigationRailLabelType.all,
-                  destinations: [
-                NavigationRailDestination(
-                  icon: BlueSkyIcon.homeSimple(
-                    color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+      return _wrapWithBackGuard(
+        Scaffold(
+          body: Row(
+            children: [
+              // Wrap NavigationRail in a colored container that extends to
+              // status bar, preventing content from bleeding behind it
+              Container(
+                color: const Color(0xFF0B0F14),
+                child: SafeArea(
+                  right: false,
+                  bottom: false,
+                  child: NavigationRail(
+                    selectedIndex: _selectedIndex,
+                    onDestinationSelected: _onItemTapped,
+                    backgroundColor: const Color(0xFF0B0F14),
+                    indicatorColor: AppColors.primary.withValues(alpha: 0.2),
+                    labelType: NavigationRailLabelType.all,
+                    destinations: [
+                      NavigationRailDestination(
+                        icon: BlueSkyIcon.homeSimple(
+                          color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                        ),
+                        selectedIcon: BlueSkyIcon.homeSimple(
+                          color: AppColors.primary,
+                        ),
+                        label: const Text('Home'),
+                      ),
+                      NavigationRailDestination(
+                        icon: Icon(
+                          Icons.workspaces_outlined,
+                          color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                        ),
+                        selectedIcon: const Icon(
+                          Icons.workspaces,
+                          color: AppColors.primary,
+                        ),
+                        label: const Text('Communities'),
+                      ),
+                      NavigationRailDestination(
+                        icon: BlueSkyIcon.plus(
+                          color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                        ),
+                        selectedIcon: BlueSkyIcon.plus(
+                          color: AppColors.primary,
+                        ),
+                        label: const Text('Create'),
+                      ),
+                      NavigationRailDestination(
+                        icon: BlueSkyIcon.bellOutline(
+                          color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                        ),
+                        selectedIcon: BlueSkyIcon.bellFilled(
+                          color: AppColors.primary,
+                        ),
+                        label: const Text('Notifications'),
+                      ),
+                      NavigationRailDestination(
+                        icon: BlueSkyIcon.personSimple(
+                          color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                        ),
+                        selectedIcon: BlueSkyIcon.personSimple(
+                          color: AppColors.primary,
+                        ),
+                        label: const Text('Me'),
+                      ),
+                    ],
                   ),
-                  selectedIcon:
-                      BlueSkyIcon.homeSimple(color: AppColors.primary),
-                  label: const Text('Home'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(
-                    Icons.workspaces_outlined,
-                    color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
-                  ),
-                  selectedIcon:
-                      const Icon(Icons.workspaces, color: AppColors.primary),
-                  label: const Text('Communities'),
-                ),
-                NavigationRailDestination(
-                  icon: BlueSkyIcon.plus(
-                    color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
-                  ),
-                  selectedIcon: BlueSkyIcon.plus(color: AppColors.primary),
-                  label: const Text('Create'),
-                ),
-                NavigationRailDestination(
-                  icon: BlueSkyIcon.bellOutline(
-                    color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
-                  ),
-                  selectedIcon:
-                      BlueSkyIcon.bellFilled(color: AppColors.primary),
-                  label: const Text('Notifications'),
-                ),
-                NavigationRailDestination(
-                  icon: BlueSkyIcon.personSimple(
-                    color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
-                  ),
-                  selectedIcon:
-                      BlueSkyIcon.personSimple(color: AppColors.primary),
-                  label: const Text('Me'),
-                ),
-              ],
                 ),
               ),
-            ),
-            const VerticalDivider(
-              width: 1,
-              thickness: 1,
-              color: Color(0xFF1A2433),
-            ),
-            Expanded(child: body),
-          ],
+              const VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: Color(0xFF1A2433),
+              ),
+              Expanded(child: body),
+            ],
+          ),
         ),
-      ));
+      );
     }
 
     // Phone layout: Bottom navigation bar
-    return _wrapWithBackGuard(Scaffold(
-      body: body,
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF0B0F14),
-          border: Border(top: BorderSide(color: Color(0xFF0B0F14), width: 0.5)),
-        ),
-        child: SafeArea(
-          child: SizedBox(
-            height: 48,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(0, 'home', 'Home'),
-                _buildNavItem(1, 'communities', 'Communities'),
-                _buildNavItem(2, 'plus', 'Create'),
-                _buildNavItem(3, 'bell', 'Notifications'),
-                _buildNavItem(4, 'person', 'Me'),
-              ],
+    return _wrapWithBackGuard(
+      Scaffold(
+        body: body,
+        bottomNavigationBar: Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF0B0F14),
+            border: Border(
+              top: BorderSide(color: Color(0xFF0B0F14), width: 0.5),
+            ),
+          ),
+          child: SafeArea(
+            child: SizedBox(
+              height: 48,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildNavItem(0, 'home', 'Home'),
+                  _buildNavItem(1, 'communities', 'Communities'),
+                  _buildNavItem(2, 'plus', 'Create'),
+                  _buildNavItem(3, 'bell', 'Notifications'),
+                  _buildNavItem(4, 'person', 'Me'),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
   }
 
   /// Shell-level back handling.
@@ -186,12 +205,14 @@ class _MainShellScreenState extends State<MainShellScreen> {
   /// backgrounded mid-compose. Everywhere else back behaves normally
   /// (backgrounds the app / pops the route).
   Widget _wrapWithBackGuard(Widget child) {
-    final protectDraft =
-        _selectedIndex == _createTabIndex && _composeHasDraft;
+    final protectDraft = _selectedIndex == _createTabIndex && _composeHasDraft;
     return PopScope(
       canPop: !protectDraft,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
+        // Re-check the draft-protection condition instead of inferring it
+        // from !didPop alone: a pop blocked by any other PopScope in the
+        // subtree must not yank the user to the Feed tab.
+        if (!didPop && _selectedIndex == _createTabIndex && _composeHasDraft) {
           _onNavigateToFeed();
         }
       },

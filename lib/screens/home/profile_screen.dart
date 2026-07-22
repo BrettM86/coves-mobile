@@ -86,22 +86,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // Check mounted after async gap (CLAUDE.md requirement)
     if (!mounted) return;
 
-    // Seed block state from the profile's viewer data so block/unblock
-    // menus reflect the server-side block after an app restart (the
-    // seed never clobbers fresher in-session optimistic state). Only
-    // seed when a viewer object is present: an unauthenticated response
-    // omits it entirely, and that absence must not be read as "false".
-    final profile = profileProvider.profile;
-    final viewer = profile?.viewer;
-    if (profile != null && viewer != null && profile.did != authProvider.did) {
-      context.read<BlockProvider>().setInitialUserBlockState(
-        userDid: profile.did,
-        isBlocked: viewer.blocked,
-      );
-    }
-
-    // Only load posts if profile loaded successfully (no error)
+    // Only seed block state / load posts if the profile loaded successfully
+    // (no error) — a failed load can leave a stale cached profile whose
+    // viewer state must not be seeded.
     if (profileProvider.profileError == null) {
+      // Seed block state from the profile's viewer data so block/unblock
+      // menus reflect the server-side block after an app restart (the
+      // seed never clobbers fresher in-session optimistic state). Only
+      // seed when a viewer object is present: an unauthenticated response
+      // omits it entirely, and that absence must not be read as "false".
+      final profile = profileProvider.profile;
+      final viewer = profile?.viewer;
+      if (profile != null &&
+          viewer != null &&
+          profile.did != authProvider.did) {
+        context.read<BlockProvider>().setInitialUserBlockState(
+          userDid: profile.did,
+          isBlocked: viewer.blocked,
+        );
+      }
+
       await profileProvider.loadPosts(refresh: true);
     }
   }

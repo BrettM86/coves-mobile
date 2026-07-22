@@ -12,6 +12,7 @@ import '../../models/comment.dart';
 import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
+import '../../services/comments_provider_cache.dart';
 import '../../utils/facet_detector.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/post_card.dart';
@@ -50,7 +51,8 @@ class ReplyScreen extends StatefulWidget {
   final ThreadViewComment? comment;
 
   /// Callback when user submits reply
-  final Future<void> Function(String content, List<RichTextFacet> facets) onSubmit;
+  final Future<void> Function(String content, List<RichTextFacet> facets)
+  onSubmit;
 
   /// CommentsProvider for draft save/restore and time updates
   final CommentsProvider commentsProvider;
@@ -70,6 +72,8 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   double _lastKeyboardHeight = 0;
   Timer? _bannerDismissTimer;
   FlutterView? _cachedView;
+  CommentsProviderCache? _commentsCache;
+  AuthProvider? _authProvider;
 
   @override
   void initState() {
@@ -77,6 +81,13 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _textController.addListener(_onTextChanged);
     _focusNode.addListener(_onFocusChanged);
+
+    // Pin the provider in the cache (acquire/release contract from
+    // CommentsProviderCache): without a pin, LRU eviction could dispose
+    // widget.commentsProvider while _ContextPreview's Consumer is still
+    // listening — e.g. if the owning detail route is removed under this
+    // reply route.
+    _acquireProviderPin();
 
     // Restore draft and autofocus after frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -103,9 +114,24 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     _cachedView = View.of(context);
   }
 
+  void _acquireProviderPin() {
+    try {
+      _commentsCache = context.read<CommentsProviderCache>()
+        ..acquireProvider(
+          postUri: widget.commentsProvider.postUri,
+          postCid: widget.commentsProvider.postCid,
+        );
+    } on ProviderNotFoundException {
+      // Expected in tests - the cache may not be available
+    }
+  }
+
   void _setupAuthListener() {
     try {
-      context.read<AuthProvider>().addListener(_onAuthChanged);
+      // Keep a reference so dispose() can remove the listener without an
+      // ancestor lookup (context.read is unsafe on a deactivated element)
+      _authProvider = context.read<AuthProvider>()
+        ..addListener(_onAuthChanged);
     } on ProviderNotFoundException {
       // Expected in tests - AuthProvider may not be available
     } on Exception catch (e) {
@@ -201,11 +227,9 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     _bannerDismissTimer?.cancel();
-    try {
-      context.read<AuthProvider>().removeListener(_onAuthChanged);
-    } on Exception {
-      // AuthProvider may not be available
-    }
+    _authProvider?.removeListener(_onAuthChanged);
+    // Release the cache pin so the provider becomes evictable again.
+    _commentsCache?.releaseProvider(widget.commentsProvider.postUri);
     WidgetsBinding.instance.removeObserver(this);
     _textController.dispose();
     _focusNode.dispose();
@@ -330,92 +354,104 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     // Provide CommentsProvider to descendant widgets (Consumer in _ContextPreview)
     return ChangeNotifierProvider.value(
       value: widget.commentsProvider,
-      child: GestureDetector(
-        onTap: () {
-          // Dismiss keyboard when tapping outside
-          FocusManager.instance.primaryFocus?.unfocus();
+      // System back / predictive back must save the draft just like the
+      // app-bar Cancel button. Never save in dispose() instead: after a
+      // successful submit the controller still holds the submitted text and
+      // a dispose-save would resurrect the just-cleared draft — hence the
+      // !_isSubmitting guard (submit pops while _isSubmitting is true).
+      child: PopScope(
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop && !_isSubmitting) {
+            _saveDraft();
+          }
         },
-        child: Scaffold(
-        backgroundColor: AppColors.background,
-        resizeToAvoidBottomInset: false, // Thunder approach
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          surfaceTintColor: Colors.transparent,
-          foregroundColor: AppColors.textPrimary,
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          leading: TextButton(
-            onPressed: _handleCancel,
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
-            ),
-          ),
-          leadingWidth: 80,
-        ),
-        body: Column(
-          children: [
-            // Scrollable content area (Thunder style)
-            Expanded(
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Column(
-                  children: [
-                    // Post or comment preview
-                    _buildContext(),
-
-                    const SizedBox(height: 8),
-
-                    // Divider between post and text input
-                    Container(height: 1, color: AppColors.border),
-
-                    // Text input - no background box, types directly into
-                    // main area
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: TextField(
-                        controller: _textController,
-                        focusNode: _focusNode,
-                        maxLines: null,
-                        minLines: 8,
-                        keyboardType: TextInputType.multiline,
-                        textCapitalization: TextCapitalization.sentences,
-                        textInputAction: TextInputAction.newline,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                          height: 1.4,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: 'Say something...',
-                          hintStyle: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 16,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ),
-                  ],
+        child: GestureDetector(
+          onTap: () {
+            // Dismiss keyboard when tapping outside
+            FocusManager.instance.primaryFocus?.unfocus();
+          },
+          child: Scaffold(
+            backgroundColor: AppColors.background,
+            resizeToAvoidBottomInset: false, // Thunder approach
+            appBar: AppBar(
+              backgroundColor: AppColors.background,
+              surfaceTintColor: Colors.transparent,
+              foregroundColor: AppColors.textPrimary,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              leading: TextButton(
+                onPressed: _handleCancel,
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
                 ),
               ),
+              leadingWidth: 80,
             ),
+            body: Column(
+              children: [
+                // Scrollable content area (Thunder style)
+                Expanded(
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      children: [
+                        // Post or comment preview
+                        _buildContext(),
 
-            // Divider - simple straight line like posts and comments
-            Container(height: 1, color: AppColors.border),
+                        const SizedBox(height: 8),
 
-            _ReplyToolbar(
-              hasText: _hasText,
-              isSubmitting: _isSubmitting,
-              onImageTap: _handleImageTap,
-              onMentionTap: _handleMentionTap,
-              onSubmit: _handleSubmit,
+                        // Divider between post and text input
+                        Container(height: 1, color: AppColors.border),
+
+                        // Text input - no background box, types directly into
+                        // main area
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: TextField(
+                            controller: _textController,
+                            focusNode: _focusNode,
+                            maxLines: null,
+                            minLines: 8,
+                            keyboardType: TextInputType.multiline,
+                            textCapitalization: TextCapitalization.sentences,
+                            textInputAction: TextInputAction.newline,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 16,
+                              height: 1.4,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: 'Say something...',
+                              hintStyle: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 16,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Divider - simple straight line like posts and comments
+                Container(height: 1, color: AppColors.border),
+
+                _ReplyToolbar(
+                  hasText: _hasText,
+                  isSubmitting: _isSubmitting,
+                  onImageTap: _handleImageTap,
+                  onMentionTap: _handleMentionTap,
+                  onSubmit: _handleSubmit,
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
       ),
     );
   }
