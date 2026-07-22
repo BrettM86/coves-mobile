@@ -11,13 +11,17 @@ import 'auth_provider.dart';
 /// Tracks local subscription state keyed by community DID for instant feedback.
 /// Automatically clears state when user signs out.
 class CommunitySubscriptionProvider with ChangeNotifier {
-  CommunitySubscriptionProvider({required AuthProvider authProvider})
-    : _authProvider = authProvider,
-      _apiService = CovesApiService(
-        tokenGetter: () async => authProvider.session?.token,
-        tokenRefresher: authProvider.refreshToken,
-        signOutHandler: authProvider.signOut,
-      ) {
+  CommunitySubscriptionProvider({
+    required AuthProvider authProvider,
+    CovesApiService? apiService,
+  }) : _authProvider = authProvider,
+       _apiService =
+           apiService ??
+           CovesApiService(
+             tokenGetter: () async => authProvider.session?.token,
+             tokenRefresher: authProvider.refreshToken,
+             signOutHandler: authProvider.signOut,
+           ) {
     // Listen to auth state changes and clear subscriptions on sign-out
     _authProvider.addListener(_onAuthChanged);
   }
@@ -112,7 +116,10 @@ class CommunitySubscriptionProvider with ChangeNotifier {
     // Optimistic update + mark request as pending. From here on, viewer
     // snapshots (which may lag behind the firehose) must not overwrite
     // this community's state — see setInitialSubscriptionState.
-    _userToggled.add(communityDid);
+    // Track whether THIS call added the DID: a failed first toggle must
+    // not leave the DID authoritative forever (blocking future server
+    // seeds), while an earlier successful toggle keeps its authority.
+    final newlyToggled = _userToggled.add(communityDid);
     _subscriptions[communityDid] = willSubscribe;
     _pendingRequests[communityDid] = true;
     notifyListeners();
@@ -136,9 +143,11 @@ class CommunitySubscriptionProvider with ChangeNotifier {
         debugPrint('❌ Failed to toggle subscription: ${e.message}');
       }
 
-      // Rollback optimistic update
+      // Rollback optimistic update (finally notifies listeners)
       _subscriptions[communityDid] = wasSubscribed;
-      notifyListeners();
+      if (newlyToggled) {
+        _userToggled.remove(communityDid);
+      }
 
       rethrow;
     } on Exception catch (e, stackTrace) {
@@ -147,9 +156,11 @@ class CommunitySubscriptionProvider with ChangeNotifier {
         debugPrint('❌ Unexpected error toggling subscription: $e');
       }
 
-      // Rollback optimistic update
+      // Rollback optimistic update (finally notifies listeners)
       _subscriptions[communityDid] = wasSubscribed;
-      notifyListeners();
+      if (newlyToggled) {
+        _userToggled.remove(communityDid);
+      }
 
       // Log to Sentry in production
       await Sentry.captureException(e, stackTrace: stackTrace);
@@ -214,6 +225,11 @@ class CommunitySubscriptionProvider with ChangeNotifier {
       final response = await _apiService.listCommunities(subscribed: true);
 
       for (final community in response.communities) {
+        // User-toggled DIDs stay authoritative for the session: a refetch
+        // racing a user unsubscribe (firehose lag) must not flip it back.
+        if (_userToggled.contains(community.did)) {
+          continue;
+        }
         _subscriptions[community.did] = true;
       }
 

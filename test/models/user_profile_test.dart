@@ -84,5 +84,35 @@ void main() {
 
       expect(viewer.blocked, isFalse);
     });
+
+    test('non-string blocking value parses as not blocked (no TypeError)', () {
+      final viewer = ProfileViewerState.fromJson(const {'blocking': 123});
+
+      expect(viewer.blocked, isFalse);
+      expect(viewer.blockUri, isNull);
+    });
+
+    test('non-string blockUri and non-bool blocked parse defensively', () {
+      final viewer = ProfileViewerState.fromJson(const {
+        'blockUri': 42,
+        'blocked': 'yes',
+        'blockedBy': 'nope',
+      });
+
+      expect(viewer.blocked, isFalse);
+      expect(viewer.blockUri, isNull);
+      expect(viewer.blockedBy, isFalse);
+    });
+
+    test('explicit blocked=false wins over a present blocking URI', () {
+      // Pins current behavior for the contradictory shape: an explicit
+      // bool from the server is trusted over URI presence.
+      final viewer = ProfileViewerState.fromJson(const {
+        'blocked': false,
+        'blocking': uri,
+      });
+
+      expect(viewer.blocked, isFalse);
+    });
   });
 }

@@ -47,6 +47,13 @@ class BlockProvider with ChangeNotifier {
   final Map<String, bool> _pendingUserBlocks = {};
   final Map<String, bool> _pendingCommunityBlocks = {};
 
+  // DIDs the user explicitly toggled this session. Their local state is
+  // authoritative until sign-out: server seeds must not overwrite it.
+  // Everything else stays refreshable by later snapshots (e.g. a block
+  // made from another device).
+  final Set<String> _toggledUserBlocks = {};
+  final Set<String> _toggledCommunityBlocks = {};
+
   /// Check if a user is blocked
   bool isUserBlocked(String userDid) => _userBlocks[userDid] ?? false;
 
@@ -70,6 +77,7 @@ class BlockProvider with ChangeNotifier {
         did: userDid,
         blocks: _userBlocks,
         pending: _pendingUserBlocks,
+        toggled: _toggledUserBlocks,
         blockFn: () => _apiService.blockUser(actor: userDid),
         unblockFn: () => _apiService.unblockUser(actor: userDid),
       );
@@ -83,6 +91,7 @@ class BlockProvider with ChangeNotifier {
         did: communityDid,
         blocks: _communityBlocks,
         pending: _pendingCommunityBlocks,
+        toggled: _toggledCommunityBlocks,
         blockFn: () => _apiService.blockCommunity(community: communityDid),
         unblockFn: () =>
             _apiService.unblockCommunity(community: communityDid),
@@ -93,6 +102,7 @@ class BlockProvider with ChangeNotifier {
     required String did,
     required Map<String, bool> blocks,
     required Map<String, bool> pending,
+    required Set<String> toggled,
     required Future<void> Function() blockFn,
     required Future<void> Function() unblockFn,
   }) async {
@@ -110,7 +120,11 @@ class BlockProvider with ChangeNotifier {
     final wasBlocked = blocks[did] ?? false;
     final willBlock = !wasBlocked;
 
-    // Optimistic update + mark as pending before notify
+    // Optimistic update + mark as pending before notify. Track whether
+    // THIS call added the DID: a failed first toggle must not leave the
+    // DID authoritative forever (blocking future server seeds), while an
+    // earlier successful toggle keeps its authority.
+    final newlyToggled = toggled.add(did);
     blocks[did] = willBlock;
     pending[did] = true;
     notifyListeners();
@@ -123,12 +137,18 @@ class BlockProvider with ChangeNotifier {
       }
       return willBlock;
     } on ApiException {
+      // Rollback optimistic update (finally notifies listeners)
       blocks[did] = wasBlocked;
-      notifyListeners();
+      if (newlyToggled) {
+        toggled.remove(did);
+      }
       rethrow;
     } catch (e, stackTrace) {
+      // Rollback optimistic update (finally notifies listeners)
       blocks[did] = wasBlocked;
-      notifyListeners();
+      if (newlyToggled) {
+        toggled.remove(did);
+      }
       await Sentry.captureException(e, stackTrace: stackTrace);
       throw ApiException(
         'Unexpected error: ${e.toString()}',
@@ -142,28 +162,51 @@ class BlockProvider with ChangeNotifier {
 
   /// Initialize user block state from server data (e.g. profile
   /// viewer.blocking).
-  ///
-  /// Seed-only: never clobbers existing local state — an optimistic
-  /// toggle already in memory (or in flight) is fresher than a possibly
-  /// cached server response.
   void setInitialUserBlockState({
     required String userDid,
     required bool isBlocked,
-  }) {
-    if (_userBlocks.containsKey(userDid) ||
-        (_pendingUserBlocks[userDid] ?? false)) {
-      return;
-    }
-    _userBlocks[userDid] = isBlocked;
-    notifyListeners();
-  }
+  }) => _setInitialBlockState(
+        did: userDid,
+        isBlocked: isBlocked,
+        blocks: _userBlocks,
+        pending: _pendingUserBlocks,
+        toggled: _toggledUserBlocks,
+      );
 
   /// Initialize community block state from community data
   void setInitialCommunityBlockState({
     required String communityDid,
     required bool isBlocked,
+  }) => _setInitialBlockState(
+        did: communityDid,
+        isBlocked: isBlocked,
+        blocks: _communityBlocks,
+        pending: _pendingCommunityBlocks,
+        toggled: _toggledCommunityBlocks,
+      );
+
+  /// Seed block state from a server snapshot.
+  ///
+  /// User-toggled DIDs are authoritative for the session (or until
+  /// sign-out) and are never overwritten — nor is a toggle in flight.
+  /// Everything else stays refreshable so a later, fresher snapshot
+  /// (e.g. a block made from another device) is applied. Notifies only
+  /// when the stored value actually changes.
+  void _setInitialBlockState({
+    required String did,
+    required bool isBlocked,
+    required Map<String, bool> blocks,
+    required Map<String, bool> pending,
+    required Set<String> toggled,
   }) {
-    _communityBlocks[communityDid] = isBlocked;
+    if (toggled.contains(did) || (pending[did] ?? false)) {
+      return;
+    }
+    if (blocks[did] == isBlocked) {
+      return;
+    }
+    blocks[did] = isBlocked;
+    notifyListeners();
   }
 
   /// Clear all block state (e.g., on sign out)
@@ -172,6 +215,8 @@ class BlockProvider with ChangeNotifier {
     _communityBlocks.clear();
     _pendingUserBlocks.clear();
     _pendingCommunityBlocks.clear();
+    _toggledUserBlocks.clear();
+    _toggledCommunityBlocks.clear();
     notifyListeners();
   }
 }

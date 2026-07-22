@@ -279,14 +279,23 @@ class ProfileViewerState {
   factory ProfileViewerState.fromJson(Map<String, dynamic> json) {
     // The backend serializes the viewer's block as `blocking` — the block
     // record URI (see users/user.go ProfileViewerState). Accept the older
-    // `blocked`/`blockUri` shape too.
-    final blockUri = (json['blockUri'] ?? json['blocking']) as String?;
-    final blocked = json['blocked'] as bool? ?? (blockUri != null);
+    // `blocked`/`blockUri` shape too. Type-check each optional field so a
+    // malformed value never kills the whole profile parse.
+    final rawBlockUri = json['blockUri'];
+    final rawBlocking = json['blocking'];
+    final blockUri =
+        rawBlockUri is String
+            ? rawBlockUri
+            : rawBlocking is String
+            ? rawBlocking
+            : null;
+    final rawBlocked = json['blocked'];
+    final rawBlockedBy = json['blockedBy'];
 
-    return ProfileViewerState._(
-      // If blocked but no blockUri, treat as not blocked (defensive)
-      blocked: blocked && blockUri != null,
-      blockedBy: json['blockedBy'] as bool? ?? false,
+    // The public factory enforces the blocked-requires-blockUri invariant.
+    return ProfileViewerState(
+      blocked: rawBlocked is bool ? rawBlocked : blockUri != null,
+      blockedBy: rawBlockedBy is bool && rawBlockedBy,
       blockUri: blockUri,
     );
   }

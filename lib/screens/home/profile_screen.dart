@@ -88,12 +88,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     // Seed block state from the profile's viewer data so block/unblock
     // menus reflect the server-side block after an app restart (the
-    // seed never clobbers fresher in-session optimistic state).
+    // seed never clobbers fresher in-session optimistic state). Only
+    // seed when a viewer object is present: an unauthenticated response
+    // omits it entirely, and that absence must not be read as "false".
     final profile = profileProvider.profile;
-    if (profile != null && profile.did != authProvider.did) {
+    final viewer = profile?.viewer;
+    if (profile != null && viewer != null && profile.did != authProvider.did) {
       context.read<BlockProvider>().setInitialUserBlockState(
         userDid: profile.did,
-        isBlocked: profile.viewer?.blocked ?? false,
+        isBlocked: viewer.blocked,
       );
     }
 

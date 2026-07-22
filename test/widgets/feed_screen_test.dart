@@ -156,6 +156,16 @@ void main() {
       );
     });
 
+    tearDown(() {
+      // Dispose auth listeners first (they unsubscribe from the auth
+      // provider), then the auth provider itself.
+      subscriptionProvider.dispose();
+      blockProvider.dispose();
+      fakeVoteProvider.dispose();
+      fakeFeedProvider.dispose();
+      fakeAuthProvider.dispose();
+    });
+
     Widget createTestWidget() {
       return MultiProvider(
         providers: [
