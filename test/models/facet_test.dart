@@ -616,15 +616,25 @@ void main() {
       expect(feature1, isNot(equals(feature3)));
     });
 
-    test('identical instances have equal hashCode', () {
+    test('hashCode is stable and equal instances hash equally', () {
       const feature = UnknownFacetFeature(data: {
         r'$type': 'test',
         'value': 123,
       });
 
-      // Identical instances should have same hashCode
-      expect(identical(feature, feature), isTrue);
-      // Note: hashCode is called twice but on the same object
+      // Stable across calls (the old entries-based hash returned a
+      // different value per invocation)
+      expect(feature.hashCode, feature.hashCode);
+
+      // ==/hashCode contract: equal content hashes equally, even when the
+      // maps were built in a different key order
+      const a = UnknownFacetFeature(data: {r'$type': 'test', 'value': 123});
+      const b = UnknownFacetFeature(data: {'value': 123, r'$type': 'test'});
+      expect(a, b);
+      expect(a.hashCode, b.hashCode);
+
+      // Usable as a set member
+      expect({a}.contains(b), isTrue);
     });
 
     test('toString format', () {

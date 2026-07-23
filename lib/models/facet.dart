@@ -474,7 +474,17 @@ class UnknownFacetFeature extends FacetFeature {
           _mapEquals(data, other.data);
 
   @override
-  int get hashCode => Object.hashAll(data.entries);
+  int get hashCode {
+    // MapEntry hashes by identity and `.entries` creates fresh entries per
+    // call, so Object.hashAll(data.entries) returned a different value on
+    // every invocation. Hash the content instead, XOR-folded so the result
+    // is independent of key insertion order (matching _mapEquals).
+    var hash = 0;
+    for (final entry in data.entries) {
+      hash ^= Object.hash(entry.key, entry.value);
+    }
+    return hash;
+  }
 
   static bool _mapEquals(Map<String, dynamic> a, Map<String, dynamic> b) {
     if (a.length != b.length) return false;
