@@ -151,17 +151,17 @@ void main() {
 
     test('returns UnknownFacetFeature for unknown types', () {
       final json = {
-        r'$type': 'social.coves.richtext.facet#mention',
-        'did': 'did:plc:abc123',
+        r'$type': 'social.coves.richtext.facet#futureFeature',
+        'attr': 'value',
       };
 
       final feature = FacetFeature.fromJson(json);
 
       expect(feature, isA<UnknownFacetFeature>());
-      expect(feature.type, 'social.coves.richtext.facet#mention');
+      expect(feature.type, 'social.coves.richtext.facet#futureFeature');
     });
 
-    test('returns UnknownFacetFeature when \$type is missing', () {
+    test(r'returns UnknownFacetFeature when $type is missing', () {
       final json = {'uri': 'https://example.com'};
 
       final feature = FacetFeature.fromJson(json);
@@ -170,7 +170,7 @@ void main() {
       expect(feature.type, 'unknown');
     });
 
-    test('returns UnknownFacetFeature when \$type is empty', () {
+    test(r'returns UnknownFacetFeature when $type is empty', () {
       final json = {r'$type': '', 'uri': 'https://example.com'};
 
       final feature = FacetFeature.fromJson(json);
@@ -178,55 +178,335 @@ void main() {
       expect(feature, isA<UnknownFacetFeature>());
     });
 
-    test('throws FormatException when LinkFacetFeature has missing uri', () {
-      final json = {r'$type': 'social.coves.richtext.facet#link'};
+    test(r'returns UnknownFacetFeature when $type is a non-string int', () {
+      final json = {r'$type': 42, 'uri': 'https://example.com'};
 
-      expect(
-        () => FacetFeature.fromJson(json),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('uri'),
-          ),
-        ),
-      );
+      final feature = FacetFeature.fromJson(json);
+
+      expect(feature, isA<UnknownFacetFeature>());
+      expect(feature.type, 'unknown');
     });
 
-    test('throws FormatException when LinkFacetFeature has empty uri', () {
+    test(r'returns UnknownFacetFeature when $type is a list', () {
+      final json = {
+        r'$type': ['x'],
+      };
+
+      final feature = FacetFeature.fromJson(json);
+
+      expect(feature, isA<UnknownFacetFeature>());
+      expect(feature.type, 'unknown');
+    });
+
+    test('degrades link with missing uri to UnknownFacetFeature', () {
+      final json = {r'$type': 'social.coves.richtext.facet#link'};
+
+      expect(FacetFeature.fromJson(json), isA<UnknownFacetFeature>());
+    });
+
+    test('degrades link with empty uri to UnknownFacetFeature', () {
       final json = {
         r'$type': 'social.coves.richtext.facet#link',
         'uri': '',
       };
 
-      expect(
-        () => FacetFeature.fromJson(json),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('uri'),
-          ),
-        ),
-      );
+      expect(FacetFeature.fromJson(json), isA<UnknownFacetFeature>());
     });
 
-    test('throws FormatException when LinkFacetFeature has non-string uri', () {
+    test('degrades link with non-string uri to UnknownFacetFeature', () {
       final json = {
         r'$type': 'social.coves.richtext.facet#link',
         'uri': 123,
       };
 
+      expect(FacetFeature.fromJson(json), isA<UnknownFacetFeature>());
+    });
+
+    test('parses MentionFacetFeature correctly', () {
+      final json = {
+        r'$type': 'social.coves.richtext.facet#mention',
+        'did': 'did:plc:abc123',
+      };
+
+      final feature = FacetFeature.fromJson(json);
+
+      expect(feature, isA<MentionFacetFeature>());
+      expect((feature as MentionFacetFeature).did, 'did:plc:abc123');
+    });
+
+    test('degrades mention with missing did to UnknownFacetFeature', () {
+      final json = {r'$type': 'social.coves.richtext.facet#mention'};
+
+      expect(FacetFeature.fromJson(json), isA<UnknownFacetFeature>());
+    });
+
+    test('parses simple formatting features', () {
       expect(
-        () => FacetFeature.fromJson(json),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('uri'),
-          ),
-        ),
+        FacetFeature.fromJson({
+          r'$type': 'social.coves.richtext.facet#bold',
+        }),
+        isA<BoldFacetFeature>(),
       );
+      expect(
+        FacetFeature.fromJson({
+          r'$type': 'social.coves.richtext.facet#italic',
+        }),
+        isA<ItalicFacetFeature>(),
+      );
+      expect(
+        FacetFeature.fromJson({
+          r'$type': 'social.coves.richtext.facet#strikethrough',
+        }),
+        isA<StrikethroughFacetFeature>(),
+      );
+      expect(
+        FacetFeature.fromJson({
+          r'$type': 'social.coves.richtext.facet#code',
+        }),
+        isA<CodeFacetFeature>(),
+      );
+    });
+
+    test('parses spoiler with and without reason', () {
+      final withReason = FacetFeature.fromJson({
+        r'$type': 'social.coves.richtext.facet#spoiler',
+        'reason': 'ending',
+      });
+      expect(withReason, isA<SpoilerFacetFeature>());
+      expect((withReason as SpoilerFacetFeature).reason, 'ending');
+
+      final withoutReason = FacetFeature.fromJson({
+        r'$type': 'social.coves.richtext.facet#spoiler',
+      });
+      expect(withoutReason, isA<SpoilerFacetFeature>());
+      expect((withoutReason as SpoilerFacetFeature).reason, isNull);
+    });
+
+    test('parses blockquote with absent level as level 1', () {
+      final feature = FacetFeature.fromJson({
+        r'$type': 'social.coves.richtext.facet#blockquote',
+      });
+
+      expect(feature, isA<BlockquoteFacetFeature>());
+      expect((feature as BlockquoteFacetFeature).level, 1);
+    });
+
+    test('parses blockquote level and clamps out-of-range values', () {
+      final level3 = FacetFeature.fromJson({
+        r'$type': 'social.coves.richtext.facet#blockquote',
+        'level': 3,
+      });
+      expect((level3 as BlockquoteFacetFeature).level, 3);
+
+      final level9 = FacetFeature.fromJson({
+        r'$type': 'social.coves.richtext.facet#blockquote',
+        'level': 9,
+      });
+      expect((level9 as BlockquoteFacetFeature).level, 6);
+    });
+
+    test('degrades blockquote with non-int level to UnknownFacetFeature', () {
+      final json = {
+        r'$type': 'social.coves.richtext.facet#blockquote',
+        'level': 'two',
+      };
+
+      expect(FacetFeature.fromJson(json), isA<UnknownFacetFeature>());
+    });
+
+    test('parses heading level and clamps out-of-range values', () {
+      final feature = FacetFeature.fromJson({
+        r'$type': 'social.coves.richtext.facet#heading',
+        'level': 2,
+      });
+
+      expect(feature, isA<HeadingFacetFeature>());
+      expect((feature as HeadingFacetFeature).level, 2);
+
+      final level9 = FacetFeature.fromJson({
+        r'$type': 'social.coves.richtext.facet#heading',
+        'level': 9,
+      });
+      expect((level9 as HeadingFacetFeature).level, 6);
+    });
+
+    test('degrades heading with missing level to UnknownFacetFeature', () {
+      final json = {r'$type': 'social.coves.richtext.facet#heading'};
+
+      expect(FacetFeature.fromJson(json), isA<UnknownFacetFeature>());
+    });
+
+    test('parses codeBlock with and without language', () {
+      final withLang = FacetFeature.fromJson({
+        r'$type': 'social.coves.richtext.facet#codeBlock',
+        'language': 'go',
+      });
+      expect(withLang, isA<CodeBlockFacetFeature>());
+      expect((withLang as CodeBlockFacetFeature).language, 'go');
+
+      final withoutLang = FacetFeature.fromJson({
+        r'$type': 'social.coves.richtext.facet#codeBlock',
+      });
+      expect(withoutLang, isA<CodeBlockFacetFeature>());
+      expect((withoutLang as CodeBlockFacetFeature).language, isNull);
+    });
+
+    test('new features round-trip through JSON', () {
+      final features = <FacetFeature>[
+        const MentionFacetFeature(did: 'did:plc:xyz'),
+        const BoldFacetFeature(),
+        const ItalicFacetFeature(),
+        const StrikethroughFacetFeature(),
+        const SpoilerFacetFeature(reason: 'plot'),
+        const BlockquoteFacetFeature(level: 2),
+        const HeadingFacetFeature(level: 1),
+        const CodeFacetFeature(),
+        const CodeBlockFacetFeature(language: 'python'),
+      ];
+
+      for (final original in features) {
+        final restored = FacetFeature.fromJson(original.toJson());
+        expect(restored, original, reason: 'round-trip of ${original.type}');
+      }
+    });
+  });
+
+  group('RichTextFacet.blockFeature', () {
+    test('returns the first block-level feature', () {
+      const facet = RichTextFacet(
+        index: ByteSlice(byteStart: 0, byteEnd: 5),
+        features: [
+          BoldFacetFeature(),
+          HeadingFacetFeature(level: 2),
+        ],
+      );
+
+      expect(facet.blockFeature, const HeadingFacetFeature(level: 2));
+    });
+
+    test('returns null when only inline features present', () {
+      const facet = RichTextFacet(
+        index: ByteSlice(byteStart: 0, byteEnd: 5),
+        features: [
+          BoldFacetFeature(),
+          LinkFacetFeature(uri: 'https://example.com'),
+        ],
+      );
+
+      expect(facet.blockFeature, isNull);
+    });
+  });
+
+  group('parseFacetsFromRecord', () {
+    test('drops malformed facets but keeps valid ones', () {
+      final record = {
+        'facets': [
+          {
+            // Malformed: missing byteStart
+            'index': {'byteEnd': 5},
+            'features': [
+              {r'$type': 'social.coves.richtext.facet#bold'},
+            ],
+          },
+          {
+            'index': {'byteStart': 0, 'byteEnd': 5},
+            'features': [
+              {r'$type': 'social.coves.richtext.facet#bold'},
+            ],
+          },
+        ],
+      };
+
+      final facets = parseFacetsFromRecord(record);
+
+      expect(facets, isNotNull);
+      expect(facets!.length, 1);
+      expect(facets.first.features.first, const BoldFacetFeature());
+    });
+
+    test('returns null when every facet is malformed', () {
+      final record = {
+        'facets': [
+          {
+            'index': {'byteEnd': 5},
+            'features': <Map<String, dynamic>>[],
+          },
+        ],
+      };
+
+      expect(parseFacetsFromRecord(record), isNull);
+    });
+
+    test('truncates to the first 200 facets (backend MaxFacets cap)', () {
+      final record = {
+        'facets': List.generate(
+          201,
+          (i) => {
+            'index': {'byteStart': i, 'byteEnd': i + 1},
+            'features': [
+              {r'$type': 'social.coves.richtext.facet#bold'},
+            ],
+          },
+        ),
+      };
+
+      final facets = parseFacetsFromRecord(record);
+
+      expect(facets, isNotNull);
+      expect(facets!.length, 200);
+      // First 200 survive: last kept facet is index 199
+      expect(facets.last.index, const ByteSlice(byteStart: 199, byteEnd: 200));
+    });
+
+    test('drops a facet with more than 20 features but keeps siblings', () {
+      final record = {
+        'facets': [
+          {
+            'index': {'byteStart': 0, 'byteEnd': 5},
+            'features': List.generate(
+              21,
+              (_) => {r'$type': 'social.coves.richtext.facet#bold'},
+            ),
+          },
+          {
+            'index': {'byteStart': 10, 'byteEnd': 15},
+            'features': [
+              {r'$type': 'social.coves.richtext.facet#italic'},
+            ],
+          },
+        ],
+      };
+
+      final facets = parseFacetsFromRecord(record);
+
+      expect(facets, isNotNull);
+      expect(facets!.length, 1);
+      expect(facets.first.index, const ByteSlice(byteStart: 10, byteEnd: 15));
+      expect(facets.first.features.first, const ItalicFacetFeature());
+    });
+
+    test('drops a facet whose features is a non-list without nuking siblings',
+        () {
+      final record = {
+        'facets': [
+          {
+            'index': {'byteStart': 0, 'byteEnd': 5},
+            'features': 'not-a-list',
+          },
+          {
+            'index': {'byteStart': 10, 'byteEnd': 15},
+            'features': [
+              {r'$type': 'social.coves.richtext.facet#bold'},
+            ],
+          },
+        ],
+      };
+
+      final facets = parseFacetsFromRecord(record);
+
+      expect(facets, isNotNull);
+      expect(facets!.length, 1);
+      expect(facets.first.index, const ByteSlice(byteStart: 10, byteEnd: 15));
     });
   });
 
@@ -238,7 +518,7 @@ void main() {
       expect(feature.type, 'social.coves.richtext.facet#link');
     });
 
-    test('toJson produces correct format with \$type field', () {
+    test(r'toJson produces correct format with $type field', () {
       const feature = LinkFacetFeature(uri: 'https://example.com/path?q=1');
       final json = feature.toJson();
 
@@ -298,30 +578,36 @@ void main() {
       expect(json, data);
     });
 
-    test('type property returns \$type from data', () {
-      final feature = UnknownFacetFeature(data: {
+    test(r'type property returns $type from data', () {
+      const feature = UnknownFacetFeature(data: {
         r'$type': 'custom.feature#type',
       });
 
       expect(feature.type, 'custom.feature#type');
     });
 
-    test('type property returns "unknown" when \$type is missing', () {
-      final feature = UnknownFacetFeature(data: {'foo': 'bar'});
+    test(r'type property returns "unknown" when $type is missing', () {
+      const feature = UnknownFacetFeature(data: {'foo': 'bar'});
+
+      expect(feature.type, 'unknown');
+    });
+
+    test(r'type property returns "unknown" when $type is not a string', () {
+      const feature = UnknownFacetFeature(data: {r'$type': 42});
 
       expect(feature.type, 'unknown');
     });
 
     test('equality works with same data', () {
-      final feature1 = UnknownFacetFeature(data: {
+      const feature1 = UnknownFacetFeature(data: {
         r'$type': 'test',
         'value': 123,
       });
-      final feature2 = UnknownFacetFeature(data: {
+      const feature2 = UnknownFacetFeature(data: {
         r'$type': 'test',
         'value': 123,
       });
-      final feature3 = UnknownFacetFeature(data: {
+      const feature3 = UnknownFacetFeature(data: {
         r'$type': 'test',
         'value': 456,
       });
@@ -331,7 +617,7 @@ void main() {
     });
 
     test('identical instances have equal hashCode', () {
-      final feature = UnknownFacetFeature(data: {
+      const feature = UnknownFacetFeature(data: {
         r'$type': 'test',
         'value': 123,
       });
@@ -342,12 +628,14 @@ void main() {
     });
 
     test('toString format', () {
-      final feature = UnknownFacetFeature(data: {
-        r'$type': 'social.coves.richtext.facet#mention',
+      const feature = UnknownFacetFeature(data: {
+        r'$type': 'social.coves.richtext.facet#future',
       });
 
       expect(
-          feature.toString(), 'UnknownFacetFeature(social.coves.richtext.facet#mention)');
+        feature.toString(),
+        'UnknownFacetFeature(social.coves.richtext.facet#future)',
+      );
     });
   });
 
@@ -355,7 +643,7 @@ void main() {
     test('valid construction and properties', () {
       const index = ByteSlice(byteStart: 0, byteEnd: 10);
       const features = [LinkFacetFeature(uri: 'https://example.com')];
-      final facet = RichTextFacet(index: index, features: features);
+      const facet = RichTextFacet(index: index, features: features);
 
       expect(facet.index, index);
       expect(facet.features.length, 1);
@@ -401,7 +689,8 @@ void main() {
 
       expect(facet.features.length, 2);
       expect(facet.features[0], isA<LinkFacetFeature>());
-      expect(facet.features[1], isA<UnknownFacetFeature>());
+      expect(facet.features[1], isA<MentionFacetFeature>());
+      expect((facet.features[1] as MentionFacetFeature).did, 'did:plc:abc');
     });
 
     test('fromJson throws on missing index', () {
@@ -482,7 +771,7 @@ void main() {
     test('toJson produces correct format', () {
       const index = ByteSlice(byteStart: 10, byteEnd: 30);
       const features = [LinkFacetFeature(uri: 'https://test.org')];
-      final facet = RichTextFacet(index: index, features: features);
+      const facet = RichTextFacet(index: index, features: features);
 
       final json = facet.toJson();
 
@@ -495,7 +784,7 @@ void main() {
     test('toJson/fromJson round-trip', () {
       const index = ByteSlice(byteStart: 5, byteEnd: 25);
       const features = [LinkFacetFeature(uri: 'https://example.com/path')];
-      final original = RichTextFacet(index: index, features: features);
+      const original = RichTextFacet(index: index, features: features);
 
       final json = original.toJson();
       final restored = RichTextFacet.fromJson(json);
@@ -508,7 +797,7 @@ void main() {
     test('hasLink returns true when contains LinkFacetFeature', () {
       const index = ByteSlice(byteStart: 0, byteEnd: 10);
       const features = [LinkFacetFeature(uri: 'https://example.com')];
-      final facet = RichTextFacet(index: index, features: features);
+      const facet = RichTextFacet(index: index, features: features);
 
       expect(facet.hasLink, true);
     });
@@ -516,7 +805,7 @@ void main() {
     test('hasLink returns false when no LinkFacetFeature', () {
       const index = ByteSlice(byteStart: 0, byteEnd: 10);
       final features = [
-        UnknownFacetFeature(data: {r'$type': 'mention'}),
+        const UnknownFacetFeature(data: {r'$type': 'mention'}),
       ];
       final facet = RichTextFacet(index: index, features: features);
 
@@ -525,8 +814,8 @@ void main() {
 
     test('hasLink returns false with empty features', () {
       const index = ByteSlice(byteStart: 0, byteEnd: 10);
-      const List<FacetFeature> features = [];
-      final facet = RichTextFacet(index: index, features: features);
+      const features = <FacetFeature>[];
+      const facet = RichTextFacet(index: index, features: features);
 
       expect(facet.hasLink, false);
     });
@@ -534,7 +823,7 @@ void main() {
     test('linkUri returns URI when has link', () {
       const index = ByteSlice(byteStart: 0, byteEnd: 10);
       const features = [LinkFacetFeature(uri: 'https://example.com/page')];
-      final facet = RichTextFacet(index: index, features: features);
+      const facet = RichTextFacet(index: index, features: features);
 
       expect(facet.linkUri, 'https://example.com/page');
     });
@@ -545,7 +834,7 @@ void main() {
         LinkFacetFeature(uri: 'https://first.com'),
         LinkFacetFeature(uri: 'https://second.com'),
       ];
-      final facet = RichTextFacet(index: index, features: features);
+      const facet = RichTextFacet(index: index, features: features);
 
       expect(facet.linkUri, 'https://first.com');
     });
@@ -553,7 +842,7 @@ void main() {
     test('linkUri returns null when no link', () {
       const index = ByteSlice(byteStart: 0, byteEnd: 10);
       final features = [
-        UnknownFacetFeature(data: {r'$type': 'mention'}),
+        const UnknownFacetFeature(data: {r'$type': 'mention'}),
       ];
       final facet = RichTextFacet(index: index, features: features);
 
@@ -562,8 +851,8 @@ void main() {
 
     test('linkUri returns null with empty features', () {
       const index = ByteSlice(byteStart: 0, byteEnd: 10);
-      const List<FacetFeature> features = [];
-      final facet = RichTextFacet(index: index, features: features);
+      const features = <FacetFeature>[];
+      const facet = RichTextFacet(index: index, features: features);
 
       expect(facet.linkUri, null);
     });
@@ -571,10 +860,10 @@ void main() {
     test('equality and hashCode', () {
       const index = ByteSlice(byteStart: 0, byteEnd: 10);
       const features = [LinkFacetFeature(uri: 'https://example.com')];
-      final facet1 = RichTextFacet(index: index, features: features);
-      final facet2 = RichTextFacet(index: index, features: features);
-      final facet3 = RichTextFacet(
-        index: const ByteSlice(byteStart: 0, byteEnd: 20),
+      const facet1 = RichTextFacet(index: index, features: features);
+      const facet2 = RichTextFacet(index: index, features: features);
+      const facet3 = RichTextFacet(
+        index: ByteSlice(byteStart: 0, byteEnd: 20),
         features: features,
       );
 
@@ -585,13 +874,13 @@ void main() {
 
     test('equality with different features', () {
       const index = ByteSlice(byteStart: 0, byteEnd: 10);
-      final facet1 = RichTextFacet(
+      const facet1 = RichTextFacet(
         index: index,
-        features: const [LinkFacetFeature(uri: 'https://example.com')],
+        features: [LinkFacetFeature(uri: 'https://example.com')],
       );
-      final facet2 = RichTextFacet(
+      const facet2 = RichTextFacet(
         index: index,
-        features: const [LinkFacetFeature(uri: 'https://other.com')],
+        features: [LinkFacetFeature(uri: 'https://other.com')],
       );
 
       expect(facet1, isNot(equals(facet2)));
@@ -600,7 +889,7 @@ void main() {
     test('toString format', () {
       const index = ByteSlice(byteStart: 5, byteEnd: 15);
       const features = [LinkFacetFeature(uri: 'https://example.com')];
-      final facet = RichTextFacet(index: index, features: features);
+      const facet = RichTextFacet(index: index, features: features);
 
       expect(facet.toString(), 'RichTextFacet(ByteSlice(5, 15), 1 features)');
     });

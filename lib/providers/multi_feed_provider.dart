@@ -343,9 +343,21 @@ class MultiFeedProvider with ChangeNotifier {
       if (kDebugMode) {
         debugPrint('❌ Failed to fetch $feedName: $e');
       }
+    } finally {
+      // Defense-in-depth: a non-Exception error (e.g. a TypeError from
+      // malformed JSON) bypasses the `on Exception` catch above and would
+      // otherwise leave isLoading/isLoadingMore stuck true forever.
+      // Guarantee the flags are cleared so the feed can retry.
+      final latestState = _feedStates[type];
+      if (latestState != null &&
+          (latestState.isLoading || latestState.isLoadingMore)) {
+        _feedStates[type] = latestState.copyWith(
+          isLoading: false,
+          isLoadingMore: false,
+        );
+      }
+      notifyListeners();
     }
-
-    notifyListeners();
   }
 
   /// Fetch timeline feed (authenticated)

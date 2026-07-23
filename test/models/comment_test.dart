@@ -33,6 +33,60 @@ void main() {
       expect(response.comments[0].comment.content, 'Test comment');
     });
 
+    test('should skip malformed comments but keep valid ones', () {
+      final json = {
+        'post': {'uri': 'at://test/post/123'},
+        'comments': [
+          {
+            'comment': {
+              'uri': 'at://did:plc:test/comment/1',
+              'cid': 'cid1',
+              'record': {'content': 'Valid before'},
+              'createdAt': '2025-01-01T12:00:00Z',
+              'indexedAt': '2025-01-01T12:00:00Z',
+              'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+              'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+              'stats': {'upvotes': 1, 'downvotes': 0, 'score': 1},
+            },
+            'hasMore': false,
+          },
+          {
+            // Malformed: unparseable createdAt raises a FormatException
+            'comment': {
+              'uri': 'at://did:plc:test/comment/bad',
+              'cid': 'cid-bad',
+              'record': {'content': 'Bad date'},
+              'createdAt': 'not-a-date',
+              'indexedAt': '2025-01-01T12:00:00Z',
+              'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+              'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+              'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
+            },
+            'hasMore': false,
+          },
+          {
+            'comment': {
+              'uri': 'at://did:plc:test/comment/2',
+              'cid': 'cid2',
+              'record': {'content': 'Valid after'},
+              'createdAt': '2025-01-01T12:00:00Z',
+              'indexedAt': '2025-01-01T12:00:00Z',
+              'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+              'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+              'stats': {'upvotes': 2, 'downvotes': 0, 'score': 2},
+            },
+            'hasMore': false,
+          },
+        ],
+      };
+
+      final response = CommentsResponse.fromJson(json);
+
+      expect(response.comments.length, 2);
+      expect(response.comments[0].comment.uri, 'at://did:plc:test/comment/1');
+      expect(response.comments[1].comment.uri, 'at://did:plc:test/comment/2');
+    });
+
     test('should handle null comments array', () {
       final json = {
         'post': {'uri': 'at://test/post/123'},

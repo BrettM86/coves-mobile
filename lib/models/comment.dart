@@ -3,6 +3,8 @@
 // These models match the backend response structure from:
 // /xrpc/social.coves.community.comment.getComments
 
+import 'package:flutter/foundation.dart';
+
 import 'post.dart';
 
 class CommentsResponse {
@@ -17,14 +19,20 @@ class CommentsResponse {
       // Backend returned null, use empty list
       commentsList = [];
     } else {
-      // Parse comment items
-      commentsList =
-          (commentsData as List<dynamic>)
-              .map(
-                (item) =>
-                    ThreadViewComment.fromJson(item as Map<String, dynamic>),
-              )
-              .toList();
+      // Parse comment items, skipping any that fail to parse so one
+      // malformed comment never kills the whole thread load
+      commentsList = <ThreadViewComment>[];
+      for (final item in commentsData as List<dynamic>) {
+        try {
+          commentsList.add(
+            ThreadViewComment.fromJson(item as Map<String, dynamic>),
+          );
+        } on Exception catch (e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ Skipping malformed comment: $e');
+          }
+        }
+      }
     }
 
     return CommentsResponse(
