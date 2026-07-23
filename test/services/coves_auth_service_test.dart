@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:coves_flutter/models/coves_session.dart';
 import 'package:coves_flutter/services/coves_auth_service.dart';
 import 'package:dio/dio.dart';
@@ -262,16 +264,76 @@ void main() {
           ),
         );
 
-        // Act & Assert
+        // Act & Assert - typed so the startup probe can distinguish a dead
+        // session from a transient refresh failure.
         expect(
           () => authService.refreshToken(),
           throwsA(
-            predicate(
-              (e) => e is Exception && e.toString().contains('Session expired'),
+            isA<SessionExpiredException>().having(
+              (e) => e.toString(),
+              'message',
+              contains('Session expired'),
             ),
           ),
         );
       });
+
+      test(
+        'should discard the refresh result when the session changes while '
+        'the request is in flight (sign-out/re-login race)',
+        () async {
+          const sessionA = CovesSession(
+            token: 'token-a',
+            did: 'did:plc:test123',
+            sessionId: 'session-a',
+          );
+          when(
+            mockStorage.read(key: storageKey),
+          ).thenAnswer((_) async => sessionA.toJsonString());
+          await authService.restoreSession();
+
+          final gate = Completer<Response<Map<String, dynamic>>>();
+          when(
+            mockDio.post<Map<String, dynamic>>(
+              '/oauth/refresh',
+              data: anyNamed('data'),
+            ),
+          ).thenAnswer((_) => gate.future);
+
+          final pending = authService.refreshToken();
+
+          // Re-login replaces the session while the refresh is in flight.
+          const sessionB = CovesSession(
+            token: 'token-b',
+            did: 'did:plc:other456',
+            sessionId: 'session-b',
+          );
+          when(
+            mockStorage.read(key: storageKey),
+          ).thenAnswer((_) async => sessionB.toJsonString());
+          await authService.restoreSession();
+
+          gate.complete(
+            Response(
+              requestOptions: RequestOptions(path: '/oauth/refresh'),
+              statusCode: 200,
+              data: {'sealed_token': 'refreshed-token-a'},
+            ),
+          );
+
+          await expectLater(
+            pending,
+            throwsA(isA<SessionRefreshDiscardedException>()),
+          );
+
+          // The stale refreshed token must never be persisted - committing
+          // it would resurrect the session the race winner replaced.
+          verifyNever(
+            mockStorage.write(key: storageKey, value: anyNamed('value')),
+          );
+          expect(authService.session?.token, 'token-b');
+        },
+      );
 
       test('should throw Exception on network error during refresh', () async {
         // Arrange - First restore a session
@@ -400,7 +462,201 @@ void main() {
       );
     });
 
+    group('validateSession()', () {
+      const session = CovesSession(
+        token: 'sealed-token',
+        did: 'did:plc:test123',
+        sessionId: 'session-123',
+        handle: 'alice.bsky.social',
+      );
+
+      Future<void> restoreTestSession() async {
+        when(
+          mockStorage.read(key: storageKey),
+        ).thenAnswer((_) async => session.toJsonString());
+        await authService.restoreSession();
+      }
+
+      test('should return indeterminate when no session exists', () async {
+        final result = await authService.validateSession();
+
+        expect(result, SessionValidationResult.indeterminate);
+        verifyNever(
+          mockDio.get<Map<String, dynamic>>(
+            any,
+            options: anyNamed('options'),
+          ),
+        );
+      });
+
+      test('should return valid on 200 from /api/me', () async {
+        await restoreTestSession();
+
+        when(
+          mockDio.get<Map<String, dynamic>>(
+            '/api/me',
+            options: anyNamed('options'),
+          ),
+        ).thenAnswer(
+          (_) async => Response(
+            requestOptions: RequestOptions(path: '/api/me'),
+            statusCode: 200,
+            data: {'did': 'did:plc:test123', 'handle': 'alice.bsky.social'},
+          ),
+        );
+
+        final result = await authService.validateSession();
+
+        expect(result, SessionValidationResult.valid);
+        // The probe must authenticate with the sealed token.
+        final captured =
+            verify(
+                  mockDio.get<Map<String, dynamic>>(
+                    '/api/me',
+                    options: captureAnyNamed('options'),
+                  ),
+                ).captured.single
+                as Options;
+        expect(captured.headers?['Authorization'], 'Bearer sealed-token');
+      });
+
+      test('should return invalid on 401 from /api/me', () async {
+        await restoreTestSession();
+
+        when(
+          mockDio.get<Map<String, dynamic>>(
+            '/api/me',
+            options: anyNamed('options'),
+          ),
+        ).thenThrow(
+          DioException(
+            requestOptions: RequestOptions(path: '/api/me'),
+            type: DioExceptionType.badResponse,
+            response: Response(
+              requestOptions: RequestOptions(path: '/api/me'),
+              statusCode: 401,
+            ),
+          ),
+        );
+
+        final result = await authService.validateSession();
+
+        expect(result, SessionValidationResult.invalid);
+      });
+
+      test('should return indeterminate on network error', () async {
+        await restoreTestSession();
+
+        when(
+          mockDio.get<Map<String, dynamic>>(
+            '/api/me',
+            options: anyNamed('options'),
+          ),
+        ).thenThrow(
+          DioException(
+            requestOptions: RequestOptions(path: '/api/me'),
+            type: DioExceptionType.connectionError,
+          ),
+        );
+
+        final result = await authService.validateSession();
+
+        expect(result, SessionValidationResult.indeterminate);
+      });
+
+      test('should return indeterminate on server error (5xx)', () async {
+        await restoreTestSession();
+
+        when(
+          mockDio.get<Map<String, dynamic>>(
+            '/api/me',
+            options: anyNamed('options'),
+          ),
+        ).thenThrow(
+          DioException(
+            requestOptions: RequestOptions(path: '/api/me'),
+            type: DioExceptionType.badResponse,
+            response: Response(
+              requestOptions: RequestOptions(path: '/api/me'),
+              statusCode: 503,
+            ),
+          ),
+        );
+
+        final result = await authService.validateSession();
+
+        expect(result, SessionValidationResult.indeterminate);
+      });
+    });
+
     group('signOut()', () {
+      test(
+        'should wait for an in-flight refresh so sign-out always wins '
+        '(no session resurrection)',
+        () async {
+          const session = CovesSession(
+            token: 'test-token',
+            did: 'did:plc:test123',
+            sessionId: 'session-123',
+          );
+          when(
+            mockStorage.read(key: storageKey),
+          ).thenAnswer((_) async => session.toJsonString());
+          await authService.restoreSession();
+
+          final gate = Completer<Response<Map<String, dynamic>>>();
+          when(
+            mockDio.post<Map<String, dynamic>>(
+              '/oauth/refresh',
+              data: anyNamed('data'),
+            ),
+          ).thenAnswer((_) => gate.future);
+          when(
+            mockStorage.write(key: storageKey, value: anyNamed('value')),
+          ).thenAnswer((_) async => {});
+          when(
+            mockDio.post<void>('/oauth/logout', options: anyNamed('options')),
+          ).thenAnswer(
+            (_) async => Response(
+              requestOptions: RequestOptions(path: '/oauth/logout'),
+              statusCode: 200,
+            ),
+          );
+          when(
+            mockStorage.delete(key: storageKey),
+          ).thenAnswer((_) async => {});
+
+          final refreshPending = authService.refreshToken();
+          final signOutPending = authService.signOut();
+
+          // Sign-out is parked behind the in-flight refresh: nothing may be
+          // cleared yet, and nothing has been resurrected.
+          await pumpEventQueue();
+          verifyNever(mockStorage.delete(key: storageKey));
+
+          gate.complete(
+            Response(
+              requestOptions: RequestOptions(path: '/oauth/refresh'),
+              statusCode: 200,
+              data: {'sealed_token': 'refreshed-token'},
+            ),
+          );
+
+          await refreshPending;
+          await signOutPending;
+
+          // The refresh save landed BEFORE the sign-out delete, so storage
+          // ends empty - a refresh resolving after sign-out can never write
+          // a live token back.
+          verifyInOrder([
+            mockStorage.write(key: storageKey, value: anyNamed('value')),
+            mockStorage.delete(key: storageKey),
+          ]);
+          expect(authService.session, isNull);
+          expect(authService.isAuthenticated, isFalse);
+        },
+      );
+
       test(
         'should clear session and storage on successful server-side logout',
         () async {

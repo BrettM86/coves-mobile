@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:coves_flutter/models/coves_session.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/services/coves_auth_service.dart';
@@ -49,12 +51,19 @@ void main() {
         when(
           mockAuthService.restoreSession(),
         ).thenAnswer((_) async => mockSession);
+        when(
+          mockAuthService.validateSession(),
+        ).thenAnswer((_) async => SessionValidationResult.valid);
 
         await authProvider.initialize();
 
         expect(authProvider.isAuthenticated, true);
         expect(authProvider.did, 'did:plc:test123');
         expect(authProvider.handle, 'test.user');
+
+        // Let the background validation probe finish.
+        await pumpEventQueue();
+        expect(authProvider.isAuthenticated, true);
       });
 
       test('should handle initialization errors gracefully', () async {
@@ -66,6 +75,206 @@ void main() {
         expect(authProvider.error, isNotNull);
         expect(authProvider.isLoading, false);
       });
+    });
+
+    group('startup session validation', () {
+      const mockSession = CovesSession(
+        token: 'mock_sealed_token',
+        did: 'did:plc:test123',
+        sessionId: 'session123',
+        handle: 'test.user',
+      );
+
+      setUp(() {
+        when(mockAuthService.initialize()).thenAnswer((_) async => {});
+        when(
+          mockAuthService.restoreSession(),
+        ).thenAnswer((_) async => mockSession);
+      });
+
+      test('should stay signed in when the session validates', () async {
+        when(
+          mockAuthService.validateSession(),
+        ).thenAnswer((_) async => SessionValidationResult.valid);
+
+        await authProvider.initialize();
+        await pumpEventQueue();
+
+        expect(authProvider.isAuthenticated, true);
+        verify(mockAuthService.validateSession()).called(1);
+        verifyNever(mockAuthService.refreshToken());
+      });
+
+      test(
+        'should keep the session when validation is indeterminate (offline)',
+        () async {
+          when(
+            mockAuthService.validateSession(),
+          ).thenAnswer((_) async => SessionValidationResult.indeterminate);
+
+          await authProvider.initialize();
+          await pumpEventQueue();
+
+          // Being offline is not evidence the session is dead.
+          expect(authProvider.isAuthenticated, true);
+          verifyNever(mockAuthService.refreshToken());
+          verifyNever(mockAuthService.signOut());
+        },
+      );
+
+      test(
+        'should refresh and stay signed in when the backend rejects the '
+        'token but refresh succeeds',
+        () async {
+          const refreshedSession = CovesSession(
+            token: 'refreshed_sealed_token',
+            did: 'did:plc:test123',
+            sessionId: 'session123',
+            handle: 'test.user',
+          );
+
+          when(
+            mockAuthService.validateSession(),
+          ).thenAnswer((_) async => SessionValidationResult.invalid);
+          when(
+            mockAuthService.refreshToken(),
+          ).thenAnswer((_) async => refreshedSession);
+
+          await authProvider.initialize();
+          await pumpEventQueue();
+
+          expect(authProvider.isAuthenticated, true);
+          expect(authProvider.session?.token, 'refreshed_sealed_token');
+          verify(mockAuthService.refreshToken()).called(1);
+        },
+      );
+
+      test(
+        'should sign out when the backend definitively rejects the token '
+        'and the refresh 401s (dead session)',
+        () async {
+          when(
+            mockAuthService.validateSession(),
+          ).thenAnswer((_) async => SessionValidationResult.invalid);
+          when(
+            mockAuthService.refreshToken(),
+          ).thenThrow(const SessionExpiredException());
+          when(mockAuthService.signOut()).thenAnswer((_) async => {});
+
+          await authProvider.initialize();
+          await pumpEventQueue();
+
+          // Dead session is cleared: listeners rebuild into signed-out UI
+          // instead of silently degrading to anonymous browsing.
+          expect(authProvider.isAuthenticated, false);
+          expect(authProvider.session, isNull);
+          verify(mockAuthService.signOut()).called(1);
+        },
+      );
+
+      test(
+        'should keep the session when the refresh fails transiently after '
+        'an invalid verdict (backend blip must not destroy a live session)',
+        () async {
+          when(
+            mockAuthService.validateSession(),
+          ).thenAnswer((_) async => SessionValidationResult.invalid);
+          when(
+            mockAuthService.refreshToken(),
+          ).thenThrow(Exception('Token refresh failed: 503'));
+
+          await authProvider.initialize();
+          await pumpEventQueue();
+
+          // The 401 verdict could itself be a transient backend failure;
+          // only a refresh 401 (SessionExpiredException) proves death.
+          expect(authProvider.isAuthenticated, true);
+          expect(authProvider.session?.token, 'mock_sealed_token');
+          verifyNever(mockAuthService.signOut());
+        },
+      );
+
+      test(
+        'should not touch a NEW session when a stale invalid verdict '
+        'resolves after sign-out + re-login',
+        () async {
+          const newSession = CovesSession(
+            token: 'new_account_token',
+            did: 'did:plc:other456',
+            sessionId: 'session456',
+            handle: 'other.user',
+          );
+
+          final validationGate = Completer<SessionValidationResult>();
+          when(
+            mockAuthService.validateSession(),
+          ).thenAnswer((_) => validationGate.future);
+          when(mockAuthService.signOut()).thenAnswer((_) async => {});
+          when(
+            mockAuthService.signIn('other.user'),
+          ).thenAnswer((_) async => newSession);
+
+          await authProvider.initialize();
+
+          // User signs out and into a different account while the old
+          // session's probe is still in flight.
+          await authProvider.signOut();
+          await authProvider.signIn('other.user');
+          clearInteractions(mockAuthService);
+
+          validationGate.complete(SessionValidationResult.invalid);
+          await pumpEventQueue();
+
+          // The stale verdict must not refresh or sign out the new session.
+          expect(authProvider.isAuthenticated, true);
+          expect(authProvider.session?.token, 'new_account_token');
+          verifyNever(mockAuthService.refreshToken());
+          verifyNever(mockAuthService.signOut());
+        },
+      );
+
+      test(
+        'should keep the session when the probe throws unexpectedly',
+        () async {
+          when(
+            mockAuthService.validateSession(),
+          ).thenThrow(Exception('unexpected'));
+
+          await authProvider.initialize();
+          await pumpEventQueue();
+
+          // The outermost catch is a fire-and-forget boundary: a probe
+          // failure must never crash startup or alter auth state.
+          expect(authProvider.isAuthenticated, true);
+          expect(authProvider.error, isNull);
+          verifyNever(mockAuthService.signOut());
+        },
+      );
+
+      test(
+        'should ignore a stale invalid verdict after the user signed out',
+        () async {
+          final validationGate = Completer<SessionValidationResult>();
+          when(
+            mockAuthService.validateSession(),
+          ).thenAnswer((_) => validationGate.future);
+          when(mockAuthService.signOut()).thenAnswer((_) async => {});
+
+          await authProvider.initialize();
+          expect(authProvider.isAuthenticated, true);
+
+          // User signs out while the probe is still in flight.
+          await authProvider.signOut();
+          clearInteractions(mockAuthService);
+
+          validationGate.complete(SessionValidationResult.invalid);
+          await pumpEventQueue();
+
+          // The stale verdict must not trigger another refresh/sign-out.
+          verifyNever(mockAuthService.refreshToken());
+          verifyNever(mockAuthService.signOut());
+        },
+      );
     });
 
     group('signIn', () {

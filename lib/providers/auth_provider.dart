@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/coves_session.dart';
@@ -76,6 +78,12 @@ class AuthProvider with ChangeNotifier {
           print('   DID: ${restoredSession.did}');
           print('   Handle: ${restoredSession.handle}');
         }
+
+        // Validate the restored session in the background (never block cold
+        // start on the network). All read endpoints are OptionalAuth and
+        // silently degrade a dead session to anonymous, so without this
+        // probe a browsing-only user would stay half-authed forever.
+        unawaited(_validateRestoredSession());
       } else {
         if (kDebugMode) {
           print('No stored session found - user not logged in');
@@ -90,6 +98,88 @@ class AuthProvider with ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Validate a just-restored session against the backend (GET /api/me)
+  ///
+  /// Runs in the background after [initialize] optimistically restores the
+  /// session, so a dead session is detected and cleared instead of degrading
+  /// silently to anonymous browsing:
+  /// - valid: nothing to do
+  /// - invalid (401): attempt a token refresh. A refresh 401
+  ///   ([SessionExpiredException]) means the session is definitively dead:
+  ///   sign out, which flips [isAuthenticated] and rebuilds listeners into
+  ///   the signed-out state. (The router deliberately allows anonymous
+  ///   browsing, so there is no forced navigation to sign-in — the user
+  ///   simply sees signed-out UI.) Any other refresh failure is treated as
+  ///   transient: keep the session and let the next cold start retry, so a
+  ///   backend blip can never destroy a live session.
+  /// - indeterminate (offline, timeout, 5xx): keep the session — being
+  ///   offline is not evidence the session is dead
+  Future<void> _validateRestoredSession() async {
+    // Capture the token so a sign-out or re-login that races the probe
+    // can't be clobbered by a stale verdict.
+    final validatedToken = _session?.token;
+    if (validatedToken == null) {
+      return;
+    }
+
+    try {
+      final result = await _authService.validateSession();
+
+      if (_session?.token != validatedToken) {
+        // Session changed while the probe was in flight - verdict is stale.
+        return;
+      }
+
+      if (result != SessionValidationResult.invalid) {
+        if (kDebugMode) {
+          if (result == SessionValidationResult.valid) {
+            print('Restored session validated against /api/me');
+          }
+        }
+        return;
+      }
+
+      if (kDebugMode) {
+        print('Restored session rejected by backend - attempting refresh');
+      }
+
+      // Call the service directly rather than [refreshToken]: that method
+      // signs out on ANY failure (appropriate for its 401-interceptor
+      // callers), while this proactive probe must only sign out when the
+      // backend definitively rejects the session.
+      try {
+        final refreshedSession = await _authService.refreshToken();
+        if (_session?.token != validatedToken) {
+          // Signed out / re-logged-in mid-refresh; verdict is stale.
+          return;
+        }
+        _session = refreshedSession;
+        notifyListeners();
+        if (kDebugMode) {
+          print('Restored session refreshed after rejected probe');
+        }
+      } on SessionExpiredException {
+        // Definitively dead - force the signed-out state.
+        await signOut();
+      } on SessionRefreshDiscardedException {
+        // Sign-out or re-login raced the refresh; nothing to do.
+      } on Exception catch (e) {
+        // Transient refresh failure (network, 5xx): keep the session.
+        if (kDebugMode) {
+          print('Probe refresh failed transiently (session kept): $e');
+        }
+      }
+      // This is the outermost guard of a fire-and-forget startup task: no
+      // throwable may escape, or it becomes an unhandled async error (a
+      // sign-out race can surface Error types like StateError here).
+      // ignore: avoid_catches_without_on_clauses
+    } catch (e) {
+      if (kDebugMode) {
+        print('Session validation error (ignored): $e');
+      }
     }
   }
 
@@ -200,6 +290,10 @@ class AuthProvider with ChangeNotifier {
 
     try {
       final refreshedSession = await _authService.refreshToken();
+      if (_session == null) {
+        // Signed out while the refresh was in flight - don't resurrect.
+        return false;
+      }
       _session = refreshedSession;
       notifyListeners();
 
@@ -208,6 +302,11 @@ class AuthProvider with ChangeNotifier {
       }
 
       return true;
+    } on SessionRefreshDiscardedException {
+      // Sign-out or re-login raced the refresh; the result was discarded.
+      // The session state is already whatever the race winner made it -
+      // signing out here would destroy a freshly created session.
+      return false;
     } on Exception catch (e) {
       if (kDebugMode) {
         print('Token refresh failed: $e');

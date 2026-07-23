@@ -488,9 +488,9 @@ class CommentsProvider with ChangeNotifier {
         return null;
       }
 
-      // Collect URIs already in the tree BEFORE merging so we only
-      // initialize vote state for genuinely new comments (re-initializing
-      // visible ones would clobber optimistic votes).
+      // Collect URIs already in the tree BEFORE merging so genuinely new
+      // comments get initialized while already-visible ones get reconciled
+      // (blind re-initialization would clobber optimistic votes).
       final knownUris = <String>{};
       if (existingNode != null) {
         _collectSubtreeUris(existingNode, knownUris);
@@ -538,7 +538,8 @@ class CommentsProvider with ChangeNotifier {
         _comments = updated;
       }
 
-      // Initialize vote state only for replies we didn't already have.
+      // Initialize vote state for new replies; reconcile already-known ones
+      // against the fresh server stats just merged in.
       if (_authProvider.isAuthenticated && _voteProvider != null) {
         _initializeVoteStateForNewComments(subtree, knownUris);
       }
@@ -644,20 +645,42 @@ class CommentsProvider with ChangeNotifier {
     }
   }
 
-  /// Initializes vote state for comments in [node]'s subtree whose URIs are
-  /// NOT in [knownUris] (mirrors the pagination pattern in loadComments:
-  /// never re-initialize already-visible comments, which would revert
-  /// optimistic votes).
+  /// Initializes vote state for comments in [node]'s subtree that are new,
+  /// and reconciles the ones already known (mirrors the pagination pattern
+  /// in loadComments: never blindly re-initialize already-visible comments,
+  /// which would revert optimistic votes).
+  ///
+  /// Known comments are reconciled instead of skipped: the subtree merge
+  /// adopts fresh server stats for nodes already in the tree, so a stale
+  /// optimistic score adjustment would double-count on top of a server
+  /// score that already includes the vote. Reconciliation clears the
+  /// adjustment only when the server's viewer state confirms it has caught
+  /// up, so an unindexed optimistic vote is never clobbered.
+  ///
+  /// "Known" means in [knownUris] (present in the top-level tree before the
+  /// merge) OR already tracked by the VoteProvider. The latter covers
+  /// subtrees anchored below the top-level tree's depth cap (the focused
+  /// thread screen): there [knownUris] is empty, but a comment the user
+  /// just voted on must still be reconciled, not clobbered.
   void _initializeVoteStateForNewComments(
     ThreadViewComment node,
     Set<String> knownUris,
   ) {
-    if (!knownUris.contains(node.comment.uri)) {
-      final viewer = node.comment.viewer;
-      _voteProvider!.setInitialVoteState(
-        postUri: node.comment.uri,
+    final voteProvider = _voteProvider!;
+    final uri = node.comment.uri;
+    final viewer = node.comment.viewer;
+    final known = knownUris.contains(uri) || voteProvider.hasStateFor(uri);
+    if (!known) {
+      voteProvider.setInitialVoteState(
+        postUri: uri,
         voteDirection: viewer?.vote,
         voteUri: viewer?.voteUri,
+      );
+    } else {
+      voteProvider.reconcileVoteState(
+        postUri: uri,
+        serverVoteDirection: viewer?.vote,
+        serverVoteUri: viewer?.voteUri,
       );
     }
     for (final reply in node.replies ?? const <ThreadViewComment>[]) {

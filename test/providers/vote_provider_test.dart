@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
@@ -764,6 +766,252 @@ void main() {
         // Adjustments should be cleared (back to 0)
         expect(voteProvider.getAdjustedScore(testPostUri1, 10), 10);
         expect(voteProvider.getAdjustedScore(testPostUri2, 5), 5);
+      });
+    });
+
+    group('reconcileVoteState', () {
+      const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
+      const testPostCid = 'bafy2bzacepostcid123';
+      const testVoteUri = 'at://did:plc:test/social.coves.feed.vote/456';
+
+      void stubCreateVote({bool deleted = false}) {
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+          ),
+        ).thenAnswer(
+          (_) async => VoteResponse(
+            uri: deleted ? null : testVoteUri,
+            cid: deleted ? null : 'bafy123',
+            rkey: deleted ? null : '456',
+            deleted: deleted,
+          ),
+        );
+      }
+
+      test(
+        'should clear stale adjustment when server confirms the like '
+        '(double-count bug)',
+        () async {
+          stubCreateVote();
+
+          // Like: server score 0 + optimistic adjustment = 1.
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+          );
+          expect(voteProvider.getAdjustedScore(testPostUri, 0), 1);
+
+          // Focused-thread hydration re-delivers the node with fresh stats:
+          // server score is now 1 (includes the vote) and viewer confirms it.
+          voteProvider.reconcileVoteState(
+            postUri: testPostUri,
+            serverVoteDirection: 'up',
+            serverVoteUri: testVoteUri,
+          );
+
+          // Without reconciliation this showed 2 (1 + stale adjustment).
+          expect(voteProvider.getAdjustedScore(testPostUri, 1), 1);
+          expect(voteProvider.isLiked(testPostUri), true);
+        },
+      );
+
+      test(
+        'should keep optimistic state when server has not indexed the vote',
+        () async {
+          stubCreateVote();
+
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+          );
+
+          // Server snapshot predates the vote: no viewer state, score 0.
+          voteProvider.reconcileVoteState(postUri: testPostUri);
+
+          // Stale server score + kept adjustment still renders correctly.
+          expect(voteProvider.getAdjustedScore(testPostUri, 0), 1);
+          expect(voteProvider.isLiked(testPostUri), true);
+        },
+      );
+
+      test(
+        'should keep the unlike when the server still reports the old vote '
+        '(delete not yet indexed)',
+        () async {
+          // Liked at load time (server counted it, no adjustment).
+          voteProvider.setInitialVoteState(
+            postUri: testPostUri,
+            voteDirection: 'up',
+            voteUri: testVoteUri,
+          );
+
+          stubCreateVote(deleted: true);
+
+          // Unlike: adjustment -1 against the old server score of 1.
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+          );
+
+          // Snapshot predates the unlike: server still says 'up', score 1.
+          voteProvider.reconcileVoteState(
+            postUri: testPostUri,
+            serverVoteDirection: 'up',
+            serverVoteUri: testVoteUri,
+          );
+
+          // Mismatch (local unliked vs server 'up') - the unlike must be
+          // kept, not resurrected, and the -1 adjustment preserved.
+          expect(voteProvider.isLiked(testPostUri), false);
+          expect(voteProvider.getAdjustedScore(testPostUri, 1), 0);
+        },
+      );
+
+      test('should reconcile a downvote the same as an upvote', () async {
+        stubCreateVote();
+
+        // Downvote: server score 5 + optimistic -1 = 4.
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          direction: 'down',
+        );
+        expect(voteProvider.getAdjustedScore(testPostUri, 5), 4);
+
+        // Server catches up: score 4 includes the downvote, viewer confirms.
+        voteProvider.reconcileVoteState(
+          postUri: testPostUri,
+          serverVoteDirection: 'down',
+          serverVoteUri: testVoteUri,
+        );
+
+        expect(voteProvider.getAdjustedScore(testPostUri, 4), 4);
+        expect(voteProvider.getVoteState(testPostUri)?.direction, 'down');
+
+        // A mismatching snapshot (server still 'up' from before a switch)
+        // must not clear anything.
+        voteProvider.reconcileVoteState(
+          postUri: testPostUri,
+          serverVoteDirection: 'up',
+          serverVoteUri: testVoteUri,
+        );
+        expect(voteProvider.getVoteState(testPostUri)?.direction, 'down');
+      });
+
+      test(
+        'should clear adjustment when server confirms an unlike',
+        () async {
+          // Liked at load time (server already counted it, no adjustment).
+          voteProvider.setInitialVoteState(
+            postUri: testPostUri,
+            voteDirection: 'up',
+            voteUri: testVoteUri,
+          );
+
+          stubCreateVote(deleted: true);
+
+          // Unlike: adjustment -1 on the old server score of 1.
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+          );
+          expect(voteProvider.getAdjustedScore(testPostUri, 1), 0);
+
+          // Fresh stats: server processed the unlike (score 0, no viewer
+          // vote) - matches local effective state, so reconcile clears.
+          voteProvider.reconcileVoteState(postUri: testPostUri);
+
+          expect(voteProvider.getAdjustedScore(testPostUri, 0), 0);
+          expect(voteProvider.isLiked(testPostUri), false);
+        },
+      );
+
+      test('should do nothing while a vote request is in flight', () async {
+        final completer = Completer<VoteResponse>();
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+          ),
+        ).thenAnswer((_) => completer.future);
+
+        // Start a vote but don't let it complete.
+        final pending = voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+        );
+        expect(voteProvider.isPending(testPostUri), true);
+
+        // A snapshot arriving now predates the in-flight vote; even a
+        // "matching" viewer state must not clear the optimistic adjustment.
+        voteProvider.reconcileVoteState(
+          postUri: testPostUri,
+          serverVoteDirection: 'up',
+          serverVoteUri: testVoteUri,
+        );
+        expect(voteProvider.getAdjustedScore(testPostUri, 0), 1);
+
+        completer.complete(
+          const VoteResponse(
+            uri: testVoteUri,
+            cid: 'bafy123',
+            rkey: '456',
+            deleted: false,
+          ),
+        );
+        await pending;
+      });
+
+      test(
+        'should prefer the locally known vote URI over a stale snapshot',
+        () async {
+          stubCreateVote();
+
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+          );
+
+          // Sibling-page snapshot carries an older vote record URI.
+          voteProvider.reconcileVoteState(
+            postUri: testPostUri,
+            serverVoteDirection: 'up',
+            serverVoteUri: 'at://did:plc:test/social.coves.feed.vote/OLD',
+          );
+
+          expect(voteProvider.getVoteState(testPostUri)?.uri, testVoteUri);
+          expect(voteProvider.getVoteState(testPostUri)?.rkey, '456');
+        },
+      );
+
+      test('should notify listeners when it clears an adjustment', () async {
+        stubCreateVote();
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+        );
+
+        var notificationCount = 0;
+        voteProvider
+          ..addListener(() => notificationCount++)
+          ..reconcileVoteState(
+            postUri: testPostUri,
+            serverVoteDirection: 'up',
+            serverVoteUri: testVoteUri,
+          );
+        expect(notificationCount, 1);
+
+        // Reconciling again is a no-op (no adjustment left) - no notify.
+        voteProvider.reconcileVoteState(
+          postUri: testPostUri,
+          serverVoteDirection: 'up',
+          serverVoteUri: testVoteUri,
+        );
+        expect(notificationCount, 1);
       });
     });
 

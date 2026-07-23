@@ -84,6 +84,16 @@ class MockCovesAuthService extends _i1.Mock implements _i3.CovesAuthService {
           as _i4.Future<_i2.CovesSession>);
 
   @override
+  _i4.Future<_i3.SessionValidationResult> validateSession() =>
+      (super.noSuchMethod(
+            Invocation.method(#validateSession, []),
+            returnValue: _i4.Future<_i3.SessionValidationResult>.value(
+              _i3.SessionValidationResult.valid,
+            ),
+          )
+          as _i4.Future<_i3.SessionValidationResult>);
+
+  @override
   _i4.Future<void> signOut() =>
       (super.noSuchMethod(
             Invocation.method(#signOut, []),

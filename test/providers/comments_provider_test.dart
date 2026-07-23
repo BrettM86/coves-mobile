@@ -39,6 +39,10 @@ void main() {
         mockAuthProvider.getAccessToken(),
       ).thenAnswer((_) async => 'test-token');
 
+      // Default: the vote provider tracks no state (individual tests
+      // override per-URI to exercise the reconcile routing).
+      when(mockVoteProvider.hasStateFor(any)).thenReturn(false);
+
       commentsProvider = CommentsProvider(
         mockAuthProvider,
         postUri: testPostUri,
@@ -2147,9 +2151,12 @@ void main() {
 
         // Second hydration adds child-2; parent and child-1 are already
         // visible and must NOT be re-initialized (that would revert
-        // optimistic votes).
+        // optimistic votes). The parent carries fresh viewer state so the
+        // reconcile call's arguments can be pinned exactly.
         final page2 = _createMockThreadCommentWithViewer(
           uri: parentUri,
+          vote: 'up',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/parentvote1',
           replies: [
             _createMockThreadComment('child-1'),
             _createMockThreadComment('child-2'),
@@ -2190,7 +2197,102 @@ void main() {
             voteUri: anyNamed('voteUri'),
           ),
         );
+
+        // Already-visible nodes are reconciled instead: the merge adopted
+        // fresh server stats for them, so a stale optimistic score
+        // adjustment would double-count without this (reconcile only
+        // clears it when the server's viewer state confirms the vote).
+        // Arguments pinned exactly: a regression that forwards the wrong
+        // node's viewer (or always null) must fail here.
+        verify(
+          mockVoteProvider.reconcileVoteState(
+            postUri: parentUri,
+            serverVoteDirection: 'up',
+            serverVoteUri:
+                'at://did:plc:test/social.coves.feed.vote/parentvote1',
+          ),
+        ).called(1);
+        verify(
+          mockVoteProvider.reconcileVoteState(
+            postUri: 'child-1',
+            serverVoteDirection: anyNamed('serverVoteDirection'),
+            serverVoteUri: anyNamed('serverVoteUri'),
+          ),
+        ).called(1);
+        verifyNever(
+          mockVoteProvider.reconcileVoteState(
+            postUri: 'child-2',
+            serverVoteDirection: anyNamed('serverVoteDirection'),
+            serverVoteUri: anyNamed('serverVoteUri'),
+          ),
+        );
       });
+
+      test(
+        'should reconcile (not clobber) voted comments in a subtree '
+        'anchored below the top-level tree (focused thread depth cap)',
+        () async {
+          await commentsProvider.loadComments(refresh: true);
+
+          // Anchor is NOT in the top-level tree, so knownUris is empty -
+          // only the VoteProvider knows the user just voted on it.
+          const deepUri =
+              'at://did:plc:author/social.coves.community.comment/deeprkey9';
+          when(mockVoteProvider.hasStateFor(deepUri)).thenReturn(true);
+
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              parentRkey: argThat(equals('deeprkey9'), named: 'parentRkey'),
+            ),
+          ).thenAnswer(
+            (_) async => CommentsResponse(
+              post: {},
+              comments: [
+                _createMockThreadCommentWithViewer(
+                  uri: deepUri,
+                  vote: 'up',
+                  voteUri: 'at://did:plc:test/social.coves.feed.vote/deep1',
+                  replies: [_createMockThreadComment('deep-child')],
+                ),
+              ],
+            ),
+          );
+
+          final result = await commentsProvider.loadMoreReplies(deepUri);
+          expect(result, isNotNull);
+
+          // The voted anchor is reconciled - setInitialVoteState here would
+          // clobber an unindexed optimistic vote (the original bug class).
+          verify(
+            mockVoteProvider.reconcileVoteState(
+              postUri: deepUri,
+              serverVoteDirection: 'up',
+              serverVoteUri: 'at://did:plc:test/social.coves.feed.vote/deep1',
+            ),
+          ).called(1);
+          verifyNever(
+            mockVoteProvider.setInitialVoteState(
+              postUri: deepUri,
+              voteDirection: anyNamed('voteDirection'),
+              voteUri: anyNamed('voteUri'),
+            ),
+          );
+
+          // The genuinely new child is initialized normally.
+          verify(
+            mockVoteProvider.setInitialVoteState(
+              postUri: 'deep-child',
+              voteDirection: anyNamed('voteDirection'),
+              voteUri: anyNamed('voteUri'),
+            ),
+          ).called(1);
+        },
+      );
 
       test('should propagate fetch errors and clear loading state', () async {
         await commentsProvider.loadComments(refresh: true);

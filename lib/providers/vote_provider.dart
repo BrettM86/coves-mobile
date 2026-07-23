@@ -61,6 +61,19 @@ class VoteProvider with ChangeNotifier {
   /// Check if a request is pending for a post
   bool isPending(String postUri) => _pendingRequests[postUri] ?? false;
 
+  /// Whether this provider already tracks any state for [postUri]
+  /// (a vote, a score adjustment, or an in-flight request).
+  ///
+  /// Callers deciding between [setInitialVoteState] and [reconcileVoteState]
+  /// should reconcile when this returns true even if the post is new to
+  /// their own view of the data (e.g. a focused-thread subtree below the
+  /// top-level tree's depth cap): blind re-initialization would clobber an
+  /// optimistic vote the server hasn't indexed yet.
+  bool hasStateFor(String postUri) =>
+      _votes.containsKey(postUri) ||
+      _scoreAdjustments.containsKey(postUri) ||
+      (_pendingRequests[postUri] ?? false);
+
   /// Get adjusted score for a post (server score + local optimistic adjustment)
   ///
   /// This allows the UI to show immediate feedback when users vote, even before
@@ -219,6 +232,14 @@ class VoteProvider with ChangeNotifier {
   /// Call this when loading posts to populate initial vote state
   /// from the backend's viewer state.
   ///
+  /// WARNING: this adopts the server snapshot unconditionally, including
+  /// clearing any optimistic score adjustment — calling it for a post this
+  /// provider already tracks ([hasStateFor]) can clobber an optimistic vote
+  /// the server hasn't indexed yet. Full-refresh paths do this deliberately
+  /// (server is truth on refresh, e.g. cross-device changes); every other
+  /// path that re-delivers server data for known posts should use
+  /// [reconcileVoteState] instead.
+  ///
   /// Parameters:
   /// - [postUri]: AT-URI of the post
   /// - [voteDirection]: Current vote direction ("up", "down", or null)
@@ -247,6 +268,70 @@ class VoteProvider with ChangeNotifier {
     _scoreAdjustments.remove(postUri);
 
     // Don't notify listeners - this is just initial state
+  }
+
+  /// Reconcile vote state for a post that was already known locally when
+  /// fresh server data arrived for it (e.g. a focused-thread subtree fetch
+  /// re-delivering stats for nodes already in the tree). Counterpart of
+  /// [setInitialVoteState], which adopts the server snapshot blindly.
+  ///
+  /// The server's stats snapshot may or may not include a vote we cast
+  /// optimistically (the appview indexes votes asynchronously via the
+  /// firehose), so the local score adjustment can only be cleared when the
+  /// server's viewer state confirms it has caught up:
+  /// - Request in flight for this URI: do nothing (the snapshot predates it).
+  /// - Server viewer state matches the local effective state: the server
+  ///   score already includes the vote — adopt server state and clear the
+  ///   adjustment so it can't double-count.
+  /// - Mismatch: assume the server is behind — keep the optimistic state and
+  ///   adjustment (stale server score + adjustment still renders correctly).
+  ///   A mismatch can also mean the server is AHEAD (vote changed from
+  ///   another device); favoring local state is the safe default there, and
+  ///   cross-device changes are adopted by the next full refresh, which
+  ///   re-initializes unconditionally.
+  ///
+  /// Callers holding a possibly-stale snapshot (e.g. sibling pages preserved
+  /// across a merge) are safe by the same rule: a stale snapshot either
+  /// mismatches (kept optimistic state) or matches with a net-zero
+  /// adjustment relative to that snapshot (clearing changes nothing).
+  void reconcileVoteState({
+    required String postUri,
+    String? serverVoteDirection,
+    String? serverVoteUri,
+  }) {
+    if (_pendingRequests[postUri] ?? false) {
+      return;
+    }
+
+    final local = _votes[postUri];
+    final localDirection =
+        (local == null || local.deleted) ? null : local.direction;
+
+    if (localDirection != serverVoteDirection) {
+      return;
+    }
+
+    if (serverVoteDirection != null) {
+      // Prefer the locally known vote URI: it came from the most recent
+      // createVote response, while the server snapshot may predate a
+      // delete/re-vote cycle and still reference the old record.
+      final voteUri = local?.uri ?? serverVoteUri;
+      _votes[postUri] = VoteState(
+        direction: serverVoteDirection,
+        uri: voteUri,
+        rkey: VoteState.extractRkeyFromUri(voteUri),
+        deleted: false,
+      );
+    } else {
+      _votes.remove(postUri);
+    }
+
+    final removedAdjustment = _scoreAdjustments.remove(postUri);
+    if (removedAdjustment != null && removedAdjustment != 0) {
+      // The displayed score changes (server score is now authoritative), so
+      // widgets watching this provider must rebuild.
+      notifyListeners();
+    }
   }
 
   /// Clear all vote state (e.g., on sign out)

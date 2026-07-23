@@ -21,6 +21,36 @@ class SignInCancelledException implements Exception {
   String toString() => 'Sign in cancelled by user';
 }
 
+/// Thrown when the backend definitively rejects the session during a token
+/// refresh (HTTP 401): the session is dead and re-authentication is required.
+/// Distinct from transient refresh failures (network, 5xx), which are plain
+/// [Exception]s — callers that must not destroy a session on a transient
+/// failure (e.g. the startup validation probe) catch this type specifically.
+class SessionExpiredException implements Exception {
+  const SessionExpiredException();
+
+  @override
+  String toString() => 'Session expired';
+}
+
+/// Thrown when a token refresh completed but its result was discarded
+/// because the session changed while the request was in flight (sign-out or
+/// re-login raced the refresh). The refreshed token was NOT saved; there is
+/// nothing to recover — callers should simply drop the operation.
+class SessionRefreshDiscardedException implements Exception {
+  const SessionRefreshDiscardedException();
+
+  @override
+  String toString() => 'Session changed during refresh; result discarded';
+}
+
+/// Outcome of probing the backend with the stored session token.
+///
+/// [indeterminate] means the probe couldn't reach a verdict (network error,
+/// timeout, server error) — callers must NOT treat it as invalid, or offline
+/// cold starts would sign the user out.
+enum SessionValidationResult { valid, invalid, indeterminate }
+
 /// Coves Authentication Service
 ///
 /// Simplified OAuth service that uses the Coves backend's mobile OAuth flow.
@@ -365,6 +395,12 @@ class CovesAuthService {
     // Start a new refresh operation
     _refreshCompleter = Completer<CovesSession>();
 
+    // Capture the session this refresh is FOR. If sign-out or re-login
+    // replaces it while the request is in flight, the result must be
+    // discarded — committing it would resurrect a session the user just
+    // terminated (live token written back to secure storage after logout).
+    final sessionAtStart = _session!;
+
     try {
       if (kDebugMode) {
         print('Refreshing token...');
@@ -373,15 +409,19 @@ class CovesAuthService {
       // Build request body per backend API contract
       // Backend expects: {"did": "...", "session_id": "...", "sealed_token": "..."}
       final requestBody = {
-        'did': _session!.did,
-        'session_id': _session!.sessionId,
-        'sealed_token': _session!.token,
+        'did': sessionAtStart.did,
+        'session_id': sessionAtStart.sessionId,
+        'sealed_token': sessionAtStart.token,
       };
 
       final response = await _dio!.post<Map<String, dynamic>>(
         '/oauth/refresh',
         data: requestBody,
       );
+
+      if (!identical(_session, sessionAtStart)) {
+        throw const SessionRefreshDiscardedException();
+      }
 
       // Backend returns: {"sealed_token": "...", "access_token": "..."}
       // We use the new sealed_token (which already contains everything we need)
@@ -392,9 +432,11 @@ class CovesAuthService {
       }
 
       // Create updated session with new token
-      final updatedSession = _session!.copyWithToken(newToken);
+      final updatedSession = sessionAtStart.copyWithToken(newToken);
 
-      // Save and cache
+      // Save and cache. No await sits between the identity check above and
+      // this write, and signOut() awaits any in-flight refresh before its
+      // storage delete, so the delete always lands after this save.
       await _saveSession(updatedSession);
       _session = updatedSession;
 
@@ -411,9 +453,12 @@ class CovesAuthService {
         print('Status code: ${e.response?.statusCode}');
       }
 
-      // 401 means session is invalid/expired - caller should sign out
+      // 401 means session is invalid/expired - caller should sign out.
+      // Typed so callers can distinguish "definitively dead" from transient
+      // refresh failures (which must NOT destroy the session on the
+      // startup-validation path).
       if (e.response?.statusCode == 401) {
-        final error = Exception('Session expired');
+        const error = SessionExpiredException();
         _refreshCompleter!.completeError(error);
         // Return the future to rethrow the error (don't throw directly)
         return _refreshCompleter!.future;
@@ -434,12 +479,70 @@ class CovesAuthService {
     }
   }
 
+  /// Validate the current session against the backend
+  ///
+  /// Probes GET /api/me (RequireAuth) with the sealed token. The backend's
+  /// read endpoints all use OptionalAuth, which silently degrades a dead
+  /// session to anonymous — so without this probe, a user who only browses
+  /// never discovers their session is dead (no viewer state, no likes,
+  /// no error). See AuthProvider for the startup validation flow.
+  ///
+  /// Returns:
+  /// - [SessionValidationResult.valid]: token unsealed and session live
+  /// - [SessionValidationResult.invalid]: backend rejected the token (401) —
+  ///   caller should refresh or force re-auth
+  /// - [SessionValidationResult.indeterminate]: couldn't tell (no session
+  ///   loaded, network error, timeout, 5xx) — caller should keep the session
+  Future<SessionValidationResult> validateSession() async {
+    if (_session == null || _dio == null) {
+      return SessionValidationResult.indeterminate;
+    }
+
+    try {
+      await _dio!.get<Map<String, dynamic>>(
+        '/api/me',
+        options: Options(
+          headers: {'Authorization': 'Bearer ${_session!.token}'},
+        ),
+      );
+      return SessionValidationResult.valid;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) {
+        if (kDebugMode) {
+          print('Session validation failed: backend rejected token (401)');
+        }
+        return SessionValidationResult.invalid;
+      }
+      // Network errors, timeouts, and server errors are not a verdict on
+      // the session - the RetryInterceptor already retried transient ones.
+      if (kDebugMode) {
+        print(
+          'Session validation indeterminate: '
+          '${e.response?.statusCode ?? e.type}',
+        );
+      }
+      return SessionValidationResult.indeterminate;
+    }
+  }
+
   /// Sign out and revoke the session
   ///
   /// Calls the backend's /oauth/logout endpoint to revoke the session.
   /// The backend handles token revocation with the PDS.
   /// Always clears local storage even if server call fails.
   Future<void> signOut() async {
+    // Serialize against any in-flight token refresh: the refresh's save must
+    // land before this method's storage delete, or a refresh resolving after
+    // sign-out would write a live token back to secure storage and resurrect
+    // the session on the next cold start.
+    if (_refreshCompleter != null) {
+      try {
+        await _refreshCompleter!.future;
+      } on Exception {
+        // The refresh failing changes nothing about signing out.
+      }
+    }
+
     try {
       if (_session != null) {
         if (kDebugMode) {
