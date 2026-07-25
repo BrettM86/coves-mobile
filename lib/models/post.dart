@@ -320,14 +320,15 @@ class PostEmbed {
     ExternalEmbed? externalEmbed;
     BlueskyPostEmbed? blueskyPostEmbed;
 
-    if (embedType == EmbedTypes.external &&
+    if ((embedType == EmbedTypes.external ||
+            embedType == EmbedTypes.externalView) &&
         json['external'] != null) {
       externalEmbed = ExternalEmbed.fromJson(
         json['external'] as Map<String, dynamic>,
       );
     }
 
-    if (embedType == EmbedTypes.post) {
+    if (embedType == EmbedTypes.post || embedType == EmbedTypes.postView) {
       blueskyPostEmbed = BlueskyPostEmbed.fromJson(json);
     }
 

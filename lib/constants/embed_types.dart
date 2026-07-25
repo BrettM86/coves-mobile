@@ -8,6 +8,12 @@ class EmbedTypes {
   /// External link embed (URLs, articles, etc.)
   static const external = 'social.coves.embed.external';
 
+  /// External link embed as served by the appview (thumb resolved to a URL).
+  static const externalView = 'social.coves.embed.external#view';
+
   /// Embedded Bluesky post
   static const post = 'social.coves.embed.post';
+
+  /// Embedded Bluesky post as served by the appview (with resolved data).
+  static const postView = 'social.coves.embed.post#view';
 }
