@@ -51,7 +51,7 @@ platform :ios do
     ipa = Dir[File.join(IPA_DIR, "*.ipa")].max_by { |f| File.mtime(f) }
     UI.user_error!("No IPA found in #{IPA_DIR}") if ipa.nil?
     UI.success("Built #{ipa}")
-    ipa
+    stash_artifact(PROJECT_ROOT, ipa, pubspec_version(PROJECT_ROOT))
   end
 
   desc "Build and upload to TestFlight"

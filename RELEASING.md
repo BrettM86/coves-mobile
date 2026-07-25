@@ -54,6 +54,11 @@ backstop, not as an invitation.
    Use `fastlane build` on either platform to produce the artifact without
    uploading anything.
 
+Every lane starts with `flutter clean`, which wipes `build/` for *both*
+platforms. So each `build` lane copies its finished artifact into
+`dist/<version>/` (gitignored) and the upload lanes read from there --
+otherwise building Android and then iOS would leave you holding only the IPA.
+
 Both upload lanes deliberately stop short of shipping: Play uploads land as a
 **draft** release and `ios release` passes `submit_for_review: false`. Store
 listing copy, screenshots, "What's New", and the actual submit stay manual

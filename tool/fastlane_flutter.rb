@@ -10,11 +10,36 @@
 # Stripping the Ruby/Bundler variables for the child process makes `flutter`
 # behave exactly as it does in a plain shell.
 
+require "fileutils"
+
 # Passing nil as a value to Kernel#system removes the variable from the child
 # environment rather than setting it to an empty string.
 CLEAN_RUBY_ENV = ENV.keys.select { |k|
   k.start_with?("GEM_", "RUBY", "BUNDLE_", "BUNDLER_")
 }.to_h { |k| [k, nil] }.freeze
+
+# Copies a freshly built artifact into dist/, returning the new path.
+#
+# Every lane starts with `flutter clean`, which wipes build/ for *both*
+# platforms -- so building Android and then iOS would otherwise leave only the
+# IPA behind. dist/ sits outside build/, so artifacts accumulate there across
+# platforms and survive the next lane's clean.
+def stash_artifact(project_root, artifact, version)
+  dist = File.join(project_root, "dist", version)
+  FileUtils.mkdir_p(dist)
+  dest = File.join(dist, File.basename(artifact))
+  FileUtils.cp(artifact, dest)
+  FastlaneCore::UI.success("Stashed #{File.basename(dest)} in dist/#{version}/")
+  dest
+end
+
+# Reads `version: <name>+<build>` out of pubspec.yaml, e.g. "1.1.0+7".
+def pubspec_version(project_root)
+  pubspec = File.read(File.join(project_root, "pubspec.yaml"))
+  match = pubspec[/^version:\s*(\S+)/, 1]
+  FastlaneCore::UI.user_error!("No version: line in pubspec.yaml") if match.nil?
+  match
+end
 
 # Runs `flutter <args>` from the Flutter project root with a clean Ruby
 # environment, raising a fastlane error if it exits non-zero.

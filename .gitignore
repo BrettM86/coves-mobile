@@ -64,3 +64,6 @@ windows/
 
 # Subagent persistent memory (local only)
 .claude/agent-memory/
+
+# Release artifacts stashed by fastlane
+/dist/

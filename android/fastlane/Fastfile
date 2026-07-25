@@ -38,15 +38,15 @@ platform :android do
 
     UI.user_error!("AAB not found at #{AAB_PATH}") unless File.exist?(AAB_PATH)
     UI.success("Built #{AAB_PATH}")
-    AAB_PATH
+    stash_artifact(PROJECT_ROOT, AAB_PATH, pubspec_version(PROJECT_ROOT))
   end
 
   desc "Build and upload to the Internal testing track"
   lane :internal do
-    build
+    aab = build
     upload_to_play_store(
       track: "internal",
-      aab: AAB_PATH,
+      aab: aab,
       release_status: "draft",
       skip_upload_apk: true,
       skip_upload_metadata: true,
@@ -57,10 +57,10 @@ platform :android do
 
   desc "Build and upload to Production as a draft release"
   lane :production do
-    build
+    aab = build
     upload_to_play_store(
       track: "production",
-      aab: AAB_PATH,
+      aab: aab,
       # Draft so the rollout is still a deliberate click in the Play Console.
       release_status: "draft",
       skip_upload_apk: true,
