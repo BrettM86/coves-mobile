@@ -1,0 +1,77 @@
+# Releasing Coves
+
+Release automation lives in `android/fastlane` and `ios/fastlane`, driven by
+[fastlane](https://fastlane.tools) (installed via Homebrew; verified against
+2.231.1). Both platforms share `tool/fastlane_flutter.rb`.
+
+## One-time credential setup
+
+Neither credential is in git, and neither can be created from the CLI -- both
+require a session in the respective web console.
+
+### Google Play
+
+1. Play Console > **Setup > API access** > create (or link) a Google Cloud
+   project.
+2. Create a **service account**, grant it the *Release manager* role, and
+   download its JSON key.
+3. Save it as `android/fastlane/play-store-key.json` (already gitignored), or
+   point `PLAY_STORE_JSON_KEY` at it elsewhere.
+4. Verify: `cd android && fastlane run validate_play_store_json_key`
+
+The service account needs at least one manual upload to have happened for the
+app before the API will accept builds.
+
+### App Store Connect
+
+1. App Store Connect > **Users and Access > Integrations > App Store Connect
+   API** > generate a key with the **App Manager** role.
+2. Download the `AuthKey_<KEY_ID>.p8` -- Apple only serves it once.
+3. Export the three values fastlane needs:
+
+   ```sh
+   export ASC_KEY_ID=XXXXXXXXXX
+   export ASC_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+   export ASC_KEY_PATH=/secure/path/AuthKey_XXXXXXXXXX.p8
+   ```
+
+Keep the `.p8` outside the repo. `ios/fastlane/*.p8` is gitignored as a
+backstop, not as an invitation.
+
+## Cutting a release
+
+1. Bump `version:` in `pubspec.yaml`. The format is `<name>+<build>`; the build
+   number must **strictly increase** on both stores and is shared between them
+   here. Neither store accepts a reused build number.
+2. `flutter analyze && flutter test`
+3. Build and upload:
+
+   ```sh
+   cd android && fastlane internal      # or: fastlane production
+   cd ios     && fastlane beta          # or: fastlane release
+   ```
+
+   Use `fastlane build` on either platform to produce the artifact without
+   uploading anything.
+
+Both upload lanes deliberately stop short of shipping: Play uploads land as a
+**draft** release and `ios release` passes `submit_for_review: false`. Store
+listing copy, screenshots, "What's New", and the actual submit stay manual
+clicks in the two consoles.
+
+## Platform notes
+
+- **Android** builds the `prod` flavor. Signing comes from
+  `android/key.properties` + the keystore it references, both untracked.
+- **iOS** builds with **no** `--flavor`. The Xcode project only defines
+  Debug/Profile/Release with a single `Runner` scheme -- the `Prod-*`/`Dev-*`
+  xcconfigs exist but are not wired into it. A plain release build resolves to
+  bundle id `social.coves`, and `EnvironmentConfig` defaults to production. If
+  iOS flavors are ever wired up properly, revisit `ios/fastlane/Fastfile`.
+- `ios/fastlane/ExportOptions.plist` is a near-copy of `ios/ExportOptions.plist`
+  with `destination` set to `export` rather than `upload`, so xcodebuild leaves
+  an IPA on disk for fastlane to upload instead of shipping it directly.
+- `tool/fastlane_flutter.rb` strips `GEM_*`/`RUBY*`/`BUNDLE*` from the
+  environment before invoking `flutter`. Without it, fastlane's Ruby leaks into
+  the Homebrew `pod` shim and Flutter reports "CocoaPods is installed but
+  broken", skips `pod install`, and the iOS archive fails.

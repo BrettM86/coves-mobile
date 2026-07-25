@@ -13,3 +13,9 @@ key.properties
 **/*.keystore
 **/*.jks
 **/*.pem
+
+# fastlane
+fastlane/play-store-key.json
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/README.md

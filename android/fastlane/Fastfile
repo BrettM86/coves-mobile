@@ -1,0 +1,72 @@
+# Coves Android release lanes.
+#
+# Credentials required (not in git):
+#   android/fastlane/play-store-key.json  Play service account JSON,
+#                                         or set PLAY_STORE_JSON_KEY.
+#   android/key.properties                Upload keystore config (already set up).
+#
+# Usage:
+#   cd android && fastlane build          # signed AAB only, no upload
+#   cd android && fastlane internal       # build + upload to Internal testing
+#   cd android && fastlane production     # build + upload to Production (draft)
+
+default_platform(:android)
+
+# fastlane runs from android/fastlane, so the Flutter project root is two up.
+PROJECT_ROOT = File.expand_path("../..", __dir__)
+
+require_relative File.join(PROJECT_ROOT, "tool/fastlane_flutter")
+
+# Android is the only platform with flavors wired up (prod/dev in
+# app/build.gradle.kts). iOS has no flavor schemes -- see ios/fastlane/Fastfile.
+AAB_PATH = File.join(
+  PROJECT_ROOT, "build/app/outputs/bundle/prodRelease/app-prod-release.aab"
+)
+
+platform :android do
+  desc "Build a signed release AAB (prod flavor)"
+  lane :build do
+    flutter(PROJECT_ROOT, "clean")
+    flutter(PROJECT_ROOT, "pub", "get")
+    flutter(
+      PROJECT_ROOT,
+      "build", "appbundle",
+      "--release",
+      "--flavor", "prod",
+      "--dart-define=ENVIRONMENT=production",
+    )
+
+    UI.user_error!("AAB not found at #{AAB_PATH}") unless File.exist?(AAB_PATH)
+    UI.success("Built #{AAB_PATH}")
+    AAB_PATH
+  end
+
+  desc "Build and upload to the Internal testing track"
+  lane :internal do
+    build
+    upload_to_play_store(
+      track: "internal",
+      aab: AAB_PATH,
+      release_status: "draft",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+  end
+
+  desc "Build and upload to Production as a draft release"
+  lane :production do
+    build
+    upload_to_play_store(
+      track: "production",
+      aab: AAB_PATH,
+      # Draft so the rollout is still a deliberate click in the Play Console.
+      release_status: "draft",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+    )
+  end
+end
