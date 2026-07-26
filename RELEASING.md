@@ -68,7 +68,15 @@ backstop, not as an invitation.
    ```sh
    cd android && fastlane run google_play_track_version_codes track:production
    cd android && fastlane run google_play_track_release_names  track:production
+   cd ios     && fastlane latest_builds
    ```
+
+   Check both stores -- they drift apart. Play production was on `1.0.5+7`
+   while the App Store was live on `1.0.6+8`. Play version codes are global to
+   the app and must always increase; iOS scopes build numbers to the version
+   string, so a build number may recur under a new version name (which is why
+   `latest_builds` reports the live version string too). Going above the
+   highest number seen anywhere is always safe.
 
    (A track with no releases fails with `undefined method 'flat_map' for nil`
    rather than returning empty -- that is a fastlane bug, not a permissions

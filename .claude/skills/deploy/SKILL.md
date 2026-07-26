@@ -48,8 +48,25 @@ cd ios     && fastlane latest_builds
 ```
 
 Repeat the Play query for `internal` and `alpha` if anything might be parked
-there. Take the **highest build number seen on any track of either store** and
-go above it.
+there.
+
+The two stores do not agree and never have — at the time of writing Play
+production was on `1.0.5+7` while the App Store was live on `1.0.6+8`. Read
+both; do not infer one from the other.
+
+The rules differ by platform:
+
+- **Play**: the version code is global to the app. It must exceed the highest
+  code on *any* track, full stop.
+- **App Store**: `CFBundleVersion` uniqueness is scoped to the
+  `CFBundleShortVersionString` train. Build 8 under a new `1.1.0` does not
+  collide with build 8 under `1.0.6`. This is why `latest_builds` reports the
+  live *version string* and not just the number — the number alone cannot
+  decide the question.
+
+Taking the highest build number seen anywhere and going above it is always
+safe. Reusing one is only safe on iOS, only under a new version string, and
+never on Play.
 
 Known non-problems:
 
