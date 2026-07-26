@@ -257,6 +257,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
+    // Header height derived from the toolbar, banner overhang, and text
+    // scale so the banner/avatar/DID land identically on all screens.
+    // SliverAppBar adds the status-bar inset to this itself.
+    final expandedHeight = ProfileHeader.expandedHeightFor(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
@@ -280,7 +285,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             SliverAppBar(
               backgroundColor: Colors.transparent,
               foregroundColor: AppColors.textPrimary,
-              expandedHeight: 220,
+              expandedHeight: expandedHeight,
               pinned: true,
               stretch: true,
               leading:
@@ -316,14 +321,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   : null,
               flexibleSpace: LayoutBuilder(
                 builder: (context, constraints) {
-                  // Calculate collapse progress (0 = expanded, 1 = collapsed)
-                  const expandedHeight = 220.0;
-                  final collapsedHeight = kToolbarHeight +
-                      MediaQuery.of(context).padding.top;
+                  // Calculate collapse progress (0 = expanded, 1 = collapsed).
+                  // The upper bound is the sliver's real max extent, which
+                  // includes the status-bar inset SliverAppBar adds on top
+                  // of expandedHeight.
+                  final collapsedHeight =
+                      ProfileHeader.collapsedExtentFor(context);
+                  final maxExtent = ProfileHeader.maxExtentFor(context);
                   final currentHeight = constraints.maxHeight;
                   final collapseProgress = 1 -
                       ((currentHeight - collapsedHeight) /
-                              (expandedHeight - collapsedHeight))
+                              (maxExtent - collapsedHeight))
                           .clamp(0.0, 1.0);
 
                   return Stack(
@@ -363,6 +371,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   );
                 },
               ),
+            ),
+            // Bio, stats, and join date as normal scroll content so they
+            // are never clipped by the collapsing header
+            SliverToBoxAdapter(
+              child: ProfileDetails(profile: profileProvider.profile),
             ),
             // Tab bar header
             SliverPersistentHeader(
