@@ -3,7 +3,8 @@
 # Credentials required (not in git):
 #   android/fastlane/play-store-key.json  Play service account JSON,
 #                                         or set PLAY_STORE_JSON_KEY.
-#   android/key.properties                Upload keystore config (already set up).
+#   android/key.properties                Upload keystore config. Maintainer
+#                                         provided -- see RELEASING.md.
 #
 # Usage:
 #   cd android && fastlane build          # signed AAB only, no upload

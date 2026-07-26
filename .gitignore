@@ -67,3 +67,14 @@ windows/
 
 # Release artifacts stashed by fastlane
 /dist/
+
+# Credentials -- repo-wide backstop.
+# The per-platform rules in android/.gitignore and ios/.gitignore cover the
+# exact paths in use; these cover the whole class, including the .env.default
+# and .env.<environment> files fastlane also loads, and a .p8 downloaded
+# anywhere other than ios/fastlane/.
+*.p8
+*.pem
+.env
+.env.*
+!.env.example

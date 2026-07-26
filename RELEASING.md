@@ -1,5 +1,12 @@
 # Releasing Coves
 
+> **This is for maintainers publishing the official Coves builds.** You do not
+> need any of it to build or run Coves from source -- see the README for that.
+> Every step below requires access to the project's own store accounts and
+> signing identity. A fork that wants to publish its own builds needs its own
+> Apple and Google Play accounts, its own signing keys, and its own bundle
+> identifier; the automation here is reusable, the credentials are not.
+
 Release automation lives in `android/fastlane` and `ios/fastlane`, driven by
 [fastlane](https://fastlane.tools) (installed via Homebrew; verified against
 2.231.1). Both platforms share `tool/fastlane_flutter.rb`.
@@ -31,9 +38,11 @@ Then in Play Console, at the **account** level (not inside an app):
 
 5. **Users and permissions > Invite new users**, paste the service account
    email (`...@<project>.iam.gserviceaccount.com`).
-6. Grant **Admin (all permissions)**, or the narrower set: *Release to
-   production, exclude devices, and use Play App Signing* + *Release apps to
-   testing tracks* + *View app information*.
+6. Grant only what the upload lanes need: *Release to production, exclude
+   devices, and use Play App Signing* + *Release apps to testing tracks* +
+   *View app information*. **Admin (all permissions)** also works and is what
+   most guides suggest, but it hands a CI-shaped credential far more authority
+   than uploading a build requires.
 
 Verify with `cd android && fastlane run validate_play_store_json_key`.
 
