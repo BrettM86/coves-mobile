@@ -38,3 +38,4 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/README.md
 fastlane/*.p8
+fastlane/.env
