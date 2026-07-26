@@ -56,6 +56,21 @@ platform :ios do
     latest = fetch.call(false)
     UI.success("Live on the App Store:        #{live || 'none'}")
     UI.success("Latest seen (incl TestFlight): #{latest || 'none'}")
+
+    # A bare build number is not enough to pick the next one. Apple scopes
+    # CFBundleVersion uniqueness to the CFBundleShortVersionString train, so
+    # "build 8 exists" only blocks us if it exists under the same version
+    # string we are about to ship.
+    begin
+      app = Spaceship::ConnectAPI::App.find("social.coves")
+      live_version = app.get_live_app_store_version
+      UI.success("Live version string:          #{live_version&.version_string || 'none'}")
+      edit_version = app.get_edit_app_store_version
+      UI.success("Version in edit/prepare:      #{edit_version&.version_string || 'none'}")
+    rescue StandardError => e
+      UI.verbose("version lookup failed: #{e.message}")
+    end
+
     { live: live, latest: latest }
   end
 
