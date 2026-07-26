@@ -11,16 +11,36 @@ require a session in the respective web console.
 
 ### Google Play
 
-1. Play Console > **Setup > API access** > create (or link) a Google Cloud
-   project.
-2. Create a **service account**, grant it the *Release manager* role, and
-   download its JSON key.
-3. Save it as `android/fastlane/play-store-key.json` (already gitignored), or
-   point `PLAY_STORE_JSON_KEY` at it elsewhere.
-4. Verify: `cd android && fastlane run validate_play_store_json_key`
+The service account is created in **Google Cloud Console**; the Play Console
+only grants it access. Play Console's old *Setup > API access* page is being
+retired, and the named roles it used (*Release manager* and friends) no longer
+exist -- permissions are individual checkboxes now.
 
-The service account needs at least one manual upload to have happened for the
-app before the API will accept builds.
+In [Google Cloud Console](https://console.cloud.google.com):
+
+1. Select or create a project, then enable the **Google Play Android Developer
+   API** under *APIs & Services*.
+2. **IAM & Admin > Service Accounts > Create service account** (e.g.
+   `fastlane-supply`). Click *Done* -- skip the optional role grants.
+3. On that account: **Actions (⋮) > Manage keys > Add key > Create new key >
+   JSON**.
+4. Save the download as `android/fastlane/play-store-key.json` (already
+   gitignored), or point `PLAY_STORE_JSON_KEY` at it elsewhere.
+
+Then in Play Console, at the **account** level (not inside an app):
+
+5. **Users and permissions > Invite new users**, paste the service account
+   email (`...@<project>.iam.gserviceaccount.com`).
+6. Grant **Admin (all permissions)**, or the narrower set: *Release to
+   production, exclude devices, and use Play App Signing* + *Release apps to
+   testing tracks* + *View app information*.
+
+Verify with `cd android && fastlane run validate_play_store_json_key`.
+
+Two things that look like broken credentials but are not: newly granted
+permissions take a few minutes to propagate, so retry a first-run 401 before
+re-cutting the key; and the API refuses uploads for an app that has never been
+published manually (not an issue here -- Coves has shipped since 1.0.4+4).
 
 ### App Store Connect
 
