@@ -33,6 +33,32 @@ def asc_api_key
 end
 
 platform :ios do
+  desc "Report the build numbers App Store Connect already knows about"
+  desc "Run this before bumping pubspec.yaml -- a build uploaded from a working"
+  desc "copy leaves no git trace, so the pubspec can sit behind the store."
+  lane :latest_builds do
+    key = asc_api_key
+
+    fetch = lambda do |live|
+      app_store_build_number(
+        api_key: key,
+        app_identifier: "social.coves",
+        live: live,
+      )
+    rescue StandardError => e
+      # Raises rather than returning nil when the app has no build in that
+      # state at all, which is a legitimate answer for a first release.
+      UI.verbose("app_store_build_number(live: #{live}) failed: #{e.message}")
+      nil
+    end
+
+    live = fetch.call(true)
+    latest = fetch.call(false)
+    UI.success("Live on the App Store:        #{live || 'none'}")
+    UI.success("Latest seen (incl TestFlight): #{latest || 'none'}")
+    { live: live, latest: latest }
+  end
+
   desc "Build a signed release IPA"
   lane :build do
     flutter(PROJECT_ROOT, "clean")
