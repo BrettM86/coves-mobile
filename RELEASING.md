@@ -60,11 +60,26 @@ backstop, not as an invitation.
 
 ## Cutting a release
 
-1. Bump `version:` in `pubspec.yaml`. The format is `<name>+<build>`; the build
-   number must **strictly increase** on both stores and is shared between them
-   here. Neither store accepts a reused build number.
-2. `flutter analyze && flutter test`
-3. Build and upload:
+1. **Check what is actually live first -- do not trust `pubspec.yaml`.** A build
+   uploaded straight from a working copy leaves no trace in git, so the pubspec
+   can sit *behind* the store. This has already happened once: production was
+   serving `1.0.5+7` while the committed pubspec still said `1.0.5+6`.
+
+   ```sh
+   cd android && fastlane run google_play_track_version_codes track:production
+   cd android && fastlane run google_play_track_release_names  track:production
+   ```
+
+   (A track with no releases fails with `undefined method 'flat_map' for nil`
+   rather than returning empty -- that is a fastlane bug, not a permissions
+   problem.)
+
+2. Bump `version:` in `pubspec.yaml` to **above the highest build number live on
+   any track**. The format is `<name>+<build>`; the build number must strictly
+   increase and is shared across both stores here. Neither store accepts a
+   reused build number.
+3. `flutter analyze && flutter test`
+4. Build and upload:
 
    ```sh
    cd android && fastlane internal      # or: fastlane production
