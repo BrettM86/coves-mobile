@@ -159,12 +159,11 @@ void main() {
     expect(find.byType(PostDetailScreen), findsOneWidget);
     expect(find.byType(NotFoundError), findsNothing);
 
-    // Unmount explicitly: PostDetailScreen.dispose calls context.read,
-    // which throws a debug-only FlutterError during tree finalization
-    // (pre-existing issue in post_detail_screen.dart, out of scope here).
-    // Absorb that one known error so it doesn't fail the test teardown.
+    // Unmount explicitly and assert clean disposal: PostDetailScreen.dispose
+    // used to context.read during tree finalization and throw a FlutterError;
+    // it now removes its auth listener via a stored reference.
     await tester.pumpWidget(const MaterialApp(home: Scaffold()));
-    expect(tester.takeException(), isA<FlutterError>());
+    expect(tester.takeException(), isNull);
     await tester.pumpAndSettle();
   });
 

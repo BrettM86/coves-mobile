@@ -60,161 +60,172 @@ Future<void> main() async {
         ),
       );
 
-      // Initialize auth provider
-      final authProvider = AuthProvider();
-      try {
-        await authProvider.initialize();
-      } on Exception catch (error, stackTrace) {
-        // Log initialization failure but continue - user can retry login
-        await Sentry.captureException(
-          error,
-          stackTrace: stackTrace,
-          withScope: (scope) {
-            scope.setTag('phase', 'auth_initialization');
-          },
-        );
-      }
-
-      // Initialize EULA acceptance provider
-      // Note: initialize() handles errors internally (fail-closed design)
-      final eulaProvider = EulaProvider();
-      try {
-        await eulaProvider.initialize();
-      } on Exception catch (error, stackTrace) {
-        await Sentry.captureException(
-          error,
-          stackTrace: stackTrace,
-          withScope: (scope) {
-            scope.setTag('phase', 'eula_initialization');
-          },
-        );
-      }
-
-      // Initialize community guidelines acceptance provider
-      // Note: initialize() handles errors internally (fail-closed design)
-      final communityGuidelinesProvider = CommunityGuidelinesProvider();
-      try {
-        await communityGuidelinesProvider.initialize();
-      } on Exception catch (error, stackTrace) {
-        await Sentry.captureException(
-          error,
-          stackTrace: stackTrace,
-          withScope: (scope) {
-            scope.setTag('phase', 'community_guidelines_initialization');
-          },
-        );
-      }
-
-      // Initialize vote service with auth callbacks
-      // Votes go through the Coves backend (which proxies to PDS with DPoP)
-      // Includes token refresh and sign-out handlers for automatic 401 recovery
-      final voteService = VoteService(
-        sessionGetter: () async => authProvider.session,
-        didGetter: () => authProvider.did,
-        tokenRefresher: authProvider.refreshToken,
-        signOutHandler: authProvider.signOut,
-      );
-
-      // Initialize comment service with auth callbacks
-      // Comments go through the Coves backend (which proxies to PDS with DPoP)
-      final commentService = CommentService(
-        sessionGetter: () async => authProvider.session,
-        tokenRefresher: authProvider.refreshToken,
-        signOutHandler: authProvider.signOut,
-      );
-
-      runApp(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider.value(value: authProvider),
-            ChangeNotifierProvider.value(value: eulaProvider),
-            ChangeNotifierProvider.value(value: communityGuidelinesProvider),
-            ChangeNotifierProvider(
-              create:
-                  (_) => VoteProvider(
-                    voteService: voteService,
-                    authProvider: authProvider,
-                  ),
-            ),
-            ChangeNotifierProvider(
-              create: (_) => CommunitySubscriptionProvider(
-                authProvider: authProvider,
-              ),
-            ),
-            ChangeNotifierProvider(
-              create: (_) => BlockProvider(
-                apiService: CovesApiService(
-                  tokenGetter: () async => authProvider.session?.token,
-                  tokenRefresher: authProvider.refreshToken,
-                  signOutHandler: authProvider.signOut,
-                ),
-                authProvider: authProvider,
-              ),
-            ),
-            ChangeNotifierProxyProvider3<
-              AuthProvider,
-              VoteProvider,
-              CommunitySubscriptionProvider,
-              MultiFeedProvider
-            >(
-              create:
-                  (context) => MultiFeedProvider(
-                    authProvider,
-                    voteProvider: context.read<VoteProvider>(),
-                    subscriptionProvider:
-                        context.read<CommunitySubscriptionProvider>(),
-                  ),
-              update: (context, auth, vote, subscription, previous) {
-                // Reuse existing provider to maintain state across rebuilds
-                return previous ??
-                    MultiFeedProvider(
-                      auth,
-                      voteProvider: vote,
-                      subscriptionProvider: subscription,
-                    );
-              },
-            ),
-            // CommentsProviderCache manages per-post CommentsProvider instances
-            // with LRU eviction and sign-out cleanup
-            ProxyProvider2<AuthProvider, VoteProvider, CommentsProviderCache>(
-              create:
-                  (context) => CommentsProviderCache(
-                    authProvider: authProvider,
-                    voteProvider: context.read<VoteProvider>(),
-                    commentService: commentService,
-                  ),
-              update: (context, auth, vote, previous) {
-                // Reuse existing cache
-                return previous ??
-                    CommentsProviderCache(
-                      authProvider: auth,
-                      voteProvider: vote,
-                      commentService: commentService,
-                    );
-              },
-              dispose: (_, cache) => cache.dispose(),
-            ),
-            // StreamableService for video embeds
-            Provider<StreamableService>(create: (_) => StreamableService()),
-            // UserProfileProvider for profile pages
-            ChangeNotifierProxyProvider2<AuthProvider, VoteProvider,
-                UserProfileProvider>(
-              create: (context) => UserProfileProvider(
-                authProvider,
-                voteProvider: context.read<VoteProvider>(),
-              ),
-              update: (context, auth, vote, previous) {
-                // Propagate auth changes to existing provider
-                previous?.updateAuthProvider(auth);
-                return previous ??
-                    UserProfileProvider(auth, voteProvider: vote);
-              },
-            ),
-          ],
-          child: const CovesApp(),
-        ),
-      );
+      runApp(await bootstrapCovesApp());
     },
+  );
+}
+
+/// Initializes providers and services and returns the root app widget.
+///
+/// Extracted from [main] so integration tests can pump the real app without
+/// [SentryFlutter.init], whose FlutterError.onError override the test
+/// binding rejects. Mirrors the [createRouter] @visibleForTesting pattern.
+@visibleForTesting
+Future<Widget> bootstrapCovesApp() async {
+  // Initialize auth provider
+  final authProvider = AuthProvider();
+  try {
+    await authProvider.initialize();
+  } on Exception catch (error, stackTrace) {
+    // Log initialization failure but continue - user can retry login
+    await Sentry.captureException(
+      error,
+      stackTrace: stackTrace,
+      withScope: (scope) {
+        scope.setTag('phase', 'auth_initialization');
+      },
+    );
+  }
+
+  // Initialize EULA acceptance provider
+  // Note: initialize() handles errors internally (fail-closed design)
+  final eulaProvider = EulaProvider();
+  try {
+    await eulaProvider.initialize();
+  } on Exception catch (error, stackTrace) {
+    await Sentry.captureException(
+      error,
+      stackTrace: stackTrace,
+      withScope: (scope) {
+        scope.setTag('phase', 'eula_initialization');
+      },
+    );
+  }
+
+  // Initialize community guidelines acceptance provider
+  // Note: initialize() handles errors internally (fail-closed design)
+  final communityGuidelinesProvider = CommunityGuidelinesProvider();
+  try {
+    await communityGuidelinesProvider.initialize();
+  } on Exception catch (error, stackTrace) {
+    await Sentry.captureException(
+      error,
+      stackTrace: stackTrace,
+      withScope: (scope) {
+        scope.setTag('phase', 'community_guidelines_initialization');
+      },
+    );
+  }
+
+  // Initialize vote service with auth callbacks
+  // Votes go through the Coves backend (which proxies to PDS with DPoP)
+  // Includes token refresh and sign-out handlers for automatic 401 recovery
+  final voteService = VoteService(
+    sessionGetter: () async => authProvider.session,
+    didGetter: () => authProvider.did,
+    tokenRefresher: authProvider.refreshToken,
+    signOutHandler: authProvider.signOut,
+  );
+
+  // Initialize comment service with auth callbacks
+  // Comments go through the Coves backend (which proxies to PDS with DPoP)
+  final commentService = CommentService(
+    sessionGetter: () async => authProvider.session,
+    tokenRefresher: authProvider.refreshToken,
+    signOutHandler: authProvider.signOut,
+  );
+
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider.value(value: authProvider),
+      ChangeNotifierProvider.value(value: eulaProvider),
+      ChangeNotifierProvider.value(value: communityGuidelinesProvider),
+      ChangeNotifierProvider(
+        create:
+            (_) => VoteProvider(
+              voteService: voteService,
+              authProvider: authProvider,
+            ),
+      ),
+      ChangeNotifierProvider(
+        create:
+            (_) => CommunitySubscriptionProvider(authProvider: authProvider),
+      ),
+      ChangeNotifierProvider(
+        create:
+            (_) => BlockProvider(
+              apiService: CovesApiService(
+                tokenGetter: () async => authProvider.session?.token,
+                tokenRefresher: authProvider.refreshToken,
+                signOutHandler: authProvider.signOut,
+              ),
+              authProvider: authProvider,
+            ),
+      ),
+      ChangeNotifierProxyProvider3<
+        AuthProvider,
+        VoteProvider,
+        CommunitySubscriptionProvider,
+        MultiFeedProvider
+      >(
+        create:
+            (context) => MultiFeedProvider(
+              authProvider,
+              voteProvider: context.read<VoteProvider>(),
+              subscriptionProvider:
+                  context.read<CommunitySubscriptionProvider>(),
+            ),
+        update: (context, auth, vote, subscription, previous) {
+          // Reuse existing provider to maintain state across rebuilds
+          return previous ??
+              MultiFeedProvider(
+                auth,
+                voteProvider: vote,
+                subscriptionProvider: subscription,
+              );
+        },
+      ),
+      // CommentsProviderCache manages per-post CommentsProvider instances
+      // with LRU eviction and sign-out cleanup
+      ProxyProvider2<AuthProvider, VoteProvider, CommentsProviderCache>(
+        create:
+            (context) => CommentsProviderCache(
+              authProvider: authProvider,
+              voteProvider: context.read<VoteProvider>(),
+              commentService: commentService,
+            ),
+        update: (context, auth, vote, previous) {
+          // Reuse existing cache
+          return previous ??
+              CommentsProviderCache(
+                authProvider: auth,
+                voteProvider: vote,
+                commentService: commentService,
+              );
+        },
+        dispose: (_, cache) => cache.dispose(),
+      ),
+      // StreamableService for video embeds
+      Provider<StreamableService>(create: (_) => StreamableService()),
+      // UserProfileProvider for profile pages
+      ChangeNotifierProxyProvider2<
+        AuthProvider,
+        VoteProvider,
+        UserProfileProvider
+      >(
+        create:
+            (context) => UserProfileProvider(
+              authProvider,
+              voteProvider: context.read<VoteProvider>(),
+            ),
+        update: (context, auth, vote, previous) {
+          // Propagate auth changes to existing provider
+          previous?.updateAuthProvider(auth);
+          return previous ?? UserProfileProvider(auth, voteProvider: vote);
+        },
+      ),
+    ],
+    child: const CovesApp(),
   );
 }
 
@@ -225,8 +236,10 @@ class CovesApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final eulaProvider = Provider.of<EulaProvider>(context, listen: false);
-    final guidelinesProvider =
-        Provider.of<CommunityGuidelinesProvider>(context, listen: false);
+    final guidelinesProvider = Provider.of<CommunityGuidelinesProvider>(
+      context,
+      listen: false,
+    );
 
     return MaterialApp.router(
       title: 'Coves',

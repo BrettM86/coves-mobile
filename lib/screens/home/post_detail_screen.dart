@@ -84,6 +84,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   late CommentsProvider _commentsProvider;
   CommentsProviderCache? _commentsCache;
 
+  // Stored for dispose: a context.read there throws a FlutterError (an
+  // Error, which the old `on Exception` guard missed) when the tree is
+  // being finalized and the provider ancestor is already deactivated.
+  AuthProvider? _authProvider;
+
   // Track initialization state
   bool _isInitialized = false;
 
@@ -110,8 +115,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   /// Listen for auth state changes to handle sign-out
   void _setupAuthListener() {
-    final authProvider = context.read<AuthProvider>();
-    authProvider.addListener(_onAuthChanged);
+    _authProvider = context.read<AuthProvider>();
+    _authProvider!.addListener(_onAuthChanged);
   }
 
   /// Handle auth state changes (specifically sign-out)
@@ -212,15 +217,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   @override
   void dispose() {
-    // Remove auth listener
-    try {
-      context.read<AuthProvider>().removeListener(_onAuthChanged);
-    } on Exception catch (e) {
-      // Context may not be valid during dispose - expected behavior
-      if (kDebugMode) {
-        debugPrint('dispose: auth listener removal failed: $e');
-      }
-    }
+    // Remove auth listener via the stored reference — context.read here is
+    // unsafe once the ancestor is deactivated (tree finalization) and throws
+    // a FlutterError that `on Exception` cannot catch.
+    _authProvider?.removeListener(_onAuthChanged);
+    _authProvider = null;
 
     // Release provider pin in cache (prevents LRU eviction disposing an active
     // provider while this screen is in the navigation stack).
@@ -418,10 +419,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: bgColor,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
       child: Center(
         child: Text(
           firstLetter,
@@ -662,11 +660,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   /// Handle comment submission (reply to post)
-  Future<void> _handleCommentSubmit(String content, List<RichTextFacet> facets) async {
+  Future<void> _handleCommentSubmit(
+    String content,
+    List<RichTextFacet> facets,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      await _commentsProvider.createComment(content: content, contentFacets: facets);
+      await _commentsProvider.createComment(
+        content: content,
+        contentFacets: facets,
+      );
 
       if (mounted) {
         messenger.showSnackBar(
@@ -749,7 +753,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         builder:
             (context) => ReplyScreen(
               comment: comment,
-              onSubmit: (content, facets) => _handleCommentReply(content, facets, comment),
+              onSubmit:
+                  (content, facets) =>
+                      _handleCommentReply(content, facets, comment),
               commentsProvider: _commentsProvider,
             ),
       ),
@@ -846,42 +852,46 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         tooltip: 'More options',
                         color: AppColors.backgroundSecondary,
                         onSelected: _handleMenuAction,
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'copy_link',
-                            child: Row(
-                              children: [
-                                Icon(Icons.link, size: 20),
-                                SizedBox(width: 12),
-                                Text('Copy link'),
-                              ],
-                            ),
-                          ),
-                          // Report is hidden on the viewer's own posts
-                          // (parity with the feed card menu).
-                          if (context.read<AuthProvider>().did !=
-                              widget.post.post.author.did)
-                            const PopupMenuItem(
-                              value: 'report',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.flag_outlined, size: 20),
-                                  SizedBox(width: 12),
-                                  Text('Report'),
-                                ],
+                        itemBuilder:
+                            (context) => [
+                              const PopupMenuItem(
+                                value: 'copy_link',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.link, size: 20),
+                                    SizedBox(width: 12),
+                                    Text('Copy link'),
+                                  ],
+                                ),
                               ),
-                            ),
-                          const PopupMenuItem(
-                            value: 'hide',
-                            child: Row(
-                              children: [
-                                Icon(Icons.visibility_off_outlined, size: 20),
-                                SizedBox(width: 12),
-                                Text('Hide post'),
-                              ],
-                            ),
-                          ),
-                        ],
+                              // Report is hidden on the viewer's own posts
+                              // (parity with the feed card menu).
+                              if (context.read<AuthProvider>().did !=
+                                  widget.post.post.author.did)
+                                const PopupMenuItem(
+                                  value: 'report',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.flag_outlined, size: 20),
+                                      SizedBox(width: 12),
+                                      Text('Report'),
+                                    ],
+                                  ),
+                                ),
+                              const PopupMenuItem(
+                                value: 'hide',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.visibility_off_outlined,
+                                      size: 20,
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text('Hide post'),
+                                  ],
+                                ),
+                              ),
+                            ],
                       ),
                     ],
                   ),
@@ -928,11 +938,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                     key: _commentsHeaderKey,
                                     commentCount:
                                         PostDetailScreen.displayedCommentCount(
-                                          serverCount: widget
-                                              .post
-                                              .post
-                                              .stats
-                                              .commentCount,
+                                          serverCount:
+                                              widget
+                                                  .post
+                                                  .post
+                                                  .stats
+                                                  .commentCount,
                                           isLoading: isLoading,
                                           hasError: error != null,
                                           hasComments: comments.isNotEmpty,
@@ -980,13 +991,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               onCommentTap: _openReplyToComment,
                               collapsedComments:
                                   commentsProvider.collapsedComments,
-                              onCollapseToggle: commentsProvider.toggleCollapsed,
+                              onCollapseToggle:
+                                  commentsProvider.toggleCollapsed,
                               onContinueThread: _onContinueThread,
                               onLoadMoreReplies: _onLoadMoreReplies,
                               loadingMoreReplies:
                                   commentsProvider.loadingMoreReplies,
-                              onDelete: (uri) =>
-                                  commentsProvider.deleteComment(commentUri: uri),
+                              onDelete:
+                                  (uri) => commentsProvider.deleteComment(
+                                    commentUri: uri,
+                                  ),
                             ),
                           );
                         },

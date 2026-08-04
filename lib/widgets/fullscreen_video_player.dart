@@ -25,6 +25,7 @@ class _FullscreenVideoPlayerState extends State<FullscreenVideoPlayer>
   bool _isDragging = false;
   VideoPlayerController? _videoController;
   bool _isInitializing = true;
+  bool _hasError = false;
 
   @override
   void initState() {
@@ -63,13 +64,21 @@ class _FullscreenVideoPlayerState extends State<FullscreenVideoPlayer>
           _isInitializing = false;
         });
       }
-    } on Exception catch (e) {
+    } on Object catch (_) {
+      // Deliberately catches Errors as well as Exceptions: the video_player
+      // platform channel throws UnimplementedError when no implementation is
+      // registered, and an `on Exception` clause lets that escape — leaving
+      // the user watching a spinner that never resolves.
+      //
+      // The thrown object is not logged: it can carry the video URL, which
+      // may be a signed blob endpoint with credentials in the query string.
       if (kDebugMode) {
-        debugPrint('Error initializing video: $e');
+        debugPrint('FullscreenVideoPlayer: video initialization failed');
       }
       if (mounted) {
         setState(() {
           _isInitializing = false;
+          _hasError = true;
         });
       }
     }
@@ -112,6 +121,69 @@ class _FullscreenVideoPlayerState extends State<FullscreenVideoPlayer>
     });
   }
 
+  /// The centre of the screen: the failure notice, the loading spinner, or
+  /// the video itself.
+  Widget _buildStage() {
+    if (_hasError) {
+      return _buildErrorState();
+    }
+
+    if (_isInitializing || _videoController == null) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.loadingIndicator),
+      );
+    }
+
+    return Center(
+      child: AspectRatio(
+        aspectRatio: _videoController!.value.aspectRatio,
+        child: VideoPlayer(_videoController!),
+      ),
+    );
+  }
+
+  /// Shown when the video could not be initialized.
+  ///
+  /// The player is a full-screen route, so without a visible way out a
+  /// failure would otherwise trap the user on a black screen — swipe-to-
+  /// dismiss still works, but nothing on screen advertises it.
+  Widget _buildErrorState() {
+    return Center(
+      key: const Key('fullscreen-video-error'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.videocam_off_outlined,
+              color: AppColors.textSecondary,
+              size: 48,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "This video couldn't be played.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textPrimary.withValues(alpha: 0.9),
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 8),
+            IconButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(
+                Icons.close,
+                color: AppColors.textPrimary,
+                semanticLabel: 'Close',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Calculate opacity based on drag offset (fade out as user drags)
@@ -137,21 +209,7 @@ class _FullscreenVideoPlayerState extends State<FullscreenVideoPlayer>
                 _dragOffsetY,
                 0,
               ),
-              child: SizedBox.expand(
-                child:
-                    _isInitializing || _videoController == null
-                        ? const Center(
-                          child: CircularProgressIndicator(
-                            color: AppColors.loadingIndicator,
-                          ),
-                        )
-                        : Center(
-                          child: AspectRatio(
-                            aspectRatio: _videoController!.value.aspectRatio,
-                            child: VideoPlayer(_videoController!),
-                          ),
-                        ),
-              ),
+              child: SizedBox.expand(child: _buildStage()),
             ),
             // Minimal controls at bottom (scrubber only)
             if (_videoController != null &&

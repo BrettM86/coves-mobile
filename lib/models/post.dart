@@ -16,18 +16,23 @@ class TimelineResponse {
   TimelineResponse({required this.feed, this.cursor});
 
   factory TimelineResponse.fromJson(Map<String, dynamic> json) {
-    // Handle null feed array from backend
+    // Handle a null or non-list feed array from the backend
     final feedData = json['feed'];
     final feedList = <FeedViewPost>[];
 
-    if (feedData != null) {
-      // Parse feed items, skipping any that fail to parse
-      for (final item in feedData as List<dynamic>) {
+    if (feedData is List) {
+      // Parse feed items, skipping any that fail to parse. One bad post
+      // must never cost the reader the whole feed, so the guard is broad:
+      // items are type-checked rather than cast, and the catch is
+      // `on Object` because an unchecked cast deep in a federated record
+      // raises a TypeError, which is an Error and would otherwise escape.
+      for (final item in feedData) {
+        if (item is! Map<String, dynamic>) {
+          continue;
+        }
         try {
-          feedList.add(
-            FeedViewPost.fromJson(item as Map<String, dynamic>),
-          );
-        } on Exception catch (e) {
+          feedList.add(FeedViewPost.fromJson(item));
+        } on Object catch (e) {
           // Skip malformed posts (e.g., deleted posts with missing data)
           if (kDebugMode) {
             debugPrint('⚠️ Skipping malformed feed item: $e');
@@ -36,7 +41,14 @@ class TimelineResponse {
       }
     }
 
-    return TimelineResponse(feed: feedList, cursor: json['cursor'] as String?);
+    // The cursor comes from the AppView's response envelope rather than a
+    // federated record, but a wrong-typed value must degrade like every
+    // other field here, not abort the whole feed parse.
+    final cursor = json['cursor'];
+    return TimelineResponse(
+      feed: feedList,
+      cursor: cursor is String ? cursor : null,
+    );
   }
   final List<FeedViewPost> feed;
   final String? cursor;
@@ -99,11 +111,7 @@ class ViewerState {
 /// When a post is deleted, this record will be null and PostView.isDeleted
 /// will be true.
 class PostRecord {
-  const PostRecord({
-    this.title,
-    this.content,
-    this.facets,
-  });
+  const PostRecord({this.title, this.content, this.facets});
 
   factory PostRecord.fromJson(Map<String, dynamic> json) {
     return PostRecord(
@@ -255,11 +263,12 @@ class CommunityRef {
       name: json['name'] as String,
       handle: json['handle'] as String?,
       avatar: json['avatar'] as String?,
-      viewer: json['viewer'] != null
-          ? CommunityRefViewerState.fromJson(
-              json['viewer'] as Map<String, dynamic>,
-            )
-          : null,
+      viewer:
+          json['viewer'] != null
+              ? CommunityRefViewerState.fromJson(
+                json['viewer'] as Map<String, dynamic>,
+              )
+              : null,
     );
   }
   final String did;
@@ -276,9 +285,7 @@ class CommunityRefViewerState {
   CommunityRefViewerState({this.subscribed});
 
   factory CommunityRefViewerState.fromJson(Map<String, dynamic> json) {
-    return CommunityRefViewerState(
-      subscribed: json['subscribed'] as bool?,
-    );
+    return CommunityRefViewerState(subscribed: json['subscribed'] as bool?);
   }
 
   /// Whether the current user is subscribed to this community
@@ -307,57 +314,362 @@ class PostStats {
   final int commentCount;
 }
 
-class PostEmbed {
-  PostEmbed({
-    required this.type,
-    this.external,
-    this.blueskyPost,
-    required this.data,
-  });
+/// An embed attached to a post, discriminated by its lexicon `$type`.
+///
+/// The appview serves embeds as a `$type`-tagged union. Hydration is
+/// all-or-nothing: when it fails, the *record* shape (no `#view` suffix) is
+/// served with atproto blob refs instead of URLs. Those are unrenderable, so
+/// they parse to [UnknownPostEmbed] — the client must never build blob URLs
+/// itself, media has to flow through the appview's proxied URLs.
+sealed class PostEmbed {
+  const PostEmbed({required this.type, required this.data});
 
+  /// Parses any embed json. Never throws on map input: anything unrecognized
+  /// or malformed degrades to [UnknownPostEmbed].
   factory PostEmbed.fromJson(Map<String, dynamic> json) {
-    final embedType = json[r'$type'] as String? ?? 'unknown';
-    ExternalEmbed? externalEmbed;
-    BlueskyPostEmbed? blueskyPostEmbed;
+    final rawType = json[r'$type'];
+    final embedType = rawType is String ? rawType : 'unknown';
 
-    if ((embedType == EmbedTypes.external ||
-            embedType == EmbedTypes.externalView) &&
-        json['external'] != null) {
-      externalEmbed = ExternalEmbed.fromJson(
-        json['external'] as Map<String, dynamic>,
+    if (embedType == EmbedTypes.imagesView) {
+      final images = _parseEmbedImages(json['images']);
+      if (images == null) {
+        return UnknownPostEmbed(type: embedType, data: json);
+      }
+      return ImagesPostEmbed(type: embedType, images: images, data: json);
+    }
+
+    if (embedType == EmbedTypes.videoView) {
+      final video = json['video'];
+      final thumbnail = json['thumbnail'];
+      if (video is! String ||
+          !_isRenderableMediaUrl(video) ||
+          thumbnail is! String? ||
+          (thumbnail != null && !_isRenderableMediaUrl(thumbnail))) {
+        return UnknownPostEmbed(type: embedType, data: json);
+      }
+      final duration = json['duration'];
+      return VideoPostEmbed(
+        type: embedType,
+        video: video,
+        thumbnail: thumbnail,
+        alt: _parseAltText(json['alt']),
+        duration: duration is int ? duration : null,
+        data: json,
       );
     }
 
+    // Unhydrated record shapes carry blob refs, never renderable URLs.
+    if (embedType == EmbedTypes.images || embedType == EmbedTypes.video) {
+      return UnknownPostEmbed(type: embedType, data: json);
+    }
+
     if (embedType == EmbedTypes.post || embedType == EmbedTypes.postView) {
-      blueskyPostEmbed = BlueskyPostEmbed.fromJson(json);
+      try {
+        return QuotePostEmbed(
+          type: embedType,
+          post: BlueskyPostEmbed.fromJson(json),
+          data: json,
+        );
+        // Broader than FormatException: BlueskyPostEmbed casts `resolved`
+        // to a Map, so a hostile record raises a TypeError instead.
+      } on Object catch (e) {
+        if (kDebugMode) {
+          debugPrint('PostEmbed: unparseable $embedType embed: $e');
+        }
+        return UnknownPostEmbed(type: embedType, data: json);
+      }
+    }
+
+    if (embedType == EmbedTypes.external ||
+        embedType == EmbedTypes.externalView) {
+      final external = json['external'];
+      if (external is Map<String, dynamic>) {
+        // ExternalEmbed.fromJson casts its fields without checking, and
+        // EmbedSource.fromJson throws outright on a bad source url. Wrap
+        // the whole branch so any of that — including future drift —
+        // degrades to an unrenderable embed instead of escaping.
+        try {
+          return ExternalPostEmbed(
+            type: embedType,
+            external: ExternalEmbed.fromJson(external),
+            data: json,
+          );
+        } on Object {
+          if (kDebugMode) {
+            debugPrint('PostEmbed: unparseable $embedType external payload');
+          }
+          return UnknownPostEmbed(type: embedType, data: json);
+        }
+      }
     }
 
     // Fallback: if no typed embed was parsed but we have a uri field at the
     // top level, treat it as an external link embed. This handles cases where
     // the backend returns simple link embeds without the full $type wrapper.
-    if (externalEmbed == null &&
-        blueskyPostEmbed == null &&
-        json['uri'] != null) {
+    // Media embeds are excluded above so a malformed images/video embed that
+    // happens to carry a uri stays unknown rather than rendering as a link.
+    if (json['uri'] is String) {
       if (kDebugMode) {
         debugPrint(
           'PostEmbed fallback: treating unrecognized embed as external link. '
           'Type was: ${json[r'$type']}, keys: ${json.keys.toList()}',
         );
       }
-      externalEmbed = ExternalEmbed.fromJson(json);
+      // Guarded for the same reason as the typed branch above: the fallback
+      // hands the whole embed to the same unchecked casts.
+      try {
+        return ExternalPostEmbed(
+          type: embedType,
+          external: ExternalEmbed.fromJson(json),
+          data: json,
+        );
+      } on Object {
+        if (kDebugMode) {
+          debugPrint('PostEmbed fallback: payload was not a usable link');
+        }
+        return UnknownPostEmbed(type: embedType, data: json);
+      }
     }
 
-    return PostEmbed(
-      type: embedType,
-      external: externalEmbed,
-      blueskyPost: blueskyPostEmbed,
-      data: json,
+    return UnknownPostEmbed(type: embedType, data: json);
+  }
+
+  /// The raw `$type`, or `'unknown'` when the embed carried no usable one.
+  final String type;
+
+  /// The raw embed json, preserved so unrecognized shapes are not lost.
+  final Map<String, dynamic> data;
+
+  /// The link payload — non-null only on [ExternalPostEmbed].
+  ExternalEmbed? get external => null;
+
+  /// The quoted Bluesky post — non-null only on [QuotePostEmbed].
+  BlueskyPostEmbed? get blueskyPost => null;
+}
+
+/// An external link card.
+final class ExternalPostEmbed extends PostEmbed {
+  const ExternalPostEmbed({
+    required super.type,
+    required this.external,
+    required super.data,
+  });
+
+  @override
+  final ExternalEmbed external;
+}
+
+/// A quoted Bluesky post.
+final class QuotePostEmbed extends PostEmbed {
+  const QuotePostEmbed({
+    required super.type,
+    required this.post,
+    required super.data,
+  });
+
+  /// Reference to the quoted post, with resolved data when the appview
+  /// managed to fetch it.
+  final BlueskyPostEmbed post;
+
+  @override
+  BlueskyPostEmbed get blueskyPost => post;
+}
+
+/// A hydrated image gallery. [images] is guaranteed non-empty and every entry
+/// has renderable urls — a partially hydrated gallery parses as unknown.
+final class ImagesPostEmbed extends PostEmbed {
+  /// Throws [ArgumentError] when [images] is empty. Checked rather than
+  /// asserted because asserts are stripped in release, and an empty gallery
+  /// would reach the widgets as a `first` on an empty list.
+  ImagesPostEmbed({
+    required super.type,
+    required List<EmbedImage> images,
+    required super.data,
+  }) : images = List.unmodifiable(images) {
+    if (images.isEmpty) {
+      throw ArgumentError.value(
+        images,
+        'images',
+        'ImagesPostEmbed requires at least one image',
+      );
+    }
+  }
+
+  final List<EmbedImage> images;
+}
+
+/// A hydrated video with a playable url.
+final class VideoPostEmbed extends PostEmbed {
+  const VideoPostEmbed({
+    required super.type,
+    required this.video,
+    required super.data,
+    this.thumbnail,
+    this.alt,
+    this.duration,
+  });
+
+  /// Playable video url served by the appview.
+  final String video;
+
+  /// Poster image url, when the appview provided one.
+  final String? thumbnail;
+
+  /// Alt text supplied by the author.
+  final String? alt;
+
+  /// Video length in seconds, when known.
+  final int? duration;
+}
+
+/// An embed this client cannot render: an unknown `$type`, an unhydrated
+/// record shape, or a malformed payload. Renders as no media.
+final class UnknownPostEmbed extends PostEmbed {
+  const UnknownPostEmbed({required super.type, required super.data});
+}
+
+/// A single image from a hydrated gallery embed.
+class EmbedImage {
+  const EmbedImage({
+    required this.thumb,
+    required this.fullsize,
+    this.alt,
+    this.aspectRatio,
+  });
+
+  /// Feed-sized rendering url (800w).
+  final String thumb;
+
+  /// Lightbox-sized rendering url (1600w).
+  final String fullsize;
+
+  /// Alt text supplied by the author.
+  final String? alt;
+
+  /// Intrinsic dimensions, used to reserve layout space before load.
+  final EmbedAspectRatio? aspectRatio;
+}
+
+/// Intrinsic dimensions of an embedded image.
+class EmbedAspectRatio {
+  /// Throws [ArgumentError] on a dimension below 1. Checked rather than
+  /// asserted: asserts are stripped in release, and a zero height would
+  /// reach the layout as a division by zero.
+  EmbedAspectRatio({required this.width, required this.height}) {
+    if (width < 1) {
+      throw ArgumentError.value(width, 'width', 'must be at least 1');
+    }
+    if (height < 1) {
+      throw ArgumentError.value(height, 'height', 'must be at least 1');
+    }
+  }
+
+  final int width;
+  final int height;
+}
+
+/// Whether a hydrated media url is safe to hand to the image/video stack.
+///
+/// The appview's hydration no-ops on `#view` types and the firehose consumer
+/// stores embeds verbatim, so a federated repo can publish a pre-stamped view
+/// carrying `file://`, `content://` or `javascript:` urls. The model is the
+/// last line of defence, so the allowlist here is the same one
+/// `UrlLauncher` enforces for outbound links: http and https only.
+bool _isRenderableMediaUrl(String url) {
+  if (url.isEmpty) {
+    return false;
+  }
+
+  final parsed = Uri.tryParse(url);
+  if (parsed == null) {
+    return false;
+  }
+
+  // Uri lowercases the scheme while parsing, but compare case-insensitively
+  // anyway so 'HTTPS://…' cannot turn on a future refactor. The host check
+  // matters too: 'http:foo' and 'https:///path' carry an allowed scheme
+  // with no authority at all.
+  final scheme = parsed.scheme.toLowerCase();
+  return (scheme == 'http' || scheme == 'https') && parsed.host.isNotEmpty;
+}
+
+/// Lexicon caps for a hydrated gallery: at most 8 images, alt text at most
+/// 10000 characters.
+const int _maxGalleryImages = 8;
+const int _maxAltLength = 10000;
+
+/// Reads alt text, truncated to the lexicon's limit.
+///
+/// Lenient about type — alt is decorative enough that a malformed one is
+/// dropped rather than poisoning the embed — but not about length: nothing
+/// downstream bounds it before it reaches the semantics tree.
+String? _parseAltText(Object? raw) {
+  if (raw is! String) {
+    return null;
+  }
+  return raw.length > _maxAltLength ? raw.substring(0, _maxAltLength) : raw;
+}
+
+/// Parses the `images` list of a hydrated gallery embed.
+///
+/// Returns null when the gallery must not be rendered at all: a missing,
+/// non-list or empty value, or any entry lacking a String `thumb` and
+/// `fullsize` (e.g. one still carrying a blob ref) or carrying one that is
+/// not an http(s) url. This mirrors the appview's all-or-nothing hydration —
+/// half a gallery is never shown, and one hostile url poisons the rest.
+List<EmbedImage>? _parseEmbedImages(Object? raw) {
+  // The lexicon caps a gallery at 8 and the appview never serves more, so a
+  // longer list is a malformed or hostile record rather than something to
+  // render partially. Checked before the loop so an absurd list costs a
+  // length read, not a walk.
+  if (raw is! List || raw.isEmpty || raw.length > _maxGalleryImages) {
+    return null;
+  }
+
+  final images = <EmbedImage>[];
+  for (final entry in raw) {
+    if (entry is! Map<String, dynamic>) {
+      return null;
+    }
+
+    final thumb = entry['thumb'];
+    final fullsize = entry['fullsize'];
+    if (thumb is! String ||
+        fullsize is! String ||
+        !_isRenderableMediaUrl(thumb) ||
+        !_isRenderableMediaUrl(fullsize)) {
+      return null;
+    }
+
+    images.add(
+      EmbedImage(
+        thumb: thumb,
+        fullsize: fullsize,
+        alt: _parseAltText(entry['alt']),
+        aspectRatio: _parseEmbedAspectRatio(entry['aspectRatio']),
+      ),
     );
   }
-  final String type;
-  final ExternalEmbed? external;
-  final BlueskyPostEmbed? blueskyPost;
-  final Map<String, dynamic> data;
+
+  return images;
+}
+
+/// Parses an image `aspectRatio`, or null when it is absent or malformed.
+///
+/// A bad ratio only costs layout hinting, so it is dropped without
+/// rejecting the image itself.
+EmbedAspectRatio? _parseEmbedAspectRatio(Object? raw) {
+  if (raw is! Map) {
+    return null;
+  }
+
+  final width = raw['width'];
+  final height = raw['height'];
+  if (width is! int || height is! int || width < 1 || height < 1) {
+    return null;
+  }
+
+  return EmbedAspectRatio(width: width, height: height);
 }
 
 class ExternalEmbed {
@@ -422,11 +734,7 @@ class ExternalEmbed {
 
 /// A source link aggregated into a megathread
 class EmbedSource {
-  EmbedSource({
-    required this.uri,
-    this.title,
-    this.domain,
-  });
+  EmbedSource({required this.uri, this.title, this.domain});
 
   factory EmbedSource.fromJson(Map<String, dynamic> json) {
     final uri = json['uri'];

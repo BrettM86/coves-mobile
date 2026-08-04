@@ -310,7 +310,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     PostEmbed? embed;
     final url = _urlController.text.trim();
     if (url.isNotEmpty) {
-      embed = PostEmbed(
+      embed = ExternalPostEmbed(
         type: EmbedTypes.external,
         external: ExternalEmbed(
           uri: url,

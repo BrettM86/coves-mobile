@@ -76,8 +76,7 @@ TimelineResponse      // Top-level feed response with cursor
       │   ├─ AuthorView
       │   ├─ CommunityRef
       │   ├─ PostStats
-      │   ├─ PostEmbed (optional)
-      │   │   └─ ExternalEmbed (for link previews)
+      │   ├─ PostEmbed (optional, sealed union — see below)
       │   └─ PostFacet[] (optional)
       └─ FeedReason (optional)
 ```
@@ -85,25 +84,38 @@ TimelineResponse      // Top-level feed response with cursor
 **Key features:**
 - All models use factory constructors for JSON deserialization
 - Handles null feed arrays (backend returns `{"feed": null}` for empty feeds)
-- External embeds parse thumbnail URLs, titles, descriptions
 - Optional fields properly handled throughout
+- Embed parsing is defensive: media URLs must be http(s), aspect ratios are
+  validated, and anything malformed degrades to `UnknownPostEmbed` rather
+  than throwing (federated records reach the client unvalidated)
 
-**Example PostEmbed with ExternalEmbed:**
+**PostEmbed sealed union** (`$type`-discriminated, exhaustive-switch safe):
 ```dart
-class PostEmbed {
-  final String type;                  // e.g., "social.coves.embed.external"
-  final ExternalEmbed? external;      // Parsed external link data
-  final Map<String, dynamic> data;    // Raw embed data
+sealed class PostEmbed {
+  final String type;                  // Raw $type string
+  final Map<String, dynamic> data;    // Raw embed JSON
 }
 
-class ExternalEmbed {
-  final String uri;                   // Link URL
-  final String? title;                // Link title
-  final String? description;          // Link description
-  final String? thumb;                // Thumbnail image URL
-  final String? domain;               // Domain name
+final class ExternalPostEmbed extends PostEmbed {   // link previews
+  final ExternalEmbed external;       // uri, title?, description?, thumb?, …
 }
+final class QuotePostEmbed extends PostEmbed {      // quoted Bluesky post
+  final BlueskyPostEmbed post;
+}
+final class ImagesPostEmbed extends PostEmbed {     // images#view, 1–8 images
+  final List<EmbedImage> images;      // thumb + fullsize URLs, alt?, aspectRatio?
+}
+final class VideoPostEmbed extends PostEmbed {      // video#view
+  final String video;                 // PDS video URL
+  final String? thumbnail;
+  final String? alt;
+  final int? duration;                // seconds
+}
+final class UnknownPostEmbed extends PostEmbed {}   // unrecognized/malformed
 ```
+Legacy call sites can still use the bridge getters `embed.external` /
+`embed.blueskyPost` (null on other variants); new code should switch on the
+sealed variants.
 
 ---
 

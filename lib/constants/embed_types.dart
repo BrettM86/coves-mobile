@@ -16,4 +16,16 @@ class EmbedTypes {
 
   /// Embedded Bluesky post as served by the appview (with resolved data).
   static const postView = 'social.coves.embed.post#view';
+
+  /// Image gallery record (unhydrated: carries atproto blob refs).
+  static const images = 'social.coves.embed.images';
+
+  /// Image gallery as served by the appview (blobs resolved to URLs).
+  static const imagesView = 'social.coves.embed.images#view';
+
+  /// Video record (unhydrated: carries atproto blob refs).
+  static const video = 'social.coves.embed.video';
+
+  /// Video as served by the appview (blobs resolved to URLs).
+  static const videoView = 'social.coves.embed.video#view';
 }
