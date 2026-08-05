@@ -37,6 +37,15 @@ class ProfileHeader extends StatelessWidget {
   static const double _bottomPadding = 12;
   static const double _identityTopGap = 6;
 
+  /// Type size for the handle when it fits the identity column outright.
+  static const double _handleMaxFontSize = 20;
+
+  /// Floor the handle shrinks to before it gives up and ellipsizes.
+  ///
+  /// Below this the handle stops reading as the primary identity on the
+  /// screen, so a very long handle is truncated rather than shrunk further.
+  static const double _handleMinFontSize = 14;
+
   /// Sliver extent when fully collapsed — mirrors `SliverAppBar.minExtent`
   /// for a primary app bar with no bottom.
   static double collapsedExtentFor(BuildContext context) =>
@@ -49,6 +58,10 @@ class ProfileHeader extends StatelessWidget {
   /// Height of the identity block that hangs below the banner edge:
   /// the avatar's lower half, or the handle + DID column if taller
   /// (e.g. with large accessibility text).
+  ///
+  /// The handle is measured at [_handleMaxFontSize]; a handle that shrinks
+  /// to fit only ever occupies less height than that, so this stays a safe
+  /// upper bound and the header's geometry is unaffected by handle length.
   static double _infoHeightFor(BuildContext context) {
     final scaler = MediaQuery.textScalerOf(context);
     // Handle line (fontSize 20) + gap + DID line (fontSize 12 + icon).
@@ -196,15 +209,8 @@ class ProfileHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          profile?.handle != null ? '@${profile!.handle}' : 'Loading...',
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        _HandleText(
+          text: profile?.handle != null ? '@${profile!.handle}' : 'Loading...',
         ),
         if (profile?.did != null) ...[
           const SizedBox(height: 4),
@@ -283,6 +289,122 @@ class ProfileHeader extends StatelessWidget {
       height: size,
       color: AppColors.primary,
       child: Icon(Icons.person, size: size * 0.5, color: Colors.white),
+    );
+  }
+}
+
+/// The handle line of the identity block, scaled down to fit its column.
+///
+/// atProto handles are full domains, so their length varies wildly —
+/// `@alice.bsky.social` fits the column beside the avatar at full size,
+/// while `@somelongname.coves.social` does not. Rather than ellipsizing the
+/// user's identity away, the type size steps down from
+/// [ProfileHeader._handleMaxFontSize] toward
+/// [ProfileHeader._handleMinFontSize] until the whole handle fits on one
+/// line. Only a handle still too long at the floor is truncated.
+///
+/// Stateful purely to memoise the fitted size: this widget rebuilds on every
+/// frame while the header collapses, and text measurement is expensive
+/// enough that Flutter's own [TextPainter.computeWidth] documents it as
+/// something to avoid repeating. None of the measurement inputs change
+/// during a collapse, so the cache makes scrolling free.
+class _HandleText extends StatefulWidget {
+  const _HandleText({required this.text});
+
+  final String text;
+
+  @override
+  State<_HandleText> createState() => _HandleTextState();
+}
+
+class _HandleTextState extends State<_HandleText> {
+  /// Everything the fitted size depends on. A record so equality is
+  /// structural — if any input changes, the size is recomputed.
+  (String, double, TextStyle, TextScaler, TextDirection)? _cacheKey;
+  double _fontSize = ProfileHeader._handleMaxFontSize;
+
+  /// Largest size in [[ProfileHeader._handleMinFontSize],
+  /// [ProfileHeader._handleMaxFontSize]] that fits [text] on one line.
+  static double _fitFontSize({
+    required String text,
+    required double available,
+    required TextStyle style,
+    required TextScaler scaler,
+    required TextDirection direction,
+  }) {
+    // computeWidth disposes the painter it creates; a bare TextPainter here
+    // would leak an engine paragraph on every measurement.
+    double widthAt(double fontSize) => TextPainter.computeWidth(
+          text: TextSpan(
+            text: text,
+            style: style.copyWith(fontSize: fontSize),
+          ),
+          maxLines: 1,
+          textDirection: direction,
+          textScaler: scaler,
+        );
+
+    final fullWidth = widthAt(ProfileHeader._handleMaxFontSize);
+    if (fullWidth <= available || fullWidth <= 0) {
+      return ProfileHeader._handleMaxFontSize;
+    }
+
+    // Glyph advances scale nearly linearly with font size, so one ratio
+    // lands on (or just past) the right size; the loop then settles the
+    // remainder. Non-linear text scaling on some platforms is what makes
+    // that verification necessary.
+    var fontSize = (ProfileHeader._handleMaxFontSize * available / fullWidth)
+        .clamp(
+          ProfileHeader._handleMinFontSize,
+          ProfileHeader._handleMaxFontSize,
+        );
+    while (fontSize > ProfileHeader._handleMinFontSize &&
+        widthAt(fontSize) > available) {
+      fontSize = math.max(ProfileHeader._handleMinFontSize, fontSize - 0.5);
+    }
+    return fontSize;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Inherit the ambient style so the measurement below uses the same font
+    // the Text will actually render with.
+    final style = DefaultTextStyle.of(context).style.merge(
+          const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        );
+    final scaler = MediaQuery.textScalerOf(context);
+    final direction = Directionality.of(context);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final key = (
+          widget.text,
+          constraints.maxWidth,
+          style,
+          scaler,
+          direction,
+        );
+        if (key != _cacheKey) {
+          _fontSize = _fitFontSize(
+            text: widget.text,
+            available: constraints.maxWidth,
+            style: style,
+            scaler: scaler,
+            direction: direction,
+          );
+          _cacheKey = key;
+        }
+
+        return Text(
+          widget.text,
+          style: style.copyWith(fontSize: _fontSize),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+      },
     );
   }
 }
