@@ -23,6 +23,7 @@ import '../../widgets/post_action_bar.dart';
 import '../../widgets/report_dialog.dart';
 import '../../widgets/sign_in_dialog.dart';
 import '../../widgets/status_bar_overlay.dart';
+import '../../widgets/tappable_community.dart';
 import '../compose/reply_screen.dart';
 import 'focused_thread_screen.dart';
 
@@ -336,7 +337,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
-  /// Build community title with avatar, name on top and instance below
+  /// Build community title with avatar, name on top and instance below.
+  ///
+  /// Tapping the title navigates to the community's feed.
   Widget _buildCommunityTitle() {
     final community = widget.post.post.community;
 
@@ -351,41 +354,52 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       }
     }
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Community avatar
-        _buildCommunityAvatar(community),
-        const SizedBox(width: 10),
-        // Text column
-        Flexible(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Community name with ! prefix - bigger, teal
-              Text(
-                '!${community.name}',
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.communityName,
-                ),
-                overflow: TextOverflow.ellipsis,
+    return TappableCommunity(
+      communityDid: community.did,
+      borderRadius: 8,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      // The avatar is only 28pt tall, so without a floor the tap target
+      // lands short of the 48pt minimum. 48 still clears kToolbarHeight
+      // (56), so the app bar is unaffected.
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Community avatar
+            _buildCommunityAvatar(community),
+            const SizedBox(width: 10),
+            // Text column
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Community name with ! prefix - bigger, teal
+                  Text(
+                    '!${community.name}',
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.communityName,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  // Instance below - smaller
+                  Text(
+                    instance,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                      color: AppColors.textSecondary.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ],
               ),
-              // Instance below - smaller
-              Text(
-                instance,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textSecondary.withValues(alpha: 0.8),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
