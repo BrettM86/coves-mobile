@@ -12,6 +12,7 @@ import '../utils/date_time_utils.dart';
 import 'bluesky_post_card.dart';
 import 'external_link_bar.dart';
 import 'fullscreen_video_player.dart';
+import 'image_viewer.dart';
 import 'post_card_actions.dart';
 import 'rich_text_renderer.dart';
 import 'source_link_bar.dart';
@@ -20,9 +21,11 @@ import 'tappable_community.dart';
 
 /// Widest and tallest aspect ratios (width/height) the feed will render media
 /// at. Clamping keeps a panorama from becoming a sliver and a tall portrait
-/// shot from swallowing the whole viewport.
+/// shot from swallowing the whole viewport. The 3:4 floor lets a standard
+/// phone-camera portrait through uncropped; only taller shots (9:16
+/// screenshots, stories) get center-cropped.
 const double _widestMediaRatio = 16 / 9;
-const double _tallestMediaRatio = 4 / 5;
+const double _tallestMediaRatio = 3 / 4;
 
 /// Resolves the display aspect ratio for an image, clamped to the feed range.
 /// Media with no declared ratio renders at the 16:9 ceiling.
@@ -375,7 +378,8 @@ class PostCard extends StatelessWidget {
   }
 
   /// Builds the images block: the first image at full card width, with a
-  /// "1/N" badge when the gallery holds more. Tapping opens the post.
+  /// "1/N" badge when the gallery holds more. Tapping opens the fullscreen
+  /// viewer directly — the rest of the card still navigates to the post.
   Widget _buildImagesEmbed(BuildContext context, ImagesPostEmbed embed) {
     final image = embed.images.first;
     final alt = image.alt;
@@ -405,7 +409,10 @@ class PostCard extends StatelessWidget {
 
     final block = GestureDetector(
       key: const Key('post-images-embed'),
-      onTap: disableNavigation ? null : () => _navigateToDetail(context),
+      onTap:
+          disableNavigation
+              ? null
+              : () => ImageViewer.open(context, embed.images),
       child: Stack(
         children: [
           thumbnail,
@@ -434,7 +441,7 @@ class PostCard extends StatelessWidget {
       container: true,
       explicitChildNodes: true,
       button: true,
-      label: 'Open post',
+      label: 'View full image',
       child: block,
     );
   }

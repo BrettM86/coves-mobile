@@ -14,19 +14,21 @@ const _countBadgeKey = Key('post-images-count-badge');
 const _videoKey = Key('post-video-embed');
 const _playOverlayKey = Key('post-video-play-overlay');
 const _durationBadgeKey = Key('post-video-duration-badge');
+const _viewerKey = Key('image-viewer');
 
 const _thumb1 = 'https://cdn.test/t1.jpg';
 const _thumb2 = 'https://cdn.test/t2.jpg';
 const _thumb3 = 'https://cdn.test/t3.jpg';
 const _full1 = 'https://cdn.test/f1.jpg';
+const _full2 = 'https://cdn.test/f2.jpg';
 const _videoUrl = 'https://cdn.test/video.mp4';
 const _videoThumb = 'https://cdn.test/video-thumb.jpg';
 
 const _detailMarker = 'DETAIL SCREEN';
 
-/// 16:9 and 4:5 as width/height doubles — the clamp bounds from B1.
+/// 16:9 and 3:4 as width/height doubles — the clamp bounds from B1.
 const _widestRatio = 16 / 9;
-const _tallestRatio = 4 / 5;
+const _tallestRatio = 3 / 4;
 
 /// Records routes pushed onto the root navigator so a tap handler's
 /// `Navigator.push` can be inspected without mounting the pushed page.
@@ -214,14 +216,38 @@ void main() {
       expect(renderedAspectRatio(tester, _imagesKey), closeTo(1.5, 0.01));
     });
 
-    testWidgets('B1 clamps an extremely tall image to 4:5', (tester) async {
+    testWidgets('B1 a 3:4 phone-camera portrait survives uncropped', (
+      tester,
+    ) async {
       useMediaSizedSurface(tester);
       final post = makePost(
         embed: imagesEmbed([
           {
             'thumb': _thumb1,
             'fullsize': _full1,
-            // 9:21 == 0.43, far taller than the 4:5 == 0.8 floor
+            'aspectRatio': {'width': 3, 'height': 4},
+          },
+        ]),
+      );
+
+      await tester.pumpWidget(harness(post));
+      await tester.pump();
+
+      expect(
+        renderedAspectRatio(tester, _imagesKey),
+        closeTo(_tallestRatio, 0.001),
+        reason: 'the floor sits exactly at 3:4 so standard portraits pass',
+      );
+    });
+
+    testWidgets('B1 clamps an extremely tall image to 3:4', (tester) async {
+      useMediaSizedSurface(tester);
+      final post = makePost(
+        embed: imagesEmbed([
+          {
+            'thumb': _thumb1,
+            'fullsize': _full1,
+            // 9:21 == 0.43, far taller than the 3:4 == 0.75 floor
             'aspectRatio': {'width': 9, 'height': 21},
           },
         ]),
@@ -323,7 +349,7 @@ void main() {
       expect(find.byKey(_countBadgeKey), findsNothing);
     });
 
-    testWidgets('B3 tapping the images block opens post detail', (
+    testWidgets('B3 tapping the images block opens the fullscreen viewer', (
       tester,
     ) async {
       useMediaSizedSurface(tester);
@@ -339,7 +365,75 @@ void main() {
       await tester.tap(find.byKey(_imagesKey));
       await tester.pumpAndSettle();
 
-      expect(find.text(_detailMarker), findsOneWidget);
+      expect(
+        find.byKey(_viewerKey),
+        findsOneWidget,
+        reason: 'an image tap opens the viewer, not the post detail screen',
+      );
+      expect(find.text(_detailMarker), findsNothing);
+
+      final viewerImages =
+          tester
+              .widgetList<CachedNetworkImage>(
+                find.descendant(
+                  of: find.byKey(_viewerKey),
+                  matching: find.byType(CachedNetworkImage),
+                ),
+              )
+              .map((w) => w.imageUrl);
+      expect(
+        viewerImages,
+        contains(_full1),
+        reason: 'the viewer shows the fullsize rendering, not the feed thumb',
+      );
+    });
+
+    testWidgets('B3 the viewer can swipe through a multi-image gallery', (
+      tester,
+    ) async {
+      useMediaSizedSurface(tester);
+      final post = makePost(
+        embed: imagesEmbed([
+          {'thumb': _thumb1, 'fullsize': _full1},
+          {'thumb': _thumb2, 'fullsize': _full2},
+        ]),
+      );
+
+      await tester.pumpWidget(harness(post));
+      await tester.pump();
+
+      await tester.tap(find.byKey(_imagesKey));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(_viewerKey), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(_viewerKey),
+          matching: find.byType(PageView),
+        ),
+        findsOneWidget,
+        reason: 'the whole gallery is reachable straight from the feed',
+      );
+
+      await tester.drag(
+        find.descendant(
+          of: find.byKey(_viewerKey),
+          matching: find.byType(PageView),
+        ),
+        const Offset(-400, 0),
+      );
+      await tester.pumpAndSettle();
+
+      final viewerImages =
+          tester
+              .widgetList<CachedNetworkImage>(
+                find.descendant(
+                  of: find.byKey(_viewerKey),
+                  matching: find.byType(CachedNetworkImage),
+                ),
+              )
+              .map((w) => w.imageUrl);
+      expect(viewerImages, contains(_full2));
     });
 
     testWidgets('B3 disableNavigation suppresses the images tap', (
@@ -359,6 +453,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text(_detailMarker), findsNothing);
+      expect(find.byKey(_viewerKey), findsNothing);
       expect(find.byKey(_imagesKey), findsOneWidget);
     });
   });
@@ -380,8 +475,8 @@ void main() {
       await tester.pump();
 
       expect(
-        tester.getSemantics(find.bySemanticsLabel('Open post')),
-        containsSemantics(isButton: true, label: 'Open post'),
+        tester.getSemantics(find.bySemanticsLabel('View full image')),
+        containsSemantics(isButton: true, label: 'View full image'),
       );
       handle.dispose();
     });
@@ -403,8 +498,8 @@ void main() {
       await tester.pump();
 
       expect(
-        tester.getSemantics(find.bySemanticsLabel('Open post')),
-        containsSemantics(isButton: true, label: 'Open post'),
+        tester.getSemantics(find.bySemanticsLabel('View full image')),
+        containsSemantics(isButton: true, label: 'View full image'),
       );
       handle.dispose();
     });
@@ -419,7 +514,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Plain text post'), findsOneWidget);
-      expect(find.bySemanticsLabel('Open post'), findsNothing);
+      expect(find.bySemanticsLabel('View full image'), findsNothing);
       handle.dispose();
     });
 
@@ -440,7 +535,7 @@ void main() {
 
       expect(find.byKey(_imagesKey), findsOneWidget);
       expect(
-        find.bySemanticsLabel('Open post'),
+        find.bySemanticsLabel('View full image'),
         findsNothing,
         reason: 'a dead actionable node is worse than no node at all',
       );
@@ -463,8 +558,8 @@ void main() {
       await tester.pump();
 
       expect(
-        tester.getSemantics(find.bySemanticsLabel('Open post')),
-        containsSemantics(isButton: true, label: 'Open post'),
+        tester.getSemantics(find.bySemanticsLabel('View full image')),
+        containsSemantics(isButton: true, label: 'View full image'),
       );
       handle.dispose();
     });

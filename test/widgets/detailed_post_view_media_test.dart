@@ -14,7 +14,8 @@ const _pageIndicatorKey = Key('detail-images-page-indicator');
 const _videoKey = Key('detail-video-embed');
 const _playOverlayKey = Key('detail-video-play-overlay');
 const _durationBadgeKey = Key('detail-video-duration-badge');
-const _imageViewerKey = Key('detail-image-viewer');
+const _imageViewerKey = Key('image-viewer');
+const _viewerIndicatorKey = Key('image-viewer-page-indicator');
 
 const _thumb1 = 'https://cdn.test/t1.jpg';
 const _thumb2 = 'https://cdn.test/t2.jpg';
@@ -950,6 +951,95 @@ void main() {
       expect(find.byKey(_imagesKey), findsOneWidget);
     });
 
+    testWidgets('a vertical swipe dismisses the viewer', (tester) async {
+      useDetailSurface(tester);
+      final post = makePost(
+        embed: imagesEmbed([
+          {
+            'thumb': _thumb1,
+            'fullsize': _full1,
+            'aspectRatio': {'width': 3, 'height': 2},
+          },
+        ]),
+      );
+
+      await tester.pumpWidget(harness(post));
+      await tester.pump();
+
+      await tester.tap(find.byKey(_imagesKey));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(_imageViewerKey), findsOneWidget);
+
+      await tester.drag(find.byKey(_imageViewerKey), const Offset(0, 200));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(_imageViewerKey),
+        findsNothing,
+        reason: 'swiping the image away pops the viewer, like the video',
+      );
+      expect(find.byKey(_imagesKey), findsOneWidget);
+    });
+
+    testWidgets('a short drag snaps back instead of dismissing', (
+      tester,
+    ) async {
+      useDetailSurface(tester);
+      final post = makePost(
+        embed: imagesEmbed([
+          {
+            'thumb': _thumb1,
+            'fullsize': _full1,
+            'aspectRatio': {'width': 3, 'height': 2},
+          },
+        ]),
+      );
+
+      await tester.pumpWidget(harness(post));
+      await tester.pump();
+
+      await tester.tap(find.byKey(_imagesKey));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byKey(_imageViewerKey), const Offset(0, 60));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(_imageViewerKey),
+        findsOneWidget,
+        reason: 'a sub-threshold drag releases the image back to center',
+      );
+    });
+
+    testWidgets('a tap does NOT dismiss the viewer', (tester) async {
+      useDetailSurface(tester);
+      final post = makePost(
+        embed: imagesEmbed([
+          {
+            'thumb': _thumb1,
+            'fullsize': _full1,
+            'aspectRatio': {'width': 3, 'height': 2},
+          },
+        ]),
+      );
+
+      await tester.pumpWidget(harness(post));
+      await tester.pump();
+
+      await tester.tap(find.byKey(_imagesKey));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(_imageViewerKey));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(_imageViewerKey),
+        findsOneWidget,
+        reason: 'only the close button and the swipe gesture dismiss',
+      );
+    });
+
     testWidgets('tapping a carousel page opens THAT page fullsize', (
       tester,
     ) async {
@@ -979,6 +1069,82 @@ void main() {
         imageUrlsIn(tester, _imageViewerKey),
         contains(_full2),
         reason: 'the viewer opens the image the user was looking at',
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(_viewerIndicatorKey),
+          matching: find.text('2/3'),
+        ),
+        findsOneWidget,
+        reason: 'the indicator must agree with the page the viewer opened on',
+      );
+    });
+
+    testWidgets('the viewer shows no page indicator for a single image', (
+      tester,
+    ) async {
+      useDetailSurface(tester);
+      final post = makePost(
+        embed: imagesEmbed([
+          {'thumb': _thumb1, 'fullsize': _full1},
+        ]),
+      );
+
+      await tester.pumpWidget(harness(post));
+      await tester.pump();
+
+      await tester.tap(find.byKey(_imagesKey));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(_imageViewerKey), findsOneWidget);
+      expect(find.byKey(_viewerIndicatorKey), findsNothing);
+    });
+
+    testWidgets('the close button dismisses the viewer', (tester) async {
+      useDetailSurface(tester);
+      final post = makePost(
+        embed: imagesEmbed([
+          {'thumb': _thumb1, 'fullsize': _full1},
+        ]),
+      );
+
+      await tester.pumpWidget(harness(post));
+      await tester.pump();
+
+      await tester.tap(find.byKey(_imagesKey));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(_imageViewerKey),
+        findsNothing,
+        reason: 'the close button must not be swallowed by the tap eater',
+      );
+    });
+
+    testWidgets('an upward swipe also dismisses the viewer', (tester) async {
+      useDetailSurface(tester);
+      final post = makePost(
+        embed: imagesEmbed([
+          {'thumb': _thumb1, 'fullsize': _full1},
+        ]),
+      );
+
+      await tester.pumpWidget(harness(post));
+      await tester.pump();
+
+      await tester.tap(find.byKey(_imagesKey));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byKey(_imageViewerKey), const Offset(0, -200));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(_imageViewerKey),
+        findsNothing,
+        reason: 'dismissal works in both directions, not just downward',
       );
     });
   });

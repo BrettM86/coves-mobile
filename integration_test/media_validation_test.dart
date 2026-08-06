@@ -11,6 +11,7 @@
 // Run on a booted simulator:
 //   flutter test integration_test/media_validation_test.dart -d <device-id>
 import 'package:coves_flutter/main.dart' as app;
+import 'package:coves_flutter/widgets/post_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -150,7 +151,9 @@ void main() {
     await settleABit(tester);
     expect(find.byKey(const Key('fullscreen-video-error')), findsNothing);
 
-    // ── Feed → detail: tap the gallery post's media block.
+    // ── Feed: tapping the gallery post's media block opens the fullscreen
+    // viewer directly (NOT the detail screen), with the whole gallery
+    // swipeable from the feed.
     var galleryBadge = find.byKey(const Key('post-images-count-badge'));
     for (var i = 0; i < 6 && galleryBadge.evaluate().isEmpty; i++) {
       await tester.fling(
@@ -171,6 +174,33 @@ void main() {
     await tester.ensureVisible(galleryBlock);
     await settleABit(tester);
     await tester.tap(galleryBlock, warnIfMissed: false);
+    await waitFor(tester, find.byKey(const Key('image-viewer')));
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('image-viewer-page-indicator')),
+        matching: find.text('1/3'),
+      ),
+      findsOneWidget,
+      reason: 'the feed tap opens the full gallery, starting at image 1',
+    );
+    tester.state<NavigatorState>(find.byType(Navigator).last).pop();
+    await settleABit(tester);
+    expect(find.byKey(const Key('image-viewer')), findsNothing);
+
+    // ── Feed → detail: the media block no longer navigates, so go through
+    // the card's comment button, which routes to detail for all post types.
+    final galleryCard =
+        find.ancestor(of: galleryBadge, matching: find.byType(PostCard)).first;
+    final commentButton =
+        find
+            .descendant(
+              of: galleryCard,
+              matching: find.byIcon(Icons.chat_bubble_outline),
+            )
+            .first;
+    await tester.ensureVisible(commentButton);
+    await settleABit(tester);
+    await tester.tap(commentButton, warnIfMissed: false);
     await settleABit(tester);
 
     // ── Detail: native gallery with page indicator; swipe advances it.
@@ -196,18 +226,27 @@ void main() {
       reason: 'swiping the gallery must advance the page indicator',
     );
 
-    // ── Tap the gallery → fullscreen zoomable viewer, then dismiss.
+    // ── Tap the gallery → fullscreen zoomable viewer, opened on the page
+    // the carousel was showing (2/3 after the swipe above), then dismiss.
     await tester.tap(
       find.byKey(const Key('detail-images-embed')),
       warnIfMissed: false,
     );
-    await waitFor(tester, find.byKey(const Key('detail-image-viewer')));
+    await waitFor(tester, find.byKey(const Key('image-viewer')));
     expect(find.byType(InteractiveViewer), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('image-viewer-page-indicator')),
+        matching: find.text('2/3'),
+      ),
+      findsOneWidget,
+      reason: 'the viewer opens on the image the carousel was showing',
+    );
     final nav = tester.state<NavigatorState>(find.byType(Navigator).last);
     expect(nav.canPop(), isTrue);
     nav.pop();
     await settleABit(tester);
-    expect(find.byKey(const Key('detail-image-viewer')), findsNothing);
+    expect(find.byKey(const Key('image-viewer')), findsNothing);
     expect(find.byKey(const Key('detail-images-embed')), findsOneWidget);
   });
 }

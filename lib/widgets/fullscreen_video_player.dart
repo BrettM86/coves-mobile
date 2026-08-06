@@ -98,13 +98,19 @@ class _FullscreenVideoPlayerState extends State<FullscreenVideoPlayer>
     if (_dragOffsetY.abs() > 100) {
       Navigator.of(context).pop();
     } else {
-      // Otherwise, animate back to original position
-      setState(() {
-        _dragOffsetX = 0.0;
-        _dragOffsetY = 0.0;
-        _isDragging = false;
-      });
+      _snapBack();
     }
+  }
+
+  /// Animates back to the original position. Also the cancel path — a
+  /// system-cancelled drag (incoming call, edge gesture) must not leave the
+  /// video stranded mid-dismiss.
+  void _snapBack() {
+    setState(() {
+      _dragOffsetX = 0.0;
+      _dragOffsetY = 0.0;
+      _isDragging = false;
+    });
   }
 
   void _togglePlayPause() {
@@ -194,6 +200,7 @@ class _FullscreenVideoPlayerState extends State<FullscreenVideoPlayer>
       body: GestureDetector(
         onPanUpdate: _onPanUpdate,
         onPanEnd: _onPanEnd,
+        onPanCancel: _snapBack,
         onTap: _togglePlayPause,
         child: Stack(
           children: [

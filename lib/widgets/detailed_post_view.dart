@@ -11,6 +11,7 @@ import '../utils/url_launcher.dart';
 import 'bluesky_post_card.dart';
 import 'external_link_bar.dart';
 import 'fullscreen_video_player.dart';
+import 'image_viewer.dart';
 import 'post_card.dart' show formatVideoDuration;
 import 'rich_text_renderer.dart';
 import 'source_link_bar.dart';
@@ -340,7 +341,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
         label: 'View full image',
         child: GestureDetector(
           key: const Key('detail-images-embed'),
-          onTap: () => _openImageViewer(image),
+          onTap: () => ImageViewer.open(context, embed.images),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: AspectRatio(
@@ -373,7 +374,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
         label: 'View full image',
         child: GestureDetector(
           key: const Key('detail-images-embed'),
-          onTap: () => _openImageViewer(images[current]),
+          onTap: () => ImageViewer.open(context, images, initialIndex: current),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: Stack(
@@ -432,19 +433,6 @@ class _DetailedPostViewState extends State<DetailedPostView> {
     }
 
     return rendered;
-  }
-
-  /// Opens the pinch-zoom viewer for a native image.
-  ///
-  /// Pushed synchronously, and through the navigator rather than the URL
-  /// launcher: native media stays inside the app.
-  void _openImageViewer(EmbedImage image) {
-    Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (context) => _ImageViewerPage(image: image),
-        fullscreenDialog: true,
-      ),
-    );
   }
 
   /// Video player with play button overlay
@@ -1066,74 +1054,6 @@ class _NativeVideoEmbed extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Fullscreen, pinch-zoomable view of one native image.
-class _ImageViewerPage extends StatelessWidget {
-  const _ImageViewerPage({required this.image});
-
-  final EmbedImage image;
-
-  @override
-  Widget build(BuildContext context) {
-    final alt = image.alt;
-
-    Widget rendered = CachedNetworkImage(
-      imageUrl: image.fullsize,
-      fit: BoxFit.contain,
-      fadeInDuration: Duration.zero,
-      fadeOutDuration: Duration.zero,
-      // Show the thumb while the fullsize downloads. It is almost always
-      // already in the cache from the feed or the post body, so the viewer
-      // opens on the picture instead of on a black screen.
-      placeholder:
-          (context, url) => CachedNetworkImage(
-            imageUrl: image.thumb,
-            fit: BoxFit.contain,
-            fadeInDuration: Duration.zero,
-            fadeOutDuration: Duration.zero,
-            errorWidget: (context, url, error) => const SizedBox.shrink(),
-          ),
-      errorWidget:
-          (context, url, error) => const Icon(
-            Icons.broken_image,
-            color: AppColors.textMuted,
-            size: 48,
-          ),
-    );
-
-    if (alt != null && alt.isNotEmpty) {
-      rendered = Semantics(image: true, label: alt, child: rendered);
-    }
-
-    return Scaffold(
-      key: const Key('detail-image-viewer'),
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              child: InteractiveViewer(
-                maxScale: 4,
-                child: Center(child: rendered),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topRight,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: AppColors.textPrimary),
-                tooltip: 'Close',
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
