@@ -112,5 +112,26 @@ void main() {
         'Bearer [REDACTED] and Bearer [REDACTED]',
       );
     });
+
+    test('redacts token-like JSON fields without a Bearer prefix', () {
+      expect(
+        redactBearerTokens('{"access_token": "abc!def.123", "ok": 1}'),
+        '{"access_token": [REDACTED], "ok": 1}',
+      );
+    });
+
+    test('redacts token-like fields in Map.toString() output', () {
+      expect(
+        redactBearerTokens('{sealed_token: abc.def~x, accessJwt: eyJx.y.z}'),
+        '{sealed_token: [REDACTED], accessJwt: [REDACTED]}',
+      );
+    });
+
+    test('leaves non-credential fields untouched', () {
+      expect(
+        redactBearerTokens('{cursor: abc123, limit: 50}'),
+        '{cursor: abc123, limit: 50}',
+      );
+    });
   });
 }

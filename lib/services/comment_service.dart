@@ -10,7 +10,7 @@ import 'retry_interceptor.dart';
 
 /// Comment Service
 ///
-/// Handles comment creation through the Coves backend.
+/// Handles comment creation and deletion through the Coves backend.
 ///
 /// **Architecture with Backend OAuth**:
 /// With sealed tokens, the client cannot write directly to the user's PDS
@@ -23,8 +23,9 @@ import 'retry_interceptor.dart';
 /// 2. Uses stored DPoP keys to sign requests
 /// 3. Writes to the user's PDS on their behalf
 ///
-/// **Backend Endpoint**:
+/// **Backend Endpoints**:
 /// - POST /xrpc/social.coves.community.comment.create
+/// - POST /xrpc/social.coves.community.comment.delete
 class CommentService {
   CommentService({
     Future<CovesSession?> Function()? sessionGetter,
@@ -169,7 +170,8 @@ class CommentService {
   /// Throws:
   /// - AuthenticationException if not authenticated
   /// - ApiException with 'You can only delete your own comments' if not
-  ///   the comment author
+  ///   the comment author (403)
+  /// - NotFoundException if the comment no longer exists (404)
   /// - ApiException for other errors
   Future<void> deleteComment({required String uri}) async {
     try {
@@ -194,8 +196,9 @@ class CommentService {
         debugPrint('✅ Comment deleted successfully');
       }
     } on DioException catch (e) {
-      // Friendlier copy than the server's for the two expected outcomes;
-      // everything else goes through the canonical mapper.
+      // Map first so every failure gets the standard (redacted) debug log,
+      // then substitute friendlier copy for the two expected outcomes.
+      final mapped = mapDioException(e, operation: 'delete comment');
       if (e.response?.statusCode == 403) {
         throw ApiException(
           'You can only delete your own comments',
@@ -209,7 +212,7 @@ class CommentService {
           originalError: e,
         );
       }
-      throw mapDioException(e, operation: 'delete comment');
+      throw mapped;
     } on AuthenticationException {
       rethrow;
     } on NotFoundException {

@@ -1,8 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import 'log_redaction.dart';
-
 /// Creates a Dio interceptor that handles authentication and automatic
 /// token refresh on 401 errors.
 ///
@@ -148,24 +146,24 @@ InterceptorsWrapper createAuthInterceptor({
               '❌ $serviceName: Token refresh failed, propagating error',
             );
           }
-        } on Exception catch (e) {
-          // Same rule as above: an exception here (from the refresher or
-          // from retrying the original request) is not evidence the session
-          // is dead, so never sign out - just propagate the error.
+        } on Object catch (e) {
+          // Same rule as above: an error here (from the refresher or from
+          // retrying the original request) is not evidence the session is
+          // dead, so never sign out - just propagate. Object, not
+          // Exception: a TypeError/StateError from the auth provider must
+          // not escape this async handler, or it would bypass the error
+          // taxonomy and surface as a misclassified network error instead
+          // of the original 401.
           if (kDebugMode) {
             debugPrint('❌ $serviceName: Error during token refresh: $e');
           }
         }
       }
 
-      // Log the error for debugging
+      // One brief line here; mapDioException prints the status and
+      // redacted body when the owning service maps this error.
       if (kDebugMode) {
         debugPrint('❌ $serviceName API Error: ${error.message}');
-        if (error.response != null) {
-          debugPrint('   Status: ${error.response?.statusCode}');
-          // Response data can echo credentials — redact before printing
-          debugPrint(redactBearerTokens('   Data: ${error.response?.data}'));
-        }
       }
       return handler.next(error);
     },

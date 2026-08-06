@@ -143,48 +143,10 @@ void main() {
       expect(signOutCallCount, 0);
     });
 
-    test(
-      'should NOT retry refresh endpoint on 401 (avoid infinite loop)',
-      () async {
-        // This test verifies that the interceptor checks for /oauth/refresh
-        // in the path to avoid infinite loops. Due to limitations with mocking
-        // complex request/response cycles, we test this by verifying the
-        // refresher runs exactly once and the error propagates.
-
-        // Set refresh to fail (simulates refresh endpoint returning 401)
-        shouldRefreshSucceed = false;
-
-        const postUri = 'at://did:plc:test/social.coves.post.record/123';
-
-        dioAdapter.onGet(
-          '/xrpc/social.coves.community.comment.getComments',
-          (server) => server.reply(401, {
-            'error': 'Unauthorized',
-            'message': 'Token expired',
-          }),
-          queryParameters: {
-            'post': postUri,
-            'sort': 'hot',
-            'depth': 10,
-            'limit': 50,
-          },
-        );
-
-        // Make the request and expect it to fail
-        expect(
-          () => apiService.getComments(postUri: postUri),
-          throwsA(isA<Exception>()),
-        );
-
-        // Wait for async operations to complete
-        await Future.delayed(const Duration(milliseconds: 100));
-
-        // The refresher ran exactly once (no infinite loop), and the
-        // interceptor left the sign-out decision to it
-        expect(tokenRefreshCallCount, 1);
-        expect(signOutCallCount, 0);
-      },
-    );
+    // The refresh-endpoint guard (401 from /oauth/refresh must not trigger
+    // another refresh) is tested directly in auth_interceptor_test.dart —
+    // a previous test here claimed to cover it but only duplicated the
+    // refresh-failure scenario above without driving that path.
 
     test(
       'should NOT sign out when token refresh throws exception',

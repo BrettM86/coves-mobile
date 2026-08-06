@@ -125,7 +125,10 @@ class CovesApiService {
       throw mapDioException(e, operation: operation);
     } on ApiException {
       rethrow;
-    } catch (e) {
+    } on Object catch (e) {
+      // Object on purpose: Errors from [parse] (TypeError from a bad cast,
+      // etc.) are deliberately degraded to a parse ApiException so callers
+      // only ever see the ApiException taxonomy.
       if (kDebugMode) {
         debugPrint('❌ Error parsing $operation response: $e');
       }
@@ -305,7 +308,10 @@ class CovesApiService {
   /// Parameters:
   /// - [uris]: 1 to [maxPostGetUris] post AT-URIs (throws [ArgumentError]
   ///   otherwise)
-  Future<List<PostGetResult>> getPosts({required List<String> uris}) {
+  // Kept `async` (like the other validating methods below) so validation
+  // failures surface as failed Futures, not synchronous throws — callers
+  // using .catchError or Future.wait must observe them asynchronously.
+  Future<List<PostGetResult>> getPosts({required List<String> uris}) async {
     if (uris.isEmpty) {
       throw ArgumentError.value(uris, 'uris', 'must not be empty');
     }
@@ -701,7 +707,7 @@ class CovesApiService {
     required String didLabel,
     required String endpoint,
     required String dataKey,
-  }) {
+  }) async {
     if (did.isEmpty || !did.startsWith('did:')) {
       throw ApiException('Invalid $didLabel DID');
     }
@@ -726,7 +732,7 @@ class CovesApiService {
     required String didLabel,
     required String endpoint,
     required String dataKey,
-  }) {
+  }) async {
     if (did.isEmpty || !did.startsWith('did:')) {
       throw ApiException('Invalid $didLabel DID');
     }
@@ -758,7 +764,7 @@ class CovesApiService {
     required String communityDid,
     required Uint8List imageBytes,
     required String mimeType,
-  }) {
+  }) async {
     // Validate image size (max 1 MB)
     const maxSizeBytes = 1024 * 1024; // 1 MB
     if (imageBytes.length > maxSizeBytes) {
@@ -810,7 +816,7 @@ class CovesApiService {
     String? avatarMimeType,
     Uint8List? bannerBytes,
     String? bannerMimeType,
-  }) {
+  }) async {
     // Validate avatar if provided
     if (avatarBytes != null) {
       if (avatarMimeType == null) {
@@ -893,7 +899,7 @@ class CovesApiService {
     required String targetUri,
     required String reason,
     String? explanation,
-  }) {
+  }) async {
     // Validate inputs before making API call
     const validReasons = {
       'spam',

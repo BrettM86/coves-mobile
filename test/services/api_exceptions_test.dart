@@ -1,11 +1,16 @@
+import 'dart:io';
+
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Tests for the canonical DioException → ApiException mapper.
 ///
 /// This is the single mapping used by CovesApiService, VoteService, and
-/// CommentService — behavior asserted here holds for every endpoint.
+/// CommentService — behavior asserted here holds for every endpoint that
+/// delegates to it (CommentService.deleteComment substitutes its own
+/// message copy for 403/404 but keeps the taxonomy).
 void main() {
   DioException responseError(
     int statusCode,
@@ -109,6 +114,37 @@ void main() {
       expect(exception.message, 'Request failed with status 400');
     });
 
+    test('does not throw on non-string message/error fields', () {
+      // A hostile or buggy server can return structured values here; the
+      // mapper must never let a TypeError escape the taxonomy.
+      final exception = ApiException.fromDioError(
+        responseError(400, {
+          'message': {'detail': 'structured'},
+          'error': 400,
+        }),
+      );
+
+      expect(exception, isA<ApiException>());
+      expect(exception.message, 'Request failed with status 400');
+    });
+
+    test('treats empty-string message as absent', () {
+      final exception = ApiException.fromDioError(
+        responseError(401, {'message': '', 'error': 'ExpiredToken'}),
+      );
+
+      expect(exception, isA<AuthenticationException>());
+      expect(exception.message, 'ExpiredToken');
+    });
+
+    test('uses the default message for non-Map, non-String bodies', () {
+      final exception = ApiException.fromDioError(
+        responseError(400, ['unexpected', 'list']),
+      );
+
+      expect(exception.message, 'Request failed with status 400');
+    });
+
     test('maps by status code regardless of DioExceptionType', () {
       final exception = ApiException.fromDioError(
         responseError(
@@ -156,6 +192,20 @@ void main() {
       expect(exception, isA<FederationException>());
     });
 
+    test('detects DNS failure via the typed SocketException too', () {
+      // Dio's message text varies by platform; the typed inner error is
+      // the reliable signal.
+      final exception = ApiException.fromDioError(
+        DioException(
+          requestOptions: RequestOptions(path: '/test'),
+          type: DioExceptionType.connectionError,
+          error: const SocketException("Failed host lookup: 'x.example'"),
+        ),
+      );
+
+      expect(exception, isA<FederationException>());
+    });
+
     test('maps bad certificates to NetworkException', () {
       final exception = ApiException.fromDioError(
         networkError(DioExceptionType.badCertificate),
@@ -173,13 +223,85 @@ void main() {
       expect(exception.message, contains('cancelled'));
     });
 
-    test('maps unknown errors to NetworkException', () {
+    test('maps unknown errors wrapping an IOException to NetworkException',
+        () {
       final exception = ApiException.fromDioError(
-        networkError(DioExceptionType.unknown),
+        DioException(
+          requestOptions: RequestOptions(path: '/test'),
+          error: const SocketException('Connection reset by peer'),
+        ),
       );
 
       expect(exception, isA<NetworkException>());
       expect(exception.message, contains('Network error'));
+    });
+
+    test(
+        'maps unknown errors wrapping a FormatException to a parse '
+        'ApiException, not a network error', () {
+      // A truncated 200 body must not tell the user to check their
+      // connection.
+      final exception = ApiException.fromDioError(
+        DioException(
+          requestOptions: RequestOptions(path: '/test'),
+          error: const FormatException('Unexpected end of input'),
+        ),
+      );
+
+      expect(exception, isA<ApiException>());
+      expect(exception, isNot(isA<NetworkException>()));
+      expect(exception.message, 'Failed to parse server response');
+    });
+
+    test('maps bare unknown errors to a plain ApiException', () {
+      final exception = ApiException.fromDioError(
+        networkError(DioExceptionType.unknown),
+      );
+
+      expect(exception, isA<ApiException>());
+      expect(exception, isNot(isA<NetworkException>()));
+      expect(exception.message, contains('Unknown error'));
+    });
+  });
+
+  group('mapDioException', () {
+    late List<String> logLines;
+    late DebugPrintCallback originalDebugPrint;
+
+    setUp(() {
+      logLines = <String>[];
+      originalDebugPrint = debugPrint;
+      debugPrint = (String? message, {int? wrapWidth}) {
+        logLines.add(message ?? '');
+      };
+    });
+
+    tearDown(() {
+      debugPrint = originalDebugPrint;
+    });
+
+    test('returns the same mapping as fromDioError', () {
+      final error = responseError(404, {'message': 'gone'});
+
+      final exception = mapDioException(error, operation: 'test op');
+
+      expect(exception, isA<NotFoundException>());
+      expect(exception.message, 'gone');
+    });
+
+    test('redacts tokens echoed in the logged response body', () {
+      const token = 'abc!def.secret~token';
+      final error = responseError(500, {
+        'error': 'InternalServerError',
+        'message': 'debug echo: Bearer $token from upstream',
+      });
+
+      mapDioException(error, operation: 'test op');
+
+      final output = logLines.join('\n');
+      expect(output, contains('Data:'));
+      expect(output, contains('Bearer [REDACTED]'));
+      expect(output, isNot(contains(token)));
     });
   });
 }

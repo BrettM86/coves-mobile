@@ -190,13 +190,6 @@ class UserProfileProvider with ChangeNotifier {
       if (kDebugMode) {
         debugPrint('❌ Failed to load profile: ${e.message}');
       }
-    } on FormatException catch (e) {
-      _isLoadingProfile = false;
-      _profileError = 'Invalid data received from server';
-
-      if (kDebugMode) {
-        debugPrint('❌ Format error loading profile: $e');
-      }
     } on Exception catch (e) {
       // Catch-all for other exceptions
       _isLoadingProfile = false;
@@ -318,16 +311,6 @@ class UserProfileProvider with ChangeNotifier {
 
       if (kDebugMode) {
         debugPrint('❌ Failed to load author posts: ${e.message}');
-      }
-    } on FormatException catch (e) {
-      _postsState = currentState.copyWith(
-        error: 'Invalid data received from server',
-        isLoading: false,
-        isLoadingMore: false,
-      );
-
-      if (kDebugMode) {
-        debugPrint('❌ Format error loading posts: $e');
       }
     } on Exception catch (e) {
       // Catch-all for other exceptions
@@ -458,16 +441,6 @@ class UserProfileProvider with ChangeNotifier {
 
       if (kDebugMode) {
         debugPrint('❌ Failed to load author comments: ${e.message}');
-      }
-    } on FormatException catch (e) {
-      _commentsState = currentState.copyWith(
-        error: 'Invalid data received from server',
-        isLoading: false,
-        isLoadingMore: false,
-      );
-
-      if (kDebugMode) {
-        debugPrint('❌ Format error loading comments: $e');
       }
     } on Exception catch (e) {
       _commentsState = currentState.copyWith(

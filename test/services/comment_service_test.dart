@@ -178,6 +178,39 @@ void main() {
         );
       });
 
+      test('should throw NotFoundException on 404 response', () async {
+        when(
+          mockDio.post<Map<String, dynamic>>(
+            '/xrpc/social.coves.community.comment.create',
+            data: anyNamed('data'),
+          ),
+        ).thenThrow(
+          DioException(
+            requestOptions: RequestOptions(path: ''),
+            type: DioExceptionType.badResponse,
+            response: Response(
+              requestOptions: RequestOptions(path: ''),
+              statusCode: 404,
+              data: {'message': 'Post not found'},
+            ),
+          ),
+        );
+
+        expect(
+          () => commentService.createComment(
+            rootUri: 'at://did:plc:author/post/123',
+            rootCid: 'rootCid',
+            parentUri: 'at://did:plc:author/post/123',
+            parentCid: 'parentCid',
+            content: 'Test comment',
+          ),
+          throwsA(
+            isA<NotFoundException>()
+                .having((e) => e.message, 'message', 'Post not found'),
+          ),
+        );
+      });
+
       test(
         'should throw ApiException on invalid response (null data)',
         () async {
@@ -360,6 +393,81 @@ void main() {
             },
           ),
         ).called(1);
+      });
+    });
+
+    group('deleteComment', () {
+      late MockDio mockDio;
+      late CommentService commentService;
+
+      const commentUri = 'at://did:plc:test/social.coves.community.comment/1';
+
+      setUp(() {
+        mockDio = MockDio();
+        when(mockDio.interceptors).thenReturn(Interceptors());
+        commentService = CommentService(
+          sessionGetter: () async => CovesSession(
+            token: 'test-token',
+            did: 'did:plc:test',
+            sessionId: 'test-session-id',
+            handle: 'test.user',
+          ),
+          tokenRefresher: () async => true,
+          signOutHandler: () async {},
+          dio: mockDio,
+        );
+      });
+
+      DioException statusError(int statusCode) => DioException(
+            requestOptions: RequestOptions(path: ''),
+            type: DioExceptionType.badResponse,
+            response: Response(
+              requestOptions: RequestOptions(path: ''),
+              statusCode: statusCode,
+              data: {'error': 'Forbidden'},
+            ),
+          );
+
+      test('403 keeps the friendly not-your-comment copy', () async {
+        when(
+          mockDio.post<Map<String, dynamic>>(
+            '/xrpc/social.coves.community.comment.delete',
+            data: anyNamed('data'),
+          ),
+        ).thenThrow(statusError(403));
+
+        expect(
+          () => commentService.deleteComment(uri: commentUri),
+          throwsA(
+            isA<ApiException>()
+                .having((e) => e.statusCode, 'statusCode', 403)
+                .having(
+                  (e) => e.message,
+                  'message',
+                  'You can only delete your own comments',
+                ),
+          ),
+        );
+      });
+
+      test('404 keeps the friendly already-deleted copy', () async {
+        when(
+          mockDio.post<Map<String, dynamic>>(
+            '/xrpc/social.coves.community.comment.delete',
+            data: anyNamed('data'),
+          ),
+        ).thenThrow(statusError(404));
+
+        expect(
+          () => commentService.deleteComment(uri: commentUri),
+          throwsA(
+            isA<NotFoundException>().having(
+              (e) => e.message,
+              'message',
+              'Comment not found. It may have already been deleted.',
+            ),
+          ),
+        );
       });
     });
   });
