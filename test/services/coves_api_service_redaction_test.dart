@@ -1,5 +1,6 @@
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/log_redaction.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -83,31 +84,31 @@ void main() {
     });
   });
 
-  group('CovesApiService.redactBearerTokens', () {
+  group('redactBearerTokens', () {
     test('greedily redacts tokens with chars outside the old charset', () {
       expect(
-        CovesApiService.redactBearerTokens('Authorization: Bearer $token'),
+        redactBearerTokens('Authorization: Bearer $token'),
         'Authorization: Bearer [REDACTED]',
       );
     });
 
     test('is case-insensitive', () {
       expect(
-        CovesApiService.redactBearerTokens('authorization: bearer $token'),
+        redactBearerTokens('authorization: bearer $token'),
         'authorization: Bearer [REDACTED]',
       );
     });
 
     test('handles tab whitespace between scheme and token', () {
       expect(
-        CovesApiService.redactBearerTokens('Bearer\t$token trailing'),
+        redactBearerTokens('Bearer\t$token trailing'),
         'Bearer [REDACTED] trailing',
       );
     });
 
     test('redacts every occurrence in a line', () {
       expect(
-        CovesApiService.redactBearerTokens('Bearer aaa!x and BEARER bbb!y'),
+        redactBearerTokens('Bearer aaa!x and BEARER bbb!y'),
         'Bearer [REDACTED] and Bearer [REDACTED]',
       );
     });

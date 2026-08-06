@@ -1,14 +1,16 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import '../models/coves_session.dart';
+import 'log_redaction.dart';
 
 /// Creates a Dio interceptor that handles authentication and automatic
 /// token refresh on 401 errors.
 ///
-/// This shared utility eliminates duplication between VoteService and
-/// CommentService by providing a single implementation of:
+/// This shared utility is the single implementation used by
+/// CovesApiService, VoteService, and CommentService of:
 /// - Adding Authorization headers with fresh tokens on each request
+///   (fetched per-request because atProto OAuth rotates tokens ~hourly;
+///   caching a token would cause 401s after the first expiry)
 /// - Automatic retry with token refresh on 401 responses
 /// - Sign-out when a 401 persists after a successful refresh
 ///
@@ -21,15 +23,16 @@ import '../models/coves_session.dart';
 /// ```dart
 /// _dio.interceptors.add(
 ///   createAuthInterceptor(
-///     sessionGetter: () async => authProvider.session,
+///     tokenGetter: () async => authProvider.session?.token,
 ///     tokenRefresher: authProvider.refreshToken,
 ///     signOutHandler: authProvider.signOut,
 ///     serviceName: 'MyService',
+///     dio: _dio,
 ///   ),
 /// );
 /// ```
 InterceptorsWrapper createAuthInterceptor({
-  required Future<CovesSession?> Function()? sessionGetter,
+  required Future<String?> Function()? tokenGetter,
   required Future<bool> Function()? tokenRefresher,
   required Future<void> Function()? signOutHandler,
   required String serviceName,
@@ -38,16 +41,16 @@ InterceptorsWrapper createAuthInterceptor({
   return InterceptorsWrapper(
     onRequest: (options, handler) async {
       // Fetch fresh token before each request
-      final session = await sessionGetter?.call();
-      if (session != null) {
-        options.headers['Authorization'] = 'Bearer ${session.token}';
+      final token = await tokenGetter?.call();
+      if (token != null) {
+        options.headers['Authorization'] = 'Bearer $token';
         if (kDebugMode) {
           debugPrint('🔐 $serviceName: Adding fresh Authorization header');
         }
       } else {
         if (kDebugMode) {
           debugPrint(
-            '⚠️ $serviceName: Session getter returned null - '
+            '⚠️ $serviceName: No token available - '
             'making unauthenticated request',
           );
         }
@@ -61,6 +64,24 @@ InterceptorsWrapper createAuthInterceptor({
           debugPrint(
             '🔄 $serviceName: 401 detected, attempting token refresh...',
           );
+        }
+
+        // Don't retry the refresh endpoint itself (avoid infinite loop)
+        final isRefreshEndpoint = error.requestOptions.path.contains(
+          '/oauth/refresh',
+        );
+        if (isRefreshEndpoint) {
+          if (kDebugMode) {
+            debugPrint(
+              '⚠️ $serviceName: Refresh endpoint returned 401, '
+              'signing out user',
+            );
+          }
+          // Refresh endpoint failed, sign out the user
+          if (signOutHandler != null) {
+            await signOutHandler();
+          }
+          return handler.next(error);
         }
 
         // Check if we already retried this request (prevent infinite loop)
@@ -89,16 +110,16 @@ InterceptorsWrapper createAuthInterceptor({
               );
             }
 
-            // Get the new session
-            final newSession = await sessionGetter?.call();
+            // Get the new token
+            final newToken = await tokenGetter?.call();
 
-            if (newSession != null) {
+            if (newToken != null) {
               // Mark this request as retried to prevent infinite loops
               error.requestOptions.extra['retried'] = true;
 
               // Update the Authorization header with the new token
               error.requestOptions.headers['Authorization'] =
-                  'Bearer ${newSession.token}';
+                  'Bearer $newToken';
 
               // Retry the original request with the new token
               try {
@@ -142,7 +163,8 @@ InterceptorsWrapper createAuthInterceptor({
         debugPrint('❌ $serviceName API Error: ${error.message}');
         if (error.response != null) {
           debugPrint('   Status: ${error.response?.statusCode}');
-          debugPrint('   Data: ${error.response?.data}');
+          // Response data can echo credentials — redact before printing
+          debugPrint(redactBearerTokens('   Data: ${error.response?.data}'));
         }
       }
       return handler.next(error);

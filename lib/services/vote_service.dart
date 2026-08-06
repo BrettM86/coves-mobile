@@ -61,7 +61,7 @@ class VoteService {
     // Add shared 401 retry interceptor
     _dio.interceptors.add(
       createAuthInterceptor(
-        sessionGetter: sessionGetter,
+        tokenGetter: () async => (await sessionGetter?.call())?.token,
         tokenRefresher: tokenRefresher,
         signOutHandler: signOutHandler,
         serviceName: 'VoteService',
@@ -160,24 +160,7 @@ class VoteService {
 
       return VoteResponse(uri: uri, cid: cid, rkey: rkey, deleted: false);
     } on DioException catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Vote failed: ${e.message}');
-        debugPrint('   Status: ${e.response?.statusCode}');
-        debugPrint('   Data: ${e.response?.data}');
-      }
-
-      if (e.response?.statusCode == 401) {
-        throw AuthenticationException(
-          'Authentication failed. Please sign in again.',
-          originalError: e,
-        );
-      }
-
-      throw ApiException(
-        'Failed to create vote: ${e.message}',
-        statusCode: e.response?.statusCode,
-        originalError: e,
-      );
+      throw mapDioException(e, operation: 'create vote');
     } on ApiException {
       rethrow;
     } on Exception catch (e) {

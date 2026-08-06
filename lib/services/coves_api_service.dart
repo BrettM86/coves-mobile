@@ -10,6 +10,8 @@ import '../models/post.dart';
 import '../models/post_get_result.dart';
 import '../models/user_profile.dart';
 import 'api_exceptions.dart';
+import 'auth_interceptor.dart';
+import 'log_redaction.dart';
 import 'retry_interceptor.dart';
 
 /// Coves API Service
@@ -22,7 +24,8 @@ import 'retry_interceptor.dart';
 /// rotates tokens automatically (~1 hour expiry), and caching tokens would
 /// cause 401 errors after the first token expires.
 ///
-/// Features automatic token refresh on 401 responses:
+/// Features automatic token refresh on 401 responses (see
+/// [createAuthInterceptor]):
 /// - When a 401 is received, attempts to refresh the token
 /// - Retries the original request with the new token
 /// - If refresh fails, propagates the error - sign-out is owned by the
@@ -34,9 +37,7 @@ class CovesApiService {
     Future<bool> Function()? tokenRefresher,
     Future<void> Function()? signOutHandler,
     Dio? dio,
-  }) : _tokenGetter = tokenGetter,
-       _tokenRefresher = tokenRefresher,
-       _signOutHandler = signOutHandler {
+  }) {
     _dio =
         dio ??
         Dio(
@@ -59,145 +60,14 @@ class CovesApiService {
       ),
     );
 
-    // Add auth interceptor to add bearer token
+    // Add shared auth interceptor (bearer token + 401 refresh/retry)
     _dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          // Fetch fresh token before each request (critical for atProto OAuth)
-          if (_tokenGetter != null) {
-            final token = await _tokenGetter();
-            if (token != null) {
-              options.headers['Authorization'] = 'Bearer $token';
-              if (kDebugMode) {
-                debugPrint('🔐 Adding fresh Authorization header');
-              }
-            } else {
-              if (kDebugMode) {
-                debugPrint(
-                  '⚠️ Token getter returned null - '
-                  'making unauthenticated request',
-                );
-              }
-            }
-          } else {
-            if (kDebugMode) {
-              debugPrint(
-                '⚠️ No token getter provided - '
-                'making unauthenticated request',
-              );
-            }
-          }
-          return handler.next(options);
-        },
-        onError: (error, handler) async {
-          // Handle 401 errors with automatic token refresh
-          if (error.response?.statusCode == 401 && _tokenRefresher != null) {
-            if (kDebugMode) {
-              debugPrint('🔄 401 detected, attempting token refresh...');
-            }
-
-            // Don't retry the refresh endpoint itself (avoid infinite loop)
-            final isRefreshEndpoint = error.requestOptions.path.contains(
-              '/oauth/refresh',
-            );
-            if (isRefreshEndpoint) {
-              if (kDebugMode) {
-                debugPrint(
-                  '⚠️ Refresh endpoint returned 401, signing out user',
-                );
-              }
-              // Refresh endpoint failed, sign out the user
-              if (_signOutHandler != null) {
-                await _signOutHandler();
-              }
-              return handler.next(error);
-            }
-
-            // Check if we already retried this request (prevent infinite loop)
-            if (error.requestOptions.extra['retried'] == true) {
-              if (kDebugMode) {
-                debugPrint(
-                  '⚠️ Request already retried after token refresh, '
-                  'signing out user',
-                );
-              }
-              // Already retried once, don't retry again
-              if (_signOutHandler != null) {
-                await _signOutHandler();
-              }
-              return handler.next(error);
-            }
-
-            try {
-              // Attempt to refresh the token
-              final refreshSucceeded = await _tokenRefresher();
-
-              if (refreshSucceeded) {
-                if (kDebugMode) {
-                  debugPrint('✅ Token refresh successful, retrying request');
-                }
-
-                // Get the new token
-                final newToken =
-                    _tokenGetter != null ? await _tokenGetter() : null;
-
-                if (newToken != null) {
-                  // Mark this request as retried to prevent infinite loops
-                  error.requestOptions.extra['retried'] = true;
-
-                  // Update the Authorization header with the new token
-                  error.requestOptions.headers['Authorization'] =
-                      'Bearer $newToken';
-
-                  // Retry the original request with the new token
-                  try {
-                    final response = await _dio.fetch(error.requestOptions);
-                    return handler.resolve(response);
-                  } on DioException catch (retryError) {
-                    // If retry failed with 401 and already retried, we already
-                    // signed out in the retry limit check above, so just pass
-                    // the error through without signing out again
-                    if (retryError.response?.statusCode == 401 &&
-                        retryError.requestOptions.extra['retried'] == true) {
-                      return handler.next(retryError);
-                    }
-                    // For other errors during retry, rethrow to outer catch
-                    rethrow;
-                  }
-                }
-              }
-
-              // Refresh failed. Do NOT sign out here: the refresher owns
-              // that decision and already signed out if the session was
-              // definitively rejected. A false return may just mean a
-              // transient network failure, and signing out would destroy
-              // a valid session.
-              if (kDebugMode) {
-                debugPrint('❌ Token refresh failed, propagating error');
-              }
-            } catch (e) {
-              // Same rule as above: an exception here (from the refresher
-              // or from retrying the original request) is not evidence the
-              // session is dead, so never sign out - just propagate.
-              if (kDebugMode) {
-                debugPrint('❌ Error during token refresh: $e');
-              }
-            }
-          }
-
-          // Log the error for debugging
-          if (kDebugMode) {
-            debugPrint('❌ API Error: ${error.message}');
-            if (error.response != null) {
-              debugPrint('   Status: ${error.response?.statusCode}');
-              // Response data can echo credentials — redact before printing
-              debugPrint(
-                redactBearerTokens('   Data: ${error.response?.data}'),
-              );
-            }
-          }
-          return handler.next(error);
-        },
+      createAuthInterceptor(
+        tokenGetter: tokenGetter,
+        tokenRefresher: tokenRefresher,
+        signOutHandler: signOutHandler,
+        serviceName: 'CovesApiService',
+        dio: _dio,
       ),
     );
 
@@ -215,29 +85,89 @@ class CovesApiService {
     }
   }
 
-  /// Matches a bearer scheme (case-insensitive) followed by any run of
-  /// non-whitespace characters. Greedy on purpose: a charset-based match
-  /// would leak the tail of tokens containing characters outside the set.
-  static final RegExp _bearerTokenPattern = RegExp(
-    r'Bearer\s+\S+',
-    caseSensitive: false,
-  );
-
-  /// Replaces bearer token values with a placeholder so credentials never
-  /// appear in logs.
-  @visibleForTesting
-  static String redactBearerTokens(String line) {
-    return line.replaceAll(_bearerTokenPattern, 'Bearer [REDACTED]');
-  }
-
   /// Maximum number of URIs per [getPosts] call, per the
   /// social.coves.community.post.get lexicon (`uris` has `maxLength: 25`).
   static const int maxPostGetUris = 25;
 
   late final Dio _dio;
-  final Future<String?> Function()? _tokenGetter;
-  final Future<bool> Function()? _tokenRefresher;
-  final Future<void> Function()? _signOutHandler;
+
+  /// Runs one API call with the shared error taxonomy.
+  ///
+  /// Every endpoint goes through here so error handling cannot drift:
+  /// - [DioException] is mapped by [mapDioException] (the canonical mapper)
+  /// - [ApiException]s thrown by [parse] (e.g. invalid response shape)
+  ///   propagate untouched
+  /// - anything else [parse] throws (FormatException, TypeError, ...)
+  ///   becomes a generic parse [ApiException], so callers only ever see
+  ///   the [ApiException] taxonomy
+  ///
+  /// [operation] is a human-readable label used in error messages and debug
+  /// logs, e.g. 'fetch timeline'.
+  Future<T> _request<T>({
+    required String operation,
+    required Future<Response<dynamic>> Function() send,
+    required T Function(Object? data) parse,
+  }) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('📡 Starting: $operation');
+      }
+
+      final response = await send();
+      final result = parse(response.data);
+
+      if (kDebugMode) {
+        debugPrint('✅ Succeeded: $operation');
+      }
+
+      return result;
+    } on DioException catch (e) {
+      throw mapDioException(e, operation: operation);
+    } on ApiException {
+      rethrow;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Error parsing $operation response: $e');
+      }
+      throw ApiException('Failed to parse server response', originalError: e);
+    }
+  }
+
+  /// Casts a response body to a JSON object, throwing [FormatException]
+  /// when the server returned something else.
+  static Map<String, dynamic> _asJsonMap(Object? data) {
+    if (data is! Map<String, dynamic>) {
+      throw FormatException('Expected Map but got ${data.runtimeType}');
+    }
+    return data;
+  }
+
+  /// Shared implementation for the three feed endpoints, which take the
+  /// same parameters and return the same shape.
+  Future<TimelineResponse> _getFeed(
+    String path,
+    String operation, {
+    String? community,
+    required String sort,
+    String? timeframe,
+    required int limit,
+    String? cursor,
+  }) {
+    return _request(
+      operation: operation,
+      send: () => _dio.get(
+        path,
+        queryParameters: {
+          if (community != null) 'community': community,
+          'sort': sort,
+          'limit': limit,
+          if (timeframe != null) 'timeframe': timeframe,
+          if (cursor != null) 'cursor': cursor,
+        },
+      ),
+      parse: (data) => TimelineResponse.fromJson(_asJsonMap(data)),
+    );
+  }
 
   /// Get timeline feed (authenticated, personalized)
   ///
@@ -255,43 +185,15 @@ class CovesApiService {
     String? timeframe,
     int limit = 15,
     String? cursor,
-  }) async {
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Fetching timeline: sort=$sort, limit=$limit');
-      }
-
-      final queryParams = <String, dynamic>{'sort': sort, 'limit': limit};
-
-      if (timeframe != null) {
-        queryParams['timeframe'] = timeframe;
-      }
-
-      if (cursor != null) {
-        queryParams['cursor'] = cursor;
-      }
-
-      final response = await _dio.get(
-        '/xrpc/social.coves.feed.getTimeline',
-        queryParameters: queryParams,
-      );
-
-      if (kDebugMode) {
-        debugPrint(
-          '✅ Timeline fetched: '
-          '${response.data['feed']?.length ?? 0} posts',
-        );
-      }
-
-      return TimelineResponse.fromJson(response.data as Map<String, dynamic>);
-    } on DioException catch (e) {
-      _handleDioException(e, 'timeline');
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error parsing timeline response: $e');
-      }
-      throw ApiException('Failed to parse server response', originalError: e);
-    }
+  }) {
+    return _getFeed(
+      '/xrpc/social.coves.feed.getTimeline',
+      'fetch timeline',
+      sort: sort,
+      timeframe: timeframe,
+      limit: limit,
+      cursor: cursor,
+    );
   }
 
   /// Get discover feed (public, no auth required)
@@ -303,43 +205,15 @@ class CovesApiService {
     String? timeframe,
     int limit = 15,
     String? cursor,
-  }) async {
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Fetching discover feed: sort=$sort, limit=$limit');
-      }
-
-      final queryParams = <String, dynamic>{'sort': sort, 'limit': limit};
-
-      if (timeframe != null) {
-        queryParams['timeframe'] = timeframe;
-      }
-
-      if (cursor != null) {
-        queryParams['cursor'] = cursor;
-      }
-
-      final response = await _dio.get(
-        '/xrpc/social.coves.feed.getDiscover',
-        queryParameters: queryParams,
-      );
-
-      if (kDebugMode) {
-        debugPrint(
-          '✅ Discover feed fetched: '
-          '${response.data['feed']?.length ?? 0} posts',
-        );
-      }
-
-      return TimelineResponse.fromJson(response.data as Map<String, dynamic>);
-    } on DioException catch (e) {
-      _handleDioException(e, 'discover feed');
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error parsing discover feed response: $e');
-      }
-      throw ApiException('Failed to parse server response', originalError: e);
-    }
+  }) {
+    return _getFeed(
+      '/xrpc/social.coves.feed.getDiscover',
+      'fetch discover feed',
+      sort: sort,
+      timeframe: timeframe,
+      limit: limit,
+      cursor: cursor,
+    );
   }
 
   /// Get community feed (public, no auth required)
@@ -361,50 +235,16 @@ class CovesApiService {
     String? timeframe,
     int limit = 15,
     String? cursor,
-  }) async {
-    try {
-      if (kDebugMode) {
-        debugPrint(
-          '📡 Fetching community feed: community=$community, '
-          'sort=$sort, limit=$limit',
-        );
-      }
-
-      final queryParams = <String, dynamic>{
-        'community': community,
-        'sort': sort,
-        'limit': limit,
-      };
-
-      if (timeframe != null) {
-        queryParams['timeframe'] = timeframe;
-      }
-
-      if (cursor != null) {
-        queryParams['cursor'] = cursor;
-      }
-
-      final response = await _dio.get(
-        '/xrpc/social.coves.communityFeed.getCommunity',
-        queryParameters: queryParams,
-      );
-
-      if (kDebugMode) {
-        debugPrint(
-          '✅ Community feed fetched: '
-          '${response.data['feed']?.length ?? 0} posts',
-        );
-      }
-
-      return TimelineResponse.fromJson(response.data as Map<String, dynamic>);
-    } on DioException catch (e) {
-      _handleDioException(e, 'community feed');
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error parsing community feed response: $e');
-      }
-      throw ApiException('Failed to parse server response', originalError: e);
-    }
+  }) {
+    return _getFeed(
+      '/xrpc/social.coves.communityFeed.getCommunity',
+      'fetch community feed',
+      community: community,
+      sort: sort,
+      timeframe: timeframe,
+      limit: limit,
+      cursor: cursor,
+    );
   }
 
   /// Get comments for a post (authenticated)
@@ -431,52 +271,24 @@ class CovesApiService {
     int limit = 50,
     String? cursor,
     String? parentRkey,
-  }) async {
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Fetching comments: postUri=$postUri, sort=$sort');
-      }
-
-      final queryParams = <String, dynamic>{
-        'post': postUri,
-        'sort': sort,
-        'depth': depth,
-        'limit': limit,
-      };
-
-      if (parentRkey != null && parentRkey.isNotEmpty) {
-        queryParams['parentRkey'] = parentRkey;
-      }
-
-      if (timeframe != null) {
-        queryParams['timeframe'] = timeframe;
-      }
-
-      if (cursor != null) {
-        queryParams['cursor'] = cursor;
-      }
-
-      final response = await _dio.get(
+  }) {
+    return _request(
+      operation: 'fetch comments',
+      send: () => _dio.get(
         '/xrpc/social.coves.community.comment.getComments',
-        queryParameters: queryParams,
-      );
-
-      if (kDebugMode) {
-        debugPrint(
-          '✅ Comments fetched: '
-          '${response.data['comments']?.length ?? 0} comments',
-        );
-      }
-
-      return CommentsResponse.fromJson(response.data as Map<String, dynamic>);
-    } on DioException catch (e) {
-      _handleDioException(e, 'comments');
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error parsing comments response: $e');
-      }
-      throw ApiException('Failed to parse server response', originalError: e);
-    }
+        queryParameters: {
+          'post': postUri,
+          'sort': sort,
+          'depth': depth,
+          'limit': limit,
+          if (parentRkey != null && parentRkey.isNotEmpty)
+            'parentRkey': parentRkey,
+          if (timeframe != null) 'timeframe': timeframe,
+          if (cursor != null) 'cursor': cursor,
+        },
+      ),
+      parse: (data) => CommentsResponse.fromJson(_asJsonMap(data)),
+    );
   }
 
   /// Get posts by AT-URI (public, optional auth)
@@ -493,7 +305,7 @@ class CovesApiService {
   /// Parameters:
   /// - [uris]: 1 to [maxPostGetUris] post AT-URIs (throws [ArgumentError]
   ///   otherwise)
-  Future<List<PostGetResult>> getPosts({required List<String> uris}) async {
+  Future<List<PostGetResult>> getPosts({required List<String> uris}) {
     if (uris.isEmpty) {
       throw ArgumentError.value(uris, 'uris', 'must not be empty');
     }
@@ -505,55 +317,42 @@ class CovesApiService {
       );
     }
 
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Fetching posts: ${uris.length} URIs');
-      }
-
+    return _request(
+      operation: 'fetch posts',
       // atproto expects repeated `uris=a&uris=b` params; pin ListFormat.multi
       // explicitly so the required encoding can't change with Dio defaults.
-      final response = await _dio.get(
+      send: () => _dio.get(
         '/xrpc/social.coves.community.post.get',
         queryParameters: {'uris': uris},
         options: Options(listFormat: ListFormat.multi),
-      );
+      ),
+      parse: (data) {
+        final posts = _asJsonMap(data)['posts'] as List<dynamic>? ?? [];
 
-      final data = response.data as Map<String, dynamic>;
-      final posts = data['posts'] as List<dynamic>? ?? [];
-
-      final results = <PostGetResult>[];
-      for (var i = 0; i < posts.length; i++) {
-        final item = posts[i];
-        try {
-          results.add(PostGetResult.fromJson(item as Map<String, dynamic>));
-        } on Object catch (e) {
-          // Degrade a single malformed entry to notFound instead of failing
-          // the whole batch. Read the uri defensively; fall back to the
-          // corresponding input URI (server guarantees order).
-          final fallbackUri =
-              (item is Map && item['uri'] is String)
-                  ? item['uri'] as String
-                  : (i < uris.length ? uris[i] : '');
-          if (kDebugMode) {
-            debugPrint('⚠️ Failed to parse post entry $i ($fallbackUri): $e');
+        final results = <PostGetResult>[];
+        for (var i = 0; i < posts.length; i++) {
+          final item = posts[i];
+          try {
+            results.add(PostGetResult.fromJson(item as Map<String, dynamic>));
+          } on Object catch (e) {
+            // Degrade a single malformed entry to notFound instead of failing
+            // the whole batch. Read the uri defensively; fall back to the
+            // corresponding input URI (server guarantees order).
+            final fallbackUri =
+                (item is Map && item['uri'] is String)
+                    ? item['uri'] as String
+                    : (i < uris.length ? uris[i] : '');
+            if (kDebugMode) {
+              debugPrint(
+                '⚠️ Failed to parse post entry $i ($fallbackUri): $e',
+              );
+            }
+            results.add(PostGetNotFound(fallbackUri));
           }
-          results.add(PostGetNotFound(fallbackUri));
         }
-      }
-
-      if (kDebugMode) {
-        debugPrint('✅ Posts fetched: ${results.length} results');
-      }
-
-      return results;
-    } on DioException catch (e) {
-      _handleDioException(e, 'posts');
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error parsing posts response: $e');
-      }
-      throw ApiException('Failed to parse server response', originalError: e);
-    }
+        return results;
+      },
+    );
   }
 
   /// Get a single post by AT-URI (public, optional auth)
@@ -579,55 +378,29 @@ class CovesApiService {
   /// Parameters:
   /// - [limit]: Number of communities per page (default: 50, max: 100)
   /// - [cursor]: Pagination cursor from previous response
-  /// - [sort]: Sort order - 'popular', 'new', or 'alphabetical' (default: 'popular')
-  /// - [subscribed]: If true, only return communities the user is subscribed to
+  /// - [sort]: Sort order - 'popular', 'new', or 'alphabetical'
+  ///   (default: 'popular')
+  /// - [subscribed]: If true, only return communities the user is
+  ///   subscribed to
   Future<CommunitiesResponse> listCommunities({
     int limit = 50,
     String? cursor,
     String sort = 'popular',
     bool? subscribed,
-  }) async {
-    try {
-      if (kDebugMode) {
-        debugPrint(
-          '📡 Fetching communities: sort=$sort, limit=$limit, '
-          'subscribed=$subscribed',
-        );
-      }
-
-      final queryParams = <String, dynamic>{'limit': limit, 'sort': sort};
-
-      if (cursor != null) {
-        queryParams['cursor'] = cursor;
-      }
-
-      if (subscribed == true) {
-        queryParams['subscribed'] = 'true';
-      }
-
-      final response = await _dio.get(
+  }) {
+    return _request(
+      operation: 'fetch communities',
+      send: () => _dio.get(
         '/xrpc/social.coves.community.list',
-        queryParameters: queryParams,
-      );
-
-      if (kDebugMode) {
-        debugPrint(
-          '✅ Communities fetched: '
-          '${response.data['communities']?.length ?? 0} communities',
-        );
-      }
-
-      return CommunitiesResponse.fromJson(
-        response.data as Map<String, dynamic>,
-      );
-    } on DioException catch (e) {
-      _handleDioException(e, 'communities');
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error parsing communities response: $e');
-      }
-      throw ApiException('Failed to parse server response', originalError: e);
-    }
+        queryParameters: {
+          'limit': limit,
+          'sort': sort,
+          if (cursor != null) 'cursor': cursor,
+          if (subscribed ?? false) 'subscribed': 'true',
+        },
+      ),
+      parse: (data) => CommunitiesResponse.fromJson(_asJsonMap(data)),
+    );
   }
 
   /// Get a single community by identifier
@@ -637,30 +410,15 @@ class CovesApiService {
   ///
   /// Parameters:
   /// - [community]: Community DID or handle (required)
-  Future<CommunityView> getCommunity({required String community}) async {
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Fetching community: $community');
-      }
-
-      final response = await _dio.get(
+  Future<CommunityView> getCommunity({required String community}) {
+    return _request(
+      operation: 'fetch community',
+      send: () => _dio.get(
         '/xrpc/social.coves.community.get',
         queryParameters: {'community': community},
-      );
-
-      if (kDebugMode) {
-        debugPrint('✅ Community fetched: ${response.data['name']}');
-      }
-
-      return CommunityView.fromJson(response.data as Map<String, dynamic>);
-    } on DioException catch (e) {
-      _handleDioException(e, 'community');
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error parsing community response: $e');
-      }
-      throw ApiException('Failed to parse server response', originalError: e);
-    }
+      ),
+      parse: (data) => CommunityView.fromJson(_asJsonMap(data)),
+    );
   }
 
   /// Create a new post in a community
@@ -683,57 +441,24 @@ class CovesApiService {
     ExternalEmbedInput? embed,
     List<String>? langs,
     SelfLabels? labels,
-  }) async {
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Creating post in community: $community');
-      }
-
-      // Build request body with only non-null fields
-      final requestBody = <String, dynamic>{'community': community};
-
-      if (title != null) {
-        requestBody['title'] = title;
-      }
-
-      if (content != null) {
-        requestBody['content'] = content;
-      }
-
-      if (facets != null && facets.isNotEmpty) {
-        requestBody['facets'] = facets.map((f) => f.toJson()).toList();
-      }
-
-      if (embed != null) {
-        requestBody['embed'] = embed.toJson();
-      }
-
-      if (langs != null && langs.isNotEmpty) {
-        requestBody['langs'] = langs;
-      }
-
-      if (labels != null) {
-        requestBody['labels'] = labels.toJson();
-      }
-
-      final response = await _dio.post(
+  }) {
+    return _request(
+      operation: 'create post',
+      send: () => _dio.post(
         '/xrpc/social.coves.community.post.create',
-        data: requestBody,
-      );
-
-      if (kDebugMode) {
-        debugPrint('✅ Post created successfully');
-      }
-
-      return CreatePostResponse.fromJson(response.data as Map<String, dynamic>);
-    } on DioException catch (e) {
-      _handleDioException(e, 'create post');
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error creating post: $e');
-      }
-      throw ApiException('Failed to create post', originalError: e);
-    }
+        data: {
+          'community': community,
+          if (title != null) 'title': title,
+          if (content != null) 'content': content,
+          if (facets != null && facets.isNotEmpty)
+            'facets': facets.map((f) => f.toJson()).toList(),
+          if (embed != null) 'embed': embed.toJson(),
+          if (langs != null && langs.isNotEmpty) 'langs': langs,
+          if (labels != null) 'labels': labels.toJson(),
+        },
+      ),
+      parse: (data) => CreatePostResponse.fromJson(_asJsonMap(data)),
+    );
   }
 
   /// Delete a post
@@ -749,34 +474,22 @@ class CovesApiService {
   /// - [ApiException] with statusCode 403 if not the post author
   /// - [NotFoundException] if post doesn't exist (404)
   /// - [NetworkException] for connection issues
-  Future<void> deletePost({required String uri}) async {
-    try {
-      if (kDebugMode) {
-        debugPrint('🗑️ Deleting post: $uri');
-      }
-
-      await _dio.post(
+  Future<void> deletePost({required String uri}) {
+    return _request(
+      operation: 'delete post',
+      send: () => _dio.post(
         '/xrpc/social.coves.community.post.delete',
         data: {'uri': uri},
-      );
-
-      if (kDebugMode) {
-        debugPrint('✅ Post deleted successfully');
-      }
-    } on DioException catch (e) {
-      _handleDioException(e, 'delete post');
-    } on Exception catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Delete post failed with unexpected error: $e');
-      }
-      throw ApiException('Failed to delete post: $e', originalError: e);
-    }
+      ),
+      parse: (_) {},
+    );
   }
 
   /// Create a new community
   ///
-  /// Creates a new community with the given name, display name, and description.
-  /// Requires authentication and admin privileges (backend enforces).
+  /// Creates a new community with the given name, display name, and
+  /// description. Requires authentication and admin privileges
+  /// (backend enforces).
   ///
   /// Parameters:
   /// - [name]: DNS-valid unique identifier (e.g., "worldnews")
@@ -789,39 +502,20 @@ class CovesApiService {
     required String displayName,
     required String description,
     String visibility = 'public',
-  }) async {
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Creating community: $name ($displayName)');
-      }
-
-      final requestBody = <String, dynamic>{
-        'name': name,
-        'displayName': displayName,
-        'description': description,
-        'visibility': visibility,
-      };
-
-      final response = await _dio.post(
+  }) {
+    return _request(
+      operation: 'create community',
+      send: () => _dio.post(
         '/xrpc/social.coves.community.create',
-        data: requestBody,
-      );
-
-      if (kDebugMode) {
-        debugPrint('✅ Community created successfully');
-      }
-
-      return CreateCommunityResponse.fromJson(
-        response.data as Map<String, dynamic>,
-      );
-    } on DioException catch (e) {
-      _handleDioException(e, 'create community');
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error creating community: $e');
-      }
-      throw ApiException('Failed to create community', originalError: e);
-    }
+        data: {
+          'name': name,
+          'displayName': displayName,
+          'description': description,
+          'visibility': visibility,
+        },
+      ),
+      parse: (data) => CreateCommunityResponse.fromJson(_asJsonMap(data)),
+    );
   }
 
   /// Get user profile by DID or handle
@@ -834,38 +528,17 @@ class CovesApiService {
   ///
   /// Throws:
   /// - `NotFoundException` if the user does not exist
-  /// - `UnauthorizedException` if authentication is required/expired
+  /// - `AuthenticationException` if authentication is required/expired
   /// - `ApiException` for other API errors
-  Future<UserProfile> getProfile({required String actor}) async {
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Fetching profile for: $actor');
-      }
-
-      final response = await _dio.get(
+  Future<UserProfile> getProfile({required String actor}) {
+    return _request(
+      operation: 'fetch profile',
+      send: () => _dio.get(
         '/xrpc/social.coves.actor.getProfile',
         queryParameters: {'actor': actor},
-      );
-
-      if (kDebugMode) {
-        debugPrint('✅ Profile fetched for: $actor');
-      }
-
-      final data = response.data;
-      if (data is! Map<String, dynamic>) {
-        throw FormatException('Expected Map but got ${data.runtimeType}');
-      }
-      return UserProfile.fromJson(data);
-    } on DioException catch (e) {
-      _handleDioException(e, 'profile'); // Never returns - always throws
-    } on FormatException {
-      rethrow;
-    } on Exception catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error parsing profile response: $e');
-      }
-      throw ApiException('Failed to parse server response', originalError: e);
-    }
+      ),
+      parse: (data) => UserProfile.fromJson(_asJsonMap(data)),
+    );
   }
 
   /// Get posts by a specific actor
@@ -885,7 +558,7 @@ class CovesApiService {
   ///
   /// Throws:
   /// - `NotFoundException` if the actor does not exist
-  /// - `UnauthorizedException` if authentication is required/expired
+  /// - `AuthenticationException` if authentication is required/expired
   /// - `ApiException` for other API errors
   Future<TimelineResponse> getAuthorPosts({
     required String actor,
@@ -893,57 +566,21 @@ class CovesApiService {
     String? community,
     int limit = 15,
     String? cursor,
-  }) async {
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Fetching posts for actor: $actor');
-      }
-
-      final queryParams = <String, dynamic>{
-        'actor': actor,
-        'limit': limit,
-      };
-
-      if (filter != null) {
-        queryParams['filter'] = filter;
-      }
-
-      if (community != null) {
-        queryParams['community'] = community;
-      }
-
-      if (cursor != null) {
-        queryParams['cursor'] = cursor;
-      }
-
-      final response = await _dio.get(
+  }) {
+    return _request(
+      operation: 'fetch actor posts',
+      send: () => _dio.get(
         '/xrpc/social.coves.actor.getPosts',
-        queryParameters: queryParams,
-      );
-
-      final data = response.data;
-      if (data is! Map<String, dynamic>) {
-        throw FormatException('Expected Map but got ${data.runtimeType}');
-      }
-
-      if (kDebugMode) {
-        debugPrint(
-          '✅ Actor posts fetched: '
-          '${data['feed']?.length ?? 0} posts',
-        );
-      }
-
-      return TimelineResponse.fromJson(data);
-    } on DioException catch (e) {
-      _handleDioException(e, 'actor posts'); // Never returns - always throws
-    } on FormatException {
-      rethrow;
-    } on Exception catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error parsing actor posts response: $e');
-      }
-      throw ApiException('Failed to parse server response', originalError: e);
-    }
+        queryParameters: {
+          'actor': actor,
+          'limit': limit,
+          if (filter != null) 'filter': filter,
+          if (community != null) 'community': community,
+          if (cursor != null) 'cursor': cursor,
+        },
+      ),
+      parse: (data) => TimelineResponse.fromJson(_asJsonMap(data)),
+    );
   }
 
   /// Get comments by a specific actor
@@ -965,53 +602,20 @@ class CovesApiService {
     String? community,
     int limit = 50,
     String? cursor,
-  }) async {
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Fetching comments for actor: $actor');
-      }
-
-      final queryParams = <String, dynamic>{
-        'actor': actor,
-        'limit': limit,
-      };
-
-      if (community != null) {
-        queryParams['community'] = community;
-      }
-
-      if (cursor != null) {
-        queryParams['cursor'] = cursor;
-      }
-
-      final response = await _dio.get(
+  }) {
+    return _request(
+      operation: 'fetch actor comments',
+      send: () => _dio.get(
         '/xrpc/social.coves.actor.getComments',
-        queryParameters: queryParams,
-      );
-
-      final data = response.data;
-      if (data is! Map<String, dynamic>) {
-        throw FormatException('Expected Map but got ${data.runtimeType}');
-      }
-
-      if (kDebugMode) {
-        debugPrint(
-          '✅ Actor comments fetched: '
-          '${data['comments']?.length ?? 0} comments',
-        );
-      }
-
-      return ActorCommentsResponse.fromJson(data);
-    } on DioException catch (e) {
-      _handleDioException(e, 'actor comments');
-    } on FormatException {
-      rethrow;
-    } on Exception catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error parsing actor comments response: $e');
-      }
-      throw ApiException('Failed to parse server response', originalError: e);
-    }
+        queryParameters: {
+          'actor': actor,
+          'limit': limit,
+          if (community != null) 'community': community,
+          if (cursor != null) 'cursor': cursor,
+        },
+      ),
+      parse: (data) => ActorCommentsResponse.fromJson(_asJsonMap(data)),
+    );
   }
 
   /// Subscribe to a community
@@ -1023,35 +627,21 @@ class CovesApiService {
   /// - [community]: Community DID or handle (required)
   ///
   /// Returns the subscription URI on success.
-  Future<String> subscribeToCommunity({required String community}) async {
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Subscribing to community: $community');
-      }
-
-      final response = await _dio.post(
+  Future<String> subscribeToCommunity({required String community}) {
+    return _request(
+      operation: 'subscribe to community',
+      send: () => _dio.post(
         '/xrpc/social.coves.community.subscribe',
         data: {'community': community},
-      );
-
-      if (kDebugMode) {
-        debugPrint('✅ Subscribed to community: $community');
-      }
-
-      final data = response.data as Map<String, dynamic>;
-      final uri = data['uri'] as String?;
-      if (uri == null || uri.isEmpty) {
-        throw ApiException('Server returned invalid subscription response');
-      }
-      return uri;
-    } on DioException catch (e) {
-      _handleDioException(e, 'subscribe to community');
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error subscribing to community: $e');
-      }
-      throw ApiException('Failed to subscribe to community', originalError: e);
-    }
+      ),
+      parse: (data) {
+        final uri = _asJsonMap(data)['uri'] as String?;
+        if (uri == null || uri.isEmpty) {
+          throw ApiException('Server returned invalid subscription response');
+        }
+        return uri;
+      },
+    );
   }
 
   /// Unsubscribe from a community
@@ -1061,31 +651,15 @@ class CovesApiService {
   ///
   /// Parameters:
   /// - [community]: Community DID or handle (required)
-  Future<void> unsubscribeFromCommunity({required String community}) async {
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Unsubscribing from community: $community');
-      }
-
-      await _dio.post(
+  Future<void> unsubscribeFromCommunity({required String community}) {
+    return _request(
+      operation: 'unsubscribe from community',
+      send: () => _dio.post(
         '/xrpc/social.coves.community.unsubscribe',
         data: {'community': community},
-      );
-
-      if (kDebugMode) {
-        debugPrint('✅ Unsubscribed from community: $community');
-      }
-    } on DioException catch (e) {
-      _handleDioException(e, 'unsubscribe from community');
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error unsubscribing from community: $e');
-      }
-      throw ApiException(
-        'Failed to unsubscribe from community',
-        originalError: e,
-      );
-    }
+      ),
+      parse: (_) {},
+    );
   }
 
   /// Block a user by DID. Returns the block record URI.
@@ -1127,40 +701,23 @@ class CovesApiService {
     required String didLabel,
     required String endpoint,
     required String dataKey,
-  }) async {
+  }) {
     if (did.isEmpty || !did.startsWith('did:')) {
       throw ApiException('Invalid $didLabel DID');
     }
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Blocking $didLabel: $did');
-      }
-
-      final response = await _dio.post(
-        endpoint,
-        data: {dataKey: did},
-      );
-
-      if (kDebugMode) {
-        debugPrint('✅ Blocked $didLabel: $did');
-      }
-
-      final data = response.data as Map<String, dynamic>;
-      final recordUri =
-          (data['block'] as Map<String, dynamic>)['recordUri'] as String?;
-      if (recordUri == null || recordUri.isEmpty) {
-        throw ApiException('Server returned invalid block response');
-      }
-      return recordUri;
-    } on DioException catch (e) {
-      _handleDioException(e, 'block $didLabel');
-    } catch (e) {
-      if (e is ApiException) rethrow;
-      if (kDebugMode) {
-        debugPrint('❌ Error blocking $didLabel: $e');
-      }
-      throw ApiException('Failed to block $didLabel', originalError: e);
-    }
+    return _request(
+      operation: 'block $didLabel',
+      send: () => _dio.post(endpoint, data: {dataKey: did}),
+      parse: (data) {
+        final recordUri =
+            (_asJsonMap(data)['block'] as Map<String, dynamic>)['recordUri']
+                as String?;
+        if (recordUri == null || recordUri.isEmpty) {
+          throw ApiException('Server returned invalid block response');
+        }
+        return recordUri;
+      },
+    );
   }
 
   /// Shared helper for unblock operations.
@@ -1169,32 +726,15 @@ class CovesApiService {
     required String didLabel,
     required String endpoint,
     required String dataKey,
-  }) async {
+  }) {
     if (did.isEmpty || !did.startsWith('did:')) {
       throw ApiException('Invalid $didLabel DID');
     }
-    try {
-      if (kDebugMode) {
-        debugPrint('📡 Unblocking $didLabel: $did');
-      }
-
-      await _dio.post(
-        endpoint,
-        data: {dataKey: did},
-      );
-
-      if (kDebugMode) {
-        debugPrint('✅ Unblocked $didLabel: $did');
-      }
-    } on DioException catch (e) {
-      _handleDioException(e, 'unblock $didLabel');
-    } catch (e) {
-      if (e is ApiException) rethrow;
-      if (kDebugMode) {
-        debugPrint('❌ Error unblocking $didLabel: $e');
-      }
-      throw ApiException('Failed to unblock $didLabel', originalError: e);
-    }
+    return _request(
+      operation: 'unblock $didLabel',
+      send: () => _dio.post(endpoint, data: {dataKey: did}),
+      parse: (_) {},
+    );
   }
 
   /// Update a community's profile (e.g., avatar)
@@ -1218,7 +758,7 @@ class CovesApiService {
     required String communityDid,
     required Uint8List imageBytes,
     required String mimeType,
-  }) async {
+  }) {
     // Validate image size (max 1 MB)
     const maxSizeBytes = 1024 * 1024; // 1 MB
     if (imageBytes.length > maxSizeBytes) {
@@ -1227,159 +767,27 @@ class CovesApiService {
         '(${(imageBytes.length / 1024 / 1024).toStringAsFixed(2)} MB)',
       );
     }
+    _validateImageMimeType(mimeType);
 
-    // Validate MIME type
-    const supportedMimeTypes = {'image/jpeg', 'image/png', 'image/webp'};
-    if (!supportedMimeTypes.contains(mimeType)) {
-      throw ApiException(
-        'Unsupported image type: $mimeType. '
-        'Supported types: ${supportedMimeTypes.join(', ')}',
-      );
-    }
-
-    try {
-      if (kDebugMode) {
-        debugPrint(
-          '📡 Updating community avatar: $communityDid '
-          '(${imageBytes.length} bytes, $mimeType)',
-        );
-      }
-
-      // Encode image bytes to base64
-      final avatarBlob = base64Encode(imageBytes);
-
-      final requestBody = <String, dynamic>{
-        'communityDid': communityDid,
-        'avatarBlob': avatarBlob,
-        'avatarMimeType': mimeType,
-      };
-
-      final response = await _dio.post(
+    return _request(
+      operation: 'update community',
+      send: () => _dio.post(
         '/xrpc/social.coves.community.update',
-        data: requestBody,
-      );
-
-      if (kDebugMode) {
-        debugPrint('✅ Community avatar updated successfully');
-      }
-
-      return CreateCommunityResponse.fromJson(
-        response.data as Map<String, dynamic>,
-      );
-    } on DioException catch (e) {
-      _handleDioException(e, 'update community');
-    } catch (e) {
-      if (e is ApiException) {
-        rethrow;
-      }
-      if (kDebugMode) {
-        debugPrint('❌ Error updating community: $e');
-      }
-      throw ApiException('Failed to update community', originalError: e);
-    }
-  }
-
-  /// Handle Dio exceptions with specific error types
-  ///
-  /// Converts generic DioException into specific typed exceptions
-  /// for better error handling throughout the app.
-  Never _handleDioException(DioException e, String operation) {
-    if (kDebugMode) {
-      debugPrint('❌ Failed to fetch $operation: ${e.message}');
-      if (e.response != null) {
-        debugPrint('   Status: ${e.response?.statusCode}');
-        // Response data can echo credentials — redact before printing
-        debugPrint(redactBearerTokens('   Data: ${e.response?.data}'));
-      }
-    }
-
-    // Handle specific HTTP status codes
-    if (e.response != null) {
-      final statusCode = e.response!.statusCode;
-      // Handle both JSON error responses and plain text responses
-      String? message;
-      final data = e.response!.data;
-      if (data is Map<String, dynamic>) {
-        message = data['error'] as String? ?? data['message'] as String?;
-      } else if (data is String && data.isNotEmpty) {
-        message = data;
-      }
-
-      if (statusCode != null) {
-        if (statusCode == 401) {
-          throw AuthenticationException(
-            message?.toString() ??
-                'Authentication failed. Token expired or invalid',
-            originalError: e,
-          );
-        } else if (statusCode == 404) {
-          throw NotFoundException(
-            message?.toString() ??
-                'Resource not found. PDS or content may not exist',
-            originalError: e,
-          );
-        } else if (statusCode >= 500) {
-          throw ServerException(
-            message?.toString() ?? 'Server error. Please try again later',
-            statusCode: statusCode,
-            originalError: e,
-          );
-        } else {
-          // Other HTTP errors
-          throw ApiException(
-            message?.toString() ?? 'Request failed: ${e.message}',
-            statusCode: statusCode,
-            originalError: e,
-          );
-        }
-      } else {
-        // No status code in response
-        throw ApiException(
-          message?.toString() ?? 'Request failed: ${e.message}',
-          originalError: e,
-        );
-      }
-    }
-
-    // Handle network-level errors (no response from server)
-    switch (e.type) {
-      case DioExceptionType.connectionTimeout:
-      case DioExceptionType.sendTimeout:
-      case DioExceptionType.receiveTimeout:
-        throw NetworkException(
-          'Connection timeout. Please check your internet connection',
-          originalError: e,
-        );
-      case DioExceptionType.connectionError:
-        // Could be federation issue if it's a PDS connection failure
-        if (e.message?.contains('Failed host lookup') ?? false) {
-          throw FederationException(
-            'Failed to connect to PDS. Server may be unreachable',
-            originalError: e,
-          );
-        }
-        throw NetworkException(
-          'Network error. Please check your internet connection',
-          originalError: e,
-        );
-      case DioExceptionType.badResponse:
-        // Already handled above by response status code check
-        throw ApiException(
-          'Bad response from server: ${e.message}',
-          statusCode: e.response?.statusCode,
-          originalError: e,
-        );
-      case DioExceptionType.cancel:
-        throw ApiException('Request cancelled', originalError: e);
-      default:
-        throw ApiException('Unknown error: ${e.message}', originalError: e);
-    }
+        data: {
+          'communityDid': communityDid,
+          'avatarBlob': base64Encode(imageBytes),
+          'avatarMimeType': mimeType,
+        },
+      ),
+      parse: (data) => CreateCommunityResponse.fromJson(_asJsonMap(data)),
+    );
   }
 
   /// Update the authenticated user's profile
   ///
   /// All parameters are optional - only non-null values will be sent to
-  /// the API. This allows updating individual fields without affecting others.
+  /// the API. This allows updating individual fields without affecting
+  /// others.
   ///
   /// Parameters:
   /// - [displayName]: New display name (optional, max 64 chars)
@@ -1402,7 +810,7 @@ class CovesApiService {
     String? avatarMimeType,
     Uint8List? bannerBytes,
     String? bannerMimeType,
-  }) async {
+  }) {
     // Validate avatar if provided
     if (avatarBytes != null) {
       if (avatarMimeType == null) {
@@ -1433,61 +841,25 @@ class CovesApiService {
       _validateImageMimeType(bannerMimeType);
     }
 
-    try {
-      if (kDebugMode) {
-        debugPrint(
-          '📡 Updating profile: '
-          'displayName=${displayName != null}, '
-          'bio=${bio != null}, '
-          'avatar=${avatarBytes != null ? "${avatarBytes.length} bytes" : "null"}, '
-          'banner=${bannerBytes != null ? "${bannerBytes.length} bytes" : "null"}',
-        );
-      }
-
-      // Build request body with only non-null fields
-      final requestBody = <String, dynamic>{};
-
-      if (displayName != null) {
-        requestBody['displayName'] = displayName;
-      }
-
-      if (bio != null) {
-        requestBody['bio'] = bio;
-      }
-
-      if (avatarBytes != null) {
-        requestBody['avatarBlob'] = base64Encode(avatarBytes);
-        requestBody['avatarMimeType'] = avatarMimeType;
-      }
-
-      if (bannerBytes != null) {
-        requestBody['bannerBlob'] = base64Encode(bannerBytes);
-        requestBody['bannerMimeType'] = bannerMimeType;
-      }
-
-      final response = await _dio.post(
+    return _request(
+      operation: 'update profile',
+      send: () => _dio.post(
         '/xrpc/social.coves.actor.updateProfile',
-        data: requestBody,
-      );
-
-      if (kDebugMode) {
-        debugPrint('✅ Profile updated successfully');
-      }
-
-      return UpdateProfileResponse.fromJson(
-        response.data as Map<String, dynamic>,
-      );
-    } on DioException catch (e) {
-      _handleDioException(e, 'update profile');
-    } catch (e) {
-      if (e is ApiException) {
-        rethrow;
-      }
-      if (kDebugMode) {
-        debugPrint('❌ Error updating profile: $e');
-      }
-      throw ApiException('Failed to update profile', originalError: e);
-    }
+        data: {
+          if (displayName != null) 'displayName': displayName,
+          if (bio != null) 'bio': bio,
+          if (avatarBytes != null) ...{
+            'avatarBlob': base64Encode(avatarBytes),
+            'avatarMimeType': avatarMimeType,
+          },
+          if (bannerBytes != null) ...{
+            'bannerBlob': base64Encode(bannerBytes),
+            'bannerMimeType': bannerMimeType,
+          },
+        },
+      ),
+      parse: (data) => UpdateProfileResponse.fromJson(_asJsonMap(data)),
+    );
   }
 
   /// Validate image MIME type for profile images
@@ -1521,7 +893,7 @@ class CovesApiService {
     required String targetUri,
     required String reason,
     String? explanation,
-  }) async {
+  }) {
     // Validate inputs before making API call
     const validReasons = {
       'spam',
@@ -1541,49 +913,30 @@ class CovesApiService {
     }
 
     if (explanation != null && explanation.length > 1000) {
-      throw ApiException('Explanation exceeds maximum length of 1000 characters');
-    }
-
-    try {
-      if (kDebugMode) {
-        debugPrint('🚨 Submitting report for: $targetUri (reason: $reason)');
-      }
-
-      final requestBody = <String, dynamic>{
-        'targetUri': targetUri,
-        'reason': reason,
-      };
-
-      if (explanation != null && explanation.isNotEmpty) {
-        requestBody['explanation'] = explanation;
-      }
-
-      final response = await _dio.post(
-        '/xrpc/social.coves.admin.submitReport',
-        data: requestBody,
+      throw ApiException(
+        'Explanation exceeds maximum length of 1000 characters',
       );
-
-      if (kDebugMode) {
-        debugPrint('✅ Report submitted successfully');
-      }
-
-      final data = response.data as Map<String, dynamic>;
-      final reportId = data['reportId'] as int?;
-      if (reportId == null) {
-        throw ApiException('Server returned invalid report response');
-      }
-      return reportId;
-    } on DioException catch (e) {
-      throw _handleDioException(e, 'submit report');
-    } catch (e) {
-      if (e is ApiException) {
-        rethrow;
-      }
-      if (kDebugMode) {
-        debugPrint('❌ Error submitting report: $e');
-      }
-      throw ApiException('Failed to submit report', originalError: e);
     }
+
+    return _request(
+      operation: 'submit report',
+      send: () => _dio.post(
+        '/xrpc/social.coves.admin.submitReport',
+        data: {
+          'targetUri': targetUri,
+          'reason': reason,
+          if (explanation != null && explanation.isNotEmpty)
+            'explanation': explanation,
+        },
+      ),
+      parse: (data) {
+        final reportId = _asJsonMap(data)['reportId'] as int?;
+        if (reportId == null) {
+          throw ApiException('Server returned invalid report response');
+        }
+        return reportId;
+      },
+    );
   }
 
   /// Dispose resources
@@ -1601,10 +954,14 @@ class UpdateProfileResponse {
     final cid = json['cid'];
 
     if (uri is! String || uri.isEmpty) {
-      throw const FormatException('UpdateProfileResponse: missing or invalid uri');
+      throw const FormatException(
+        'UpdateProfileResponse: missing or invalid uri',
+      );
     }
     if (cid is! String || cid.isEmpty) {
-      throw const FormatException('UpdateProfileResponse: missing or invalid cid');
+      throw const FormatException(
+        'UpdateProfileResponse: missing or invalid cid',
+      );
     }
 
     return UpdateProfileResponse(uri: uri, cid: cid);

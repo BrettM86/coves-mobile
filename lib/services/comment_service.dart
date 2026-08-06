@@ -57,7 +57,7 @@ class CommentService {
     // Add shared 401 retry interceptor
     _dio.interceptors.add(
       createAuthInterceptor(
-        sessionGetter: sessionGetter,
+        tokenGetter: () async => (await sessionGetter?.call())?.token,
         tokenRefresher: tokenRefresher,
         signOutHandler: signOutHandler,
         serviceName: 'CommentService',
@@ -148,24 +148,7 @@ class CommentService {
 
       return CreateCommentResponse(uri: uri, cid: cid);
     } on DioException catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Comment creation failed: ${e.message}');
-        debugPrint('   Status: ${e.response?.statusCode}');
-        debugPrint('   Data: ${e.response?.data}');
-      }
-
-      if (e.response?.statusCode == 401) {
-        throw AuthenticationException(
-          'Authentication failed. Please sign in again.',
-          originalError: e,
-        );
-      }
-
-      throw ApiException(
-        'Failed to create comment: ${e.message}',
-        statusCode: e.response?.statusCode,
-        originalError: e,
-      );
+      throw mapDioException(e, operation: 'create comment');
     } on AuthenticationException {
       rethrow;
     } on ApiException {
@@ -185,7 +168,8 @@ class CommentService {
   ///
   /// Throws:
   /// - AuthenticationException if not authenticated
-  /// - ApiException with 'You can only delete your own comments' if not the comment author
+  /// - ApiException with 'You can only delete your own comments' if not
+  ///   the comment author
   /// - ApiException for other errors
   Future<void> deleteComment({required String uri}) async {
     try {
@@ -210,17 +194,8 @@ class CommentService {
         debugPrint('✅ Comment deleted successfully');
       }
     } on DioException catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Comment deletion failed: ${e.message}');
-      }
-
-      if (e.response?.statusCode == 401) {
-        throw AuthenticationException(
-          'Authentication failed. Please sign in again.',
-          originalError: e,
-        );
-      }
-
+      // Friendlier copy than the server's for the two expected outcomes;
+      // everything else goes through the canonical mapper.
       if (e.response?.statusCode == 403) {
         throw ApiException(
           'You can only delete your own comments',
@@ -228,35 +203,13 @@ class CommentService {
           originalError: e,
         );
       }
-
       if (e.response?.statusCode == 404) {
         throw NotFoundException(
           'Comment not found. It may have already been deleted.',
           originalError: e,
         );
       }
-
-      // Handle network-level errors
-      if (e.response == null) {
-        switch (e.type) {
-          case DioExceptionType.connectionTimeout:
-          case DioExceptionType.sendTimeout:
-          case DioExceptionType.receiveTimeout:
-          case DioExceptionType.connectionError:
-            throw NetworkException(
-              'Network error. Please check your connection.',
-              originalError: e,
-            );
-          default:
-            break;
-        }
-      }
-
-      throw ApiException(
-        'Failed to delete comment: ${e.message}',
-        statusCode: e.response?.statusCode,
-        originalError: e,
-      );
+      throw mapDioException(e, operation: 'delete comment');
     } on AuthenticationException {
       rethrow;
     } on NotFoundException {
