@@ -49,10 +49,12 @@ class _RecordingObserver extends NavigatorObserver {
   ///
   /// MaterialApp's own initial `/` route is a `MaterialPageRoute<dynamic>`,
   /// and Dart treats `dynamic` and `void` as mutual subtypes — so a plain
-  /// `whereType<MaterialPageRoute<void>>()` would count it too. Callers
-  /// clear the log after pumping, and this getter is what they assert on.
-  List<MaterialPageRoute<void>> get pushedPages =>
-      pushed.whereType<MaterialPageRoute<void>>().toList();
+  /// `whereType<PageRoute<void>>()` would count it too. Callers clear the
+  /// log after pumping, and this getter is what they assert on. PageRoute
+  /// rather than MaterialPageRoute: the image viewer pushes a
+  /// PageRouteBuilder to opt out of the M3 zoom transition.
+  List<PageRoute<void>> get pushedPages =>
+      pushed.whereType<PageRoute<void>>().toList();
 
   /// Forgets routes recorded during setup, so only taps are counted.
   void reset() => pushed.clear();
@@ -903,7 +905,7 @@ void main() {
       expect(
         observer.pushedPages,
         hasLength(1),
-        reason: 'image tap pushes exactly one MaterialPageRoute',
+        reason: 'image tap pushes exactly one page route',
       );
 
       await tester.pumpAndSettle();
@@ -1264,7 +1266,9 @@ void main() {
       final videoRoutes = observer.pushedPages;
       expect(videoRoutes, hasLength(1));
 
-      final page = videoRoutes.single.builder(
+      // The video player still pushes a MaterialPageRoute; the cast is what
+      // exposes `builder` for building the page without mounting it.
+      final page = (videoRoutes.single as MaterialPageRoute<void>).builder(
         tester.element(find.byKey(_videoKey)),
       );
       expect(page, isA<FullscreenVideoPlayer>());

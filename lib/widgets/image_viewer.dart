@@ -31,9 +31,20 @@ class ImageViewer extends StatefulWidget {
     // an indicator like "5/3". Clamp instead of trusting the caller.
     final index = initialIndex.clamp(0, images.length - 1);
     Navigator.of(context, rootNavigator: true).push<void>(
-      MaterialPageRoute(
-        builder: (context) => ImageViewer(images: images, initialIndex: index),
+      PageRouteBuilder<void>(
         fullscreenDialog: true,
+        // Not a MaterialPageRoute: Android's M3 zoom transition scale-fades
+        // the incoming route, which on a black page holding one image reads
+        // as a ghost of the image growing into place. A quick plain fade
+        // fits a lightbox.
+        transitionDuration: const Duration(milliseconds: 150),
+        reverseTransitionDuration: const Duration(milliseconds: 150),
+        pageBuilder:
+            (context, animation, secondaryAnimation) =>
+                ImageViewer(images: images, initialIndex: index),
+        transitionsBuilder:
+            (context, animation, secondaryAnimation, child) =>
+                FadeTransition(opacity: animation, child: child),
       ),
     );
   }
