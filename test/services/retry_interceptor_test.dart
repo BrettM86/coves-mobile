@@ -99,6 +99,56 @@ void main() {
         );
       });
 
+      test('should NOT retry POST requests with connectionError', () async {
+        // dio raises connectionError for resets both before AND after the
+        // request went out, so the server may have already processed it.
+        // Retrying would double-toggle votes / duplicate comments.
+        final error = DioException(
+          type: DioExceptionType.connectionError,
+          requestOptions: RequestOptions(path: '/vote', method: 'POST'),
+        );
+
+        final retryCount = await getRetryCount(error);
+
+        expect(
+          retryCount,
+          isNull,
+          reason: 'POST + connectionError must NOT retry (prevents duplicates)',
+        );
+      });
+
+      test('should retry GET requests with connectionError', () async {
+        final error = DioException(
+          type: DioExceptionType.connectionError,
+          requestOptions: RequestOptions(path: '/feed', method: 'GET'),
+        );
+
+        final retryCount = await getRetryCount(error);
+
+        expect(
+          retryCount,
+          equals(1),
+          reason: 'GET is idempotent - connectionError should retry',
+        );
+      });
+
+      test('should retry POST requests with connectionTimeout', () async {
+        // connectionTimeout means the TCP connection was never established,
+        // so the server cannot have processed anything - safe to retry.
+        final error = DioException(
+          type: DioExceptionType.connectionTimeout,
+          requestOptions: RequestOptions(path: '/vote', method: 'POST'),
+        );
+
+        final retryCount = await getRetryCount(error);
+
+        expect(
+          retryCount,
+          equals(1),
+          reason: 'POST + connectionTimeout is safe to retry',
+        );
+      });
+
       test('should NOT retry on HTTP errors (badResponse)', () async {
         final requestOptions = RequestOptions(path: '/test', method: 'GET');
         final error = DioException(

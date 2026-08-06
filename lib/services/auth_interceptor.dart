@@ -10,7 +10,12 @@ import '../models/coves_session.dart';
 /// CommentService by providing a single implementation of:
 /// - Adding Authorization headers with fresh tokens on each request
 /// - Automatic retry with token refresh on 401 responses
-/// - Sign-out handling when refresh fails
+/// - Sign-out when a 401 persists after a successful refresh
+///
+/// Sign-out on refresh *failure* is deliberately NOT handled here: the
+/// tokenRefresher (AuthProvider.refreshToken) owns that decision, because
+/// only it can tell a definitive session rejection from a transient
+/// network/server failure that must keep the session alive.
 ///
 /// Usage:
 /// ```dart
@@ -113,28 +118,21 @@ InterceptorsWrapper createAuthInterceptor({
             }
           }
 
-          // Refresh failed, sign out the user
+          // Refresh failed. Do NOT sign out here: the refresher owns that
+          // decision and already signed out if the session was definitively
+          // rejected. A false return may just mean a transient network
+          // failure, and signing out would destroy a valid session.
           if (kDebugMode) {
             debugPrint(
-              '❌ $serviceName: Token refresh failed, signing out user',
+              '❌ $serviceName: Token refresh failed, propagating error',
             );
           }
-          if (signOutHandler != null) {
-            await signOutHandler();
-          }
         } on Exception catch (e) {
+          // Same rule as above: an exception here (from the refresher or
+          // from retrying the original request) is not evidence the session
+          // is dead, so never sign out - just propagate the error.
           if (kDebugMode) {
             debugPrint('❌ $serviceName: Error during token refresh: $e');
-          }
-          // Only sign out if we haven't already (avoid double sign-out)
-          // Check if this is a DioException from a retried request
-          final isRetriedRequest =
-              e is DioException &&
-              e.response?.statusCode == 401 &&
-              e.requestOptions.extra['retried'] == true;
-
-          if (!isRetriedRequest && signOutHandler != null) {
-            await signOutHandler();
           }
         }
       }

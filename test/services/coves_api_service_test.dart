@@ -561,10 +561,11 @@ void main() {
         },
       );
 
-      expect(
-        () => apiService.getComments(postUri: postUri),
-        throwsA(isA<ApiException>()),
-      );
+      // A malformed comment (missing required field raises a TypeError
+      // during parsing) is skipped rather than killing the whole thread
+      // load - one bad federated record must never blank the thread.
+      final response = await apiService.getComments(postUri: postUri);
+      expect(response.comments, isEmpty);
     });
 
     test('should handle comments with nested replies', () async {

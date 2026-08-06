@@ -92,18 +92,31 @@ class RetryInterceptor extends Interceptor {
     }
   }
 
+  /// HTTP methods that are safe to retry after an ambiguous failure:
+  /// they don't mutate server state, so a duplicate delivery is harmless.
+  static const _idempotentMethods = {'GET', 'HEAD', 'OPTIONS'};
+
   /// Determine if the error is retryable
   ///
   /// Only retry on transient network errors, not:
   /// - HTTP errors (4xx, 5xx) - server responded, retry won't help
   /// - Request cancellation - intentional
   /// - Bad certificate - security issue
-  /// - Receive timeout on POST - server may have processed the request
+  /// - Ambiguous failures on mutating methods - see below
   bool _shouldRetry(DioException err) {
-    // Never retry receive timeouts on POST - server may have processed
-    // the request. This prevents duplicate comments, vote toggling, etc.
-    if (err.type == DioExceptionType.receiveTimeout &&
-        err.requestOptions.method == 'POST') {
+    // Never retry mutating requests (POST etc.) when the failure is
+    // ambiguous about whether the server already processed the request:
+    // - receiveTimeout: the request was fully sent; only the response
+    //   was lost
+    // - connectionError: dio raises this for resets both before AND after
+    //   the request went out, so the server may have processed it
+    // Retrying would double-submit: a vote toggle fired twice silently
+    // reverts the user's vote, a comment posts twice, etc.
+    // connectionTimeout/sendTimeout stay retryable: the request never
+    // fully reached the server, so it cannot have been processed.
+    if (!_idempotentMethods.contains(err.requestOptions.method) &&
+        (err.type == DioExceptionType.receiveTimeout ||
+            err.type == DioExceptionType.connectionError)) {
       return false;
     }
 

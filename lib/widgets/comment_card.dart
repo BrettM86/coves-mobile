@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
@@ -636,7 +637,7 @@ class _CommentCardState extends State<CommentCard> {
                     );
 
                     if ((shouldSignIn ?? false) && context.mounted) {
-                      await Navigator.of(context).pushNamed('/sign-in');
+                      await context.push('/login');
                     }
                     return;
                   }

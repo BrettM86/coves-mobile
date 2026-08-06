@@ -132,10 +132,13 @@ class CommentService {
         throw ApiException('Invalid response from server - no data');
       }
 
-      final uri = data['uri'] as String?;
-      final cid = data['cid'] as String?;
+      final uri = data['uri'];
+      final cid = data['cid'];
 
-      if (uri == null || uri.isEmpty || cid == null || cid.isEmpty) {
+      // Type-check rather than cast: a non-string uri/cid raises a
+      // TypeError - an Error, not an Exception - which would escape every
+      // handler up the stack instead of surfacing as ApiException.
+      if (uri is! String || uri.isEmpty || cid is! String || cid.isEmpty) {
         throw ApiException('Invalid response from server - missing uri or cid');
       }
 

@@ -70,6 +70,36 @@ void main() {
       expect(response.cursor, null);
       expect(response.communities.length, 1);
     });
+
+    test('should skip malformed communities but keep valid ones', () {
+      final json = {
+        'communities': [
+          {'did': 'did:plc:community1', 'name': 'first'},
+          // Malformed: missing required name raises a TypeError (an
+          // Error, not an Exception) during parsing
+          {'did': 'did:plc:community-bad'},
+          // Not even a map
+          'garbage',
+          {'did': 'did:plc:community2', 'name': 'second'},
+        ],
+      };
+
+      final response = CommunitiesResponse.fromJson(json);
+
+      expect(response.communities.length, 2);
+      expect(response.communities[0].name, 'first');
+      expect(response.communities[1].name, 'second');
+    });
+
+    test('should treat a wrong-typed cursor or non-list array as absent', () {
+      final response = CommunitiesResponse.fromJson({
+        'communities': 'nope',
+        'cursor': 99,
+      });
+
+      expect(response.communities, isEmpty);
+      expect(response.cursor, null);
+    });
   });
 
   group('CommunityView', () {

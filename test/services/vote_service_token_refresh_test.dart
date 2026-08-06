@@ -118,7 +118,12 @@ void main() {
       expect(signOutCallCount, 1);
     });
 
-    test('should sign out user if token refresh fails', () async {
+    test('should NOT sign out here when token refresh fails', () async {
+      // The interceptor must not sign out on a false return from the
+      // refresher: AuthProvider.refreshToken owns that decision (it signs
+      // out itself on a definitive 401, and keeps the session on transient
+      // failures). Signing out here would destroy a valid session when the
+      // refresh merely hit a network blip or 5xx.
       const postUri = 'at://did:plc:test/social.coves.post.record/123';
       const postCid = 'bafy123';
 
@@ -154,8 +159,9 @@ void main() {
       // Verify token refresh was attempted
       expect(tokenRefreshCallCount, 1);
 
-      // Verify user was signed out after refresh failure
-      expect(signOutCallCount, 1);
+      // The refresher owns the sign-out decision - the interceptor must
+      // not sign out on its behalf
+      expect(signOutCallCount, 0);
     });
 
     test(

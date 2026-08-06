@@ -100,7 +100,12 @@ void main() {
       expect(signOutCallCount, 1);
     });
 
-    test('should sign out user if token refresh fails', () async {
+    test('should NOT sign out here when token refresh fails', () async {
+      // The interceptor must not sign out on a false return from the
+      // refresher: AuthProvider.refreshToken owns that decision (it signs
+      // out itself on a definitive 401, and keeps the session on transient
+      // failures). Signing out here would destroy a valid session when the
+      // refresh merely hit a network blip or 5xx.
       const postUri = 'at://did:plc:test/social.coves.post.record/123';
 
       // Set refresh to fail
@@ -133,8 +138,9 @@ void main() {
       // Verify token refresh was attempted
       expect(tokenRefreshCallCount, 1);
 
-      // Verify user was signed out after refresh failure
-      expect(signOutCallCount, 1);
+      // The refresher owns the sign-out decision - the interceptor must
+      // not sign out on its behalf
+      expect(signOutCallCount, 0);
     });
 
     test(
@@ -143,7 +149,7 @@ void main() {
         // This test verifies that the interceptor checks for /oauth/refresh
         // in the path to avoid infinite loops. Due to limitations with mocking
         // complex request/response cycles, we test this by verifying the
-        // signOutHandler gets called when refresh fails.
+        // refresher runs exactly once and the error propagates.
 
         // Set refresh to fail (simulates refresh endpoint returning 401)
         shouldRefreshSucceed = false;
@@ -173,17 +179,20 @@ void main() {
         // Wait for async operations to complete
         await Future.delayed(const Duration(milliseconds: 100));
 
-        // Verify user was signed out (no infinite loop)
-        expect(signOutCallCount, 1);
+        // The refresher ran exactly once (no infinite loop), and the
+        // interceptor left the sign-out decision to it
+        expect(tokenRefreshCallCount, 1);
+        expect(signOutCallCount, 0);
       },
     );
 
     test(
-      'should sign out user if token refresh throws exception',
+      'should NOT sign out when token refresh throws exception',
       () async {
-        // Skipped: causes retry loops with http_mock_adapter after disposal
-        // The core functionality is tested by the "should sign out user if token
-        // refresh fails" test above.
+        // Skipped: causes retry loops with http_mock_adapter after disposal.
+        // The contract (refresher owns the sign-out decision; an exception
+        // here must not sign out) is covered by the "should NOT sign out
+        // here when token refresh fails" test above.
       },
       skip: 'Causes retry issues with http_mock_adapter',
     );

@@ -132,8 +132,16 @@ class VoteService {
         throw ApiException('Invalid response from server - no data');
       }
 
-      final uri = data['uri'] as String?;
-      final cid = data['cid'] as String?;
+      final uri = data['uri'];
+      final cid = data['cid'];
+
+      // Type-check rather than cast: a non-string uri/cid from a backend
+      // contract break raises a TypeError - an Error, not an Exception -
+      // which escapes every handler up the stack and skips VoteProvider's
+      // optimistic-state rollback. Surface it as ApiException instead.
+      if (uri is! String? || cid is! String?) {
+        throw ApiException('Invalid response from server - malformed uri/cid');
+      }
 
       // If uri/cid are empty, the backend toggled off an existing vote
       if (uri == null || uri.isEmpty || cid == null || cid.isEmpty) {

@@ -454,7 +454,34 @@ void main() {
         expect(authProvider.session?.token, 'new_sealed_token');
       });
 
-      test('should sign out if refresh fails', () async {
+      test(
+        'should sign out when refresh is definitively rejected '
+        '(SessionExpiredException)',
+        () async {
+          const mockSession = CovesSession(
+            token: 'mock_sealed_token',
+            did: 'did:plc:test123',
+            sessionId: 'session123',
+          );
+
+          when(
+            mockAuthService.signIn('alice.bsky.social'),
+          ).thenAnswer((_) async => mockSession);
+          when(
+            mockAuthService.refreshToken(),
+          ).thenThrow(const SessionExpiredException());
+          when(mockAuthService.signOut()).thenAnswer((_) async => {});
+
+          await authProvider.signIn('alice.bsky.social');
+          final result = await authProvider.refreshToken();
+
+          expect(result, false);
+          expect(authProvider.isAuthenticated, false);
+          verify(mockAuthService.signOut()).called(1);
+        },
+      );
+
+      test('should keep the session when refresh fails transiently', () async {
         const mockSession = CovesSession(
           token: 'mock_sealed_token',
           did: 'did:plc:test123',
@@ -466,14 +493,16 @@ void main() {
         ).thenAnswer((_) async => mockSession);
         when(
           mockAuthService.refreshToken(),
-        ).thenThrow(Exception('Refresh failed'));
-        when(mockAuthService.signOut()).thenAnswer((_) async => {});
+        ).thenThrow(Exception('Refresh failed: network error'));
 
         await authProvider.signIn('alice.bsky.social');
         final result = await authProvider.refreshToken();
 
+        // A 5xx or network drop during refresh is not evidence the session
+        // is dead - the user must stay signed in.
         expect(result, false);
-        expect(authProvider.isAuthenticated, false);
+        expect(authProvider.isAuthenticated, true);
+        verifyNever(mockAuthService.signOut());
       });
     });
 

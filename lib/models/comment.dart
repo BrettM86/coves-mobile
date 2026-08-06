@@ -11,23 +11,23 @@ class CommentsResponse {
   CommentsResponse({required this.post, this.cursor, required this.comments});
 
   factory CommentsResponse.fromJson(Map<String, dynamic> json) {
-    // Handle null comments array from backend
+    // Handle a null or non-list comments array from the backend
     final commentsData = json['comments'];
-    final List<ThreadViewComment> commentsList;
+    final commentsList = <ThreadViewComment>[];
 
-    if (commentsData == null) {
-      // Backend returned null, use empty list
-      commentsList = [];
-    } else {
+    if (commentsData is List) {
       // Parse comment items, skipping any that fail to parse so one
-      // malformed comment never kills the whole thread load
-      commentsList = <ThreadViewComment>[];
-      for (final item in commentsData as List<dynamic>) {
+      // malformed comment never kills the whole thread load. Items are
+      // type-checked rather than cast, and the catch is `on Object`
+      // because an unchecked cast deep in a federated record raises a
+      // TypeError, which is an Error and would escape `on Exception`.
+      for (final item in commentsData) {
+        if (item is! Map<String, dynamic>) {
+          continue;
+        }
         try {
-          commentsList.add(
-            ThreadViewComment.fromJson(item as Map<String, dynamic>),
-          );
-        } on Exception catch (e) {
+          commentsList.add(ThreadViewComment.fromJson(item));
+        } on Object catch (e) {
           if (kDebugMode) {
             debugPrint('⚠️ Skipping malformed comment: $e');
           }
@@ -35,9 +35,10 @@ class CommentsResponse {
       }
     }
 
+    final cursor = json['cursor'];
     return CommentsResponse(
       post: json['post'],
-      cursor: json['cursor'] as String?,
+      cursor: cursor is String ? cursor : null,
       comments: commentsList,
     );
   }
@@ -56,18 +57,30 @@ class ThreadViewComment {
   }) : replies = replies == null ? null : List.unmodifiable(replies);
 
   factory ThreadViewComment.fromJson(Map<String, dynamic> json) {
+    // Parse replies with the same skip-malformed guard as the top level,
+    // so one bad nested reply drops only itself (and its subtree), not
+    // every ancestor up to the thread root.
+    final repliesData = json['replies'];
+    List<ThreadViewComment>? repliesList;
+    if (repliesData is List) {
+      repliesList = <ThreadViewComment>[];
+      for (final item in repliesData) {
+        if (item is! Map<String, dynamic>) {
+          continue;
+        }
+        try {
+          repliesList.add(ThreadViewComment.fromJson(item));
+        } on Object catch (e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ Skipping malformed reply: $e');
+          }
+        }
+      }
+    }
+
     return ThreadViewComment(
       comment: CommentView.fromJson(json['comment'] as Map<String, dynamic>),
-      replies:
-          json['replies'] != null
-              ? (json['replies'] as List<dynamic>)
-                  .map(
-                    (item) => ThreadViewComment.fromJson(
-                      item as Map<String, dynamic>,
-                    ),
-                  )
-                  .toList()
-              : null,
+      replies: repliesList,
       hasMore: json['hasMore'] as bool? ?? false,
     );
   }
@@ -439,20 +452,29 @@ class ActorCommentsResponse {
   /// Handles null comments array gracefully by returning an empty list.
   factory ActorCommentsResponse.fromJson(Map<String, dynamic> json) {
     final commentsData = json['comments'];
-    final List<CommentView> commentsList;
+    final commentsList = <CommentView>[];
 
-    if (commentsData == null) {
-      commentsList = [];
-    } else {
-      commentsList =
-          (commentsData as List<dynamic>)
-              .map((item) => CommentView.fromJson(item as Map<String, dynamic>))
-              .toList();
+    // Same skip-malformed guard as CommentsResponse: one bad comment must
+    // not blank the whole profile comments tab.
+    if (commentsData is List) {
+      for (final item in commentsData) {
+        if (item is! Map<String, dynamic>) {
+          continue;
+        }
+        try {
+          commentsList.add(CommentView.fromJson(item));
+        } on Object catch (e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ Skipping malformed actor comment: $e');
+          }
+        }
+      }
     }
 
+    final cursor = json['cursor'];
     return ActorCommentsResponse(
       comments: commentsList,
-      cursor: json['cursor'] as String?,
+      cursor: cursor is String ? cursor : null,
     );
   }
 

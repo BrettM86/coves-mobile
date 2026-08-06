@@ -25,7 +25,9 @@ import 'retry_interceptor.dart';
 /// Features automatic token refresh on 401 responses:
 /// - When a 401 is received, attempts to refresh the token
 /// - Retries the original request with the new token
-/// - If refresh fails, signs out the user
+/// - If refresh fails, propagates the error - sign-out is owned by the
+///   token refresher (AuthProvider.refreshToken); sign-out here happens
+///   only when a 401 persists after a successful refresh
 class CovesApiService {
   CovesApiService({
     Future<String?> Function()? tokenGetter,
@@ -165,26 +167,20 @@ class CovesApiService {
                 }
               }
 
-              // Refresh failed, sign out the user
+              // Refresh failed. Do NOT sign out here: the refresher owns
+              // that decision and already signed out if the session was
+              // definitively rejected. A false return may just mean a
+              // transient network failure, and signing out would destroy
+              // a valid session.
               if (kDebugMode) {
-                debugPrint('❌ Token refresh failed, signing out user');
-              }
-              if (_signOutHandler != null) {
-                await _signOutHandler();
+                debugPrint('❌ Token refresh failed, propagating error');
               }
             } catch (e) {
+              // Same rule as above: an exception here (from the refresher
+              // or from retrying the original request) is not evidence the
+              // session is dead, so never sign out - just propagate.
               if (kDebugMode) {
                 debugPrint('❌ Error during token refresh: $e');
-              }
-              // Only sign out if we haven't already (avoid double sign-out)
-              // Check if this is a DioException from a retried request
-              final isRetriedRequest =
-                  e is DioException &&
-                  e.response?.statusCode == 401 &&
-                  e.requestOptions.extra['retried'] == true;
-
-              if (!isRetriedRequest && _signOutHandler != null) {
-                await _signOutHandler();
               }
             }
           }

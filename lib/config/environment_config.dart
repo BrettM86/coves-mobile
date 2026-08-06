@@ -55,8 +55,10 @@ class EnvironmentConfig {
   );
 
   /// Flutter flavor passed via --flavor flag
-  /// This is set automatically by Flutter build system
-  static const String _flavor = String.fromEnvironment('FLUTTER_FLAVOR');
+  /// FLUTTER_APP_FLAVOR is the define the Flutter build system actually
+  /// injects for --flavor builds (there is no FLUTTER_FLAVOR define -
+  /// reading that name silently falls through to production).
+  static const String _flavor = String.fromEnvironment('FLUTTER_APP_FLAVOR');
 
   /// Explicit environment override via --dart-define=ENVIRONMENT=local
   /// Also supports --dart-define=ENV=dev for convenience

@@ -4,6 +4,8 @@
 // GET /xrpc/social.coves.community.list
 // POST /xrpc/social.coves.community.post.create
 
+import 'package:flutter/foundation.dart';
+
 import '../constants/embed_types.dart';
 
 /// Response from GET /xrpc/social.coves.community.list
@@ -11,25 +13,32 @@ class CommunitiesResponse {
   CommunitiesResponse({required this.communities, this.cursor});
 
   factory CommunitiesResponse.fromJson(Map<String, dynamic> json) {
-    // Handle null communities array from backend
+    // Handle a null or non-list communities array from the backend
     final communitiesData = json['communities'];
-    final List<CommunityView> communitiesList;
+    final communitiesList = <CommunityView>[];
 
-    if (communitiesData == null) {
-      // Backend returned null, use empty list
-      communitiesList = [];
-    } else {
-      // Parse community items
-      communitiesList = (communitiesData as List<dynamic>)
-          .map(
-            (item) => CommunityView.fromJson(item as Map<String, dynamic>),
-          )
-          .toList();
+    // Parse community items, skipping any that fail to parse so one
+    // malformed community never kills the whole list. `on Object` because
+    // a bad cast raises a TypeError, which escapes `on Exception`.
+    if (communitiesData is List) {
+      for (final item in communitiesData) {
+        if (item is! Map<String, dynamic>) {
+          continue;
+        }
+        try {
+          communitiesList.add(CommunityView.fromJson(item));
+        } on Object catch (e) {
+          if (kDebugMode) {
+            debugPrint('⚠️ Skipping malformed community: $e');
+          }
+        }
+      }
     }
 
+    final cursor = json['cursor'];
     return CommunitiesResponse(
       communities: communitiesList,
-      cursor: json['cursor'] as String?,
+      cursor: cursor is String ? cursor : null,
     );
   }
 

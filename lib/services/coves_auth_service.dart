@@ -453,6 +453,17 @@ class CovesAuthService {
         print('Status code: ${e.response?.statusCode}');
       }
 
+      // The race-discard rule applies to failures too: if sign-out or
+      // re-login replaced the session mid-flight, this outcome belongs to
+      // a session that no longer exists. Without this check a stale 401
+      // would be classified as SessionExpiredException below, and the
+      // caller would sign out the race winner's freshly created session.
+      if (!identical(_session, sessionAtStart)) {
+        const error = SessionRefreshDiscardedException();
+        _refreshCompleter!.completeError(error);
+        return _refreshCompleter!.future;
+      }
+
       // 401 means session is invalid/expired - caller should sign out.
       // Typed so callers can distinguish "definitively dead" from transient
       // refresh failures (which must NOT destroy the session on the

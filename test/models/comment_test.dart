@@ -138,6 +138,18 @@ void main() {
       expect(response.cursor, null);
       expect(response.comments.length, 1);
     });
+
+    test('should treat a wrong-typed cursor as absent', () {
+      final json = {
+        'post': {'uri': 'at://test/post/123'},
+        'cursor': 12345,
+        'comments': <dynamic>[],
+      };
+
+      final response = CommentsResponse.fromJson(json);
+
+      expect(response.cursor, null);
+    });
   });
 
   group('ThreadViewComment', () {
@@ -201,6 +213,62 @@ void main() {
       expect(thread.replies!.length, 1);
       expect(thread.replies![0].comment.uri, 'at://did:plc:test/comment/2');
       expect(thread.replies![0].comment.content, 'Reply comment');
+    });
+
+    test('should skip malformed nested replies but keep the parent and '
+        'valid siblings', () {
+      final json = {
+        'comment': {
+          'uri': 'at://did:plc:test/comment/1',
+          'cid': 'cid1',
+          'record': {'content': 'Parent comment'},
+          'createdAt': '2025-01-01T12:00:00Z',
+          'indexedAt': '2025-01-01T12:00:00Z',
+          'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+          'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+          'stats': {'upvotes': 5, 'downvotes': 1, 'score': 4},
+        },
+        'replies': [
+          {
+            'comment': {
+              'uri': 'at://did:plc:test/comment/good',
+              'cid': 'cid-good',
+              'record': {'content': 'Valid reply'},
+              'createdAt': '2025-01-01T13:00:00Z',
+              'indexedAt': '2025-01-01T13:00:00Z',
+              'author': {'did': 'did:plc:author2', 'handle': 'test.user2'},
+              'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+              'stats': {'upvotes': 3, 'downvotes': 0, 'score': 3},
+            },
+            'hasMore': false,
+          },
+          {
+            // Malformed: missing required cid raises a TypeError (an
+            // Error, not an Exception) during CommentView parsing
+            'comment': {
+              'uri': 'at://did:plc:test/comment/bad',
+              'record': {'content': 'Broken reply'},
+              'createdAt': '2025-01-01T13:00:00Z',
+              'indexedAt': '2025-01-01T13:00:00Z',
+              'author': {'did': 'did:plc:author3', 'handle': 'test.user3'},
+              'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+              'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
+            },
+            'hasMore': false,
+          },
+          // Not even a map - a federated record gone completely wrong
+          'garbage',
+        ],
+        'hasMore': false,
+      };
+
+      final thread = ThreadViewComment.fromJson(json);
+
+      // The parent survives and only the malformed reply is dropped
+      expect(thread.comment.uri, 'at://did:plc:test/comment/1');
+      expect(thread.replies, isNotNull);
+      expect(thread.replies!.length, 1);
+      expect(thread.replies![0].comment.uri, 'at://did:plc:test/comment/good');
     });
 
     test('should default hasMore to false when missing', () {
@@ -866,6 +934,70 @@ void main() {
           ),
         ),
       );
+    });
+  });
+
+  group('ActorCommentsResponse', () {
+    Map<String, dynamic> validComment(String suffix) => {
+          'uri': 'at://did:plc:test/comment/$suffix',
+          'cid': 'cid-$suffix',
+          'record': {'content': 'Comment $suffix'},
+          'createdAt': '2025-01-01T12:00:00Z',
+          'indexedAt': '2025-01-01T12:00:00Z',
+          'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+          'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+          'stats': {'upvotes': 1, 'downvotes': 0, 'score': 1},
+        };
+
+    test('should parse valid JSON with comments and cursor', () {
+      final json = {
+        'comments': [validComment('1'), validComment('2')],
+        'cursor': 'next-page',
+      };
+
+      final response = ActorCommentsResponse.fromJson(json);
+
+      expect(response.comments.length, 2);
+      expect(response.comments[0].uri, 'at://did:plc:test/comment/1');
+      expect(response.cursor, 'next-page');
+    });
+
+    test('should skip malformed comments but keep valid ones', () {
+      final malformed = validComment('bad')..remove('cid');
+      final json = {
+        'comments': [
+          validComment('1'),
+          malformed, // missing cid raises a TypeError, not an Exception
+          'garbage', // not even a map
+          validComment('2'),
+        ],
+      };
+
+      final response = ActorCommentsResponse.fromJson(json);
+
+      expect(response.comments.length, 2);
+      expect(response.comments[0].uri, 'at://did:plc:test/comment/1');
+      expect(response.comments[1].uri, 'at://did:plc:test/comment/2');
+    });
+
+    test('should handle null or non-list comments array', () {
+      expect(
+        ActorCommentsResponse.fromJson({'comments': null}).comments,
+        isEmpty,
+      );
+      expect(
+        ActorCommentsResponse.fromJson({'comments': 'nope'}).comments,
+        isEmpty,
+      );
+    });
+
+    test('should treat a wrong-typed cursor as absent', () {
+      final json = {
+        'comments': <dynamic>[],
+        'cursor': 42,
+      };
+
+      expect(ActorCommentsResponse.fromJson(json).cursor, null);
     });
   });
 }

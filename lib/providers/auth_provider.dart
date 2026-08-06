@@ -39,9 +39,6 @@ class AuthProvider with ChangeNotifier {
   ///
   /// Returns the sealed token for API authentication.
   /// The token is opaque to the client - backend handles everything.
-  ///
-  /// If token refresh fails, attempts to refresh automatically.
-  /// If refresh fails, signs out the user.
   Future<String?> getAccessToken() async {
     if (_session == null) {
       return null;
@@ -146,10 +143,9 @@ class AuthProvider with ChangeNotifier {
         print('Restored session rejected by backend - attempting refresh');
       }
 
-      // Call the service directly rather than [refreshToken]: that method
-      // signs out on ANY failure (appropriate for its 401-interceptor
-      // callers), while this proactive probe must only sign out when the
-      // backend definitively rejects the session.
+      // Call the service directly rather than [refreshToken] so this probe
+      // can distinguish the race-discard case and keep its own logging;
+      // both paths sign out only on [SessionExpiredException].
       try {
         final refreshedSession = await _authService.refreshToken();
         if (_session?.token != validatedToken) {
@@ -282,7 +278,11 @@ class AuthProvider with ChangeNotifier {
   /// Calls the backend's /oauth/refresh endpoint.
   /// The backend handles the actual PDS token refresh internally.
   ///
-  /// Returns true if refresh succeeded, false otherwise.
+  /// Returns true if refresh succeeded, false otherwise. Owns the
+  /// sign-out decision: signs out only when the backend definitively
+  /// rejects the session ([SessionExpiredException]); transient failures
+  /// (network, 5xx) keep the session. Callers must not sign out on a
+  /// false return - a false may just mean the network blipped.
   Future<bool> refreshToken() async {
     if (_session == null) {
       return false;
@@ -307,13 +307,21 @@ class AuthProvider with ChangeNotifier {
       // The session state is already whatever the race winner made it -
       // signing out here would destroy a freshly created session.
       return false;
-    } on Exception catch (e) {
+    } on SessionExpiredException {
+      // The backend definitively rejected the session (refresh 401):
+      // it is dead and only a new sign-in can recover.
       if (kDebugMode) {
-        print('Token refresh failed: $e');
+        print('Session expired - signing out');
       }
-
-      // If refresh fails, sign out the user
       await signOut();
+      return false;
+    } on Exception catch (e) {
+      // Transient failure (network drop, timeout, 5xx): the session may
+      // still be perfectly valid, so keep it. The caller's request fails
+      // like any other network error and the next 401 retriggers refresh.
+      if (kDebugMode) {
+        print('Token refresh failed transiently (session kept): $e');
+      }
       return false;
     }
   }

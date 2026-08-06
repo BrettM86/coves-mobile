@@ -335,6 +335,63 @@ void main() {
         },
       );
 
+      test(
+        'should discard a refresh 401 when the session changes while the '
+        'request is in flight (must not become SessionExpiredException)',
+        () async {
+          const sessionA = CovesSession(
+            token: 'token-a',
+            did: 'did:plc:test123',
+            sessionId: 'session-a',
+          );
+          when(
+            mockStorage.read(key: storageKey),
+          ).thenAnswer((_) async => sessionA.toJsonString());
+          await authService.restoreSession();
+
+          final gate = Completer<Response<Map<String, dynamic>>>();
+          when(
+            mockDio.post<Map<String, dynamic>>(
+              '/oauth/refresh',
+              data: anyNamed('data'),
+            ),
+          ).thenAnswer((_) => gate.future);
+
+          final pending = authService.refreshToken();
+
+          // Re-login replaces the session while the refresh is in flight.
+          const sessionB = CovesSession(
+            token: 'token-b',
+            did: 'did:plc:other456',
+            sessionId: 'session-b',
+          );
+          when(
+            mockStorage.read(key: storageKey),
+          ).thenAnswer((_) async => sessionB.toJsonString());
+          await authService.restoreSession();
+
+          // The stale session's refresh comes back 401. Classifying it as
+          // SessionExpiredException would make AuthProvider sign out the
+          // race winner's freshly created session.
+          gate.completeError(
+            DioException(
+              requestOptions: RequestOptions(path: '/oauth/refresh'),
+              type: DioExceptionType.badResponse,
+              response: Response(
+                requestOptions: RequestOptions(path: '/oauth/refresh'),
+                statusCode: 401,
+              ),
+            ),
+          );
+
+          await expectLater(
+            pending,
+            throwsA(isA<SessionRefreshDiscardedException>()),
+          );
+          expect(authService.session?.token, 'token-b');
+        },
+      );
+
       test('should throw Exception on network error during refresh', () async {
         // Arrange - First restore a session
         const session = CovesSession(
