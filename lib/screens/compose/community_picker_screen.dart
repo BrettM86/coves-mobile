@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
 import '../../models/community.dart';
-import '../../providers/auth_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 
@@ -46,27 +45,18 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
   String? _cursor;
   bool _hasMore = true;
   Timer? _searchDebounce;
-  CovesApiService? _apiService;
+  // Shared app-wide API client (owned by main.dart) — do not dispose here
+  late final CovesApiService _apiService;
 
   @override
   void initState() {
     super.initState();
+    _apiService = context.read<CovesApiService>();
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(_onScroll);
-    // Defer API initialization to first frame to access context
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initApiService();
       _loadCommunities();
     });
-  }
-
-  void _initApiService() {
-    final authProvider = context.read<AuthProvider>();
-    _apiService = CovesApiService(
-      tokenGetter: authProvider.getAccessToken,
-      tokenRefresher: authProvider.refreshToken,
-      signOutHandler: authProvider.signOut,
-    );
   }
 
   @override
@@ -74,7 +64,6 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
     _searchController.dispose();
     _scrollController.dispose();
     _searchDebounce?.cancel();
-    _apiService?.dispose();
     super.dispose();
   }
 
@@ -120,7 +109,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
   }
 
   Future<void> _loadCommunities() async {
-    if (_isLoading || _apiService == null) {
+    if (_isLoading) {
       return;
     }
 
@@ -130,7 +119,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
     });
 
     try {
-      final response = await _apiService!.listCommunities(
+      final response = await _apiService.listCommunities(
         limit: 50,
       );
 
@@ -161,7 +150,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
   }
 
   Future<void> _loadMoreCommunities() async {
-    if (_isLoadingMore || !_hasMore || _cursor == null || _apiService == null) {
+    if (_isLoadingMore || !_hasMore || _cursor == null) {
       return;
     }
 
@@ -170,7 +159,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
     });
 
     try {
-      final response = await _apiService!.listCommunities(
+      final response = await _apiService.listCommunities(
         limit: 50,
         cursor: _cursor,
       );

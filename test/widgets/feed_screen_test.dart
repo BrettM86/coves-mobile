@@ -58,7 +58,8 @@ class FakeVoteProvider extends VoteProvider {
 
 // Fake CommunitySubscriptionProvider that never touches the network
 class FakeCommunitySubscriptionProvider extends CommunitySubscriptionProvider {
-  FakeCommunitySubscriptionProvider({required super.authProvider});
+  FakeCommunitySubscriptionProvider({required super.authProvider})
+    : super(apiService: CovesApiService());
 
   @override
   Future<void> loadSubscribedCommunities() async {
@@ -68,7 +69,8 @@ class FakeCommunitySubscriptionProvider extends CommunitySubscriptionProvider {
 
 // Fake MultiFeedProvider for testing
 class FakeMultiFeedProvider extends MultiFeedProvider {
-  FakeMultiFeedProvider() : super(FakeAuthProvider());
+  FakeMultiFeedProvider()
+    : super(FakeAuthProvider(), apiService: CovesApiService());
 
   final Map<FeedType, FeedState> _states = {
     FeedType.discover: FeedState.initial(),

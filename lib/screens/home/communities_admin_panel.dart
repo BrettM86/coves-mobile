@@ -8,7 +8,6 @@ import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../models/community.dart';
 import '../../models/picked_image.dart';
-import '../../providers/auth_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../utils/image_crop_utils.dart';
@@ -57,8 +56,8 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
   final TextEditingController _communityHandleController =
       TextEditingController();
 
-  // API service (cached to avoid repeated instantiation)
-  CovesApiService? _apiService;
+  // Shared app-wide API client (owned by main.dart) — do not dispose here
+  late final CovesApiService _apiService;
 
   // Form state
   bool _isSubmitting = false;
@@ -88,6 +87,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
   @override
   void initState() {
     super.initState();
+    _apiService = context.read<CovesApiService>();
     _nameController.addListener(_onTextChanged);
     _displayNameController.addListener(_onTextChanged);
     _descriptionController.addListener(_onTextChanged);
@@ -103,7 +103,6 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
     _displayNameController.dispose();
     _descriptionController.dispose();
     _communityHandleController.dispose();
-    _apiService?.dispose();
     super.dispose();
   }
 
@@ -144,19 +143,6 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
     return true;
   }
 
-  /// Gets or creates the cached API service
-  CovesApiService _getApiService() {
-    if (_apiService == null) {
-      final authProvider = context.read<AuthProvider>();
-      _apiService = CovesApiService(
-        tokenGetter: authProvider.getAccessToken,
-        tokenRefresher: authProvider.refreshToken,
-        signOutHandler: authProvider.signOut,
-      );
-    }
-    return _apiService!;
-  }
-
   Future<void> _createCommunity() async {
     if (!_isFormValid || _isSubmitting) return;
 
@@ -168,9 +154,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
     });
 
     try {
-      final apiService = _getApiService();
-
-      final response = await apiService.createCommunity(
+      final response = await _apiService.createCommunity(
         name: _nameController.text.trim().toLowerCase(),
         displayName: _displayNameController.text.trim(),
         description: _descriptionController.text.trim(),
@@ -292,8 +276,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
     });
 
     try {
-      final apiService = _getApiService();
-      final response = await apiService.listCommunities();
+      final response = await _apiService.listCommunities();
 
       if (mounted) {
         if (kDebugMode) {
@@ -1053,9 +1036,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
         );
       }
 
-      final apiService = _getApiService();
-
-      await apiService.updateCommunity(
+      await _apiService.updateCommunity(
         communityDid: _selectedCommunity!.did,
         imageBytes: imageBytes,
         mimeType: mimeType,

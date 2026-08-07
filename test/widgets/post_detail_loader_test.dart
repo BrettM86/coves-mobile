@@ -9,6 +9,7 @@ import 'package:coves_flutter/screens/home/post_detail_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
+import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:coves_flutter/widgets/loading_error_states.dart';
 import 'package:flutter/material.dart';
@@ -135,6 +136,7 @@ void main() {
       authProvider: fakeAuthProvider,
       voteProvider: voteProvider,
       commentService: CommentService(),
+      apiService: CovesApiService(),
     );
 
     await tester.pumpWidget(
@@ -187,6 +189,7 @@ void main() {
       authProvider: fakeAuthProvider,
       voteProvider: voteProvider,
       commentService: CommentService(),
+      apiService: CovesApiService(),
     );
 
     await tester.pumpWidget(
@@ -429,18 +432,22 @@ void main() {
     expect(find.text('Post Unavailable'), findsNothing);
   });
 
-  testWidgets('default fetcher resolves AuthProvider without throwing', (
-    tester,
-  ) async {
-    // No injected fetcher: the loader must build its own CovesApiService
-    // from AuthProvider. The test HTTP client fails every request, so the
-    // loader should land in a terminal (error or not-found) state - the
-    // point is that it never throws ProviderNotFoundException or hangs.
+  testWidgets('default fetcher resolves the shared CovesApiService '
+      'from the widget tree', (tester) async {
+    // No injected fetcher: the loader must read the app-wide
+    // Provider<CovesApiService>. The test HTTP client fails every request,
+    // so the loader should land in a terminal (error or not-found) state
+    // via a real fetch attempt - never hang on the loading state.
     final fakeAuthProvider = FakeAuthProvider();
+    final apiService = CovesApiService(tokenGetter: () async => null);
+    addTearDown(apiService.dispose);
 
     await tester.pumpWidget(
-      ChangeNotifierProvider<AuthProvider>.value(
-        value: fakeAuthProvider,
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthProvider>.value(value: fakeAuthProvider),
+          Provider<CovesApiService>.value(value: apiService),
+        ],
         child: const MaterialApp(home: PostDetailLoader(postUri: testUri)),
       ),
     );
@@ -452,10 +459,26 @@ void main() {
         tester.any(find.byType(NotFoundError)) ||
         tester.any(find.byType(FullScreenError));
     expect(reachedTerminalState, isTrue);
+  });
 
-    // Unmount to exercise disposal of the lazily created API service
-    await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+  testWidgets('missing Provider<CovesApiService> degrades to the error '
+      'state instead of crashing', (tester) async {
+    // Documents (rather than accidentally blesses) the DI-misconfiguration
+    // mode: without the provider, _resolveFetcher throws
+    // ProviderNotFoundException, which _fetch's broad catch converts into
+    // the terminal error UI.
+    final fakeAuthProvider = FakeAuthProvider();
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AuthProvider>.value(
+        value: fakeAuthProvider,
+        child: const MaterialApp(home: PostDetailLoader(postUri: testUri)),
+      ),
+    );
     await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(FullScreenError), findsOneWidget);
   });
 
   group('PostDetailScreen.displayedCommentCount', () {

@@ -213,11 +213,8 @@ class _PostCardActionsState extends State<PostCardActions> {
       if (!context.mounted) return;
       final messenger = ScaffoldMessenger.of(context);
 
-      final apiService = CovesApiService(
-        tokenGetter: authProvider.getAccessToken,
-        tokenRefresher: authProvider.refreshToken,
-        signOutHandler: authProvider.signOut,
-      );
+      // Shared app-wide API client (owned by main.dart) — do not dispose
+      final apiService = context.read<CovesApiService>();
 
       try {
         await apiService.deletePost(uri: post.post.uri);
@@ -288,7 +285,6 @@ class _PostCardActionsState extends State<PostCardActions> {
           );
         }
       } finally {
-        apiService.dispose();
         if (mounted) {
           setState(() => _isDeleting = false);
         }

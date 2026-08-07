@@ -45,7 +45,8 @@ class CommunityFeedScreen extends StatefulWidget {
 }
 
 class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
-  CovesApiService? _apiService;
+  // Shared app-wide API client (owned by main.dart) — do not dispose here
+  late final CovesApiService _apiService;
   final ScrollController _scrollController = ScrollController();
 
   // Tab state
@@ -75,6 +76,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   @override
   void initState() {
     super.initState();
+    _apiService = context.read<CovesApiService>();
     _community = widget.community;
     _scrollController.addListener(_onScroll);
 
@@ -88,20 +90,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
-    _apiService?.dispose();
     super.dispose();
-  }
-
-  CovesApiService _getApiService() {
-    if (_apiService == null) {
-      final authProvider = context.read<AuthProvider>();
-      _apiService = CovesApiService(
-        tokenGetter: authProvider.getAccessToken,
-        tokenRefresher: authProvider.refreshToken,
-        signOutHandler: authProvider.signOut,
-      );
-    }
-    return _apiService!;
   }
 
   void _onScroll() {
@@ -142,8 +131,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     });
 
     try {
-      final apiService = _getApiService();
-      final community = await apiService.getCommunity(
+      final community = await _apiService.getCommunity(
         community: widget.identifier,
       );
 
@@ -192,8 +180,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     });
 
     try {
-      final apiService = _getApiService();
-      final response = await apiService.getCommunityFeed(
+      final response = await _apiService.getCommunityFeed(
         community: widget.identifier,
         sort: _feedSort,
         cursor: refresh ? null : _cursor,
@@ -236,8 +223,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     });
 
     try {
-      final apiService = _getApiService();
-      final response = await apiService.getCommunityFeed(
+      final response = await _apiService.getCommunityFeed(
         community: widget.identifier,
         sort: _feedSort,
         cursor: _cursor,

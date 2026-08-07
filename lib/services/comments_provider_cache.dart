@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../providers/comments_provider.dart';
 import '../providers/vote_provider.dart';
 import 'comment_service.dart';
+import 'coves_api_service.dart';
 
 /// Comments Provider Cache
 ///
@@ -29,10 +30,12 @@ class CommentsProviderCache {
     required AuthProvider authProvider,
     required VoteProvider voteProvider,
     required CommentService commentService,
+    required CovesApiService apiService,
     this.maxSize = 15,
   }) : _authProvider = authProvider,
        _voteProvider = voteProvider,
-       _commentService = commentService {
+       _commentService = commentService,
+       _apiService = apiService {
     _wasAuthenticated = _authProvider.isAuthenticated;
     _authProvider.addListener(_onAuthChanged);
   }
@@ -40,6 +43,7 @@ class CommentsProviderCache {
   final AuthProvider _authProvider;
   final VoteProvider _voteProvider;
   final CommentService _commentService;
+  final CovesApiService _apiService;
 
   /// Maximum number of providers to cache
   final int maxSize;
@@ -125,6 +129,7 @@ class CommentsProviderCache {
     // Create new provider
     final provider = CommentsProvider(
       _authProvider,
+      apiService: _apiService,
       voteProvider: _voteProvider,
       commentService: _commentService,
       postUri: postUri,

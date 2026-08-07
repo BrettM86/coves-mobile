@@ -117,6 +117,19 @@ Future<Widget> bootstrapCovesApp() async {
     );
   }
 
+  // Single app-wide Coves API client (one Dio stack / connection pool).
+  // Constructed once here and injected everywhere — providers via
+  // constructor, widgets via Provider<CovesApiService>. Never construct
+  // ad-hoc instances elsewhere: they would miss future auth wiring and
+  // leak their Dio stack. This instance lives for the whole app and is
+  // intentionally never disposed; CovesApiService.dispose() exists for
+  // test-local instances only.
+  final apiService = CovesApiService(
+    tokenGetter: authProvider.getAccessToken,
+    tokenRefresher: authProvider.refreshToken,
+    signOutHandler: authProvider.signOut,
+  );
+
   // Initialize vote service with auth callbacks
   // Votes go through the Coves backend (which proxies to PDS with DPoP)
   // Includes token refresh and sign-out handlers for automatic 401 recovery
@@ -147,18 +160,19 @@ Future<Widget> bootstrapCovesApp() async {
               authProvider: authProvider,
             ),
       ),
+      // Expose the shared API client so screens/widgets can context.read it
+      Provider<CovesApiService>.value(value: apiService),
       ChangeNotifierProvider(
         create:
-            (_) => CommunitySubscriptionProvider(authProvider: authProvider),
+            (_) => CommunitySubscriptionProvider(
+              authProvider: authProvider,
+              apiService: apiService,
+            ),
       ),
       ChangeNotifierProvider(
         create:
             (_) => BlockProvider(
-              apiService: CovesApiService(
-                tokenGetter: () async => authProvider.session?.token,
-                tokenRefresher: authProvider.refreshToken,
-                signOutHandler: authProvider.signOut,
-              ),
+              apiService: apiService,
               authProvider: authProvider,
             ),
       ),
@@ -171,6 +185,7 @@ Future<Widget> bootstrapCovesApp() async {
         create:
             (context) => MultiFeedProvider(
               authProvider,
+              apiService: apiService,
               voteProvider: context.read<VoteProvider>(),
               subscriptionProvider:
                   context.read<CommunitySubscriptionProvider>(),
@@ -180,6 +195,7 @@ Future<Widget> bootstrapCovesApp() async {
           return previous ??
               MultiFeedProvider(
                 auth,
+                apiService: apiService,
                 voteProvider: vote,
                 subscriptionProvider: subscription,
               );
@@ -193,6 +209,7 @@ Future<Widget> bootstrapCovesApp() async {
               authProvider: authProvider,
               voteProvider: context.read<VoteProvider>(),
               commentService: commentService,
+              apiService: apiService,
             ),
         update: (context, auth, vote, previous) {
           // Reuse existing cache
@@ -201,6 +218,7 @@ Future<Widget> bootstrapCovesApp() async {
                 authProvider: auth,
                 voteProvider: vote,
                 commentService: commentService,
+                apiService: apiService,
               );
         },
         dispose: (_, cache) => cache.dispose(),
@@ -216,12 +234,28 @@ Future<Widget> bootstrapCovesApp() async {
         create:
             (context) => UserProfileProvider(
               authProvider,
+              apiService: apiService,
               voteProvider: context.read<VoteProvider>(),
+              commentService: commentService,
             ),
         update: (context, auth, vote, previous) {
+          // The shared apiService/commentService auth callbacks are bound
+          // to the bootstrap AuthProvider instance; a different instance
+          // flowing through here would leave them stale.
+          assert(
+            identical(auth, authProvider),
+            'AuthProvider instance changed: shared service auth callbacks '
+            'are bound to the bootstrap instance',
+          );
           // Propagate auth changes to existing provider
           previous?.updateAuthProvider(auth);
-          return previous ?? UserProfileProvider(auth, voteProvider: vote);
+          return previous ??
+              UserProfileProvider(
+                auth,
+                apiService: apiService,
+                voteProvider: vote,
+                commentService: commentService,
+              );
         },
       ),
     ],

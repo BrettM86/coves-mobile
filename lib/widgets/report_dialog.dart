@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
-import '../providers/auth_provider.dart';
 import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
 
@@ -91,18 +90,16 @@ class _ReportDialogState extends State<ReportDialog> {
       _error = null;
     });
 
+    // Shared app-wide API client (owned by main.dart) — do not dispose.
+    // Read before the first await: the dialog can be dismissed during the
+    // haptic call, deactivating this context.
+    final apiService = context.read<CovesApiService>();
+
     try {
       await HapticFeedback.lightImpact();
     } on PlatformException {
       // Haptics not supported
     }
-
-    final authProvider = context.read<AuthProvider>();
-    final apiService = CovesApiService(
-      tokenGetter: authProvider.getAccessToken,
-      tokenRefresher: authProvider.refreshToken,
-      signOutHandler: authProvider.signOut,
-    );
 
     try {
       await apiService.submitReport(
@@ -136,8 +133,6 @@ class _ReportDialogState extends State<ReportDialog> {
           _isSubmitting = false;
         });
       }
-    } finally {
-      apiService.dispose();
     }
   }
 

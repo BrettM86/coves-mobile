@@ -15,62 +15,37 @@ import 'vote_provider.dart';
 /// Manages state for user profile pages including profile data and
 /// author posts feed. Supports viewing both own profile and other users.
 ///
-/// IMPORTANT: Accepts AuthProvider reference to fetch fresh access
-/// tokens before each authenticated request (critical for atProto OAuth
-/// token rotation).
+/// The [CovesApiService] is injected (shared app-wide, owned by main.dart)
+/// and must not be disposed here. Its auth callbacks are bound to the
+/// app-level [AuthProvider], so they stay valid across auth state changes.
 class UserProfileProvider with ChangeNotifier {
   UserProfileProvider(
     AuthProvider authProvider, {
-    CovesApiService? apiService,
+    required CovesApiService apiService,
+    required CommentService commentService,
     VoteProvider? voteProvider,
-    CommentService? commentService,
   }) : _authProvider = authProvider,
+       _apiService = apiService,
+       _commentService = commentService,
        _voteProvider = voteProvider {
-    _apiService =
-        apiService ??
-        CovesApiService(
-          tokenGetter: _authProvider.getAccessToken,
-          tokenRefresher: _authProvider.refreshToken,
-          signOutHandler: _authProvider.signOut,
-        );
-
-    // Create CommentService if not provided (for delete functionality)
-    _commentService =
-        commentService ??
-        CommentService(
-          sessionGetter: () async => _authProvider.session,
-          tokenRefresher: _authProvider.refreshToken,
-          signOutHandler: _authProvider.signOut,
-        );
-
     // Listen to auth state changes
     _authProvider.addListener(_onAuthChanged);
   }
 
   AuthProvider _authProvider;
   final VoteProvider? _voteProvider;
-  late final CommentService _commentService;
+  final CommentService _commentService;
 
   /// Update auth provider reference (called by ChangeNotifierProxyProvider)
-  ///
-  /// This ensures token refresh and sign-out handlers stay in sync when
-  /// auth state changes propagate through the provider tree.
   void updateAuthProvider(AuthProvider newAuth) {
     if (_authProvider != newAuth) {
       _authProvider.removeListener(_onAuthChanged);
       _authProvider = newAuth;
       _authProvider.addListener(_onAuthChanged);
-      // Recreate API service with new auth callbacks
-      _apiService.dispose();
-      _apiService = CovesApiService(
-        tokenGetter: _authProvider.getAccessToken,
-        tokenRefresher: _authProvider.refreshToken,
-        signOutHandler: _authProvider.signOut,
-      );
     }
   }
 
-  late CovesApiService _apiService;
+  final CovesApiService _apiService;
 
   // Profile state
   UserProfile? _profile;
@@ -677,7 +652,6 @@ class UserProfileProvider with ChangeNotifier {
   @override
   void dispose() {
     _authProvider.removeListener(_onAuthChanged);
-    _apiService.dispose();
     super.dispose();
   }
 }

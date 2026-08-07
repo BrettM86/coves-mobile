@@ -52,6 +52,22 @@ void main() {
       commentsProvider.dispose();
     });
 
+    test('dispose does not dispose the injected shared api service', () {
+      // The api service is app-lifetime and owned by main.dart; an
+      // LRU-evicted CommentsProvider closing it would break every other
+      // consumer's requests.
+      commentsProvider.dispose();
+      verifyNever(mockApiService.dispose());
+      // Recreate so the group tearDown's dispose() targets a live provider
+      commentsProvider = CommentsProvider(
+        mockAuthProvider,
+        postUri: testPostUri,
+        postCid: testPostCid,
+        apiService: mockApiService,
+        voteProvider: mockVoteProvider,
+      );
+    });
+
     group('loadComments', () {
       test('should load comments successfully', () async {
         final mockComments = [

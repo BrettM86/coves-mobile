@@ -8,7 +8,6 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../../constants/app_colors.dart';
 import '../../models/community.dart';
-import '../../providers/auth_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../utils/community_search_utils.dart';
@@ -47,26 +46,18 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
   String? _cursor;
   bool _hasMore = true;
   Timer? _searchDebounce;
-  CovesApiService? _apiService;
+  // Shared app-wide API client (owned by main.dart) — do not dispose here
+  late final CovesApiService _apiService;
 
   @override
   void initState() {
     super.initState();
+    _apiService = context.read<CovesApiService>();
     _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initApiService();
       _loadCommunities();
     });
-  }
-
-  void _initApiService() {
-    final authProvider = context.read<AuthProvider>();
-    _apiService = CovesApiService(
-      tokenGetter: authProvider.getAccessToken,
-      tokenRefresher: authProvider.refreshToken,
-      signOutHandler: authProvider.signOut,
-    );
   }
 
   @override
@@ -74,7 +65,6 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
     _searchController.dispose();
     _scrollController.dispose();
     _searchDebounce?.cancel();
-    _apiService?.dispose();
     super.dispose();
   }
 
@@ -108,13 +98,6 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
 
   Future<void> _loadCommunities() async {
     if (_isLoading) return;
-    if (_apiService == null) {
-      setState(() {
-        _error = 'Unable to connect. Please try again.';
-        _isLoading = false;
-      });
-      return;
-    }
 
     setState(() {
       _isLoading = true;
@@ -122,7 +105,7 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
     });
 
     try {
-      final response = await _apiService!.listCommunities(
+      final response = await _apiService.listCommunities(
         limit: 50,
         sort: widget.sort,
         subscribed: widget.subscribed,
@@ -160,20 +143,13 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
 
   Future<void> _loadMoreCommunities() async {
     if (_isLoadingMore || !_hasMore || _cursor == null) return;
-    if (_apiService == null) {
-      setState(() {
-        _error = 'Unable to connect. Please try again.';
-        _isLoadingMore = false;
-      });
-      return;
-    }
 
     setState(() {
       _isLoadingMore = true;
     });
 
     try {
-      final response = await _apiService!.listCommunities(
+      final response = await _apiService.listCommunities(
         limit: 50,
         cursor: _cursor,
         sort: widget.sort,

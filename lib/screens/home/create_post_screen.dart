@@ -171,13 +171,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
     try {
       final authProvider = context.read<AuthProvider>();
-
-      // Create API service with auth
-      final apiService = CovesApiService(
-        tokenGetter: authProvider.getAccessToken,
-        tokenRefresher: authProvider.refreshToken,
-        signOutHandler: authProvider.signOut,
-      );
+      // Shared app-wide API client (owned by main.dart)
+      final apiService = context.read<CovesApiService>();
 
       // Build embed if URL is provided
       ExternalEmbedInput? embed;

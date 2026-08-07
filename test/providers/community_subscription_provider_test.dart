@@ -73,6 +73,18 @@ void main() {
       authProvider.dispose();
     });
 
+    test('dispose does not dispose the injected shared api service', () {
+      // The api service is app-lifetime and owned by main.dart; disposing
+      // it here would close the shared Dio stack for the whole app.
+      provider.dispose();
+      verifyNever(mockApiService.dispose());
+      // Recreate so the group tearDown's dispose() targets a live provider
+      provider = CommunitySubscriptionProvider(
+        authProvider: authProvider,
+        apiService: mockApiService,
+      );
+    });
+
     test('toggle-then-refetch: user toggle beats a stale server seed',
         () async {
       await provider.toggleSubscription(communityDid: did);

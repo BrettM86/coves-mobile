@@ -22,28 +22,17 @@ enum FeedType {
 /// Manages independent state for multiple feeds (Discover and For You).
 /// Each feed maintains its own posts, scroll position, and pagination state.
 ///
-/// IMPORTANT: Accepts AuthProvider reference to fetch fresh access
-/// tokens before each authenticated request (critical for atProto OAuth
-/// token rotation).
+/// The [CovesApiService] is injected (shared app-wide, owned by main.dart)
+/// and must not be disposed here.
 class MultiFeedProvider with ChangeNotifier {
   MultiFeedProvider(
     this._authProvider, {
-    CovesApiService? apiService,
+    required CovesApiService apiService,
     VoteProvider? voteProvider,
     CommunitySubscriptionProvider? subscriptionProvider,
-  })  : _voteProvider = voteProvider,
+  })  : _apiService = apiService,
+        _voteProvider = voteProvider,
         _subscriptionProvider = subscriptionProvider {
-    // Use injected service (for testing) or create new one (for production)
-    // Pass token getter, refresh handler, and sign out handler to API service
-    // for automatic fresh token retrieval and automatic token refresh on 401
-    _apiService =
-        apiService ??
-        CovesApiService(
-          tokenGetter: _authProvider.getAccessToken,
-          tokenRefresher: _authProvider.refreshToken,
-          signOutHandler: _authProvider.signOut,
-        );
-
     // Track initial auth state
     _wasAuthenticated = _authProvider.isAuthenticated;
 
@@ -83,7 +72,7 @@ class MultiFeedProvider with ChangeNotifier {
   }
 
   final AuthProvider _authProvider;
-  late final CovesApiService _apiService;
+  final CovesApiService _apiService;
   final VoteProvider? _voteProvider;
   final CommunitySubscriptionProvider? _subscriptionProvider;
 
@@ -440,7 +429,6 @@ class MultiFeedProvider with ChangeNotifier {
     stopTimeUpdates();
     // Remove auth listener to prevent memory leaks
     _authProvider.removeListener(_onAuthChanged);
-    _apiService.dispose();
     super.dispose();
   }
 }

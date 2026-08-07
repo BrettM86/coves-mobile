@@ -28,27 +28,17 @@ class CommentsProvider with ChangeNotifier {
     this._authProvider, {
     required String postUri,
     required String postCid,
-    CovesApiService? apiService,
+    required CovesApiService apiService,
     VoteProvider? voteProvider,
     CommentService? commentService,
     List<Duration>? indexingRetryDelays,
   }) : _postUri = postUri,
        _postCid = postCid,
+       _apiService = apiService,
        _voteProvider = voteProvider,
        _commentService = commentService,
        _indexingRetryDelays =
-           indexingRetryDelays ?? _defaultIndexingRetryDelays {
-    // Use injected service (for testing) or create new one (for production)
-    // Pass token getter, refresh handler, and sign out handler to API service
-    // for automatic fresh token retrieval and automatic token refresh on 401
-    _apiService =
-        apiService ??
-        CovesApiService(
-          tokenGetter: _authProvider.getAccessToken,
-          tokenRefresher: _authProvider.refreshToken,
-          signOutHandler: _authProvider.signOut,
-        );
-  }
+           indexingRetryDelays ?? _defaultIndexingRetryDelays;
 
   /// Maximum comment length in characters (matches backend limit)
   /// Note: This counts Unicode grapheme clusters, so emojis count correctly
@@ -67,7 +57,7 @@ class CommentsProvider with ChangeNotifier {
   ];
 
   final AuthProvider _authProvider;
-  late final CovesApiService _apiService;
+  final CovesApiService _apiService;
   final VoteProvider? _voteProvider;
   final CommentService? _commentService;
   final List<Duration> _indexingRetryDelays;
@@ -970,8 +960,6 @@ class CommentsProvider with ChangeNotifier {
     _isDisposed = true;
     // Stop time updates and cancel timer (also sets value to null)
     stopTimeUpdates();
-    // Dispose API service
-    _apiService.dispose();
     // Dispose the ValueNotifier last
     _currentTimeNotifier.dispose();
     super.dispose();

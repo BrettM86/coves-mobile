@@ -46,9 +46,6 @@ class PostDetailLoader extends StatefulWidget {
 }
 
 class _PostDetailLoaderState extends State<PostDetailLoader> {
-  /// API service created for the default fetcher (null when injected)
-  CovesApiService? _apiService;
-
   /// Result of the fetch, null while loading or on error
   PostGetResult? _result;
 
@@ -76,12 +73,6 @@ class _PostDetailLoaderState extends State<PostDetailLoader> {
     }
   }
 
-  @override
-  void dispose() {
-    _apiService?.dispose();
-    super.dispose();
-  }
-
   /// Resets state, invalidates in-flight fetches, and starts a new load.
   ///
   /// Callers must ensure a rebuild is already scheduled (initState,
@@ -105,7 +96,7 @@ class _PostDetailLoaderState extends State<PostDetailLoader> {
     setState(_startLoad);
   }
 
-  /// Resolves the fetcher: injected override or a lazily created API service
+  /// Resolves the fetcher: injected override or the shared API service
   PostFetcher _resolveFetcher() {
     final injected = widget.fetchPost;
     if (injected != null) {
@@ -113,13 +104,7 @@ class _PostDetailLoaderState extends State<PostDetailLoader> {
     }
 
     // context.read doesn't subscribe, so it's safe outside of build
-    final authProvider = context.read<AuthProvider>();
-    _apiService ??= CovesApiService(
-      tokenGetter: () async => authProvider.session?.token,
-      tokenRefresher: authProvider.refreshToken,
-      signOutHandler: authProvider.signOut,
-    );
-    return _apiService!.getPost;
+    return context.read<CovesApiService>().getPost;
   }
 
   Future<void> _fetch() async {

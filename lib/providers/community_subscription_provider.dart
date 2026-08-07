@@ -13,15 +13,9 @@ import 'auth_provider.dart';
 class CommunitySubscriptionProvider with ChangeNotifier {
   CommunitySubscriptionProvider({
     required AuthProvider authProvider,
-    CovesApiService? apiService,
+    required CovesApiService apiService,
   }) : _authProvider = authProvider,
-       _apiService =
-           apiService ??
-           CovesApiService(
-             tokenGetter: () async => authProvider.session?.token,
-             tokenRefresher: authProvider.refreshToken,
-             signOutHandler: authProvider.signOut,
-           ) {
+       _apiService = apiService {
     // Listen to auth state changes and clear subscriptions on sign-out
     _authProvider.addListener(_onAuthChanged);
   }

@@ -42,7 +42,10 @@ class FakeVoteProvider extends VoteProvider {
 /// CommunitySubscriptionProvider whose initial load is a no-op, so no
 /// pending timers or network calls leak into a test.
 class FakeSubscriptionProvider extends CommunitySubscriptionProvider {
-  FakeSubscriptionProvider({required super.authProvider, super.apiService});
+  FakeSubscriptionProvider({
+    required super.authProvider,
+    CovesApiService? apiService,
+  }) : super(apiService: apiService ?? tokenlessApiService());
 
   @override
   Future<void> loadSubscribedCommunities() async {}
@@ -62,6 +65,12 @@ List<SingleChildWidget> postCardProviders({
   StreamableService? streamableService,
 }) {
   return [
+    // PostCardActions' delete flow and ReportDialog read the shared API
+    // client from the tree, mirroring the app-level wiring in main.dart.
+    Provider<CovesApiService>(
+      create: (_) => tokenlessApiService(),
+      dispose: (_, service) => service.dispose(),
+    ),
     ChangeNotifierProvider<AuthProvider>.value(value: auth),
     ChangeNotifierProvider<VoteProvider>(create: (_) => FakeVoteProvider(auth)),
     ChangeNotifierProvider<CommunitySubscriptionProvider>(

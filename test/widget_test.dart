@@ -3,6 +3,7 @@ import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/community_guidelines_provider.dart';
 import 'package:coves_flutter/providers/eula_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
+import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -47,8 +48,16 @@ void main() {
           ChangeNotifierProvider<CommunityGuidelinesProvider>(
             create: (_) => FakeGuidelinesProvider(),
           ),
+          Provider<CovesApiService>(
+            create: (_) => CovesApiService(tokenGetter: () async => null),
+            dispose: (_, service) => service.dispose(),
+          ),
           ChangeNotifierProvider(
-            create: (_) => MultiFeedProvider(authProvider),
+            create:
+                (context) => MultiFeedProvider(
+                  authProvider,
+                  apiService: context.read<CovesApiService>(),
+                ),
           ),
         ],
         child: const CovesApp(),

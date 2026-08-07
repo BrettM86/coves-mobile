@@ -64,32 +64,23 @@ class _CommunitiesDiscoveryScreenState
   String? _newError;
 
   bool _hasLoaded = false;
-  CovesApiService? _apiService;
+  // Shared app-wide API client (owned by main.dart) — do not dispose here
+  late final CovesApiService _apiService;
 
   @override
   void initState() {
     super.initState();
+    _apiService = context.read<CovesApiService>();
     _searchController.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initApiService();
       _loadAllSections();
     });
-  }
-
-  void _initApiService() {
-    final authProvider = context.read<AuthProvider>();
-    _apiService = CovesApiService(
-      tokenGetter: authProvider.getAccessToken,
-      tokenRefresher: authProvider.refreshToken,
-      signOutHandler: authProvider.signOut,
-    );
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _searchDebounce?.cancel();
-    _apiService?.dispose();
     super.dispose();
   }
 
@@ -116,19 +107,6 @@ class _CommunitiesDiscoveryScreenState
       _isLoadingNew = true;
       if (isAuthenticated) _isLoadingSubscribed = true;
     });
-
-    // Guard against null API service (initialization may have failed)
-    if (_apiService == null) {
-      setState(() {
-        _subscribedError = 'Service not initialized. Pull to retry.';
-        _popularError = 'Service not initialized. Pull to retry.';
-        _newError = 'Service not initialized. Pull to retry.';
-        _isLoadingSubscribed = false;
-        _isLoadingPopular = false;
-        _isLoadingNew = false;
-      });
-      return;
-    }
 
     // Fire all requests in parallel
     await Future.wait([
@@ -159,7 +137,7 @@ class _CommunitiesDiscoveryScreenState
     required String fallbackError,
   }) async {
     try {
-      final response = await _apiService!.listCommunities(
+      final response = await _apiService.listCommunities(
         limit: limit,
         sort: sort,
         subscribed: subscribed,
@@ -272,42 +250,13 @@ class _CommunitiesDiscoveryScreenState
   }
 
   Future<void> _loadFullCommunityList(String query) async {
-    if (_apiService == null) {
-      // Fall back to partial data if API service isn't initialized
-      if (kDebugMode) {
-        debugPrint(
-          'CommunitiesDiscoveryScreen: _apiService is null during search, '
-          'falling back to partial data',
-        );
-      }
-      unawaited(
-        Sentry.addBreadcrumb(
-          Breadcrumb(
-            message: 'Search fell back to partial data: _apiService was null',
-            category: 'communities.search',
-            level: SentryLevel.warning,
-          ),
-        ),
-      );
-      _allCommunities = _deduplicateCommunities([
-        ..._subscribedCommunities,
-        ..._popularCommunities,
-        ..._newCommunities,
-      ]);
-      setState(() {
-        _isUsingPartialData = _allCommunities.isNotEmpty;
-      });
-      _applySearchFilter(query);
-      return;
-    }
-
     setState(() {
       _isLoadingFullList = true;
       _searchQuery = query;
     });
 
     try {
-      final response = await _apiService!.listCommunities(limit: 100);
+      final response = await _apiService.listCommunities(limit: 100);
 
       if (mounted) {
         _allCommunities = response.communities;

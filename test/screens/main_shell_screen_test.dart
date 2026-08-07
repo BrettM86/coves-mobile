@@ -8,6 +8,7 @@ import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/providers/user_profile_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/main_shell_screen.dart';
+import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter/material.dart';
@@ -42,7 +43,8 @@ class FakeVoteProvider extends VoteProvider {
 
 // Fake CommunitySubscriptionProvider that never touches the network
 class FakeCommunitySubscriptionProvider extends CommunitySubscriptionProvider {
-  FakeCommunitySubscriptionProvider({required super.authProvider});
+  FakeCommunitySubscriptionProvider({required super.authProvider})
+    : super(apiService: CovesApiService());
 
   @override
   Future<void> loadSubscribedCommunities() async {
@@ -52,7 +54,8 @@ class FakeCommunitySubscriptionProvider extends CommunitySubscriptionProvider {
 
 // Fake MultiFeedProvider that never touches the network
 class FakeMultiFeedProvider extends MultiFeedProvider {
-  FakeMultiFeedProvider() : super(FakeAuthProvider());
+  FakeMultiFeedProvider()
+    : super(FakeAuthProvider(), apiService: CovesApiService());
 
   @override
   FeedState getState(FeedType type) => FeedState.initial();
@@ -91,7 +94,11 @@ void main() {
         apiService: CovesApiService(),
         authProvider: fakeAuthProvider,
       );
-      profileProvider = UserProfileProvider(fakeAuthProvider);
+      profileProvider = UserProfileProvider(
+        fakeAuthProvider,
+        apiService: CovesApiService(),
+        commentService: CommentService(),
+      );
       navigatorKey = GlobalKey<NavigatorState>();
     });
 
@@ -117,6 +124,7 @@ void main() {
       await tester.pumpWidget(
         MultiProvider(
           providers: [
+            Provider<CovesApiService>(create: (_) => CovesApiService()),
             ChangeNotifierProvider<AuthProvider>.value(value: fakeAuthProvider),
             ChangeNotifierProvider<MultiFeedProvider>.value(
               value: fakeFeedProvider,
