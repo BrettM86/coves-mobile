@@ -1,9 +1,14 @@
 import 'package:coves_flutter/models/community.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/screens/home/create_post_screen.dart';
+import 'package:coves_flutter/services/api_exceptions.dart';
+import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
+
+import '../test_helpers/test_mocks.dart';
 
 // Fake AuthProvider for testing
 class FakeAuthProvider extends AuthProvider {
@@ -382,6 +387,145 @@ void main() {
 
       // Verify text was entered
       expect(find.text('This is my post content'), findsOneWidget);
+    });
+  });
+
+  group('CreatePostScreen URL validation', () {
+    // The composer's URL field is the only place a user-typed uri becomes an
+    // ExternalEmbedInput posted to the backend. It must enforce the same
+    // allowlist as every other url check in the app: an http/https scheme
+    // (exact, not "starts with http") AND a non-empty host.
+    late FakeAuthProvider fakeAuthProvider;
+    late MockCovesApiService mockApiService;
+
+    const kInvalidUrlMessage = 'Please enter a valid URL (http or https)';
+
+    setUp(() {
+      fakeAuthProvider = FakeAuthProvider();
+      mockApiService = MockCovesApiService();
+
+      when(
+        mockApiService.listCommunities(
+          limit: anyNamed('limit'),
+          cursor: anyNamed('cursor'),
+          sort: anyNamed('sort'),
+          subscribed: anyNamed('subscribed'),
+        ),
+      ).thenAnswer(
+        (_) async => CommunitiesResponse(
+          communities: [
+            CommunityView(
+              did: 'did:plc:community',
+              name: 'testcove',
+              displayName: 'Test Cove',
+            ),
+          ],
+        ),
+      );
+
+      // Any createPost that does happen is short-circuited so the screen
+      // never navigates to PostDetailScreen; the assertion of interest is
+      // whether it was called at all.
+      when(
+        mockApiService.createPost(
+          community: anyNamed('community'),
+          title: anyNamed('title'),
+          content: anyNamed('content'),
+          facets: anyNamed('facets'),
+          embed: anyNamed('embed'),
+          langs: anyNamed('langs'),
+          labels: anyNamed('labels'),
+        ),
+      ).thenThrow(ApiException('stubbed - should not have been called'));
+    });
+
+    Widget createTestWidget() {
+      return MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthProvider>.value(value: fakeAuthProvider),
+          Provider<CovesApiService>.value(value: mockApiService),
+        ],
+        child: const MaterialApp(home: CreatePostScreen()),
+      );
+    }
+
+    /// Opens the community picker and selects the single stubbed community,
+    /// which is the only way to make the form (and the Post button) valid.
+    Future<void> selectCommunity(WidgetTester tester) async {
+      await tester.tap(find.text('Select a community'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Test Cove'));
+      await tester.pumpAndSettle();
+    }
+
+    void verifyCreatePostNeverCalled() {
+      verifyNever(
+        mockApiService.createPost(
+          community: anyNamed('community'),
+          title: anyNamed('title'),
+          content: anyNamed('content'),
+          facets: anyNamed('facets'),
+          embed: anyNamed('embed'),
+          langs: anyNamed('langs'),
+          labels: anyNamed('labels'),
+        ),
+      );
+    }
+
+    Future<void> submitWithUrl(WidgetTester tester, String url) async {
+      await tester.pumpWidget(createTestWidget());
+      await tester.pumpAndSettle();
+
+      await selectCommunity(tester);
+
+      await tester.enterText(find.widgetWithText(TextField, 'URL'), url);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(TextButton, 'Post'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('rejects a scheme that merely starts with http', (
+      tester,
+    ) async {
+      await submitWithUrl(tester, 'httpx://evil.com');
+
+      expect(find.text(kInvalidUrlMessage), findsOneWidget);
+      verifyCreatePostNeverCalled();
+    });
+
+    testWidgets('rejects an https scheme with no host', (tester) async {
+      await submitWithUrl(tester, 'https:///nohost');
+
+      expect(find.text(kInvalidUrlMessage), findsOneWidget);
+      verifyCreatePostNeverCalled();
+    });
+
+    testWidgets('rejects a non-web scheme', (tester) async {
+      await submitWithUrl(tester, 'javascript:alert(1)');
+
+      expect(find.text(kInvalidUrlMessage), findsOneWidget);
+      verifyCreatePostNeverCalled();
+    });
+
+    testWidgets('accepts a well-formed https url', (tester) async {
+      await submitWithUrl(tester, 'https://example.com/article');
+
+      // Positive control: the harness really can reach _handleSubmit, so a
+      // failing rejection test above is the validator's fault, not the
+      // fixture's.
+      expect(find.text(kInvalidUrlMessage), findsNothing);
+      verify(
+        mockApiService.createPost(
+          community: anyNamed('community'),
+          title: anyNamed('title'),
+          content: anyNamed('content'),
+          facets: anyNamed('facets'),
+          embed: anyNamed('embed'),
+          langs: anyNamed('langs'),
+          labels: anyNamed('labels'),
+        ),
+      ).called(1);
     });
   });
 }

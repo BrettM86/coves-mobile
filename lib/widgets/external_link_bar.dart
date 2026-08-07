@@ -1,9 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
 import '../models/post.dart';
+import '../utils/url_display.dart';
 import '../utils/url_launcher.dart';
+import 'media/favicon.dart';
 
 /// External link bar widget for displaying clickable links
 ///
@@ -33,7 +34,7 @@ class ExternalLinkBar extends StatelessWidget {
           child: Row(
             children: [
               // Favicon
-              _buildFavicon(),
+              Favicon(embed.uri, domain: embed.domain),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -59,73 +60,16 @@ class ExternalLinkBar extends StatelessWidget {
     );
   }
 
-  /// Extracts the domain from the embed
+  /// The domain to show in the bar.
+  ///
+  /// The record's own `domain` wins when it has one; otherwise the host is
+  /// parsed out of the uri, and a uri with no host is shown whole so the row
+  /// is never blank.
   String _extractDomain() {
-    // Use domain field if available
-    if (embed.domain != null && embed.domain!.isNotEmpty) {
-      return embed.domain!;
+    final declared = embed.domain;
+    if (declared != null && declared.isNotEmpty) {
+      return declared;
     }
-
-    // Otherwise parse from URI
-    try {
-      final uri = Uri.parse(embed.uri);
-      if (uri.host.isNotEmpty) {
-        return uri.host;
-      }
-    } on FormatException {
-      // Invalid URI, fall through to fallback
-    }
-
-    // Fallback to full URI if domain extraction fails
-    return embed.uri;
-  }
-
-  /// Builds the favicon widget
-  Widget _buildFavicon() {
-    // Extract domain for favicon URL
-    var domain = embed.domain;
-    if (domain == null || domain.isEmpty) {
-      try {
-        final uri = Uri.parse(embed.uri);
-        domain = uri.host;
-      } on FormatException {
-        domain = null;
-      }
-    }
-
-    if (domain == null || domain.isEmpty) {
-      // Fallback to link icon if we can't get the domain
-      return Icon(
-        Icons.link,
-        size: 18,
-        color: AppColors.textPrimary.withValues(alpha: 0.7),
-      );
-    }
-
-    // Use Google's favicon service
-    final faviconUrl =
-        'https://www.google.com/s2/favicons?domain=$domain&sz=32';
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: CachedNetworkImage(
-        imageUrl: faviconUrl,
-        width: 18,
-        height: 18,
-        fit: BoxFit.cover,
-        placeholder:
-            (context, url) => Icon(
-              Icons.link,
-              size: 18,
-              color: AppColors.textPrimary.withValues(alpha: 0.7),
-            ),
-        errorWidget:
-            (context, url, error) => Icon(
-              Icons.link,
-              size: 18,
-              color: AppColors.textPrimary.withValues(alpha: 0.7),
-            ),
-      ),
-    );
+    return domainOf(embed.uri) ?? embed.uri;
   }
 }

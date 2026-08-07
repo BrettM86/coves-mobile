@@ -226,4 +226,70 @@ void main() {
       expect(copy.post, same(feedItem.post));
     });
   });
+
+  group('EmbedSource.fromJson url policy', () {
+    // A megathread source uri is rendered as a tappable outbound link, so it
+    // must satisfy the same allowlist the rest of the app enforces: an
+    // http/https scheme AND a non-empty host. A scheme-only uri carries an
+    // allowed scheme with no authority at all and must be rejected too.
+    test('accepts an http(s) uri with a host', () {
+      final source = EmbedSource.fromJson({
+        'uri': 'https://example.com/article',
+        'title': 'Article',
+        'domain': 'example.com',
+      });
+
+      expect(source.uri, 'https://example.com/article');
+      expect(source.title, 'Article');
+      expect(source.domain, 'example.com');
+    });
+
+    test('accepts an uppercase scheme', () {
+      expect(
+        EmbedSource.fromJson({'uri': 'HTTPS://example.com'}).uri,
+        'HTTPS://example.com',
+      );
+    });
+
+    test('rejects a disallowed scheme', () {
+      for (final uri in const [
+        'javascript:alert(1)',
+        'file:///etc/passwd',
+        'data:text/html,<h1>x</h1>',
+        'content://media/external/images/1',
+        'httpx://evil.com',
+      ]) {
+        expect(
+          () => EmbedSource.fromJson({'uri': uri}),
+          throwsA(isA<FormatException>()),
+          reason: uri,
+        );
+      }
+    });
+
+    test('rejects an allowed scheme with no host', () {
+      for (final uri in const ['https:///nohost', 'http:foo', 'http://']) {
+        expect(
+          () => EmbedSource.fromJson({'uri': uri}),
+          throwsA(isA<FormatException>()),
+          reason: uri,
+        );
+      }
+    });
+
+    test('rejects a missing or empty uri', () {
+      expect(
+        () => EmbedSource.fromJson(<String, dynamic>{}),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => EmbedSource.fromJson({'uri': ''}),
+        throwsA(isA<FormatException>()),
+      );
+      expect(
+        () => EmbedSource.fromJson({'uri': 42}),
+        throwsA(isA<FormatException>()),
+      );
+    });
+  });
 }

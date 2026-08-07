@@ -7,6 +7,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../constants/embed_types.dart';
+import '../utils/url_policy.dart';
 import 'bluesky_post.dart';
 import 'facet.dart';
 
@@ -635,25 +636,10 @@ class EmbedAspectRatio {
 /// The appview's hydration no-ops on `#view` types and the firehose consumer
 /// stores embeds verbatim, so a federated repo can publish a pre-stamped view
 /// carrying `file://`, `content://` or `javascript:` urls. The model is the
-/// last line of defence, so the allowlist here is the same one
-/// `UrlLauncher` enforces for outbound links: http and https only.
-bool _isRenderableMediaUrl(String url) {
-  if (url.isEmpty) {
-    return false;
-  }
-
-  final parsed = Uri.tryParse(url);
-  if (parsed == null) {
-    return false;
-  }
-
-  // Uri lowercases the scheme while parsing, but compare case-insensitively
-  // anyway so 'HTTPS://…' cannot turn on a future refactor. The host check
-  // matters too: 'http:foo' and 'https:///path' carry an allowed scheme
-  // with no authority at all.
-  final scheme = parsed.scheme.toLowerCase();
-  return (scheme == 'http' || scheme == 'https') && parsed.host.isNotEmpty;
-}
+/// last line of defence, so it applies the app-wide web allowlist —
+/// [isAllowedWebUrl], the same predicate `UrlLauncher` enforces for outbound
+/// links: http(s) with a host.
+bool _isRenderableMediaUrl(String url) => isAllowedWebUrl(url);
 
 /// Lexicon caps for a hydrated gallery: at most 8 images, alt text at most
 /// 10000 characters.
@@ -806,11 +792,8 @@ class EmbedSource {
       );
     }
 
-    // Validate URI scheme for security
-    final parsedUri = Uri.tryParse(uri);
-    if (parsedUri == null ||
-        !parsedUri.hasScheme ||
-        !['http', 'https'].contains(parsedUri.scheme.toLowerCase())) {
+    // Validate URI scheme and host for security
+    if (!isAllowedWebUrl(uri)) {
       throw FormatException(
         'EmbedSource: URI has invalid or unsupported scheme: $uri',
       );

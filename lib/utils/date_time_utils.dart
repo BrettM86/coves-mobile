@@ -1,8 +1,9 @@
 /// DateTime utility functions
 ///
-/// Provides reusable time formatting and number formatting utilities.
-/// All functions accept current time as parameter to enable testing
-/// without relying on DateTime.now().
+/// Provides reusable time formatting utilities. All functions accept current
+/// time as parameter to enable testing without relying on DateTime.now().
+///
+/// Number formatting lives in `DisplayUtils.formatCount`.
 class DateTimeUtils {
   // Private constructor to prevent instantiation
   DateTimeUtils._();
@@ -30,22 +31,6 @@ class DateTimeUtils {
     } else {
       final years = (difference.inDays / 365).floor();
       return '${years}yr';
-    }
-  }
-
-  /// Format large numbers with 'k' suffix for thousands
-  ///
-  /// Examples:
-  /// - 0-999: "0", "42", "999"
-  /// - 1000+: "1.0k", "5.2k", "12.5k"
-  ///
-  /// [count] is the number to format
-  static String formatCount(int count) {
-    if (count < 1000) {
-      return count.toString();
-    } else {
-      final thousands = count / 1000;
-      return '${thousands.toStringAsFixed(1)}k';
     }
   }
 

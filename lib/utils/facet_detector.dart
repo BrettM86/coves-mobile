@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../models/facet.dart';
+import 'url_policy.dart';
 
 class FacetDetector {
   // Private constructor to prevent instantiation
@@ -64,7 +65,7 @@ class FacetDetector {
       final normalizedUrl = _normalizeUrl(trimmed);
 
       // Validate the normalized URL
-      if (!_isValidUrl(normalizedUrl)) {
+      if (!isAllowedWebUrl(normalizedUrl)) {
         continue;
       }
 
@@ -186,34 +187,4 @@ class FacetDetector {
     return 'https://$trimmed';
   }
 
-  /// Validate that a string is a valid URL
-  ///
-  /// Basic validation to ensure the URL has a valid scheme and host.
-  static bool _isValidUrl(String url) {
-    if (url.isEmpty) {
-      return false;
-    }
-
-    final uri = Uri.tryParse(url);
-    if (uri == null) {
-      return false;
-    }
-
-    // Must have a scheme (http or https)
-    if (!uri.hasScheme) {
-      return false;
-    }
-
-    final scheme = uri.scheme.toLowerCase();
-    if (scheme != 'http' && scheme != 'https') {
-      return false;
-    }
-
-    // Must have a host
-    if (!uri.hasAuthority || uri.host.isEmpty) {
-      return false;
-    }
-
-    return true;
-  }
 }

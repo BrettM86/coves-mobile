@@ -9,6 +9,7 @@ import '../../providers/auth_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../utils/facet_detector.dart';
+import '../../utils/url_policy.dart';
 import '../compose/community_picker_screen.dart';
 import 'post_detail_screen.dart';
 
@@ -179,8 +180,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       final url = _urlController.text.trim();
       if (url.isNotEmpty) {
         // Validate URL
-        final uri = Uri.tryParse(url);
-        if (uri == null || !uri.hasScheme || (!uri.scheme.startsWith('http'))) {
+        if (!isAllowedWebUrl(url)) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

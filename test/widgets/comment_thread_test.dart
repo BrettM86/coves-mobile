@@ -48,6 +48,7 @@ void main() {
     String content = 'Test comment',
     String handle = 'test.user',
     int replyCount = 0,
+    int score = 4,
     bool isDeleted = false,
     String? deletionReason,
   }) {
@@ -66,7 +67,7 @@ void main() {
       stats: CommentStats(
         upvotes: 5,
         downvotes: 1,
-        score: 4,
+        score: score,
         replyCount: replyCount,
       ),
     );
@@ -77,6 +78,7 @@ void main() {
     required String uri,
     String content = 'Test comment',
     int replyCount = 0,
+    int score = 4,
     bool isDeleted = false,
     String? deletionReason,
     List<ThreadViewComment>? replies,
@@ -88,6 +90,7 @@ void main() {
         uri: uri,
         content: content,
         replyCount: replyCount,
+        score: score,
         isDeleted: isDeleted,
         deletionReason: deletionReason,
       ),
@@ -146,6 +149,30 @@ void main() {
       await tester.pumpWidget(createTestWidget(thread));
 
       expect(find.text('Hello, world!'), findsOneWidget);
+    });
+
+    testWidgets('formats the vote score through the canonical formatter', (
+      tester,
+    ) async {
+      // CommentCard must agree with every other count surface: uppercase
+      // K/M via DisplayUtils.formatCount.
+      final thread = createThread(uri: 'comment/1', score: 5234);
+
+      await tester.pumpWidget(createTestWidget(thread));
+
+      expect(find.text('5.2K'), findsOneWidget);
+      expect(find.text('5.2k'), findsNothing);
+    });
+
+    testWidgets('formats a millions-scale vote score with an M suffix', (
+      tester,
+    ) async {
+      final thread = createThread(uri: 'comment/1', score: 1500000);
+
+      await tester.pumpWidget(createTestWidget(thread));
+
+      expect(find.text('1.5M'), findsOneWidget);
+      expect(find.text('1500.0k'), findsNothing);
     });
 
     testWidgets('renders nested replies when depth < maxDepth',

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,6 +7,8 @@ import '../../constants/app_colors.dart';
 import '../../models/community.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
+import '../../utils/display_utils.dart';
+import '../../widgets/community_avatar.dart';
 
 /// Community Picker Screen
 ///
@@ -368,63 +369,11 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
     );
   }
 
-  Widget _buildCommunityAvatar(CommunityView community) {
-    final fallbackChild = CircleAvatar(
-      radius: 20,
-      backgroundColor: AppColors.backgroundSecondary,
-      foregroundColor: Colors.white,
-      child: Text(
-        community.name.isNotEmpty ? community.name[0].toUpperCase() : '?',
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-
-    if (community.avatar == null) {
-      return fallbackChild;
-    }
-
-    return CachedNetworkImage(
-      imageUrl: community.avatar!,
-      imageBuilder: (context, imageProvider) => CircleAvatar(
-        radius: 20,
-        backgroundColor: AppColors.backgroundSecondary,
-        backgroundImage: imageProvider,
-      ),
-      placeholder: (context, url) => CircleAvatar(
-        radius: 20,
-        backgroundColor: AppColors.backgroundSecondary,
-        child: const SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppColors.primary,
-          ),
-        ),
-      ),
-      errorWidget: (context, url, error) => fallbackChild,
-    );
-  }
-
   Widget _buildCommunityTile(CommunityView community) {
-    // Format member count
-    String formatCount(int? count) {
-      if (count == null) {
-        return '0';
-      }
-      if (count >= 1000000) {
-        return '${(count / 1000000).toStringAsFixed(1)}M';
-      } else if (count >= 1000) {
-        return '${(count / 1000).toStringAsFixed(1)}K';
-      }
-      return count.toString();
-    }
-
-    final memberCount = formatCount(community.memberCount);
-    final subscriberCount = formatCount(community.subscriberCount);
+    final memberCount = DisplayUtils.formatCount(community.memberCount ?? 0);
+    final subscriberCount = DisplayUtils.formatCount(
+      community.subscriberCount ?? 0,
+    );
 
     // Build description line
     var descriptionLine = '';
@@ -463,7 +412,12 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
           child: Row(
             children: [
               // Avatar
-              _buildCommunityAvatar(community),
+              CommunityAvatar(
+                name: community.name,
+                avatarUrl: community.avatar,
+                size: 40,
+                showLoadingIndicator: true,
+              ),
               const SizedBox(width: 12),
 
               // Community info

@@ -10,50 +10,25 @@ import '../services/streamable_service.dart';
 import '../utils/community_handle_utils.dart';
 import '../utils/date_time_utils.dart';
 import 'bluesky_post_card.dart';
+import 'community_avatar.dart';
 import 'external_link_bar.dart';
-import 'fullscreen_video_player.dart';
 import 'image_viewer.dart';
+import 'media/media_surface.dart';
+import 'media/native_image_embed.dart';
+import 'media/native_video_embed.dart';
+import 'media/streamable_video_embed.dart';
 import 'post_card_actions.dart';
 import 'rich_text_renderer.dart';
 import 'source_link_bar.dart';
 import 'tappable_author.dart';
 import 'tappable_community.dart';
+import 'user_avatar.dart';
 
-/// Widest and tallest aspect ratios (width/height) the feed will render media
-/// at. Clamping keeps a panorama from becoming a sliver and a tall portrait
-/// shot from swallowing the whole viewport. The 3:4 floor lets a standard
-/// phone-camera portrait through uncropped; only taller shots (9:16
-/// screenshots, stories) get center-cropped.
-const double _widestMediaRatio = 16 / 9;
-const double _tallestMediaRatio = 3 / 4;
-
-/// Resolves the display aspect ratio for an image, clamped to the feed range.
-/// Media with no declared ratio renders at the 16:9 ceiling.
-double _mediaAspectRatio(EmbedAspectRatio? ratio) {
-  if (ratio == null) {
-    return _widestMediaRatio;
-  }
-  return (ratio.width / ratio.height).clamp(
-    _tallestMediaRatio,
-    _widestMediaRatio,
-  );
-}
-
-/// Formats a video duration as `m:ss`, switching to `h:mm:ss` from one hour.
-///
-/// Total function: a negative duration reads as `0:00` rather than throwing,
-/// since the value comes from an untrusted record.
-String formatVideoDuration(int seconds) {
-  final total = seconds < 0 ? 0 : seconds;
-  final hours = total ~/ 3600;
-  final minutes = (total % 3600) ~/ 60;
-  final paddedSeconds = (total % 60).toString().padLeft(2, '0');
-
-  if (hours > 0) {
-    return '$hours:${minutes.toString().padLeft(2, '0')}:$paddedSeconds';
-  }
-  return '$minutes:$paddedSeconds';
-}
+/// The feed's bordered frame around an external embed's thumbnail.
+const BoxDecoration _embedFrame = BoxDecoration(
+  borderRadius: BorderRadius.all(Radius.circular(8)),
+  border: Border.fromBorderSide(BorderSide(color: AppColors.border)),
+);
 
 /// Post card widget for displaying feed posts
 ///
@@ -146,7 +121,11 @@ class PostCard extends StatelessWidget {
                   // Community avatar (tappable for community navigation)
                   TappableCommunity(
                     communityDid: post.post.community.did,
-                    child: _buildCommunityAvatar(post.post.community),
+                    child: CommunityAvatar(
+                      name: post.post.community.name,
+                      avatarUrl: post.post.community.avatar,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -247,15 +226,7 @@ class PostCard extends StatelessWidget {
 
                 // Embed thumbnail
                 if (post.post.embed?.external != null) ...[
-                  _EmbedCard(
-                    embed: post.post.embed!.external!,
-                    streamableService: context.read<StreamableService>(),
-                    height: embedHeight,
-                    onImageTap:
-                        disableNavigation
-                            ? null
-                            : () => _navigateToDetail(context),
-                  ),
+                  _buildExternalEmbed(context, post.post.embed!.external!),
                   const SizedBox(height: 8),
                 ],
 
@@ -381,159 +352,43 @@ class PostCard extends StatelessWidget {
   /// "1/N" badge when the gallery holds more. Tapping opens the fullscreen
   /// viewer directly — the rest of the card still navigates to the post.
   Widget _buildImagesEmbed(BuildContext context, ImagesPostEmbed embed) {
-    final image = embed.images.first;
-    final alt = image.alt;
-
-    Widget thumbnail = ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: AspectRatio(
-        aspectRatio: _mediaAspectRatio(image.aspectRatio),
-        child: CachedNetworkImage(
-          imageUrl: image.thumb,
-          width: double.infinity,
-          fit: BoxFit.cover,
-          // Disable fade animation to prevent scroll jitter
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
-          placeholder: (context, url) => const _MediaPlaceholder(),
-          errorWidget:
-              (context, url, error) =>
-                  const _MediaPlaceholder(icon: Icons.broken_image),
-        ),
-      ),
-    );
-
-    if (alt != null && alt.isNotEmpty) {
-      thumbnail = Semantics(image: true, label: alt, child: thumbnail);
-    }
-
-    final block = GestureDetector(
-      key: const Key('post-images-embed'),
+    return NativeImageThumb(
+      images: embed.images,
+      keyPrefix: 'post',
+      // With navigation off there is nothing to activate, and the block
+      // drops its button semantics along with the handler.
       onTap:
           disableNavigation
               ? null
               : () => ImageViewer.open(context, embed.images),
-      child: Stack(
-        children: [
-          thumbnail,
-          if (embed.images.length > 1)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: _MediaBadge(
-                key: const Key('post-images-count-badge'),
-                label: '1/${embed.images.length}',
-              ),
-            ),
-        ],
-      ),
-    );
-
-    // With navigation off there is nothing to activate, and announcing a
-    // button a screen reader cannot use is worse than announcing nothing.
-    if (disableNavigation) {
-      return block;
-    }
-
-    return Semantics(
-      // An explicit container: without it this annotation is absorbed into
-      // the subtree's node, swallowing the image's alt-text label.
-      container: true,
-      explicitChildNodes: true,
-      button: true,
-      label: 'View full image',
-      child: block,
     );
   }
 
   /// Builds the video block: thumbnail or dark placeholder, a play overlay,
   /// and the duration when the record carried one.
+  ///
+  /// Media plays in place even when [disableNavigation] is set — it is
+  /// playback, not navigation.
   Widget _buildVideoEmbed(BuildContext context, VideoPostEmbed embed) {
-    final thumbnail = embed.thumbnail;
-    final duration = embed.duration;
-    final alt = embed.alt;
-
-    Widget surface = AspectRatio(
-      aspectRatio: _widestMediaRatio,
-      child:
-          thumbnail != null
-              ? CachedNetworkImage(
-                imageUrl: thumbnail,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                // Disable fade animation to prevent scroll jitter
-                fadeInDuration: Duration.zero,
-                fadeOutDuration: Duration.zero,
-                placeholder: (context, url) => const _MediaPlaceholder(),
-                errorWidget:
-                    (context, url, error) =>
-                        const _MediaPlaceholder(icon: Icons.broken_image),
-              )
-              : const _MediaPlaceholder(),
-    );
-
-    if (alt != null && alt.isNotEmpty) {
-      surface = Semantics(image: true, label: alt, child: surface);
-    }
-
-    return Semantics(
-      // An explicit container: without it this annotation is absorbed into
-      // the subtree's node, and the duration badge's text displaces the
-      // label. Any future overlay (mute, GIF chip) would do the same.
-      container: true,
-      explicitChildNodes: true,
-      button: true,
-      label: 'Play video',
-      child: GestureDetector(
-        key: const Key('post-video-embed'),
-        onTap: () => _playVideo(context, embed),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              surface,
-              Container(
-                key: const Key('post-video-play-overlay'),
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: AppColors.background.withValues(alpha: 0.7),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.play_arrow,
-                  color: AppColors.textPrimary,
-                  size: 48,
-                ),
-              ),
-              if (duration != null)
-                Positioned(
-                  right: 8,
-                  bottom: 8,
-                  child: _MediaBadge(
-                    key: const Key('post-video-duration-badge'),
-                    label: formatVideoDuration(duration),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
+    return NativeVideoEmbed(embed: embed, keyPrefix: 'post');
   }
 
-  /// Opens the fullscreen player for a native video embed.
-  ///
-  /// Pushed synchronously: the embed already carries a playable URL, unlike
-  /// the Streamable flow which has to resolve one first. Media plays in place
-  /// even when [disableNavigation] is set — it is playback, not navigation.
-  void _playVideo(BuildContext context, VideoPostEmbed embed) {
-    Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (context) => FullscreenVideoPlayer(videoUrl: embed.video),
-        fullscreenDialog: true,
-      ),
+  /// Builds the external embed block: a Streamable poster the user can play
+  /// in place, or a plain link thumbnail that opens the post.
+  Widget _buildExternalEmbed(BuildContext context, ExternalEmbed embed) {
+    if (StreamableVideoEmbed.isStreamableVideo(embed)) {
+      return StreamableVideoEmbed(
+        embed: embed,
+        streamableService: context.read<StreamableService>(),
+        height: embedHeight,
+        frameDecoration: _embedFrame,
+      );
+    }
+
+    return _LinkThumbnail(
+      embed: embed,
+      height: embedHeight,
+      onTap: disableNavigation ? null : () => _navigateToDetail(context),
     );
   }
 
@@ -579,52 +434,6 @@ class PostCard extends StatelessWidget {
     );
   }
 
-  /// Builds the community avatar widget
-  Widget _buildCommunityAvatar(CommunityRef community) {
-    if (community.avatar != null && community.avatar!.isNotEmpty) {
-      // Show real community avatar
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: CachedNetworkImage(
-          imageUrl: community.avatar!,
-          width: 24,
-          height: 24,
-          fit: BoxFit.cover,
-          // Disable fade animation to prevent scroll jitter
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
-          placeholder: (context, url) => _buildFallbackAvatar(community),
-          errorWidget: (context, url, error) => _buildFallbackAvatar(community),
-        ),
-      );
-    }
-
-    // Fallback to letter placeholder
-    return _buildFallbackAvatar(community);
-  }
-
-  /// Builds a fallback avatar with the first letter of community name
-  Widget _buildFallbackAvatar(CommunityRef community) {
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: const BoxDecoration(
-        color: AppColors.primary,
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Text(
-          community.name[0].toUpperCase(),
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-
   /// Builds author footer with avatar, handle, and timestamp
   Widget _buildAuthorFooter(BuildContext context) {
     final author = post.post.author;
@@ -640,26 +449,11 @@ class PostCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Author avatar (circular, small)
-                if (author.avatar != null && author.avatar!.isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: CachedNetworkImage(
-                      imageUrl: author.avatar!,
-                      width: 20,
-                      height: 20,
-                      fit: BoxFit.cover,
-                      // Disable fade animation to prevent scroll jitter
-                      fadeInDuration: Duration.zero,
-                      fadeOutDuration: Duration.zero,
-                      placeholder:
-                          (context, url) => _buildAuthorFallbackAvatar(author),
-                      errorWidget:
-                          (context, url, error) =>
-                              _buildAuthorFallbackAvatar(author),
-                    ),
-                  )
-                else
-                  _buildAuthorFallbackAvatar(author),
+                UserAvatar(
+                  name: author.displayName ?? author.handle,
+                  avatarUrl: author.avatar,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
 
                 // Author handle
@@ -692,206 +486,44 @@ class PostCard extends StatelessWidget {
       ),
     );
   }
-
-  /// Builds a fallback avatar for the author
-  Widget _buildAuthorFallbackAvatar(AuthorView author) {
-    final firstLetter =
-        (author.displayName ?? author.handle).isNotEmpty
-            ? (author.displayName ?? author.handle)[0]
-            : '?';
-    return Container(
-      width: 20,
-      height: 20,
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Center(
-        child: Text(
-          firstLetter.toUpperCase(),
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
 }
 
-/// Neutral dark fill behind feed media: shown while a thumbnail loads, when
-/// it fails, and for videos the AppView gave us no thumbnail for.
-class _MediaPlaceholder extends StatelessWidget {
-  const _MediaPlaceholder({this.icon});
-
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: AppColors.backgroundSecondary,
-      child:
-          icon == null
-              ? null
-              : Center(
-                child: Icon(icon, color: AppColors.textSecondary, size: 32),
-              ),
-    );
-  }
-}
-
-/// Small translucent pill overlaying media — the image count and the video
-/// duration both use it.
-class _MediaBadge extends StatelessWidget {
-  const _MediaBadge({required this.label, super.key});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.background.withValues(alpha: 0.75),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Embed card widget for displaying link previews
+/// A plain external-link preview: the embed's thumbnail in the feed's
+/// bordered frame, opening the post when tapped.
 ///
-/// Shows a thumbnail image for external embeds with loading and error states.
-/// For video embeds (Streamable), displays a play button overlay and opens
-/// a video player dialog when tapped.
-class _EmbedCard extends StatefulWidget {
-  const _EmbedCard({
-    required this.embed,
-    required this.streamableService,
-    this.height = 180,
-    this.onImageTap,
-  });
+/// Streamable videos take a different path — see [StreamableVideoEmbed],
+/// which plays in place instead of navigating.
+class _LinkThumbnail extends StatelessWidget {
+  const _LinkThumbnail({required this.embed, required this.height, this.onTap});
 
   final ExternalEmbed embed;
-  final StreamableService streamableService;
   final double height;
-  final VoidCallback? onImageTap;
-
-  @override
-  State<_EmbedCard> createState() => _EmbedCardState();
-}
-
-class _EmbedCardState extends State<_EmbedCard> {
-  bool _isLoadingVideo = false;
-
-  /// Checks if this embed is a video
-  bool get _isVideo {
-    final embedType = widget.embed.embedType;
-    return embedType == 'video' || embedType == 'video-stream';
-  }
-
-  /// Checks if this is a Streamable video
-  bool get _isStreamableVideo {
-    return _isVideo && widget.embed.provider?.toLowerCase() == 'streamable';
-  }
-
-  /// Shows the video player in fullscreen with swipe-to-dismiss
-  Future<void> _showVideoPlayer(BuildContext context) async {
-    // Capture context-dependent objects before async gap
-    final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-
-    setState(() {
-      _isLoadingVideo = true;
-    });
-
-    try {
-      // Fetch the MP4 URL from Streamable using the injected service
-      final videoUrl = await widget.streamableService.getVideoUrl(
-        widget.embed.uri,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      if (videoUrl == null) {
-        // Show error if we couldn't get the video URL
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to load video',
-              style: TextStyle(
-                color: AppColors.textPrimary.withValues(alpha: 0.9),
-              ),
-            ),
-            backgroundColor: AppColors.backgroundSecondary,
-          ),
-        );
-        return;
-      }
-
-      // Navigate to fullscreen video player
-      await navigator.push<void>(
-        MaterialPageRoute(
-          builder: (context) => FullscreenVideoPlayer(videoUrl: videoUrl),
-          fullscreenDialog: true,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingVideo = false;
-        });
-      }
-    }
-  }
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    // Hide embed area when no thumbnail available
-    if (widget.embed.thumb == null) {
+    // Hide the embed area when there is no thumbnail to show.
+    final thumb = embed.thumb;
+    if (thumb == null) {
       return const SizedBox.shrink();
     }
 
-    // Build the thumbnail image
-    final thumbnailWidget = Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
+    final thumbnail = Container(
+      decoration: _embedFrame,
       clipBehavior: Clip.antiAlias,
       child: CachedNetworkImage(
-        imageUrl: widget.embed.thumb!,
+        imageUrl: thumb,
         width: double.infinity,
-        height: widget.height,
+        height: height,
         fit: BoxFit.cover,
         // Disable fade animation to prevent scroll jitter from height changes
         fadeInDuration: Duration.zero,
         fadeOutDuration: Duration.zero,
         placeholder:
-            (context, url) => Container(
+            (context, url) => SizedBox(
               width: double.infinity,
-              height: widget.height,
-              color: AppColors.backgroundSecondary,
-              child: const Center(
-                child: Icon(
-                  Icons.image_outlined,
-                  color: AppColors.textSecondary,
-                  size: 32,
-                ),
-              ),
+              height: height,
+              child: const MediaFill(icon: Icons.image_outlined),
             ),
         errorWidget: (context, url, error) {
           if (kDebugMode) {
@@ -900,7 +532,7 @@ class _EmbedCardState extends State<_EmbedCard> {
           }
           return Container(
             width: double.infinity,
-            height: widget.height,
+            height: height,
             color: AppColors.background,
             child: const Icon(
               Icons.broken_image,
@@ -912,52 +544,10 @@ class _EmbedCardState extends State<_EmbedCard> {
       ),
     );
 
-    // If this is a Streamable video, add play button overlay and tap handler
-    if (_isStreamableVideo) {
-      return Semantics(
-        button: true,
-        // Reflect the disabled tap handler while the video is loading so
-        // assistive tech doesn't advertise a dead button
-        enabled: !_isLoadingVideo,
-        label: 'Play video',
-        child: GestureDetector(
-          onTap: _isLoadingVideo ? null : () => _showVideoPlayer(context),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              thumbnailWidget,
-              // Semi-transparent play button or loading indicator overlay
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: AppColors.background.withValues(alpha: 0.7),
-                  shape: BoxShape.circle,
-                ),
-                child:
-                    _isLoadingVideo
-                        ? const CircularProgressIndicator(
-                          color: AppColors.loadingIndicator,
-                        )
-                        : const Icon(
-                          Icons.play_arrow,
-                          color: AppColors.textPrimary,
-                          size: 48,
-                        ),
-              ),
-            ],
-          ),
-        ),
-      );
+    if (onTap == null) {
+      return thumbnail;
     }
 
-    // For non-video embeds (images, link previews), make them tappable
-    // to navigate to post detail
-    if (widget.onImageTap != null) {
-      return GestureDetector(onTap: widget.onImageTap, child: thumbnailWidget);
-    }
-
-    // No tap handler provided, just return the thumbnail
-    return thumbnailWidget;
+    return GestureDetector(onTap: onTap, child: thumbnail);
   }
 }

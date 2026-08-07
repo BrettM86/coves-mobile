@@ -1,10 +1,11 @@
+import 'dart:async';
 import 'dart:ui';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import '../../constants/app_colors.dart';
 import '../../utils/responsive_utils.dart';
 import '../../models/community.dart';
@@ -12,11 +13,16 @@ import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/community_subscription_provider.dart';
 import '../../providers/vote_provider.dart';
+import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
+import '../../utils/cursor_pagination_controller.dart';
 import '../../utils/display_utils.dart';
 import '../../utils/error_messages.dart';
+import '../../utils/pagination_scroll_listener.dart';
+import '../../widgets/community_avatar.dart';
 import '../../widgets/community_header.dart';
 import '../../widgets/loading_error_states.dart';
+import '../../widgets/paginated_sliver_list.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/share_button.dart';
 
@@ -61,24 +67,37 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   String? _communityError;
   bool _communityIsAuthError = false;
 
-  // Feed state
-  List<FeedViewPost> _posts = [];
-  bool _isLoadingFeed = false;
-  bool _isLoadingMore = false;
-  String? _feedError;
-  String? _loadMoreError;
-  String? _cursor;
-  bool _hasMore = true;
+  // Feed state — items, cursor, loading flags and both error channels live
+  // in the shared controller
+  late final CursorPaginationController<FeedViewPost> _feedController;
+  late final PaginationScrollListener _paginationListener;
 
   // Time for relative timestamps
   DateTime _currentTime = DateTime.now();
+
+  // One pending post-frame "does the content fill the viewport?" check.
+  bool _viewportFillCheckScheduled = false;
 
   @override
   void initState() {
     super.initState();
     _apiService = context.read<CovesApiService>();
     _community = widget.community;
-    _scrollController.addListener(_onScroll);
+
+    _feedController = CursorPaginationController<FeedViewPost>(
+      fetchPage: _fetchFeedPage,
+      onPageLoaded: _syncViewerStates,
+      errorMapper: ErrorMessage.loadFeed,
+      // Cursor drift hands back overlapping pages; the list keys its rows
+      // by this URI and asserts on duplicates.
+      idOf: (post) => post.post.uri,
+      onUnexpectedError: _reportUnexpected,
+    )..addListener(_onFeedChanged);
+
+    _paginationListener = PaginationScrollListener(
+      controller: _scrollController,
+      onLoadMore: _feedController.loadMore,
+    )..attach();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -89,15 +108,43 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
 
   @override
   void dispose() {
+    _paginationListener.dispose();
+    _feedController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
-      _loadMore();
+  /// The controller owns the feed state; rebuild when it changes.
+  void _onFeedChanged() {
+    if (!mounted) {
+      return;
     }
+    setState(() {});
+    _scheduleViewportFillCheck();
+  }
+
+  /// Keep loading while the loaded posts do not fill the viewport.
+  ///
+  /// [PaginationScrollListener] only fires on scroll events, so a first
+  /// page shorter than the screen leaves nothing to scroll and pagination
+  /// stalls (the profile screen's old build-phase trigger did not have this
+  /// hole). Asked once per landed page, after layout.
+  void _scheduleViewportFillCheck() {
+    if (_viewportFillCheckScheduled ||
+        _feedController.isLoading ||
+        _feedController.isLoadingMore ||
+        _feedController.loadMoreError != null ||
+        !_feedController.hasMore) {
+      return;
+    }
+
+    _viewportFillCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _viewportFillCheckScheduled = false;
+      if (mounted) {
+        _paginationListener.checkNow();
+      }
+    });
   }
 
   void _onTabChanged(int index) {
@@ -111,14 +158,17 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     setState(() {
       _feedSort = sort;
     });
-    _loadFeed(refresh: true);
+    // Whatever is in flight for the previous sort — a first page or an
+    // append — is superseded by this refresh and discarded when it lands,
+    // so the new label can never sit above the old sort's posts.
+    _loadFeed();
   }
 
   Future<void> _initializeAndLoad() async {
     if (_community == null) {
       await _loadCommunity();
     }
-    await _loadFeed(refresh: true);
+    await _loadFeed();
   }
 
   Future<void> _loadCommunity() async {
@@ -167,98 +217,51 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     }
   }
 
-  Future<void> _loadFeed({bool refresh = false}) async {
-    if (_isLoadingFeed) return;
+  /// Everything the feed controller swallows.
+  ///
+  /// Typed [ApiException]s are skipped: they are the expected,
+  /// already-on-screen failures. What matters here is the rest — above all
+  /// a viewer-state hydration failure, which silently leaves votes and
+  /// subscriptions wrong in the UI.
+  void _reportUnexpected(Object error, StackTrace stackTrace) {
+    if (error is ApiException) {
+      return;
+    }
+    unawaited(Sentry.captureException(error, stackTrace: stackTrace));
+  }
 
-    setState(() {
-      _isLoadingFeed = true;
-      if (refresh) {
-        _feedError = null;
-        _cursor = null;
-        _hasMore = true;
-      }
-    });
-
-    try {
-      final response = await _apiService.getCommunityFeed(
-        community: widget.identifier,
-        sort: _feedSort,
-        cursor: refresh ? null : _cursor,
-      );
-
-      if (mounted) {
-        setState(() {
-          _currentTime = DateTime.now();
-          if (refresh) {
-            _posts = response.feed;
-          } else {
-            _posts = [..._posts, ...response.feed];
-          }
-          _cursor = response.cursor;
-          _hasMore = response.cursor != null;
-          _isLoadingFeed = false;
-        });
-
-        _syncViewerStates(response.feed);
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error loading community feed: $e');
-      }
-      if (mounted) {
-        setState(() {
-          _feedError = ErrorMessage.loadFeed(e);
-          _isLoadingFeed = false;
-        });
-      }
+  /// Reload the feed from the top (also the initial load).
+  ///
+  /// The controller clears both error channels and supersedes any in-flight
+  /// request, so a stale load-more error or a page of the previous sort can
+  /// never survive into the new feed.
+  Future<void> _loadFeed() async {
+    await _feedController.refresh();
+    if (mounted) {
+      setState(() {
+        _currentTime = DateTime.now();
+      });
     }
   }
 
-  Future<void> _loadMore() async {
-    if (_isLoadingMore || !_hasMore || _isLoadingFeed) return;
+  Future<CursorPage<FeedViewPost>> _fetchFeedPage(String? cursor) async {
+    final response = await _apiService.getCommunityFeed(
+      community: widget.identifier,
+      sort: _feedSort,
+      cursor: cursor,
+    );
 
-    setState(() {
-      _isLoadingMore = true;
-      _loadMoreError = null;
-    });
+    return CursorPage<FeedViewPost>(
+      items: response.feed,
+      cursor: response.cursor,
+    );
+  }
 
-    try {
-      final response = await _apiService.getCommunityFeed(
-        community: widget.identifier,
-        sort: _feedSort,
-        cursor: _cursor,
-      );
-
-      if (mounted) {
-        setState(() {
-          _posts = [..._posts, ...response.feed];
-          _cursor = response.cursor;
-          _hasMore = response.cursor != null;
-          _isLoadingMore = false;
-        });
-
-        _syncViewerStates(response.feed);
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error loading more posts: $e');
-      }
-      if (mounted) {
-        setState(() {
-          _isLoadingMore = false;
-          _loadMoreError = ErrorMessage.loadFeed(e);
-        });
-      }
+  Future<void> _syncViewerStates(List<FeedViewPost> posts) async {
+    if (!mounted) {
+      return;
     }
-  }
 
-  void _clearLoadMoreError() {
-    setState(() {
-      _loadMoreError = null;
-    });
-  }
-
-  void _syncViewerStates(List<FeedViewPost> posts) {
     final authProvider = context.read<AuthProvider>();
     if (!authProvider.isAuthenticated) return;
 
@@ -285,7 +288,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
 
   Future<void> _onRefresh() async {
     await _loadCommunity();
-    await _loadFeed(refresh: true);
+    await _loadFeed();
   }
 
   @override
@@ -408,28 +411,11 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      if (_community?.avatar != null &&
-                                          _community!.avatar!.isNotEmpty)
-                                        ClipOval(
-                                          child: CachedNetworkImage(
-                                            imageUrl: _community!.avatar!,
-                                            width: 28,
-                                            height: 28,
-                                            fit: BoxFit.cover,
-                                            fadeInDuration: Duration.zero,
-                                            fadeOutDuration: Duration.zero,
-                                            errorWidget: (context, url, error) {
-                                              if (kDebugMode) {
-                                                debugPrint(
-                                                  'Error loading collapsed avatar: $error',
-                                                );
-                                              }
-                                              return _buildCollapsedFallbackAvatar();
-                                            },
-                                          ),
-                                        )
-                                      else
-                                        _buildCollapsedFallbackAvatar(),
+                                      CommunityAvatar(
+                                        name: _community?.name ?? '',
+                                        avatarUrl: _community?.avatar,
+                                        size: 28,
+                                      ),
                                       const SizedBox(width: 10),
                                       Flexible(
                                         child: Column(
@@ -557,30 +543,6 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     return 'coves.social';
   }
 
-  Widget _buildCollapsedFallbackAvatar() {
-    final name = _community?.name ?? '';
-    final bgColor = DisplayUtils.getFallbackColor(name);
-
-    return Container(
-      width: 28,
-      height: 28,
-      decoration: BoxDecoration(
-        color: bgColor,
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Text(
-          name.isNotEmpty ? name[0].toUpperCase() : 'C',
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildSubscribeButton() {
     final isAuthenticated = context.watch<AuthProvider>().isAuthenticated;
     if (!isAuthenticated || _community == null) {
@@ -684,8 +646,10 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   }
 
   Widget _buildPostsList() {
+    final posts = _feedController.items;
+
     // Loading state
-    if (_isLoadingFeed && _posts.isEmpty) {
+    if (_feedController.isLoading && posts.isEmpty) {
       return const SliverFillRemaining(
         child: Center(
           child: CircularProgressIndicator(color: AppColors.primary),
@@ -693,75 +657,51 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
       );
     }
 
-    // Error state
-    if (_feedError != null && _posts.isEmpty) {
+    // Full-screen error only while there is nothing to read. With posts on
+    // screen the same failure (a pull-to-refresh that failed) goes to the
+    // footer instead — blanking readable content would be worse, and
+    // showing nothing at all was the old bug.
+    final feedError = _feedController.error;
+    if (feedError != null && posts.isEmpty) {
       return SliverFillRemaining(
         child: Center(
-          child: InlineError(
-            message: _feedError!,
-            onRetry: () => _loadFeed(refresh: true),
-          ),
+          child: InlineError(message: feedError, onRetry: _loadFeed),
         ),
       );
     }
 
-    // Empty state
-    if (_posts.isEmpty && !_isLoadingFeed) {
-      return SliverFillRemaining(
-        child: _buildEmptyPostsState(),
-      );
-    }
+    return PaginatedSliverList<FeedViewPost>(
+      items: posts,
+      isLoadingMore: _feedController.isLoadingMore,
+      hasMore: _feedController.hasMore,
+      loadMoreError: _feedController.loadMoreError,
+      refreshError: posts.isEmpty ? null : feedError,
+      onRetryRefresh: _loadFeed,
+      onRetryLoadMore: _feedController.retryLoadMore,
+      idOf: (post) => post.post.uri,
+      footerKey: const ValueKey<String>('community_feed_footer'),
+      endOfFeedWidget: _buildEndOfFeed(),
+      emptyWidget: _buildEmptyPostsState(),
+      itemBuilder: (context, post, index) {
+        final postCard = PostCard(
+          post: post,
+          currentTime: _currentTime,
+          showHeader: true,
+        );
 
-    // Posts list with loading indicator
-    final showLoadingSlot = _isLoadingMore || _loadMoreError != null;
-
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          if (index == _posts.length) {
-            if (_isLoadingMore) {
-              return const InlineLoading();
-            }
-            if (_loadMoreError != null) {
-              return InlineError(
-                message: _loadMoreError!,
-                onRetry: () {
-                  _clearLoadMoreError();
-                  _loadMore();
-                },
-              );
-            }
-            if (!_hasMore && _posts.isNotEmpty) {
-              return _buildEndOfFeed();
-            }
-            return const SizedBox(height: 80);
-          }
-
-          final post = _posts[index];
-          final postCard = RepaintBoundary(
-            key: ValueKey(post.post.uri),
-            child: PostCard(
-              post: post,
-              currentTime: _currentTime,
-              showHeader: true,
+        // Constrain width on tablets for better readability
+        if (ResponsiveUtils.isTablet(context)) {
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: ResponsiveUtils.maxContentWidth,
+              ),
+              child: postCard,
             ),
           );
-
-          // Constrain width on tablets for better readability
-          if (ResponsiveUtils.isTablet(context)) {
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: ResponsiveUtils.maxContentWidth,
-                ),
-                child: postCard,
-              ),
-            );
-          }
-          return postCard;
-        },
-        childCount: _posts.length + (showLoadingSlot || !_hasMore ? 1 : 0),
-      ),
+        }
+        return postCard;
+      },
     );
   }
 

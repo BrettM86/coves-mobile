@@ -11,7 +11,10 @@ import '../../models/community.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../utils/community_search_utils.dart';
+import '../../utils/cursor_pagination_controller.dart';
+import '../../utils/pagination_scroll_listener.dart';
 import '../../widgets/community_list_tile.dart';
+import '../../widgets/paginated_sliver_list.dart';
 
 /// Full paginated list of communities for a given sort/filter.
 ///
@@ -38,14 +41,17 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  List<CommunityView> _communities = [];
+  /// Loaded pages, cursor, loading flags and both error channels.
+  late final CursorPaginationController<CommunityView> _controller;
+  late final PaginationScrollListener _paginationListener;
+
+  /// The loaded communities narrowed by the search box. Search is
+  /// client-side over the pages loaded so far — it does not query the API.
   List<CommunityView> _filteredCommunities = [];
-  bool _isLoading = false;
-  bool _isLoadingMore = false;
-  String? _error;
-  String? _cursor;
-  bool _hasMore = true;
   Timer? _searchDebounce;
+
+  // One pending post-frame "does the content fill the viewport?" check.
+  bool _viewportFillCheckScheduled = false;
   // Shared app-wide API client (owned by main.dart) — do not dispose here
   late final CovesApiService _apiService;
 
@@ -53,16 +59,32 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
   void initState() {
     super.initState();
     _apiService = context.read<CovesApiService>();
+
+    _controller = CursorPaginationController<CommunityView>(
+      fetchPage: _fetchCommunitiesPage,
+      errorMapper: _errorMessage,
+      // Cursor drift hands back overlapping pages; the list keys its rows
+      // by this DID and asserts on duplicates.
+      idOf: (community) => community.did,
+      onUnexpectedError: _reportUnexpected,
+    )..addListener(_onCommunitiesChanged);
+
+    _paginationListener = PaginationScrollListener(
+      controller: _scrollController,
+      onLoadMore: _controller.loadMore,
+    )..attach();
+
     _searchController.addListener(_onSearchChanged);
-    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadCommunities();
+      _controller.refresh();
     });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _paginationListener.dispose();
+    _controller.dispose();
     _scrollController.dispose();
     _searchDebounce?.cancel();
     super.dispose();
@@ -76,113 +98,88 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
     );
   }
 
+  void _onCommunitiesChanged() {
+    if (!mounted) {
+      return;
+    }
+    _filterCommunities();
+    _scheduleViewportFillCheck();
+  }
+
+  /// Keep loading while the loaded communities do not fill the viewport.
+  ///
+  /// [PaginationScrollListener] only fires on scroll events, so a first
+  /// page shorter than the screen leaves nothing to scroll and pagination
+  /// stalls. Skipped while a search is active: an almost-empty list is then
+  /// a filter artifact, not a short page, and chasing it would pull the
+  /// whole directory down 50 rows at a time.
+  void _scheduleViewportFillCheck() {
+    if (_viewportFillCheckScheduled ||
+        _controller.isLoading ||
+        _controller.isLoadingMore ||
+        _controller.loadMoreError != null ||
+        !_controller.hasMore ||
+        _searchController.text.trim().isNotEmpty) {
+      return;
+    }
+
+    _viewportFillCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _viewportFillCheckScheduled = false;
+      if (mounted) {
+        _paginationListener.checkNow();
+      }
+    });
+  }
+
   void _filterCommunities() {
     final query = _searchController.text.trim().toLowerCase();
 
     setState(() {
       _filteredCommunities = CommunitySearchUtils.filterByQuery(
-        _communities,
+        _controller.items,
         query,
       );
     });
   }
 
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent * 0.8) {
-      if (!_isLoadingMore && _hasMore && !_isLoading) {
-        _loadMoreCommunities();
-      }
-    }
+  Future<CursorPage<CommunityView>> _fetchCommunitiesPage(
+    String? cursor,
+  ) async {
+    final response = await _apiService.listCommunities(
+      limit: 50,
+      cursor: cursor,
+      sort: widget.sort,
+      subscribed: widget.subscribed,
+    );
+
+    return CursorPage<CommunityView>(
+      items: response.communities,
+      cursor: response.cursor,
+    );
   }
 
-  Future<void> _loadCommunities() async {
-    if (_isLoading) return;
-
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final response = await _apiService.listCommunities(
-        limit: 50,
-        sort: widget.sort,
-        subscribed: widget.subscribed,
-      );
-
-      if (mounted) {
-        setState(() {
-          _communities = response.communities;
-          _filteredCommunities = response.communities;
-          _cursor = response.cursor;
-          _hasMore = response.cursor != null && response.cursor!.isNotEmpty;
-          _isLoading = false;
-        });
-      }
-    } on ApiException catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.message;
-          _isLoading = false;
-        });
-      }
-    } on Exception catch (e, stackTrace) {
-      if (kDebugMode) {
-        debugPrint('Failed to load communities: $e');
-      }
-      unawaited(Sentry.captureException(e, stackTrace: stackTrace));
-      if (mounted) {
-        setState(() {
-          _error = 'Failed to load communities. Pull down to retry.';
-          _isLoading = false;
-        });
-      }
+  /// Everything the controller swallows.
+  ///
+  /// Typed [ApiException]s are skipped — already-typed, user-presentable
+  /// failures, reported to the user by the error states below. This is the
+  /// single reporting point now: the controller catches fetch failures on
+  /// the caller's behalf, so the fetcher no longer captures its own.
+  void _reportUnexpected(Object error, StackTrace stackTrace) {
+    if (error is ApiException) {
+      return;
     }
+    if (kDebugMode) {
+      debugPrint('Failed to load communities: $error');
+    }
+    unawaited(Sentry.captureException(error, stackTrace: stackTrace));
   }
 
-  Future<void> _loadMoreCommunities() async {
-    if (_isLoadingMore || !_hasMore || _cursor == null) return;
-
-    setState(() {
-      _isLoadingMore = true;
-    });
-
-    try {
-      final response = await _apiService.listCommunities(
-        limit: 50,
-        cursor: _cursor,
-        sort: widget.sort,
-        subscribed: widget.subscribed,
-      );
-
-      if (mounted) {
-        setState(() {
-          _communities.addAll(response.communities);
-          _cursor = response.cursor;
-          _hasMore = response.cursor != null && response.cursor!.isNotEmpty;
-          _isLoadingMore = false;
-        });
-        _filterCommunities();
-      }
-    } on Exception catch (e, stackTrace) {
-      if (kDebugMode) {
-        debugPrint('Failed to load more communities: $e');
-      }
-      unawaited(Sentry.captureException(e, stackTrace: stackTrace));
-      if (mounted) {
-        setState(() {
-          _isLoadingMore = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Failed to load more communities. Try scrolling again.',
-            ),
-          ),
-        );
-      }
+  String _errorMessage(Object error) {
+    if (error is ApiException) {
+      return error.message;
     }
+    return 'Failed to load communities. Pull down to retry.';
   }
 
   @override
@@ -241,23 +238,21 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
   }
 
   Future<void> _refreshCommunities() async {
-    setState(() {
-      _cursor = null;
-      _hasMore = true;
-      _communities = [];
-      _filteredCommunities = [];
-    });
-    await _loadCommunities();
+    await _controller.refresh();
   }
 
   Widget _buildBody() {
-    if (_isLoading) {
+    final communities = _controller.items;
+
+    if (_controller.isLoading && communities.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.primary),
       );
     }
 
-    if (_error != null) {
+    // First-page failure — pagination failures show in the list footer.
+    final error = _controller.error;
+    if (error != null && communities.isEmpty) {
       return RefreshIndicator(
         onRefresh: _refreshCommunities,
         color: AppColors.primary,
@@ -279,7 +274,7 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        _error!,
+                        error,
                         style: const TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 16,
@@ -288,7 +283,7 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
                       ),
                       const SizedBox(height: 24),
                       ElevatedButton(
-                        onPressed: _loadCommunities,
+                        onPressed: _controller.refresh,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: AppColors.textPrimary,
@@ -312,70 +307,69 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
       );
     }
 
-    if (_filteredCommunities.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _refreshCommunities,
-        color: AppColors.primary,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            SizedBox(
-              height: MediaQuery.of(context).size.height * 0.6,
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.search_off,
-                        size: 48,
-                        color: AppColors.textMuted,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _searchController.text.trim().isEmpty
-                            ? 'No communities found'
-                            : 'No communities match your search',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 16,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
     return RefreshIndicator(
       onRefresh: _refreshCommunities,
       color: AppColors.primary,
-      child: ListView.builder(
+      child: CustomScrollView(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: _filteredCommunities.length + (_isLoadingMore ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == _filteredCommunities.length) {
-            return const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+        slivers: [
+          PaginatedSliverList<CommunityView>(
+            items: _filteredCommunities,
+            isLoadingMore: _controller.isLoadingMore,
+            hasMore: _controller.hasMore,
+            loadMoreError: _controller.loadMoreError,
+            // A pull-to-refresh that fails with rows on screen: the
+            // full-screen error above is empty-list-only, so without this
+            // the failure would be invisible.
+            refreshError: communities.isEmpty ? null : error,
+            onRetryRefresh: _refreshCommunities,
+            onRetryLoadMore: _controller.retryLoadMore,
+            idOf: (community) => community.did,
+            footerKey: const ValueKey<String>('communities_see_all_footer'),
+            emptyWidget: _buildEmptyState(),
+            endOfFeedWidget: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              child: Text(
+                "That's every community",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 14,
+                ),
               ),
-            );
-          }
+            ),
+            itemBuilder: (context, community, index) => CommunityListTile(
+              community: community,
+              onTap: () => context.push('/community/${community.did}'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-          final community = _filteredCommunities[index];
-          return CommunityListTile(
-            community: community,
-            onTap: () => context.push('/community/${community.did}'),
-          );
-        },
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.search_off, size: 48, color: AppColors.textMuted),
+            const SizedBox(height: 16),
+            Text(
+              _searchController.text.trim().isEmpty
+                  ? 'No communities found'
+                  : 'No communities match your search',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 16,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

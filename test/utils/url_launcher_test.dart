@@ -65,6 +65,36 @@ void main() {
         // URL gets normalized to lowercase by url_launcher
         expect(mockPlatform.launchedUrls, contains('https://example.com'));
       });
+
+      // An allowed scheme with no authority is not a web link. The model
+      // layer (_isRenderableMediaUrl) and FacetDetector already reject these;
+      // the launcher is the outbound edge and must agree, or a hostile record
+      // can hand the platform a scheme-only uri that resolves per-OS.
+      test('blocks http: with an opaque path and no host', () async {
+        final result = await UrlLauncher.launchExternalUrl('http:foo');
+        expect(result, false);
+        expect(mockPlatform.launchedUrls, isEmpty);
+      });
+
+      test('blocks https:/// with an empty authority', () async {
+        final result = await UrlLauncher.launchExternalUrl('https:///path');
+        expect(result, false);
+        expect(mockPlatform.launchedUrls, isEmpty);
+      });
+
+      test('blocks a bare http:// with nothing after it', () async {
+        final result = await UrlLauncher.launchExternalUrl('http://');
+        expect(result, false);
+        expect(mockPlatform.launchedUrls, isEmpty);
+      });
+
+      test('blocks a scheme that merely starts with http', () async {
+        final result = await UrlLauncher.launchExternalUrl(
+          'httpx://evil.com',
+        );
+        expect(result, false);
+        expect(mockPlatform.launchedUrls, isEmpty);
+      });
     });
 
     group('Invalid URL Handling', () {

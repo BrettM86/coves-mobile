@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,14 +12,16 @@ import '../providers/auth_provider.dart';
 import '../providers/block_provider.dart';
 import '../providers/vote_provider.dart';
 import '../services/api_exceptions.dart';
-import '../utils/error_messages.dart';
 import '../utils/date_time_utils.dart';
+import '../utils/display_utils.dart';
+import '../utils/error_messages.dart';
 import 'block_action_helpers.dart';
 import 'icons/animated_heart_icon.dart';
 import 'report_dialog.dart';
 import 'rich_text_renderer.dart';
 import 'sign_in_dialog.dart';
 import 'tappable_author.dart';
+import 'user_avatar.dart';
 
 /// Comment card widget for displaying individual comments
 ///
@@ -268,48 +269,10 @@ class _CommentCardState extends State<CommentCard> {
 
   /// Builds the author avatar widget
   Widget _buildAuthorAvatar(AuthorView author) {
-    if (author.avatar != null && author.avatar!.isNotEmpty) {
-      // Show real author avatar
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: CachedNetworkImage(
-          imageUrl: author.avatar!,
-          width: 14,
-          height: 14,
-          fit: BoxFit.cover,
-          // Disable fade animation to prevent scroll jitter
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
-          placeholder: (context, url) => _buildFallbackAvatar(author),
-          errorWidget: (context, url, error) => _buildFallbackAvatar(author),
-        ),
-      );
-    }
-
-    // Fallback to letter placeholder
-    return _buildFallbackAvatar(author);
-  }
-
-  /// Builds a fallback avatar with the first letter of handle
-  Widget _buildFallbackAvatar(AuthorView author) {
-    final firstLetter = author.handle.isNotEmpty ? author.handle[0] : '?';
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Center(
-        child: Text(
-          firstLetter.toUpperCase(),
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
+    return UserAvatar(
+      name: author.displayName ?? author.handle,
+      avatarUrl: author.avatar,
+      size: 24,
     );
   }
 
@@ -685,7 +648,7 @@ class _CommentCardState extends State<CommentCard> {
                       ),
                       const SizedBox(width: 5),
                       Text(
-                        DateTimeUtils.formatCount(adjustedScore),
+                        DisplayUtils.formatCount(adjustedScore),
                         style: TextStyle(
                           color: AppColors.textPrimary.withValues(alpha: 0.6),
                           fontSize: 12,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
+import '../utils/display_utils.dart';
 
 /// Comments section header with sort dropdown
 ///
@@ -95,7 +96,7 @@ class CommentsHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    '$commentCount '
+                    '${DisplayUtils.formatCount(commentCount)} '
                     '${commentCount == 1 ? 'Comment' : 'Comments'}',
                     style: const TextStyle(
                       fontSize: 15,

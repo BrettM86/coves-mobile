@@ -93,15 +93,25 @@ class FullScreenError extends StatelessWidget {
   }
 }
 
+/// Footprint of [InlineLoading], and of the idle spacer that stands in for
+/// it in a paginated list's footer slot.
+///
+/// Both sides are sized from this constant so the two are identical by
+/// construction: a footer that changes height when the spinner appears
+/// moves the scroll offset under the user's finger. (The spinner's
+/// intrinsic size is 68px — padding plus a 36px indicator — which is why
+/// "80" cannot be left implicit on either side.)
+const double kInlineLoadingHeight = 80;
+
 /// Inline loading indicator (for pagination)
 class InlineLoading extends StatelessWidget {
   const InlineLoading({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(16),
+    return const SizedBox(
+      height: kInlineLoadingHeight,
+      child: Center(
         child: CircularProgressIndicator(color: AppColors.primary),
       ),
     );

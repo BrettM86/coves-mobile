@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'url_policy.dart';
+
 /// Utility class for safely launching external URLs
 ///
 /// Provides security validation and error handling for opening URLs
@@ -9,15 +11,12 @@ import 'package:url_launcher/url_launcher.dart';
 class UrlLauncher {
   UrlLauncher._(); // Private constructor to prevent instantiation
 
-  /// Allowed URL schemes for security
-  static const _allowedSchemes = ['http', 'https'];
-
   /// Launches an external URL with security validation
   ///
   /// Returns true if the URL was successfully launched, false otherwise.
   ///
   /// Security:
-  /// - Only allows http and https schemes
+  /// - Only allows http(s) urls with a host (see [isAllowedWebUrl])
   /// - Blocks potentially malicious schemes (javascript:, file:, etc.)
   /// - Opens in external browser for user control
   ///
@@ -30,10 +29,12 @@ class UrlLauncher {
     try {
       final uri = Uri.parse(url);
 
-      // Validate URL scheme for security
-      if (!_allowedSchemes.contains(uri.scheme.toLowerCase())) {
+      // Validate URL scheme and host for security
+      if (!isAllowedWebUrl(url)) {
         if (kDebugMode) {
-          debugPrint('Blocked non-http(s) URL scheme: ${uri.scheme}');
+          debugPrint(
+            'Blocked URL (scheme "${uri.scheme}", host "${uri.host}")',
+          );
         }
         _showErrorIfPossible(context, 'Invalid link format');
         return false;

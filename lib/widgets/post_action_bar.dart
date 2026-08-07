@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
 import '../models/post.dart';
-import '../utils/date_time_utils.dart';
+import '../utils/display_utils.dart';
 import 'icons/animated_heart_icon.dart';
 
 /// Post Action Bar
@@ -111,7 +111,7 @@ class PostActionBar extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      DateTimeUtils.formatCount(post.post.stats.score),
+                      DisplayUtils.formatCount(post.post.stats.score),
                       style: TextStyle(
                         color:
                             isVoted
@@ -188,7 +188,7 @@ class _ActionButton extends StatelessWidget {
             Icon(icon, size: 24, color: effectiveColor),
             const SizedBox(width: 4),
             Text(
-              DateTimeUtils.formatCount(count),
+              DisplayUtils.formatCount(count),
               style: TextStyle(
                 color: effectiveColor,
                 fontSize: 13,

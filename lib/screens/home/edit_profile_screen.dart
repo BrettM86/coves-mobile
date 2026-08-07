@@ -10,6 +10,7 @@ import '../../services/api_exceptions.dart';
 import '../../utils/image_crop_utils.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../widgets/image_source_picker.dart';
+import '../../widgets/user_avatar.dart';
 
 /// Content limits matching backend lexicon
 const int kDisplayNameMaxLength = 64;
@@ -431,18 +432,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                       _selectedAvatar!.file,
                                       fit: BoxFit.cover,
                                     )
-                                  : (widget.profile.avatar != null)
-                                      ? CachedNetworkImage(
-                                          imageUrl: widget.profile.avatar!,
-                                          fit: BoxFit.cover,
-                                          fadeInDuration: Duration.zero,
-                                          fadeOutDuration: Duration.zero,
-                                          errorWidget: (context, url, error) =>
-                                              _buildFallbackAvatar(
-                                            avatarSize - 8,
-                                          ),
-                                        )
-                                      : _buildFallbackAvatar(avatarSize - 8),
+                                  : UserAvatar(
+                                      name: widget.profile.handle ?? '',
+                                      avatarUrl: widget.profile.avatar,
+                                      size: avatarSize - 8,
+                                      fallbackColor: AppColors.primary,
+                                      fallbackIcon: const Icon(
+                                        Icons.person,
+                                        size: (avatarSize - 8) * 0.5,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                             ),
                             // Edit overlay
                             Positioned.fill(
@@ -491,19 +491,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildFallbackAvatar(double size) {
-    return Container(
-      width: size,
-      height: size,
-      color: AppColors.primary,
-      child: Icon(
-        Icons.person,
-        size: size * 0.5,
-        color: Colors.white,
       ),
     );
   }

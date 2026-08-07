@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,10 +11,10 @@ import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
 import '../../providers/vote_provider.dart';
 import '../../services/comments_provider_cache.dart';
-import '../../utils/display_utils.dart';
 import '../../utils/error_messages.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/comments_header.dart';
+import '../../widgets/community_avatar.dart';
 import '../../widgets/share_button.dart';
 import '../../widgets/detailed_post_view.dart';
 import '../../widgets/loading_error_states.dart';
@@ -367,7 +366,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Community avatar
-            _buildCommunityAvatar(community),
+            CommunityAvatar(
+              name: community.name,
+              avatarUrl: community.avatar,
+              size: 28,
+            ),
             const SizedBox(width: 10),
             // Text column
             Flexible(
@@ -398,50 +401,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  /// Build community avatar or fallback
-  Widget _buildCommunityAvatar(CommunityRef community) {
-    const size = 28.0;
-
-    if (community.avatar != null && community.avatar!.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(size / 2),
-        child: CachedNetworkImage(
-          imageUrl: community.avatar!,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          placeholder: (context, url) => _buildFallbackAvatar(community, size),
-          errorWidget: (_, __, ___) => _buildFallbackAvatar(community, size),
-        ),
-      );
-    }
-
-    return _buildFallbackAvatar(community, size);
-  }
-
-  /// Build fallback avatar with first letter and hash-based color
-  Widget _buildFallbackAvatar(CommunityRef community, double size) {
-    final name = community.name;
-    final firstLetter = name.isNotEmpty ? name[0].toUpperCase() : 'C';
-    final bgColor = DisplayUtils.getFallbackColor(name);
-
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
-      child: Center(
-        child: Text(
-          firstLetter,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: size * 0.45,
-            fontWeight: FontWeight.bold,
-          ),
         ),
       ),
     );

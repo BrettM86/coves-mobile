@@ -1,6 +1,5 @@
 import 'dart:developer' as developer;
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +11,7 @@ import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../utils/image_crop_utils.dart';
 import '../../utils/image_picker_utils.dart';
+import '../../widgets/community_avatar.dart';
 import '../../widgets/image_source_picker.dart';
 
 /// Admin handles that can create communities
@@ -634,31 +634,16 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
                           borderRadius: BorderRadius.circular(50),
                           border: Border.all(color: AppColors.border, width: 2),
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(50),
-                          child: _selectedCommunity!.avatar != null
-                              ? CachedNetworkImage(
-                                  imageUrl: '${_selectedCommunity!.avatar!}',
-                                  width: 100,
-                                  height: 100,
-                                  fit: BoxFit.cover,
-                                  fadeInDuration: Duration.zero,
-                                  fadeOutDuration: Duration.zero,
-                                  placeholder: (context, url) => Container(
-                                    color: AppColors.backgroundSecondary,
-                                  ),
-                                  errorWidget: (context, url, error) =>
-                                      const Icon(
-                                    Icons.workspaces_outlined,
-                                    size: 40,
-                                    color: AppColors.primary,
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.workspaces_outlined,
-                                  size: 40,
-                                  color: AppColors.primary,
-                                ),
+                        child: CommunityAvatar(
+                          name: _selectedCommunity!.name,
+                          avatarUrl: _selectedCommunity!.avatar,
+                          size: 100,
+                          fallbackColor: AppColors.backgroundSecondary,
+                          fallbackIcon: const Icon(
+                            Icons.workspaces_outlined,
+                            size: 40,
+                            color: AppColors.primary,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -809,31 +794,16 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
                         borderRadius: BorderRadius.circular(60),
                         border: Border.all(color: AppColors.border, width: 2),
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(60),
-                        child: _selectedCommunity!.avatar != null
-                            ? CachedNetworkImage(
-                                imageUrl: '${_selectedCommunity!.avatar!}',
-                                width: 120,
-                                height: 120,
-                                fit: BoxFit.cover,
-                                fadeInDuration: Duration.zero,
-                                fadeOutDuration: Duration.zero,
-                                placeholder: (context, url) => Container(
-                                  color: AppColors.backgroundSecondary,
-                                ),
-                                errorWidget: (context, url, error) =>
-                                    const Icon(
-                                  Icons.workspaces_outlined,
-                                  size: 48,
-                                  color: AppColors.primary,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.workspaces_outlined,
-                                size: 48,
-                                color: AppColors.primary,
-                              ),
+                      child: CommunityAvatar(
+                        name: _selectedCommunity!.name,
+                        avatarUrl: _selectedCommunity!.avatar,
+                        size: 120,
+                        fallbackColor: AppColors.backgroundSecondary,
+                        fallbackIcon: const Icon(
+                          Icons.workspaces_outlined,
+                          size: 48,
+                          color: AppColors.primary,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -903,38 +873,15 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
         ),
         child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: community.avatar != null
-                    ? CachedNetworkImage(
-                        imageUrl: '${community.avatar!}',
-                        width: 40,
-                        height: 40,
-                        fit: BoxFit.cover,
-                        fadeInDuration: Duration.zero,
-                        fadeOutDuration: Duration.zero,
-                        placeholder: (context, url) => Container(
-                          color: AppColors.backgroundSecondary,
-                        ),
-                        errorWidget: (context, url, error) =>
-                            const Icon(
-                          Icons.workspaces_outlined,
-                          size: 20,
-                          color: AppColors.primary,
-                        ),
-                      )
-                    : const Icon(
-                        Icons.workspaces_outlined,
-                        size: 20,
-                        color: AppColors.primary,
-                      ),
+            CommunityAvatar(
+              name: community.name,
+              avatarUrl: community.avatar,
+              size: 40,
+              fallbackColor: AppColors.background,
+              fallbackIcon: const Icon(
+                Icons.workspaces_outlined,
+                size: 20,
+                color: AppColors.primary,
               ),
             ),
             const SizedBox(width: 12),

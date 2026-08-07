@@ -87,35 +87,8 @@ void main() {
     });
   });
 
-  group('DateTimeUtils.formatCount', () {
-    test('formats numbers less than 1000 as-is', () {
-      expect(DateTimeUtils.formatCount(0), '0');
-      expect(DateTimeUtils.formatCount(1), '1');
-      expect(DateTimeUtils.formatCount(42), '42');
-      expect(DateTimeUtils.formatCount(999), '999');
-    });
-
-    test('formats 1000 as 1.0k', () {
-      expect(DateTimeUtils.formatCount(1000), '1.0k');
-    });
-
-    test('formats thousands with one decimal place', () {
-      expect(DateTimeUtils.formatCount(1500), '1.5k');
-      expect(DateTimeUtils.formatCount(2300), '2.3k');
-      expect(DateTimeUtils.formatCount(5678), '5.7k');
-    });
-
-    test('formats large numbers correctly', () {
-      expect(DateTimeUtils.formatCount(10000), '10.0k');
-      expect(DateTimeUtils.formatCount(42500), '42.5k');
-      expect(DateTimeUtils.formatCount(999999), '1000.0k');
-    });
-
-    test('rounds to one decimal place', () {
-      expect(DateTimeUtils.formatCount(1234), '1.2k');
-      expect(DateTimeUtils.formatCount(1567), '1.6k');
-    });
-  });
+  // Count formatting moved to DisplayUtils.formatCount — see
+  // test/utils/display_utils_test.dart for its spec.
 
   group('DateTimeUtils.formatFullDateTime', () {
     test('formats midnight (12:00 AM) correctly', () {

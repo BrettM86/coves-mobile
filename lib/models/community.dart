@@ -7,6 +7,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../constants/embed_types.dart';
+import '../utils/url_policy.dart';
 
 /// Response from GET /xrpc/social.coves.community.list
 class CommunitiesResponse {
@@ -222,10 +223,7 @@ class ExternalEmbedInput {
     }
 
     // Validate URI is a well-formed URL
-    final parsedUri = Uri.tryParse(uri);
-    if (parsedUri == null ||
-        !parsedUri.hasScheme ||
-        (!parsedUri.isScheme('http') && !parsedUri.isScheme('https'))) {
+    if (!isAllowedWebUrl(uri)) {
       throw ArgumentError.value(
         uri,
         'uri',

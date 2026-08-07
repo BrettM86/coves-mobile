@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../models/comment.dart';
 import '../models/feed_state.dart';
@@ -7,6 +10,7 @@ import '../models/user_profile.dart';
 import '../services/api_exceptions.dart';
 import '../services/comment_service.dart';
 import '../services/coves_api_service.dart';
+import '../utils/cursor_pagination_controller.dart';
 import 'auth_provider.dart';
 import 'vote_provider.dart';
 
@@ -28,8 +32,49 @@ class UserProfileProvider with ChangeNotifier {
        _apiService = apiService,
        _commentService = commentService,
        _voteProvider = voteProvider {
+    // The two feeds are the same cursor-pagination state machine with
+    // different fetchers; the controllers own items/cursor/loading/errors
+    // and this provider projects them onto the FeedState / CommentsState
+    // the screens already read.
+    _postsController = CursorPaginationController<FeedViewPost>(
+      fetchPage: _fetchPostsPage,
+      onPageLoaded: _hydratePostVotes,
+      errorMapper: _postsErrorMessage,
+      // Server-side cursor drift hands back overlapping pages; the list
+      // keys its rows by this same URI and asserts on duplicates.
+      idOf: (feedItem) => feedItem.post.uri,
+      onUnexpectedError: _reportUnexpected,
+    )..addListener(_syncPostsState);
+
+    _commentsController = CursorPaginationController<CommentView>(
+      fetchPage: _fetchCommentsPage,
+      onPageLoaded: _hydrateCommentVotes,
+      errorMapper: _commentsErrorMessage,
+      idOf: (comment) => comment.uri,
+      onUnexpectedError: _reportUnexpected,
+    )..addListener(_syncCommentsState);
+
     // Listen to auth state changes
     _authProvider.addListener(_onAuthChanged);
+  }
+
+  late final CursorPaginationController<FeedViewPost> _postsController;
+  late final CursorPaginationController<CommentView> _commentsController;
+
+  /// Everything the pagination controllers swallow: fetch failures the UI
+  /// already reports, vote-hydration failures it does not, and failures of
+  /// superseded requests.
+  ///
+  /// Typed [ApiException]s are skipped — they are the expected, already
+  /// user-presentable failures (offline, 404, 401), and reporting them
+  /// would drown the useful signal. A vote-hydration failure is exactly the
+  /// kind of silent breakage that has shipped wrong vote state before, so
+  /// it must reach crash reporting.
+  void _reportUnexpected(Object error, StackTrace stackTrace) {
+    if (error is ApiException) {
+      return;
+    }
+    unawaited(Sentry.captureException(error, stackTrace: stackTrace));
   }
 
   AuthProvider _authProvider;
@@ -53,10 +98,12 @@ class UserProfileProvider with ChangeNotifier {
   String? _profileError;
   String? _currentProfileDid;
 
-  // Posts feed state (reusing FeedState pattern)
+  // Posts feed state — a projection of _postsController, rebuilt whenever
+  // the controller notifies (reusing the FeedState pattern the screens read)
   FeedState _postsState = FeedState.initial();
+  DateTime? _postsLastRefreshTime;
 
-  // Comments feed state
+  // Comments feed state — a projection of _commentsController
   CommentsState _commentsState = CommentsState.initial();
 
   // LRU profile cache keyed by DID (max 50 entries)
@@ -117,8 +164,7 @@ class UserProfileProvider with ChangeNotifier {
       _profileCache.clear();
       _cacheAccessOrder.clear();
       _profile = null;
-      _postsState = FeedState.initial();
-      _commentsState = CommentsState.initial();
+      _resetFeeds();
       _currentProfileDid = null;
       notifyListeners();
     }
@@ -218,119 +264,103 @@ class UserProfileProvider with ChangeNotifier {
       notifyListeners();
       return;
     }
-    if (_postsState.isLoading || _postsState.isLoadingMore) return;
 
-    final currentState = _postsState;
-
-    try {
-      if (refresh) {
-        _postsState = currentState.copyWith(isLoading: true, error: null);
-      } else {
-        if (!currentState.hasMore) return;
-        _postsState = currentState.copyWith(isLoadingMore: true);
-      }
-      notifyListeners();
-
-      final response = await _apiService.getAuthorPosts(
-        actor: _currentProfileDid!,
-        cursor: refresh ? null : currentState.cursor,
-      );
-
-      final List<FeedViewPost> newPosts;
-      if (refresh) {
-        newPosts = response.feed;
-      } else {
-        newPosts = [...currentState.posts, ...response.feed];
-      }
-
-      _postsState = currentState.copyWith(
-        posts: newPosts,
-        cursor: response.cursor,
-        hasMore: response.cursor != null,
-        error: null,
-        isLoading: false,
-        isLoadingMore: false,
-        lastRefreshTime:
-            refresh ? DateTime.now() : currentState.lastRefreshTime,
-      );
-
-      // Apply viewer vote state so a liked post shows a lit heart even
-      // when the profile is its first surface this session.
-      if (_authProvider.isAuthenticated && _voteProvider != null) {
-        for (final feedItem in response.feed) {
-          final viewer = feedItem.post.viewer;
-          _voteProvider.applyServerVoteState(
-            postUri: feedItem.post.uri,
-            voteDirection: viewer?.vote,
-            voteUri: viewer?.voteUri,
-          );
-        }
-      }
-
-      if (kDebugMode) {
-        debugPrint('✅ Author posts loaded: ${newPosts.length} posts total');
-      }
-    } on AuthenticationException {
-      _postsState = currentState.copyWith(
-        error: 'Please sign in to view posts',
-        isLoading: false,
-        isLoadingMore: false,
-      );
-
-      if (kDebugMode) {
-        debugPrint('❌ Auth required to load posts');
-      }
-    } on NotFoundException {
-      // 404 means the actor doesn't exist (not "no posts")
-      // Empty posts are returned as an empty array, not 404
-      _postsState = currentState.copyWith(
-        error: 'User not found',
-        isLoading: false,
-        isLoadingMore: false,
-      );
-
-      if (kDebugMode) {
-        debugPrint('❌ Actor not found when loading posts');
-      }
-    } on NetworkException catch (e) {
-      _postsState = currentState.copyWith(
-        error: 'Network error. Check your connection.',
-        isLoading: false,
-        isLoadingMore: false,
-      );
-
-      if (kDebugMode) {
-        debugPrint('❌ Network error loading posts: ${e.message}');
-      }
-    } on ApiException catch (e) {
-      _postsState = currentState.copyWith(
-        error: e.message,
-        isLoading: false,
-        isLoadingMore: false,
-      );
-
-      if (kDebugMode) {
-        debugPrint('❌ Failed to load author posts: ${e.message}');
-      }
-    } on Exception catch (e) {
-      // Catch-all for other exceptions
-      _postsState = currentState.copyWith(
-        error: 'Failed to load posts. Please try again.',
-        isLoading: false,
-        isLoadingMore: false,
-      );
-
-      if (kDebugMode) {
-        debugPrint('❌ Unexpected error loading posts: $e');
-      }
+    if (!refresh) {
+      await _postsController.loadMore();
+      return;
     }
 
-    notifyListeners();
+    // Only a refresh that actually landed its own page counts as "fresh
+    // as of now": a failed one, or one a newer refresh superseded, must not
+    // move the timestamp.
+    final refreshed = await _postsController.refresh();
+    if (refreshed) {
+      _postsLastRefreshTime = DateTime.now();
+      // The controller already notified with the new page; this second
+      // sync exists only to project the timestamp stamped above (which the
+      // controller knows nothing about) onto _postsState.
+      _syncPostsState();
+    }
   }
 
   /// Load more posts (pagination)
+  ///
+  /// Failures land on `postsState.loadMoreError`, never on
+  /// `postsState.error`: a pagination hiccup must not blank a profile that
+  /// already has posts on screen. While that error is showing the
+  /// controller refuses further pages — use [retryLoadMorePosts] for the
+  /// footer's Retry, otherwise the scroll trigger would re-fire the failing
+  /// request on every scroll tick.
   Future<void> loadMorePosts() async {
     await loadPosts(refresh: false);
+  }
+
+  /// The posts footer's Retry: clears the pagination error and tries again.
+  Future<void> retryLoadMorePosts() => _postsController.retryLoadMore();
+
+  /// The comments footer's Retry.
+  Future<void> retryLoadMoreComments() => _commentsController.retryLoadMore();
+
+  Future<CursorPage<FeedViewPost>> _fetchPostsPage(String? cursor) async {
+    final actor = _currentProfileDid;
+    if (actor == null) throw ApiException('No profile loaded');
+
+    final response = await _apiService.getAuthorPosts(
+      actor: actor,
+      cursor: cursor,
+    );
+
+    if (kDebugMode) {
+      debugPrint('✅ Author posts page loaded: ${response.feed.length} posts');
+    }
+
+    return CursorPage<FeedViewPost>(
+      items: response.feed,
+      cursor: response.cursor,
+    );
+  }
+
+  /// Apply viewer vote state so a liked post shows a lit heart even when
+  /// the profile is its first surface this session.
+  Future<void> _hydratePostVotes(List<FeedViewPost> newPosts) async {
+    final voteProvider = _voteProvider;
+    if (!_authProvider.isAuthenticated || voteProvider == null) return;
+
+    for (final feedItem in newPosts) {
+      final viewer = feedItem.post.viewer;
+      voteProvider.applyServerVoteState(
+        postUri: feedItem.post.uri,
+        voteDirection: viewer?.vote,
+        voteUri: viewer?.voteUri,
+      );
+    }
+  }
+
+  String _postsErrorMessage(Object error) {
+    // 404 means the actor doesn't exist (not "no posts") — an empty feed
+    // comes back as an empty array.
+    if (error is AuthenticationException) return 'Please sign in to view posts';
+    if (error is NotFoundException) return 'User not found';
+    if (error is NetworkException) {
+      return 'Network error. Check your connection.';
+    }
+    if (error is ApiException) return error.message;
+    return 'Failed to load posts. Please try again.';
+  }
+
+  void _syncPostsState() {
+    _postsState = FeedState(
+      posts: _postsController.items,
+      cursor: _postsController.cursor,
+      hasMore: _postsController.hasMore,
+      isLoading: _postsController.isLoading,
+      isLoadingMore: _postsController.isLoadingMore,
+      error: _postsController.error,
+      loadMoreError: _postsController.loadMoreError,
+      scrollPosition: _postsState.scrollPosition,
+      lastRefreshTime: _postsLastRefreshTime,
+    );
+    notifyListeners();
   }
 
   /// Load comments by the current profile's author
@@ -347,119 +377,85 @@ class UserProfileProvider with ChangeNotifier {
       notifyListeners();
       return;
     }
-    if (_commentsState.isLoading || _commentsState.isLoadingMore) return;
 
-    final currentState = _commentsState;
-
-    try {
-      if (refresh) {
-        _commentsState = currentState.copyWith(isLoading: true, error: null);
-      } else {
-        if (!currentState.hasMore) return;
-        _commentsState = currentState.copyWith(isLoadingMore: true);
-      }
-      notifyListeners();
-
-      final response = await _apiService.getActorComments(
-        actor: _currentProfileDid!,
-        cursor: refresh ? null : currentState.cursor,
-      );
-
-      final List<CommentView> newComments;
-      if (refresh) {
-        newComments = response.comments;
-      } else {
-        newComments = [...currentState.comments, ...response.comments];
-      }
-
-      _commentsState = currentState.copyWith(
-        comments: newComments,
-        cursor: response.cursor,
-        hasMore: response.cursor != null,
-        error: null,
-        isLoading: false,
-        isLoadingMore: false,
-      );
-
-      // Apply viewer vote state from the comments response. Safe on both
-      // refresh and pagination: the provider keeps an optimistic vote the
-      // appview has not indexed yet instead of adopting a stale snapshot.
-      if (_authProvider.isAuthenticated && _voteProvider != null) {
-        response.comments.forEach(_applyCommentVoteState);
-      } else if (_authProvider.isAuthenticated && _voteProvider == null) {
-        if (kDebugMode) {
-          debugPrint(
-            '⚠️ VoteProvider is null - '
-            'cannot apply comment vote states',
-          );
-        }
-      }
-
-      if (kDebugMode) {
-        debugPrint(
-          '✅ Author comments loaded: ${newComments.length} comments total',
-        );
-      }
-    } on AuthenticationException {
-      _commentsState = currentState.copyWith(
-        error: 'Please sign in to view comments',
-        isLoading: false,
-        isLoadingMore: false,
-      );
-
-      if (kDebugMode) {
-        debugPrint('❌ Auth required to load comments');
-      }
-    } on NotFoundException {
-      // 404 means the actor doesn't exist (not "no comments")
-      // Empty comments are returned as an empty array, not 404
-      _commentsState = currentState.copyWith(
-        error: 'User not found',
-        isLoading: false,
-        isLoadingMore: false,
-      );
-
-      if (kDebugMode) {
-        debugPrint('❌ Actor not found when loading comments');
-      }
-    } on NetworkException catch (e) {
-      _commentsState = currentState.copyWith(
-        error: 'Network error. Check your connection.',
-        isLoading: false,
-        isLoadingMore: false,
-      );
-
-      if (kDebugMode) {
-        debugPrint('❌ Network error loading comments: ${e.message}');
-      }
-    } on ApiException catch (e) {
-      _commentsState = currentState.copyWith(
-        error: e.message,
-        isLoading: false,
-        isLoadingMore: false,
-      );
-
-      if (kDebugMode) {
-        debugPrint('❌ Failed to load author comments: ${e.message}');
-      }
-    } on Exception catch (e) {
-      _commentsState = currentState.copyWith(
-        error: 'Failed to load comments. Please try again.',
-        isLoading: false,
-        isLoadingMore: false,
-      );
-
-      if (kDebugMode) {
-        debugPrint('❌ Unexpected error loading comments: $e');
-      }
+    if (refresh) {
+      await _commentsController.refresh();
+    } else {
+      await _commentsController.loadMore();
     }
-
-    notifyListeners();
   }
 
   /// Load more comments (pagination)
+  ///
+  /// Failures land on `commentsState.loadMoreError`, never on
+  /// `commentsState.error`.
   Future<void> loadMoreComments() async {
     await loadComments(refresh: false);
+  }
+
+  Future<CursorPage<CommentView>> _fetchCommentsPage(String? cursor) async {
+    final actor = _currentProfileDid;
+    if (actor == null) throw ApiException('No profile loaded');
+
+    final response = await _apiService.getActorComments(
+      actor: actor,
+      cursor: cursor,
+    );
+
+    if (kDebugMode) {
+      debugPrint(
+        '✅ Author comments page loaded: ${response.comments.length} comments',
+      );
+    }
+
+    return CursorPage<CommentView>(
+      items: response.comments,
+      cursor: response.cursor,
+    );
+  }
+
+  /// Apply viewer vote state from the comments response. Safe on both
+  /// refresh and pagination: the vote provider keeps an optimistic vote the
+  /// appview has not indexed yet instead of adopting a stale snapshot.
+  Future<void> _hydrateCommentVotes(List<CommentView> newComments) async {
+    if (!_authProvider.isAuthenticated) return;
+
+    if (_voteProvider == null) {
+      if (kDebugMode) {
+        debugPrint(
+          '⚠️ VoteProvider is null - cannot apply comment vote states',
+        );
+      }
+      return;
+    }
+
+    newComments.forEach(_applyCommentVoteState);
+  }
+
+  String _commentsErrorMessage(Object error) {
+    // 404 means the actor doesn't exist (not "no comments").
+    if (error is AuthenticationException) {
+      return 'Please sign in to view comments';
+    }
+    if (error is NotFoundException) return 'User not found';
+    if (error is NetworkException) {
+      return 'Network error. Check your connection.';
+    }
+    if (error is ApiException) return error.message;
+    return 'Failed to load comments. Please try again.';
+  }
+
+  void _syncCommentsState() {
+    _commentsState = CommentsState(
+      comments: _commentsController.items,
+      cursor: _commentsController.cursor,
+      hasMore: _commentsController.hasMore,
+      isLoading: _commentsController.isLoading,
+      isLoadingMore: _commentsController.isLoadingMore,
+      error: _commentsController.error,
+      loadMoreError: _commentsController.loadMoreError,
+    );
+    notifyListeners();
   }
 
   /// Delete a comment from the user's profile comments
@@ -481,14 +477,9 @@ class UserProfileProvider with ChangeNotifier {
     try {
       await _commentService.deleteComment(uri: commentUri);
 
-      // Remove the comment from local state
-      final updatedComments =
-          _commentsState.comments
-              .where((c) => c.uri != commentUri)
-              .toList();
-
-      _commentsState = _commentsState.copyWith(comments: updatedComments);
-      notifyListeners();
+      // Remove the comment from local state (the controller notifies, which
+      // re-projects _commentsState)
+      _commentsController.removeWhere((c) => c.uri == commentUri);
 
       if (kDebugMode) {
         debugPrint('✅ Comment deleted from profile');
@@ -527,11 +518,20 @@ class UserProfileProvider with ChangeNotifier {
   void clearProfile() {
     _profile = null;
     _currentProfileDid = null;
-    _postsState = FeedState.initial();
-    _commentsState = CommentsState.initial();
+    _resetFeeds();
     _profileError = null;
     _isLoadingProfile = false;
     notifyListeners();
+  }
+
+  /// Drop both feeds back to their pre-load state, orphaning any in-flight
+  /// page so it cannot land on the next profile.
+  void _resetFeeds() {
+    _postsController.reset();
+    _commentsController.reset();
+    _postsLastRefreshTime = null;
+    _postsState = FeedState.initial();
+    _commentsState = CommentsState.initial();
   }
 
   /// Set an error message directly (for cases like missing actor)
@@ -625,6 +625,8 @@ class UserProfileProvider with ChangeNotifier {
   @override
   void dispose() {
     _authProvider.removeListener(_onAuthChanged);
+    _postsController.dispose();
+    _commentsController.dispose();
     super.dispose();
   }
 }

@@ -391,6 +391,7 @@ class CommentsState {
     this.isLoading = false,
     this.isLoadingMore = false,
     this.error,
+    this.loadMoreError,
   }) : comments = List.unmodifiable(comments);
 
   /// Create a default empty state
@@ -413,13 +414,22 @@ class CommentsState {
   /// Pagination (load more) in progress
   final bool isLoadingMore;
 
-  /// Error message if any
+  /// First-page error message, if any.
+  ///
+  /// Drives the full-screen error state. A pagination failure must never
+  /// land here — see [loadMoreError].
   final String? error;
+
+  /// Pagination error message, if any.
+  ///
+  /// Drives the list's footer error, kept separate from [error] so a
+  /// load-more hiccup cannot blank a list that already has comments.
+  final String? loadMoreError;
 
   /// Create a copy with modified fields (immutable updates)
   ///
-  /// Nullable fields (cursor, error) use a sentinel pattern to distinguish
-  /// between "not provided" and "explicitly set to null".
+  /// Nullable fields (cursor, error, loadMoreError) use a sentinel pattern
+  /// to distinguish between "not provided" and "explicitly set to null".
   CommentsState copyWith({
     List<CommentView>? comments,
     Object? cursor = _sentinel,
@@ -427,6 +437,7 @@ class CommentsState {
     bool? isLoading,
     bool? isLoadingMore,
     Object? error = _sentinel,
+    Object? loadMoreError = _sentinel,
   }) {
     return CommentsState(
       comments: comments ?? this.comments,
@@ -435,6 +446,10 @@ class CommentsState {
       isLoading: isLoading ?? this.isLoading,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       error: error == _sentinel ? this.error : error as String?,
+      loadMoreError:
+          loadMoreError == _sentinel
+              ? this.loadMoreError
+              : loadMoreError as String?,
     );
   }
 }

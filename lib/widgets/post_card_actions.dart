@@ -12,8 +12,8 @@ import '../providers/community_subscription_provider.dart';
 import '../providers/vote_provider.dart';
 import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
+import '../utils/display_utils.dart';
 import '../utils/error_messages.dart';
-import '../utils/date_time_utils.dart';
 import 'block_action_helpers.dart';
 import 'icons/animated_heart_icon.dart';
 import 'report_dialog.dart';
@@ -478,7 +478,7 @@ class _PostCardActionsState extends State<PostCardActions> {
                             ),
                             const SizedBox(width: 5),
                             Text(
-                              DateTimeUtils.formatCount(count),
+                              DisplayUtils.formatCount(count),
                               style: TextStyle(
                                 color: AppColors.textPrimary.withValues(
                                   alpha: 0.6,
@@ -578,7 +578,7 @@ class _PostCardActionsState extends State<PostCardActions> {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            DateTimeUtils.formatCount(adjustedScore),
+                            DisplayUtils.formatCount(adjustedScore),
                             style: TextStyle(
                               color: AppColors.textPrimary.withValues(
                                 alpha: 0.6,

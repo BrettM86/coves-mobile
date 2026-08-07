@@ -28,8 +28,10 @@ class CommunityAvatar extends StatelessWidget {
     this.avatarUrl,
     this.shape = CommunityAvatarShape.circle,
     this.borderRadius = 14.0,
+    this.fallbackColor,
     this.fallbackColorAlpha = 1.0,
     this.fallbackBorder,
+    this.fallbackIcon,
     this.showLoadingIndicator = false,
     super.key,
   });
@@ -49,11 +51,18 @@ class CommunityAvatar extends StatelessWidget {
   /// Border radius when [shape] is [CommunityAvatarShape.roundedRect].
   final double borderRadius;
 
+  /// Fallback background color. Defaults to the deterministic hash color for
+  /// [name] so the same community looks the same everywhere.
+  final Color? fallbackColor;
+
   /// Alpha value applied to the fallback background color (0.0 - 1.0).
   final double fallbackColorAlpha;
 
   /// Optional border on the fallback avatar.
   final BoxBorder? fallbackBorder;
+
+  /// Rendered instead of the name initial when set.
+  final Widget? fallbackIcon;
 
   /// Whether to show a loading spinner while the image loads.
   final bool showLoadingIndicator;
@@ -69,6 +78,10 @@ class CommunityAvatar extends StatelessWidget {
     if (shape == CommunityAvatarShape.roundedRect) {
       return CachedNetworkImage(
         imageUrl: avatarUrl!,
+        // Disable fade animation to prevent scroll jitter, same as the
+        // circle path and UserAvatar.
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
         imageBuilder: (context, imageProvider) => Container(
           width: size,
           height: size,
@@ -115,7 +128,7 @@ class CommunityAvatar extends StatelessWidget {
   }
 
   Widget _buildFallback() {
-    final baseColor = DisplayUtils.getFallbackColor(name);
+    final baseColor = fallbackColor ?? DisplayUtils.getFallbackColor(name);
     final isCircle = shape == CommunityAvatarShape.circle;
 
     return Container(
@@ -128,14 +141,15 @@ class CommunityAvatar extends StatelessWidget {
         border: fallbackBorder,
       ),
       child: Center(
-        child: Text(
-          name.isNotEmpty ? name[0].toUpperCase() : '?',
-          style: TextStyle(
-            fontSize: size * 0.45,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
+        child: fallbackIcon ??
+            Text(
+              name.isNotEmpty ? name[0].toUpperCase() : '?',
+              style: TextStyle(
+                fontSize: size * 0.45,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
       ),
     );
   }

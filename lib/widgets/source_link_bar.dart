@@ -1,10 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
 import '../models/post.dart';
+import '../utils/url_display.dart';
 import '../utils/url_launcher.dart';
+import 'media/favicon.dart';
 
 /// Source link bar widget for displaying clickable source links
 ///
@@ -35,7 +35,7 @@ class SourceLinkBar extends StatelessWidget {
           child: Row(
             children: [
               // Favicon
-              _buildFavicon(),
+              Favicon(source.uri, domain: source.domain),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -61,78 +61,16 @@ class SourceLinkBar extends StatelessWidget {
     );
   }
 
-  /// Extracts the domain from the source
+  /// The domain to show in the bar.
+  ///
+  /// The record's own `domain` wins when it has one; otherwise the host is
+  /// parsed out of the uri, and a uri with no host is shown whole so the row
+  /// is never blank.
   String _extractDomain() {
-    // Use domain field if available
-    if (source.domain != null && source.domain!.isNotEmpty) {
-      return source.domain!;
+    final declared = source.domain;
+    if (declared != null && declared.isNotEmpty) {
+      return declared;
     }
-
-    // Otherwise parse from URI
-    try {
-      final uri = Uri.parse(source.uri);
-      if (uri.host.isNotEmpty) {
-        return uri.host;
-      }
-    } on FormatException catch (e) {
-      if (kDebugMode) {
-        debugPrint('SourceLinkBar: Failed to parse URI "${source.uri}": $e');
-      }
-    }
-
-    // Fallback to full URI if domain extraction fails
-    return source.uri;
-  }
-
-  /// Builds the favicon widget
-  Widget _buildFavicon() {
-    // Extract domain for favicon URL
-    var domain = source.domain;
-    if (domain == null || domain.isEmpty) {
-      try {
-        final uri = Uri.parse(source.uri);
-        domain = uri.host;
-      } on FormatException catch (e) {
-        if (kDebugMode) {
-          debugPrint('SourceLinkBar: Failed to parse URI "${source.uri}": $e');
-        }
-        domain = null;
-      }
-    }
-
-    if (domain == null || domain.isEmpty) {
-      // Fallback to link icon if we can't get the domain
-      return Icon(
-        Icons.link,
-        size: 18,
-        color: AppColors.textPrimary.withValues(alpha: 0.7),
-      );
-    }
-
-    // Use Google's favicon service
-    final faviconUrl =
-        'https://www.google.com/s2/favicons?domain=$domain&sz=32';
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: CachedNetworkImage(
-        imageUrl: faviconUrl,
-        width: 18,
-        height: 18,
-        fit: BoxFit.cover,
-        placeholder:
-            (context, url) => Icon(
-              Icons.link,
-              size: 18,
-              color: AppColors.textPrimary.withValues(alpha: 0.7),
-            ),
-        errorWidget:
-            (context, url, error) => Icon(
-              Icons.link,
-              size: 18,
-              color: AppColors.textPrimary.withValues(alpha: 0.7),
-            ),
-      ),
-    );
+    return domainOf(source.uri) ?? source.uri;
   }
 }

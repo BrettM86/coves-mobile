@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import '../constants/app_colors.dart';
 import '../models/user_profile.dart';
 import '../utils/date_time_utils.dart';
+import '../utils/display_utils.dart';
+import 'user_avatar.dart';
 
 /// Collapsing profile header displaying the banner with the avatar and
 /// identity row (handle + DID) anchored to the banner's bottom edge.
@@ -256,39 +258,12 @@ class ProfileHeader extends StatelessWidget {
   }
 
   Widget _buildAvatar(double size) {
-    if (profile?.avatar != null) {
-      return CachedNetworkImage(
-        imageUrl: profile!.avatar!,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        // Disable fade animation to prevent scroll jitter
-        fadeInDuration: Duration.zero,
-        fadeOutDuration: Duration.zero,
-        // Static placeholder instead of animated spinner to prevent
-        // scroll jitter
-        placeholder: (context, url) => _buildAvatarLoading(size),
-        errorWidget: (context, url, error) => _buildFallbackAvatar(size),
-      );
-    }
-    return _buildFallbackAvatar(size);
-  }
-
-  Widget _buildAvatarLoading(double size) {
-    // Static placeholder instead of animated spinner to prevent scroll jitter
-    return Container(
-      width: size,
-      height: size,
-      color: AppColors.backgroundSecondary,
-    );
-  }
-
-  Widget _buildFallbackAvatar(double size) {
-    return Container(
-      width: size,
-      height: size,
-      color: AppColors.primary,
-      child: Icon(Icons.person, size: size * 0.5, color: Colors.white),
+    return UserAvatar(
+      name: profile?.handle ?? '',
+      avatarUrl: profile?.avatar,
+      size: size,
+      fallbackColor: AppColors.primary,
+      fallbackIcon: Icon(Icons.person, size: size * 0.5, color: Colors.white),
     );
   }
 }
@@ -493,7 +468,7 @@ class _StatItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final valueText = _formatNumber(value);
+    final valueText = DisplayUtils.formatCount(value);
 
     return RichText(
       text: TextSpan(
@@ -516,14 +491,5 @@ class _StatItem extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatNumber(int value) {
-    if (value >= 1000000) {
-      return '${(value / 1000000).toStringAsFixed(1)}M';
-    } else if (value >= 1000) {
-      return '${(value / 1000).toStringAsFixed(1)}K';
-    }
-    return value.toString();
   }
 }

@@ -372,15 +372,14 @@ void main() {
       );
       expect(find.text(_detailMarker), findsNothing);
 
-      final viewerImages =
-          tester
-              .widgetList<CachedNetworkImage>(
-                find.descendant(
-                  of: find.byKey(_viewerKey),
-                  matching: find.byType(CachedNetworkImage),
-                ),
-              )
-              .map((w) => w.imageUrl);
+      final viewerImages = tester
+          .widgetList<CachedNetworkImage>(
+            find.descendant(
+              of: find.byKey(_viewerKey),
+              matching: find.byType(CachedNetworkImage),
+            ),
+          )
+          .map((w) => w.imageUrl);
       expect(
         viewerImages,
         contains(_full1),
@@ -424,15 +423,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final viewerImages =
-          tester
-              .widgetList<CachedNetworkImage>(
-                find.descendant(
-                  of: find.byKey(_viewerKey),
-                  matching: find.byType(CachedNetworkImage),
-                ),
-              )
-              .map((w) => w.imageUrl);
+      final viewerImages = tester
+          .widgetList<CachedNetworkImage>(
+            find.descendant(
+              of: find.byKey(_viewerKey),
+              matching: find.byType(CachedNetworkImage),
+            ),
+          )
+          .map((w) => w.imageUrl);
       expect(viewerImages, contains(_full2));
     });
 
@@ -906,32 +904,6 @@ void main() {
       expect(find.text('Plain text post'), findsOneWidget);
       expect(find.byKey(_imagesKey), findsNothing);
       expect(find.byKey(_videoKey), findsNothing);
-    });
-  });
-
-  group('formatVideoDuration', () {
-    test('B5 formats sub-minute durations as m:ss', () {
-      expect(formatVideoDuration(0), '0:00');
-      expect(formatVideoDuration(5), '0:05');
-      expect(formatVideoDuration(42), '0:42');
-      expect(formatVideoDuration(59), '0:59');
-    });
-
-    test('B5 formats minute durations as m:ss zero-padded', () {
-      expect(formatVideoDuration(60), '1:00');
-      expect(formatVideoDuration(61), '1:01');
-      expect(formatVideoDuration(754), '12:34');
-      expect(formatVideoDuration(3599), '59:59');
-    });
-
-    test('B5 switches to h:mm:ss at one hour', () {
-      expect(formatVideoDuration(3600), '1:00:00');
-      expect(formatVideoDuration(3723), '1:02:03');
-      expect(formatVideoDuration(7325), '2:02:05');
-    });
-
-    test('B5 treats negative input as zero rather than throwing', () {
-      expect(formatVideoDuration(-1), '0:00');
     });
   });
 }

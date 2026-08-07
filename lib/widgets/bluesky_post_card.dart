@@ -1,5 +1,4 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../constants/bluesky_colors.dart';
@@ -7,7 +6,9 @@ import '../constants/bluesky_icons.dart';
 import '../models/bluesky_post.dart';
 import '../models/post.dart';
 import '../utils/date_time_utils.dart';
+import '../utils/display_utils.dart';
 import '../utils/url_launcher.dart';
+import 'user_avatar.dart';
 
 /// Bluesky post card widget for displaying Bluesky crossposts
 ///
@@ -217,7 +218,7 @@ class BlueskyPostCard extends StatelessWidget {
         if (count != null && count > 0) ...[
           const SizedBox(width: 4),
           Text(
-            DateTimeUtils.formatCount(count),
+            DisplayUtils.formatCount(count),
             style: const TextStyle(
               color: BlueskyColors.actionColor,
               fontSize: 13,
@@ -237,7 +238,7 @@ class BlueskyPostCard extends StatelessWidget {
         if (count != null && count > 0) ...[
           const SizedBox(width: 4),
           Text(
-            DateTimeUtils.formatCount(count),
+            DisplayUtils.formatCount(count),
             style: const TextStyle(
               color: BlueskyColors.actionColor,
               fontSize: 13,
@@ -304,54 +305,14 @@ class BlueskyPostCard extends StatelessWidget {
 
   /// Builds the avatar widget with fallback
   Widget _buildAvatar(AuthorView author) {
-    final avatarUrl = author.avatar;
-    if (avatarUrl != null && avatarUrl.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: CachedNetworkImage(
-          imageUrl: avatarUrl,
-          width: 40,
-          height: 40,
-          fit: BoxFit.cover,
-          // Disable fade animation to prevent scroll jitter
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
-          placeholder: (context, url) => _buildFallbackAvatar(author),
-          errorWidget: (context, url, error) {
-            if (kDebugMode) {
-              debugPrint('Failed to load avatar from $url: $error');
-            }
-            return _buildFallbackAvatar(author);
-          },
-        ),
-      );
-    }
-
-    return _buildFallbackAvatar(author);
-  }
-
-  /// Builds a fallback avatar with the first letter of display name or handle
-  Widget _buildFallbackAvatar(AuthorView author) {
-    final text = author.displayName ?? author.handle;
-    final firstLetter = text.isNotEmpty ? text[0].toUpperCase() : '?';
-
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: BlueskyColors.avatarFallback,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Center(
-        child: Text(
-          firstLetter,
-          style: const TextStyle(
-            color: BlueskyColors.textSecondary,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
+    // Bluesky-embedded posts keep their own themed fallback rather than the
+    // Coves hash palette, so the embed reads as Bluesky chrome.
+    return UserAvatar(
+      name: author.displayName ?? author.handle,
+      avatarUrl: author.avatar,
+      size: 40,
+      fallbackColor: BlueskyColors.avatarFallback,
+      fallbackTextColor: BlueskyColors.textSecondary,
     );
   }
 
@@ -622,54 +583,12 @@ class BlueskyPostCard extends StatelessWidget {
 
   /// Builds a small avatar widget with fallback for quoted posts
   Widget _buildSmallAvatar(AuthorView author) {
-    final avatarUrl = author.avatar;
-    if (avatarUrl != null && avatarUrl.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: CachedNetworkImage(
-          imageUrl: avatarUrl,
-          width: 20,
-          height: 20,
-          fit: BoxFit.cover,
-          // Disable fade animation to prevent scroll jitter
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
-          placeholder: (context, url) => _buildSmallFallbackAvatar(author),
-          errorWidget: (context, url, error) {
-            if (kDebugMode) {
-              debugPrint('Failed to load avatar from $url: $error');
-            }
-            return _buildSmallFallbackAvatar(author);
-          },
-        ),
-      );
-    }
-
-    return _buildSmallFallbackAvatar(author);
-  }
-
-  /// Builds a small fallback avatar for quoted posts
-  Widget _buildSmallFallbackAvatar(AuthorView author) {
-    final text = author.displayName ?? author.handle;
-    final firstLetter = text.isNotEmpty ? text[0].toUpperCase() : '?';
-
-    return Container(
-      width: 20,
-      height: 20,
-      decoration: BoxDecoration(
-        color: BlueskyColors.avatarFallback,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Center(
-        child: Text(
-          firstLetter,
-          style: const TextStyle(
-            color: BlueskyColors.textSecondary,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
+    return UserAvatar(
+      name: author.displayName ?? author.handle,
+      avatarUrl: author.avatar,
+      size: 20,
+      fallbackColor: BlueskyColors.avatarFallback,
+      fallbackTextColor: BlueskyColors.textSecondary,
     );
   }
 

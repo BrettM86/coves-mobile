@@ -7,12 +7,15 @@ import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../utils/responsive_utils.dart';
 import '../../models/comment.dart';
+import '../../models/post.dart';
 import '../../models/user_profile.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/block_provider.dart';
 import '../../providers/user_profile_provider.dart';
+import '../../utils/pagination_scroll_listener.dart';
 import '../../widgets/comment_card.dart';
 import '../../widgets/loading_error_states.dart';
+import '../../widgets/paginated_sliver_list.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/profile_header.dart';
@@ -37,11 +40,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _selectedTabIndex = 0;
   bool _commentsLoadedOnce = false;
 
+  final ScrollController _scrollController = ScrollController();
+  late final PaginationScrollListener _paginationListener;
+
+  // One pending post-frame "does the content fill the viewport?" check.
+  bool _viewportFillCheckScheduled = false;
+
   @override
   void initState() {
     super.initState();
+    // Pagination is driven by the scroll position, not by the item builder:
+    // triggering a load from build() re-enters the provider mid-frame.
+    _paginationListener = PaginationScrollListener(
+      controller: _scrollController,
+      onLoadMore: _loadMoreForActiveTab,
+    )..attach();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadProfile();
+    });
+  }
+
+  @override
+  void dispose() {
+    _paginationListener.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _loadMoreForActiveTab() {
+    if (!mounted) {
+      return;
+    }
+    final profileProvider = context.read<UserProfileProvider>();
+    if (_selectedTabIndex == 0) {
+      profileProvider.loadMorePosts();
+    } else if (_selectedTabIndex == 1) {
+      profileProvider.loadMoreComments();
+    }
+  }
+
+  /// Keep loading while the active tab's content does not fill the
+  /// viewport.
+  ///
+  /// [PaginationScrollListener] only fires on scroll events. The build-phase
+  /// trigger this screen used to have covered the short-first-page case by
+  /// accident; this covers it on purpose, after layout instead of during
+  /// it. Scheduled from build, at most one callback outstanding.
+  void _scheduleViewportFillCheck({
+    required bool isLoading,
+    required bool isLoadingMore,
+    required bool hasMore,
+    required String? loadMoreError,
+  }) {
+    if (_viewportFillCheckScheduled ||
+        isLoading ||
+        isLoadingMore ||
+        loadMoreError != null ||
+        !hasMore) {
+      return;
+    }
+
+    _viewportFillCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _viewportFillCheckScheduled = false;
+      if (mounted) {
+        _paginationListener.checkNow();
+      }
     });
   }
 
@@ -280,6 +345,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           }
         },
         child: CustomScrollView(
+          controller: _scrollController,
           slivers: [
             // Collapsing app bar with profile header and frosted glass effect
             SliverAppBar(
@@ -474,7 +540,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    // Error state for posts
+    // Error state for posts — only while there is nothing to read. With
+    // posts on screen the same failure (a pull-to-refresh that failed)
+    // goes to the footer below instead of blanking the tab.
     if (postsState.error != null && postsState.posts.isEmpty) {
       return SliverFillRemaining(
         child: Center(
@@ -486,46 +554,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    // Empty state
-    if (postsState.posts.isEmpty && !postsState.isLoading) {
-      return const SliverFillRemaining(
-        child: Center(
-          child: Text(
-            'No posts yet',
-            style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
-          ),
+    _scheduleViewportFillCheck(
+      isLoading: postsState.isLoading,
+      isLoadingMore: postsState.isLoadingMore,
+      hasMore: postsState.hasMore,
+      loadMoreError: postsState.loadMoreError,
+    );
+
+    // Posts list. Pagination failures show in the footer via
+    // loadMoreError; a failed refresh shows there too, via refreshError.
+    return PaginatedSliverList<FeedViewPost>(
+      items: postsState.posts,
+      isLoadingMore: postsState.isLoadingMore,
+      hasMore: postsState.hasMore,
+      loadMoreError: postsState.loadMoreError,
+      refreshError: postsState.posts.isEmpty ? null : postsState.error,
+      onRetryRefresh: () => profileProvider.retryPosts(),
+      onRetryLoadMore: profileProvider.retryLoadMorePosts,
+      idOf: (feedViewPost) => feedViewPost.post.uri,
+      footerKey: const ValueKey<String>('profile_posts_footer'),
+      emptyWidget: const Center(
+        child: Text(
+          'No posts yet',
+          style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
         ),
-      );
-    }
-
-    // Posts list
-    // Only add extra slot for loading/error indicators, not just hasMore
-    final showLoadingSlot =
-        postsState.isLoadingMore || postsState.error != null;
-
-    return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        // Load more when reaching end
-        if (index == postsState.posts.length - 3 && postsState.hasMore) {
-          profileProvider.loadMorePosts();
-        }
-
-        // Show loading indicator or error at the end
-        if (index == postsState.posts.length) {
-          if (postsState.isLoadingMore) {
-            return const InlineLoading();
-          }
-          if (postsState.error != null) {
-            return InlineError(
-              message: postsState.error!,
-              onRetry: () => profileProvider.loadMorePosts(),
-            );
-          }
-          // Shouldn't reach here due to showLoadingSlot check
-          return const SizedBox.shrink();
-        }
-
-        final feedViewPost = postsState.posts[index];
+      ),
+      itemBuilder: (context, feedViewPost, index) {
         final postCard = PostCard(post: feedViewPost);
 
         // Constrain width on tablets for better readability
@@ -540,7 +594,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
         }
         return postCard;
-      }, childCount: postsState.posts.length + (showLoadingSlot ? 1 : 0)),
+      },
     );
   }
 
@@ -568,45 +622,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    // Empty state
-    if (commentsState.comments.isEmpty && !commentsState.isLoading) {
-      return const SliverFillRemaining(
-        child: Center(
-          child: Text(
-            'No comments yet',
-            style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
-          ),
+    _scheduleViewportFillCheck(
+      isLoading: commentsState.isLoading,
+      isLoadingMore: commentsState.isLoadingMore,
+      hasMore: commentsState.hasMore,
+      loadMoreError: commentsState.loadMoreError,
+    );
+
+    // Comments list — same footer/error split as the posts tab.
+    return PaginatedSliverList<CommentView>(
+      items: commentsState.comments,
+      isLoadingMore: commentsState.isLoadingMore,
+      hasMore: commentsState.hasMore,
+      loadMoreError: commentsState.loadMoreError,
+      refreshError: commentsState.comments.isEmpty
+          ? null
+          : commentsState.error,
+      onRetryRefresh: () => profileProvider.retryComments(),
+      onRetryLoadMore: profileProvider.retryLoadMoreComments,
+      idOf: (comment) => comment.uri,
+      footerKey: const ValueKey<String>('profile_comments_footer'),
+      emptyWidget: const Center(
+        child: Text(
+          'No comments yet',
+          style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
         ),
-      );
-    }
-
-    // Comments list
-    final showLoadingSlot =
-        commentsState.isLoadingMore || commentsState.error != null;
-
-    return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        // Load more when reaching end
-        if (index == commentsState.comments.length - 3 &&
-            commentsState.hasMore) {
-          profileProvider.loadMoreComments();
-        }
-
-        // Show loading indicator or error at the end
-        if (index == commentsState.comments.length) {
-          if (commentsState.isLoadingMore) {
-            return const InlineLoading();
-          }
-          if (commentsState.error != null) {
-            return InlineError(
-              message: commentsState.error!,
-              onRetry: () => profileProvider.loadMoreComments(),
-            );
-          }
-          return const SizedBox.shrink();
-        }
-
-        final comment = commentsState.comments[index];
+      ),
+      itemBuilder: (context, comment, index) {
         final commentCard = _ProfileCommentCard(comment: comment);
 
         // Constrain width on tablets for better readability
@@ -621,7 +663,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
         }
         return commentCard;
-      }, childCount: commentsState.comments.length + (showLoadingSlot ? 1 : 0)),
+      },
     );
   }
 

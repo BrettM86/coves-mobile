@@ -96,6 +96,41 @@ void main() {
       expect(find.text('5'), findsOneWidget); // comment count
     });
 
+    testWidgets('formats large stats through the canonical formatter', (
+      tester,
+    ) async {
+      // PostCardActions must render counts the same way every other surface
+      // does: uppercase K/M via DisplayUtils.formatCount.
+      final post = FeedViewPost(
+        post: PostView(
+          uri: 'at://did:example/post/123',
+          cid: 'cid123',
+          rkey: '123',
+          author: AuthorView(did: 'did:plc:author', handle: 'author.test'),
+          community: CommunityRef(
+            did: 'did:plc:community',
+            name: 'test-community',
+          ),
+          createdAt: DateTime(2024),
+          indexedAt: DateTime(2024),
+          record: const PostRecord(content: 'Test post content'),
+          stats: PostStats(
+            upvotes: 5234,
+            downvotes: 0,
+            score: 5234,
+            commentCount: 1500000,
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(createTestWidget(post));
+
+      expect(find.text('5.2K'), findsOneWidget); // score
+      expect(find.text('1.5M'), findsOneWidget); // comment count
+      expect(find.text('5.2k'), findsNothing);
+      expect(find.text('1500.0k'), findsNothing);
+    });
+
     testWidgets('displays community avatar when available', (tester) async {
       final post = FeedViewPost(
         post: PostView(
