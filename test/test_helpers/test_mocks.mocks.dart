@@ -731,14 +731,6 @@ class MockVoteProvider extends _i1.Mock implements _i14.VoteProvider {
           as bool);
 
   @override
-  bool hasStateFor(String? postUri) =>
-      (super.noSuchMethod(
-            Invocation.method(#hasStateFor, [postUri]),
-            returnValue: false,
-          )
-          as bool);
-
-  @override
   int getAdjustedScore(String? postUri, int? serverScore) =>
       (super.noSuchMethod(
             Invocation.method(#getAdjustedScore, [postUri, serverScore]),
@@ -763,29 +755,15 @@ class MockVoteProvider extends _i1.Mock implements _i14.VoteProvider {
           as _i9.Future<bool>);
 
   @override
-  void setInitialVoteState({
+  void applyServerVoteState({
     required String? postUri,
     String? voteDirection,
     String? voteUri,
   }) => super.noSuchMethod(
-    Invocation.method(#setInitialVoteState, [], {
+    Invocation.method(#applyServerVoteState, [], {
       #postUri: postUri,
       #voteDirection: voteDirection,
       #voteUri: voteUri,
-    }),
-    returnValueForMissingStub: null,
-  );
-
-  @override
-  void reconcileVoteState({
-    required String? postUri,
-    String? serverVoteDirection,
-    String? serverVoteUri,
-  }) => super.noSuchMethod(
-    Invocation.method(#reconcileVoteState, [], {
-      #postUri: postUri,
-      #serverVoteDirection: serverVoteDirection,
-      #serverVoteUri: serverVoteUri,
     }),
     returnValueForMissingStub: null,
   );

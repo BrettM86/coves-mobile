@@ -555,25 +555,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         );
 
         // Create a modified post with adjusted score for display
-        final displayPost = FeedViewPost(
-          post: PostView(
-            uri: widget.post.post.uri,
-            cid: widget.post.post.cid,
-            rkey: widget.post.post.rkey,
-            author: widget.post.post.author,
-            community: widget.post.post.community,
-            createdAt: widget.post.post.createdAt,
-            indexedAt: widget.post.post.indexedAt,
-            record: widget.post.post.record,
-            stats: PostStats(
-              upvotes: widget.post.post.stats.upvotes,
-              downvotes: widget.post.post.stats.downvotes,
-              score: adjustedScore,
-              commentCount: widget.post.post.stats.commentCount,
-            ),
-            embed: widget.post.post.embed,
+        final displayPost = widget.post.copyWith(
+          post: widget.post.post.copyWith(
+            stats: widget.post.post.stats.copyWith(score: adjustedScore),
           ),
-          reason: widget.post.reason,
         );
 
         return PostActionBar(

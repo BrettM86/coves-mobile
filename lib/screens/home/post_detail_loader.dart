@@ -6,6 +6,7 @@ import '../../constants/app_colors.dart';
 import '../../models/post.dart';
 import '../../models/post_get_result.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/vote_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../utils/error_messages.dart';
@@ -132,6 +133,7 @@ class _PostDetailLoaderState extends State<PostDetailLoader> {
       if (!mounted || requestId != _requestId) {
         return;
       }
+      _applyViewerVoteState(result);
       setState(() => _result = result);
     } on ApiException catch (e) {
       if (!mounted || requestId != _requestId) {
@@ -155,6 +157,29 @@ class _PostDetailLoaderState extends State<PostDetailLoader> {
       }
       setState(() => _error = e);
     }
+  }
+
+  /// Seeds VoteProvider from a cold-loaded post's viewer state so a
+  /// deep-linked post the user already voted on renders a lit heart.
+  ///
+  /// The response is fresh from getPost, so applying it honors
+  /// [VoteProvider.applyServerVoteState]'s fresh-snapshots-only contract.
+  /// Skipped when signed out; VoteProvider is read only behind that guard
+  /// so provider-less widget trees (tests) never look it up.
+  void _applyViewerVoteState(PostGetResult result) {
+    if (result is! PostGetSuccess) {
+      return;
+    }
+    if (!context.read<AuthProvider>().isAuthenticated) {
+      return;
+    }
+
+    final viewer = result.post.viewer;
+    context.read<VoteProvider>().applyServerVoteState(
+      postUri: result.post.uri,
+      voteDirection: viewer?.vote,
+      voteUri: viewer?.voteUri,
+    );
   }
 
   /// Navigate away: pop if possible, otherwise fall back to the feed

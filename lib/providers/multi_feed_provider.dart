@@ -290,15 +290,14 @@ class MultiFeedProvider with ChangeNotifier {
         debugPrint('✅ $feedName loaded: ${newPosts.length} posts total');
       }
 
-      // Initialize vote state from viewer data in feed response
-      // IMPORTANT: Call setInitialVoteState for ALL feed items, even
-      // when viewer.vote is null. This ensures that if a user removed
-      // their vote on another device, the local state is cleared on
-      // refresh.
+      // Apply viewer vote state from the feed response for ALL items,
+      // including those with a null viewer.vote - the provider decides
+      // whether the snapshot may win, and a null direction is how a vote
+      // removed on another device gets cleared here.
       if (_authProvider.isAuthenticated && _voteProvider != null) {
         for (final feedItem in response.feed) {
           final viewer = feedItem.post.viewer;
-          _voteProvider.setInitialVoteState(
+          _voteProvider.applyServerVoteState(
             postUri: feedItem.post.uri,
             voteDirection: viewer?.vote,
             voteUri: viewer?.voteUri,

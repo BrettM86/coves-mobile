@@ -51,8 +51,9 @@ void main() {
 
   /// Pumps the loader with an injectable fetcher.
   ///
-  /// No providers are needed: the loader only touches AuthProvider when
-  /// building its default fetcher, which the injected one replaces.
+  /// No providers are needed for non-success paths: the loader touches
+  /// AuthProvider only when building its default fetcher (replaced by the
+  /// injected one) or when seeding vote state after a successful fetch.
   Future<void> pumpLoader(
     WidgetTester tester, {
     required PostFetcher fetchPost,
@@ -66,8 +67,9 @@ void main() {
   }
 
   /// Builds a minimal PostView for success-path tests
-  PostView createMockPostView() {
+  PostView createMockPostView({ViewerState? viewer}) {
     return PostView(
+      viewer: viewer,
       uri: testUri,
       cid: 'test-cid',
       rkey: 'abc123',
@@ -164,6 +166,57 @@ void main() {
     // it now removes its auth listener via a stored reference.
     await tester.pumpWidget(const MaterialApp(home: Scaffold()));
     expect(tester.takeException(), isNull);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('cold load seeds VoteProvider from the post viewer state', (
+    tester,
+  ) async {
+    const coldVoteUri = 'at://did:plc:me/social.coves.feed.vote/cold1';
+
+    final fakeAuthProvider = FakeAuthProvider()
+      ..setAuthenticated(value: true);
+    final voteProvider = VoteProvider(
+      voteService: VoteService(
+        sessionGetter: () async => null,
+        didGetter: () => null,
+      ),
+      authProvider: fakeAuthProvider,
+    );
+    final commentsCache = CommentsProviderCache(
+      authProvider: fakeAuthProvider,
+      voteProvider: voteProvider,
+      commentService: CommentService(),
+    );
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthProvider>.value(value: fakeAuthProvider),
+          ChangeNotifierProvider<VoteProvider>.value(value: voteProvider),
+          Provider<CommentsProviderCache>.value(value: commentsCache),
+        ],
+        child: MaterialApp(
+          home: PostDetailLoader(
+            postUri: testUri,
+            fetchPost: (_) async => PostGetSuccess(
+              createMockPostView(
+                viewer: ViewerState(vote: 'up', voteUri: coldVoteUri),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // A deep-linked post the user already voted on renders a lit heart:
+    // the loader must apply the fresh viewer state before rendering.
+    expect(find.byType(PostDetailScreen), findsOneWidget);
+    expect(voteProvider.isLiked(testUri), true);
+    expect(voteProvider.getVoteState(testUri)?.uri, coldVoteUri);
+
+    await tester.pumpWidget(const MaterialApp(home: Scaffold()));
     await tester.pumpAndSettle();
   });
 

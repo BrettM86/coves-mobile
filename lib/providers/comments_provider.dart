@@ -316,16 +316,12 @@ class CommentsProvider with ChangeNotifier {
         debugPrint('✅ Comments loaded: ${_comments.length} comments total');
       }
 
-      // Initialize vote state from viewer data in comments response
+      // Apply viewer vote state from the comments response. Safe for
+      // comments already on screen (a duplicate across pages keeps its
+      // optimistic vote), so refresh and pagination share one path - on
+      // refresh _comments is response.comments anyway.
       if (_authProvider.isAuthenticated && _voteProvider != null) {
-        if (refresh) {
-          // On refresh, initialize all comments - server data is truth
-          _comments.forEach(_initializeCommentVoteState);
-        } else {
-          // On pagination, only initialize newly fetched comments to avoid
-          // overwriting optimistic vote state on existing comments
-          response.comments.forEach(_initializeCommentVoteState);
-        }
+        response.comments.forEach(_applyCommentVoteState);
       }
 
       // Start time updates when comments are loaded
@@ -488,14 +484,6 @@ class CommentsProvider with ChangeNotifier {
         return null;
       }
 
-      // Collect URIs already in the tree BEFORE merging so genuinely new
-      // comments get initialized while already-visible ones get reconciled
-      // (blind re-initialization would clobber optimistic votes).
-      final knownUris = <String>{};
-      if (existingNode != null) {
-        _collectSubtreeUris(existingNode, knownUris);
-      }
-
       // The response cursor paginates this node's direct replies; if
       // present there are more direct replies beyond this page.
       final ThreadViewComment subtree;
@@ -538,10 +526,15 @@ class CommentsProvider with ChangeNotifier {
         _comments = updated;
       }
 
-      // Initialize vote state for new replies; reconcile already-known ones
-      // against the fresh server stats just merged in.
+      // Apply viewer vote state from [fresh] - the nodes this response
+      // actually delivered - NOT from the merged subtree. The merge
+      // preserves earlier-hydrated branches whose snapshots are old;
+      // re-applying those could roll back a vote the server has since
+      // confirmed through another surface (they were applied when their
+      // own response arrived, which is enough). Nodes with an optimistic
+      // vote the server has not indexed yet are protected either way.
       if (_authProvider.isAuthenticated && _voteProvider != null) {
-        _initializeVoteStateForNewComments(subtree, knownUris);
+        _applyCommentVoteState(fresh);
       }
 
       if (kDebugMode) {
@@ -635,57 +628,6 @@ class CommentsProvider with ChangeNotifier {
       }
     }
     return null;
-  }
-
-  /// Collects the URIs of [node] and all its descendants into [uris].
-  void _collectSubtreeUris(ThreadViewComment node, Set<String> uris) {
-    uris.add(node.comment.uri);
-    for (final reply in node.replies ?? const <ThreadViewComment>[]) {
-      _collectSubtreeUris(reply, uris);
-    }
-  }
-
-  /// Initializes vote state for comments in [node]'s subtree that are new,
-  /// and reconciles the ones already known (mirrors the pagination pattern
-  /// in loadComments: never blindly re-initialize already-visible comments,
-  /// which would revert optimistic votes).
-  ///
-  /// Known comments are reconciled instead of skipped: the subtree merge
-  /// adopts fresh server stats for nodes already in the tree, so a stale
-  /// optimistic score adjustment would double-count on top of a server
-  /// score that already includes the vote. Reconciliation clears the
-  /// adjustment only when the server's viewer state confirms it has caught
-  /// up, so an unindexed optimistic vote is never clobbered.
-  ///
-  /// "Known" means in [knownUris] (present in the top-level tree before the
-  /// merge) OR already tracked by the VoteProvider. The latter covers
-  /// subtrees anchored below the top-level tree's depth cap (the focused
-  /// thread screen): there [knownUris] is empty, but a comment the user
-  /// just voted on must still be reconciled, not clobbered.
-  void _initializeVoteStateForNewComments(
-    ThreadViewComment node,
-    Set<String> knownUris,
-  ) {
-    final voteProvider = _voteProvider!;
-    final uri = node.comment.uri;
-    final viewer = node.comment.viewer;
-    final known = knownUris.contains(uri) || voteProvider.hasStateFor(uri);
-    if (!known) {
-      voteProvider.setInitialVoteState(
-        postUri: uri,
-        voteDirection: viewer?.vote,
-        voteUri: viewer?.voteUri,
-      );
-    } else {
-      voteProvider.reconcileVoteState(
-        postUri: uri,
-        serverVoteDirection: viewer?.vote,
-        serverVoteUri: viewer?.voteUri,
-      );
-    }
-    for (final reply in node.replies ?? const <ThreadViewComment>[]) {
-      _initializeVoteStateForNewComments(reply, knownUris);
-    }
   }
 
   /// Returns a copy of [nodes] with the node matching [replacement]'s URI
@@ -991,24 +933,24 @@ class CommentsProvider with ChangeNotifier {
     }
   }
 
-  /// Initialize vote state for a comment and its replies recursively
+  /// Apply vote state for a comment and its replies recursively
   ///
-  /// Extracts viewer vote data from comment and initializes VoteProvider state.
-  /// Handles nested replies recursively.
+  /// Extracts viewer vote data from comment and hands it to VoteProvider,
+  /// which decides whether the snapshot wins. Handles nested replies
+  /// recursively.
   ///
-  /// IMPORTANT: Always calls setInitialVoteState, even when viewer.vote is
-  /// null. This ensures that if a user removed their vote on another device,
-  /// the local state is cleared on refresh.
-  void _initializeCommentVoteState(ThreadViewComment threadComment) {
+  /// IMPORTANT: Always applies the snapshot, even when viewer.vote is null.
+  /// This ensures that if a user removed their vote on another device, the
+  /// local state is cleared on refresh.
+  void _applyCommentVoteState(ThreadViewComment threadComment) {
     final viewer = threadComment.comment.viewer;
-    _voteProvider!.setInitialVoteState(
+    _voteProvider!.applyServerVoteState(
       postUri: threadComment.comment.uri,
       voteDirection: viewer?.vote,
       voteUri: viewer?.voteUri,
     );
 
-    // Recursively initialize vote state for replies
-    threadComment.replies?.forEach(_initializeCommentVoteState);
+    threadComment.replies?.forEach(_applyCommentVoteState);
   }
 
   /// Retry loading after error

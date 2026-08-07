@@ -39,10 +39,6 @@ void main() {
         mockAuthProvider.getAccessToken(),
       ).thenAnswer((_) async => 'test-token');
 
-      // Default: the vote provider tracks no state (individual tests
-      // override per-URI to exercise the reconcile routing).
-      when(mockVoteProvider.hasStateFor(any)).thenReturn(false);
-
       commentsProvider = CommentsProvider(
         mockAuthProvider,
         postUri: testPostUri,
@@ -796,7 +792,7 @@ void main() {
         await commentsProvider.loadComments(refresh: true);
 
         verify(
-          mockVoteProvider.setInitialVoteState(
+          mockVoteProvider.applyServerVoteState(
             postUri: 'comment1',
             voteDirection: 'up',
             voteUri: 'at://did:plc:test/social.coves.feed.vote/vote1',
@@ -830,7 +826,7 @@ void main() {
         await commentsProvider.loadComments(refresh: true);
 
         verify(
-          mockVoteProvider.setInitialVoteState(
+          mockVoteProvider.applyServerVoteState(
             postUri: 'comment1',
             voteDirection: 'down',
             voteUri: 'at://did:plc:test/social.coves.feed.vote/vote1',
@@ -865,9 +861,9 @@ void main() {
 
           await commentsProvider.loadComments(refresh: true);
 
-          // Should call setInitialVoteState with null to clear stale state
+          // Should apply a null direction to clear stale state
           verify(
-            mockVoteProvider.setInitialVoteState(
+            mockVoteProvider.applyServerVoteState(
               postUri: 'comment1',
               voteDirection: null,
               voteUri: null,
@@ -913,7 +909,7 @@ void main() {
 
           // Should initialize vote state for both parent and reply
           verify(
-            mockVoteProvider.setInitialVoteState(
+            mockVoteProvider.applyServerVoteState(
               postUri: 'parent-comment',
               voteDirection: 'up',
               voteUri: 'at://did:plc:test/social.coves.feed.vote/vote-parent',
@@ -921,7 +917,7 @@ void main() {
           ).called(1);
 
           verify(
-            mockVoteProvider.setInitialVoteState(
+            mockVoteProvider.applyServerVoteState(
               postUri: 'reply-comment',
               voteDirection: 'down',
               voteUri: 'at://did:plc:test/social.coves.feed.vote/vote-reply',
@@ -972,7 +968,7 @@ void main() {
 
         // Should initialize vote state for all 3 levels
         verify(
-          mockVoteProvider.setInitialVoteState(
+          mockVoteProvider.applyServerVoteState(
             postUri: anyNamed('postUri'),
             voteDirection: anyNamed('voteDirection'),
             voteUri: anyNamed('voteUri'),
@@ -1037,7 +1033,7 @@ void main() {
 
           // Verify comment1 vote initialized
           verify(
-            mockVoteProvider.setInitialVoteState(
+            mockVoteProvider.applyServerVoteState(
               postUri: 'comment1',
               voteDirection: 'up',
               voteUri: 'at://did:plc:test/social.coves.feed.vote/vote1',
@@ -1050,19 +1046,22 @@ void main() {
           // Load second page (pagination, not refresh)
           await commentsProvider.loadMoreComments();
 
-          // Should ONLY initialize vote state for comment2 (new comments)
-          // NOT re-initialize comment1 (which would wipe optimistic votes)
+          // Pagination forwards only the new page's comments. comment1 is
+          // not in the page-2 response, so it gets no call. (Re-applying a
+          // duplicate would be SAFE now - the provider protects optimistic
+          // votes - but forwarding only what the response delivered is the
+          // applyServerVoteState caller contract.)
           verify(
-            mockVoteProvider.setInitialVoteState(
+            mockVoteProvider.applyServerVoteState(
               postUri: 'comment2',
               voteDirection: 'down',
               voteUri: 'at://did:plc:test/social.coves.feed.vote/vote2',
             ),
           ).called(1);
 
-          // Verify comment1 was NOT re-initialized during pagination
+          // comment1 was not in the response, so it must not be re-applied.
           verifyNever(
-            mockVoteProvider.setInitialVoteState(
+            mockVoteProvider.applyServerVoteState(
               postUri: 'comment1',
               voteDirection: anyNamed('voteDirection'),
               voteUri: anyNamed('voteUri'),
@@ -2125,8 +2124,8 @@ void main() {
         },
       );
 
-      test('should not clobber vote state of already-visible comments',
-          () async {
+      test('should apply fresh viewer state to every node of the merged '
+          'subtree', () async {
         await commentsProvider.loadComments(refresh: true);
 
         // First hydration: parent + child-1.
@@ -2150,9 +2149,8 @@ void main() {
         clearInteractions(mockVoteProvider);
 
         // Second hydration adds child-2; parent and child-1 are already
-        // visible and must NOT be re-initialized (that would revert
-        // optimistic votes). The parent carries fresh viewer state so the
-        // reconcile call's arguments can be pinned exactly.
+        // visible. The parent carries fresh viewer state so the call's
+        // arguments can be pinned exactly.
         final page2 = _createMockThreadCommentWithViewer(
           uri: parentUri,
           vote: 'up',
@@ -2176,69 +2174,117 @@ void main() {
         );
         await commentsProvider.loadMoreReplies(parentUri);
 
+        // Every node THIS RESPONSE delivered is handed to the vote
+        // provider - including already-visible ones, whose merged stats
+        // come from this response. The provider is what protects an
+        // unindexed optimistic vote from the snapshot. Arguments pinned
+        // exactly: a regression that forwards the wrong node's viewer (or
+        // always null) must fail here.
         verify(
-          mockVoteProvider.setInitialVoteState(
+          mockVoteProvider.applyServerVoteState(
+            postUri: parentUri,
+            voteDirection: 'up',
+            voteUri: 'at://did:plc:test/social.coves.feed.vote/parentvote1',
+          ),
+        ).called(1);
+        verify(
+          mockVoteProvider.applyServerVoteState(
+            postUri: 'child-1',
+            voteDirection: anyNamed('voteDirection'),
+            voteUri: anyNamed('voteUri'),
+          ),
+        ).called(1);
+        verify(
+          mockVoteProvider.applyServerVoteState(
             postUri: 'child-2',
             voteDirection: anyNamed('voteDirection'),
             voteUri: anyNamed('voteUri'),
           ),
         ).called(1);
-        verifyNever(
-          mockVoteProvider.setInitialVoteState(
-            postUri: parentUri,
-            voteDirection: anyNamed('voteDirection'),
-            voteUri: anyNamed('voteUri'),
-          ),
+      });
+
+      test('should not re-apply merge-preserved branches the response did '
+          'not deliver', () async {
+        await commentsProvider.loadComments(refresh: true);
+
+        // First hydration delivers child-1; its snapshot is applied then.
+        final page1 = _createMockThreadCommentWithViewer(
+          uri: parentUri,
+          replies: [_createMockThreadComment('child-1')],
         );
-        verifyNever(
-          mockVoteProvider.setInitialVoteState(
-            postUri: 'child-1',
-            voteDirection: anyNamed('voteDirection'),
-            voteUri: anyNamed('voteUri'),
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            parentRkey: argThat(isNotNull, named: 'parentRkey'),
           ),
+        ).thenAnswer(
+          (_) async => CommentsResponse(post: {}, comments: [page1]),
+        );
+        await commentsProvider.loadMoreReplies(parentUri);
+        clearInteractions(mockVoteProvider);
+
+        // Second hydration hits the response's depth cutoff: the parent
+        // comes back with no replies, and the merge keeps child-1 from the
+        // existing tree - carrying its OLD viewer snapshot.
+        final depthCutoff = _createMockThreadCommentWithViewer(
+          uri: parentUri,
+          vote: 'up',
+          voteUri: 'at://did:plc:test/social.coves.feed.vote/parentvote2',
+        );
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            parentRkey: argThat(isNotNull, named: 'parentRkey'),
+          ),
+        ).thenAnswer(
+          (_) async => CommentsResponse(post: {}, comments: [depthCutoff]),
+        );
+        final result = await commentsProvider.loadMoreReplies(parentUri);
+
+        // The merge must still preserve the branch for display...
+        expect(
+          result!.replies!.map((r) => r.comment.uri),
+          contains('child-1'),
         );
 
-        // Already-visible nodes are reconciled instead: the merge adopted
-        // fresh server stats for them, so a stale optimistic score
-        // adjustment would double-count without this (reconcile only
-        // clears it when the server's viewer state confirms the vote).
-        // Arguments pinned exactly: a regression that forwards the wrong
-        // node's viewer (or always null) must fail here.
+        // ...but child-1's stale preserved snapshot must NOT be re-applied:
+        // if its vote was confirmed via another surface (adjustment
+        // cleared), re-applying the old snapshot would blind-adopt it and
+        // roll the confirmed vote back.
         verify(
-          mockVoteProvider.reconcileVoteState(
+          mockVoteProvider.applyServerVoteState(
             postUri: parentUri,
-            serverVoteDirection: 'up',
-            serverVoteUri:
-                'at://did:plc:test/social.coves.feed.vote/parentvote1',
-          ),
-        ).called(1);
-        verify(
-          mockVoteProvider.reconcileVoteState(
-            postUri: 'child-1',
-            serverVoteDirection: anyNamed('serverVoteDirection'),
-            serverVoteUri: anyNamed('serverVoteUri'),
+            voteDirection: 'up',
+            voteUri: 'at://did:plc:test/social.coves.feed.vote/parentvote2',
           ),
         ).called(1);
         verifyNever(
-          mockVoteProvider.reconcileVoteState(
-            postUri: 'child-2',
-            serverVoteDirection: anyNamed('serverVoteDirection'),
-            serverVoteUri: anyNamed('serverVoteUri'),
+          mockVoteProvider.applyServerVoteState(
+            postUri: 'child-1',
+            voteDirection: anyNamed('voteDirection'),
+            voteUri: anyNamed('voteUri'),
           ),
         );
       });
 
       test(
-        'should reconcile (not clobber) voted comments in a subtree '
-        'anchored below the top-level tree (focused thread depth cap)',
+        'should apply viewer state for a subtree anchored below the '
+        'top-level tree (focused thread depth cap)',
         () async {
           await commentsProvider.loadComments(refresh: true);
 
-          // Anchor is NOT in the top-level tree, so knownUris is empty -
-          // only the VoteProvider knows the user just voted on it.
+          // Anchor is NOT in the top-level tree - only the VoteProvider can
+          // know the user just voted on it, so it must still be told.
           const deepUri =
               'at://did:plc:author/social.coves.community.comment/deeprkey9';
-          when(mockVoteProvider.hasStateFor(deepUri)).thenReturn(true);
 
           when(
             mockApiService.getComments(
@@ -2266,26 +2312,20 @@ void main() {
           final result = await commentsProvider.loadMoreReplies(deepUri);
           expect(result, isNotNull);
 
-          // The voted anchor is reconciled - setInitialVoteState here would
-          // clobber an unindexed optimistic vote (the original bug class).
+          // The anchor's fresh viewer state reaches the provider verbatim;
+          // deciding it must not clobber an unindexed optimistic vote (the
+          // original bug class) is the provider's job.
           verify(
-            mockVoteProvider.reconcileVoteState(
+            mockVoteProvider.applyServerVoteState(
               postUri: deepUri,
-              serverVoteDirection: 'up',
-              serverVoteUri: 'at://did:plc:test/social.coves.feed.vote/deep1',
+              voteDirection: 'up',
+              voteUri: 'at://did:plc:test/social.coves.feed.vote/deep1',
             ),
           ).called(1);
-          verifyNever(
-            mockVoteProvider.setInitialVoteState(
-              postUri: deepUri,
-              voteDirection: anyNamed('voteDirection'),
-              voteUri: anyNamed('voteUri'),
-            ),
-          );
 
-          // The genuinely new child is initialized normally.
+          // And so does the genuinely new child's.
           verify(
-            mockVoteProvider.setInitialVoteState(
+            mockVoteProvider.applyServerVoteState(
               postUri: 'deep-child',
               voteDirection: anyNamed('voteDirection'),
               voteUri: anyNamed('voteUri'),

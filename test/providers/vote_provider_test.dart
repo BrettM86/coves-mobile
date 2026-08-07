@@ -90,7 +90,7 @@ void main() {
 
       test('should remove vote when toggled off', () async {
         // First, set up initial vote state
-        voteProvider.setInitialVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
           voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
@@ -162,7 +162,7 @@ void main() {
 
       test('should rollback to previous state on error', () async {
         // Set up initial voted state
-        voteProvider.setInitialVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
           voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
@@ -273,11 +273,11 @@ void main() {
       });
     });
 
-    group('setInitialVoteState', () {
+    group('applyServerVoteState: server-snapshot initialization', () {
       const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
 
       test('should set initial vote state from API data', () {
-        voteProvider.setInitialVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
           voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
@@ -292,7 +292,7 @@ void main() {
       });
 
       test('should set initial vote state with "down" direction', () {
-        voteProvider.setInitialVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
           voteDirection: 'down',
           voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
@@ -308,7 +308,7 @@ void main() {
       });
 
       test('should extract rkey from voteUri', () {
-        voteProvider.setInitialVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
           voteUri: 'at://did:plc:test/social.coves.feed.vote/3kbyxyz123',
@@ -319,7 +319,7 @@ void main() {
       });
 
       test('should handle voteUri being null', () {
-        voteProvider.setInitialVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
         );
@@ -333,7 +333,7 @@ void main() {
 
       test('should remove vote state when voteDirection is null', () {
         // First set a vote
-        voteProvider.setInitialVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
           voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
@@ -342,7 +342,7 @@ void main() {
         expect(voteProvider.isLiked(testPostUri), true);
 
         // Then clear it
-        voteProvider.setInitialVoteState(postUri: testPostUri);
+        voteProvider.applyServerVoteState(postUri: testPostUri);
 
         expect(voteProvider.isLiked(testPostUri), false);
         expect(voteProvider.getVoteState(testPostUri), null);
@@ -350,7 +350,7 @@ void main() {
 
       test('should clear stale vote state when refreshing with null vote', () {
         // Simulate initial state from previous session
-        voteProvider.setInitialVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
           voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
@@ -360,7 +360,7 @@ void main() {
 
         // Simulate refresh where server returns viewer.vote = null
         // (user removed vote on another device)
-        voteProvider.setInitialVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
           voteDirection: null,
         );
@@ -399,7 +399,7 @@ void main() {
 
         // Now simulate a feed refresh - server returns fresh score (11)
         // which already includes the vote. The adjustment should be cleared.
-        voteProvider.setInitialVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
           voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
@@ -420,7 +420,7 @@ void main() {
           ..addListener(() {
             notificationCount++;
           })
-          ..setInitialVoteState(
+          ..applyServerVoteState(
             postUri: testPostUri,
             voteDirection: 'up',
             voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
@@ -466,12 +466,12 @@ void main() {
 
         // Set up multiple votes
         voteProvider
-          ..setInitialVoteState(
+          ..applyServerVoteState(
             postUri: post1,
             voteDirection: 'up',
             voteUri: 'at://did:plc:test/social.coves.feed.vote/1',
           )
-          ..setInitialVoteState(
+          ..applyServerVoteState(
             postUri: post2,
             voteDirection: 'up',
             voteUri: 'at://did:plc:test/social.coves.feed.vote/2',
@@ -589,7 +589,7 @@ void main() {
 
       test('should adjust score when removing upvote', () async {
         // Set initial state with upvote
-        voteProvider.setInitialVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
           voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
@@ -651,7 +651,7 @@ void main() {
         'should adjust score when switching from upvote to downvote',
         () async {
           // Set initial state with upvote
-          voteProvider.setInitialVoteState(
+          voteProvider.applyServerVoteState(
             postUri: testPostUri,
             voteDirection: 'up',
             voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
@@ -690,7 +690,7 @@ void main() {
         'should adjust score when switching from downvote to upvote',
         () async {
           // Set initial state with downvote
-          voteProvider.setInitialVoteState(
+          voteProvider.applyServerVoteState(
             postUri: testPostUri,
             voteDirection: 'down',
             voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
@@ -756,7 +756,7 @@ void main() {
 
         // Manually set some adjustments (simulating votes)
         voteProvider
-          ..setInitialVoteState(
+          ..applyServerVoteState(
             postUri: testPostUri1,
             voteDirection: 'up',
             voteUri: 'at://did:plc:test/social.coves.feed.vote/1',
@@ -769,7 +769,7 @@ void main() {
       });
     });
 
-    group('reconcileVoteState', () {
+    group('applyServerVoteState: indexing-lag reconciliation', () {
       const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
       const testPostCid = 'bafy2bzacepostcid123';
       const testVoteUri = 'at://did:plc:test/social.coves.feed.vote/456';
@@ -806,10 +806,10 @@ void main() {
 
           // Focused-thread hydration re-delivers the node with fresh stats:
           // server score is now 1 (includes the vote) and viewer confirms it.
-          voteProvider.reconcileVoteState(
+          voteProvider.applyServerVoteState(
             postUri: testPostUri,
-            serverVoteDirection: 'up',
-            serverVoteUri: testVoteUri,
+            voteDirection: 'up',
+            voteUri: testVoteUri,
           );
 
           // Without reconciliation this showed 2 (1 + stale adjustment).
@@ -829,7 +829,7 @@ void main() {
           );
 
           // Server snapshot predates the vote: no viewer state, score 0.
-          voteProvider.reconcileVoteState(postUri: testPostUri);
+          voteProvider.applyServerVoteState(postUri: testPostUri);
 
           // Stale server score + kept adjustment still renders correctly.
           expect(voteProvider.getAdjustedScore(testPostUri, 0), 1);
@@ -842,7 +842,7 @@ void main() {
         '(delete not yet indexed)',
         () async {
           // Liked at load time (server counted it, no adjustment).
-          voteProvider.setInitialVoteState(
+          voteProvider.applyServerVoteState(
             postUri: testPostUri,
             voteDirection: 'up',
             voteUri: testVoteUri,
@@ -857,10 +857,10 @@ void main() {
           );
 
           // Snapshot predates the unlike: server still says 'up', score 1.
-          voteProvider.reconcileVoteState(
+          voteProvider.applyServerVoteState(
             postUri: testPostUri,
-            serverVoteDirection: 'up',
-            serverVoteUri: testVoteUri,
+            voteDirection: 'up',
+            voteUri: testVoteUri,
           );
 
           // Mismatch (local unliked vs server 'up') - the unlike must be
@@ -881,23 +881,24 @@ void main() {
         );
         expect(voteProvider.getAdjustedScore(testPostUri, 5), 4);
 
-        // Server catches up: score 4 includes the downvote, viewer confirms.
-        voteProvider.reconcileVoteState(
+        // A mismatching snapshot (server still 'up' from before the switch)
+        // must not clear anything while the local vote is unreconciled.
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
-          serverVoteDirection: 'down',
-          serverVoteUri: testVoteUri,
+          voteDirection: 'up',
+          voteUri: testVoteUri,
+        );
+        expect(voteProvider.getVoteState(testPostUri)?.direction, 'down');
+        expect(voteProvider.getAdjustedScore(testPostUri, 5), 4);
+
+        // Server catches up: score 4 includes the downvote, viewer confirms.
+        voteProvider.applyServerVoteState(
+          postUri: testPostUri,
+          voteDirection: 'down',
+          voteUri: testVoteUri,
         );
 
         expect(voteProvider.getAdjustedScore(testPostUri, 4), 4);
-        expect(voteProvider.getVoteState(testPostUri)?.direction, 'down');
-
-        // A mismatching snapshot (server still 'up' from before a switch)
-        // must not clear anything.
-        voteProvider.reconcileVoteState(
-          postUri: testPostUri,
-          serverVoteDirection: 'up',
-          serverVoteUri: testVoteUri,
-        );
         expect(voteProvider.getVoteState(testPostUri)?.direction, 'down');
       });
 
@@ -905,7 +906,7 @@ void main() {
         'should clear adjustment when server confirms an unlike',
         () async {
           // Liked at load time (server already counted it, no adjustment).
-          voteProvider.setInitialVoteState(
+          voteProvider.applyServerVoteState(
             postUri: testPostUri,
             voteDirection: 'up',
             voteUri: testVoteUri,
@@ -922,7 +923,7 @@ void main() {
 
           // Fresh stats: server processed the unlike (score 0, no viewer
           // vote) - matches local effective state, so reconcile clears.
-          voteProvider.reconcileVoteState(postUri: testPostUri);
+          voteProvider.applyServerVoteState(postUri: testPostUri);
 
           expect(voteProvider.getAdjustedScore(testPostUri, 0), 0);
           expect(voteProvider.isLiked(testPostUri), false);
@@ -948,10 +949,10 @@ void main() {
 
         // A snapshot arriving now predates the in-flight vote; even a
         // "matching" viewer state must not clear the optimistic adjustment.
-        voteProvider.reconcileVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
-          serverVoteDirection: 'up',
-          serverVoteUri: testVoteUri,
+          voteDirection: 'up',
+          voteUri: testVoteUri,
         );
         expect(voteProvider.getAdjustedScore(testPostUri, 0), 1);
 
@@ -977,10 +978,10 @@ void main() {
           );
 
           // Sibling-page snapshot carries an older vote record URI.
-          voteProvider.reconcileVoteState(
+          voteProvider.applyServerVoteState(
             postUri: testPostUri,
-            serverVoteDirection: 'up',
-            serverVoteUri: 'at://did:plc:test/social.coves.feed.vote/OLD',
+            voteDirection: 'up',
+            voteUri: 'at://did:plc:test/social.coves.feed.vote/OLD',
           );
 
           expect(voteProvider.getVoteState(testPostUri)?.uri, testVoteUri);
@@ -998,21 +999,381 @@ void main() {
         var notificationCount = 0;
         voteProvider
           ..addListener(() => notificationCount++)
-          ..reconcileVoteState(
+          ..applyServerVoteState(
             postUri: testPostUri,
-            serverVoteDirection: 'up',
-            serverVoteUri: testVoteUri,
+            voteDirection: 'up',
+            voteUri: testVoteUri,
           );
         expect(notificationCount, 1);
 
         // Reconciling again is a no-op (no adjustment left) - no notify.
-        voteProvider.reconcileVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
-          serverVoteDirection: 'up',
-          serverVoteUri: testVoteUri,
+          voteDirection: 'up',
+          voteUri: testVoteUri,
         );
         expect(notificationCount, 1);
       });
+    });
+
+    group('applyServerVoteState', () {
+      const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
+      const testPostCid = 'bafy2bzacepostcid123';
+      const testVoteUri = 'at://did:plc:test/social.coves.feed.vote/456';
+
+      void stubCreateVote({bool deleted = false}) {
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+          ),
+        ).thenAnswer(
+          (_) async => VoteResponse(
+            uri: deleted ? null : testVoteUri,
+            cid: deleted ? null : 'bafy123',
+            rkey: deleted ? null : '456',
+            deleted: deleted,
+          ),
+        );
+      }
+
+      // Scenario (a): no local state for the URI - adopt the snapshot.
+      test('should adopt a snapshot for a post it tracks no state for', () {
+        voteProvider.applyServerVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+          voteUri: testVoteUri,
+        );
+
+        expect(voteProvider.isLiked(testPostUri), true);
+        final voteState = voteProvider.getVoteState(testPostUri);
+        expect(voteState?.direction, 'up');
+        expect(voteState?.uri, testVoteUri);
+        expect(voteState?.rkey, '456');
+        expect(voteState?.deleted, false);
+      });
+
+      // Scenario (a), null half: an unvoted snapshot leaves no state.
+      test('should leave no state for an unvoted post', () {
+        voteProvider.applyServerVoteState(postUri: testPostUri);
+
+        expect(voteProvider.getVoteState(testPostUri), null);
+        expect(voteProvider.isLiked(testPostUri), false);
+      });
+
+      // Scenario (b): cross-device vote removal must still land.
+      test('should clear an adopted vote when the server reports none', () {
+        voteProvider
+          ..applyServerVoteState(
+            postUri: testPostUri,
+            voteDirection: 'up',
+            voteUri: testVoteUri,
+          )
+          // The user removed the vote on another device; there is no local
+          // mutation to protect, so the snapshot wins.
+          ..applyServerVoteState(postUri: testPostUri);
+
+        expect(voteProvider.isLiked(testPostUri), false);
+        expect(voteProvider.getVoteState(testPostUri), null);
+      });
+
+      // Scenario (c): optimistic vote survives a snapshot that predates it.
+      test(
+        'should keep an optimistic vote when the snapshot has not indexed it',
+        () async {
+          stubCreateVote();
+
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+          );
+          expect(voteProvider.getAdjustedScore(testPostUri, 0), 1);
+
+          // Profile/feed refresh delivered a snapshot from before the vote.
+          voteProvider.applyServerVoteState(postUri: testPostUri);
+
+          expect(voteProvider.isLiked(testPostUri), true);
+          expect(voteProvider.getAdjustedScore(testPostUri, 0), 1);
+        },
+      );
+
+      // Scenario (d): the server catching up clears the adjustment.
+      test(
+        'should clear the adjustment and notify once the server agrees',
+        () async {
+          stubCreateVote();
+
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+          );
+
+          // A stale snapshot first: nothing is cleared.
+          voteProvider.applyServerVoteState(postUri: testPostUri);
+          expect(voteProvider.getAdjustedScore(testPostUri, 0), 1);
+
+          var notificationCount = 0;
+          voteProvider
+            ..addListener(() => notificationCount++)
+            // Now the appview has indexed the vote: its score of 1 already
+            // includes it, so the +1 adjustment must go.
+            ..applyServerVoteState(
+              postUri: testPostUri,
+              voteDirection: 'up',
+              voteUri: testVoteUri,
+            );
+
+          expect(voteProvider.isLiked(testPostUri), true);
+          expect(voteProvider.getAdjustedScore(testPostUri, 1), 1);
+          expect(notificationCount, 1);
+        },
+      );
+
+      // Scenario (e): an in-flight write outranks any snapshot.
+      test('should do nothing while a vote request is in flight', () async {
+        final completer = Completer<VoteResponse>();
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+          ),
+        ).thenAnswer((_) => completer.future);
+
+        final pending = voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+        );
+        expect(voteProvider.isPending(testPostUri), true);
+
+        // The snapshot predates the in-flight write; even a "matching"
+        // viewer state must not clear the optimistic adjustment.
+        voteProvider.applyServerVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+          voteUri: testVoteUri,
+        );
+
+        expect(voteProvider.getAdjustedScore(testPostUri, 0), 1);
+        expect(voteProvider.isLiked(testPostUri), true);
+
+        completer.complete(
+          const VoteResponse(
+            uri: testVoteUri,
+            cid: 'bafy123',
+            rkey: '456',
+            deleted: false,
+          ),
+        );
+        await pending;
+
+        // After the write completes, the response is authoritative and
+        // the adjustment stays outstanding for the next fetch to
+        // reconcile.
+        expect(voteProvider.isLiked(testPostUri), true);
+        expect(voteProvider.getVoteState(testPostUri)?.uri, testVoteUri);
+        expect(voteProvider.getAdjustedScore(testPostUri, 0), 1);
+      });
+
+      // Scenario (f): the locally known vote record wins over a stale one.
+      test(
+        'should prefer the locally known vote URI over a stale snapshot',
+        () async {
+          stubCreateVote();
+
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+          );
+
+          // Sibling-page snapshot still references the pre-delete record.
+          voteProvider.applyServerVoteState(
+            postUri: testPostUri,
+            voteDirection: 'up',
+            voteUri: 'at://did:plc:test/social.coves.feed.vote/OLD',
+          );
+
+          expect(voteProvider.getVoteState(testPostUri)?.uri, testVoteUri);
+          expect(voteProvider.getVoteState(testPostUri)?.rkey, '456');
+        },
+      );
+
+      // Scenario (g): plain adoption is silent.
+      test('should not notify listeners when adopting initial state', () {
+        var notificationCount = 0;
+        voteProvider
+          ..addListener(() => notificationCount++)
+          ..applyServerVoteState(
+            postUri: testPostUri,
+            voteDirection: 'up',
+            voteUri: testVoteUri,
+          );
+
+        expect(notificationCount, 0);
+
+        // Clearing an untracked post is silent too.
+        voteProvider.applyServerVoteState(
+          postUri: 'at://did:plc:test/social.coves.post.record/other',
+        );
+        expect(notificationCount, 0);
+      });
+
+      test(
+        'should keep an optimistic unlike the server has not indexed',
+        () async {
+          // Adopt a liked snapshot, then unlike locally.
+          voteProvider.applyServerVoteState(
+            postUri: testPostUri,
+            voteDirection: 'up',
+            voteUri: testVoteUri,
+          );
+
+          stubCreateVote(deleted: true);
+
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+          );
+
+          // Snapshot predates the unlike: server still reports 'up'.
+          voteProvider.applyServerVoteState(
+            postUri: testPostUri,
+            voteDirection: 'up',
+            voteUri: testVoteUri,
+          );
+
+          expect(voteProvider.isLiked(testPostUri), false);
+          expect(voteProvider.getAdjustedScore(testPostUri, 1), 0);
+        },
+      );
+
+      test(
+        'a failed re-vote must not let a stale snapshot resurrect the '
+        'removed vote',
+        () async {
+          // Like then unlike, neither indexed yet: the adjustment key ends
+          // at value 0, and that key is the only thing routing snapshots
+          // into reconciliation for this URI.
+          stubCreateVote();
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+          );
+          stubCreateVote(deleted: true);
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+          );
+          expect(voteProvider.isLiked(testPostUri), false);
+
+          // A re-vote fails at the API layer; the rollback must restore
+          // the zero-value key, not drop it.
+          when(
+            mockVoteService.createVote(
+              postUri: anyNamed('postUri'),
+              postCid: anyNamed('postCid'),
+              direction: anyNamed('direction'),
+            ),
+          ).thenThrow(ApiException('server rejected the vote'));
+          await expectLater(
+            voteProvider.toggleVote(
+              postUri: testPostUri,
+              postCid: testPostCid,
+            ),
+            throwsA(isA<ApiException>()),
+          );
+          expect(voteProvider.isLiked(testPostUri), false);
+
+          // A stale snapshot that predates the unlike must reconcile
+          // (mismatch - unlike kept), NOT be adopted: adoption would light
+          // the heart for a vote the user removed.
+          voteProvider.applyServerVoteState(
+            postUri: testPostUri,
+            voteDirection: 'up',
+            voteUri: testVoteUri,
+          );
+          expect(voteProvider.isLiked(testPostUri), false);
+          expect(voteProvider.getAdjustedScore(testPostUri, 0), 0);
+        },
+      );
+
+      test(
+        'rolls back the optimistic update when the service throws a '
+        'non-ApiException error',
+        () async {
+          // A TypeError/StateError from a malformed response must not
+          // strand the optimistic vote: the leftover adjustment key would
+          // route every future snapshot into reconciliation for the whole
+          // session.
+          when(
+            mockVoteService.createVote(
+              postUri: anyNamed('postUri'),
+              postCid: anyNamed('postCid'),
+              direction: anyNamed('direction'),
+            ),
+          ).thenThrow(StateError('malformed response'));
+
+          await expectLater(
+            voteProvider.toggleVote(
+              postUri: testPostUri,
+              postCid: testPostCid,
+            ),
+            throwsA(isA<StateError>()),
+          );
+
+          expect(voteProvider.isLiked(testPostUri), false);
+          expect(voteProvider.getAdjustedScore(testPostUri, 5), 5);
+
+          // Proof the rollback removed the adjustment key: a fresh
+          // snapshot is adopted verbatim (a leftover key would reconcile
+          // the mismatch and keep the heart off).
+          voteProvider.applyServerVoteState(
+            postUri: testPostUri,
+            voteDirection: 'up',
+            voteUri: testVoteUri,
+          );
+          expect(voteProvider.isLiked(testPostUri), true);
+        },
+      );
+
+      test(
+        'clears a direction-switch adjustment once the server reports the '
+        'new direction',
+        () async {
+          // Server-confirmed downvote, no adjustment outstanding.
+          voteProvider.applyServerVoteState(
+            postUri: testPostUri,
+            voteDirection: 'down',
+            voteUri: testVoteUri,
+          );
+
+          // Switch to an upvote: adjustment +2 (remove down, add up).
+          stubCreateVote();
+          await voteProvider.toggleVote(
+            postUri: testPostUri,
+            postCid: testPostCid,
+          );
+          expect(voteProvider.isLiked(testPostUri), true);
+          expect(voteProvider.getAdjustedScore(testPostUri, -1), 1);
+
+          // Caught-up snapshot: the server score already reflects the
+          // switch, so the +2 must clear (and notify - the displayed
+          // score changes).
+          var notifications = 0;
+          voteProvider
+            ..addListener(() => notifications++)
+            ..applyServerVoteState(
+              postUri: testPostUri,
+              voteDirection: 'up',
+              voteUri: testVoteUri,
+            );
+
+          expect(voteProvider.isLiked(testPostUri), true);
+          expect(voteProvider.getAdjustedScore(testPostUri, 1), 1);
+          expect(notifications, 1);
+        },
+      );
     });
 
     group('Auth state listener', () {
@@ -1020,7 +1381,7 @@ void main() {
         const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
 
         // Set up vote state
-        voteProvider.setInitialVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
           voteUri: 'at://did:plc:test/social.coves.feed.vote/456',
@@ -1045,7 +1406,7 @@ void main() {
         const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
 
         // Set up vote state
-        voteProvider.setInitialVoteState(
+        voteProvider.applyServerVoteState(
           postUri: testPostUri,
           voteDirection: 'up',
           voteUri: 'at://did:plc:test/social.coves.feed.vote/456',

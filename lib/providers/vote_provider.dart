@@ -61,19 +61,6 @@ class VoteProvider with ChangeNotifier {
   /// Check if a request is pending for a post
   bool isPending(String postUri) => _pendingRequests[postUri] ?? false;
 
-  /// Whether this provider already tracks any state for [postUri]
-  /// (a vote, a score adjustment, or an in-flight request).
-  ///
-  /// Callers deciding between [setInitialVoteState] and [reconcileVoteState]
-  /// should reconcile when this returns true even if the post is new to
-  /// their own view of the data (e.g. a focused-thread subtree below the
-  /// top-level tree's depth cap): blind re-initialization would clobber an
-  /// optimistic vote the server hasn't indexed yet.
-  bool hasStateFor(String postUri) =>
-      _votes.containsKey(postUri) ||
-      _scoreAdjustments.containsKey(postUri) ||
-      (_pendingRequests[postUri] ?? false);
-
   /// Get adjusted score for a post (server score + local optimistic adjustment)
   ///
   /// This allows the UI to show immediate feedback when users vote, even before
@@ -120,8 +107,14 @@ class VoteProvider with ChangeNotifier {
       return false;
     }
 
-    // Save current state for rollback on error
+    // Save current state for rollback on error. Key PRESENCE is saved
+    // separately from the value: an adjustment key with value 0 (e.g. a
+    // like then unlike, neither indexed yet) is what routes
+    // [applyServerVoteState] into reconciliation, so a rollback that
+    // dropped it would let the next stale snapshot resurrect the removed
+    // vote.
     final previousState = _votes[postUri];
+    final hadAdjustment = _scoreAdjustments.containsKey(postUri);
     final previousAdjustment = _scoreAdjustments[postUri] ?? 0;
     final currentState = previousState;
 
@@ -176,6 +169,22 @@ class VoteProvider with ChangeNotifier {
     // Mark request as pending
     _pendingRequests[postUri] = true;
 
+    void rollbackOptimisticUpdate() {
+      if (previousState != null) {
+        _votes[postUri] = previousState;
+      } else {
+        _votes.remove(postUri);
+      }
+
+      if (hadAdjustment) {
+        _scoreAdjustments[postUri] = previousAdjustment;
+      } else {
+        _scoreAdjustments.remove(postUri);
+      }
+
+      notifyListeners();
+    }
+
     try {
       // Make API call
       final response = await _voteService.createVote(
@@ -205,46 +214,84 @@ class VoteProvider with ChangeNotifier {
         debugPrint('❌ Failed to toggle vote: ${e.message}');
       }
 
-      // Rollback optimistic update
-      if (previousState != null) {
-        _votes[postUri] = previousState;
-      } else {
-        _votes.remove(postUri);
+      rollbackOptimisticUpdate();
+      rethrow;
+      // Deliberately broad: a non-ApiException failure (a TypeError from a
+      // malformed response, a StateError) must not strand the optimistic
+      // vote — the leftover adjustment key would route every future
+      // snapshot into reconciliation and the wrong state could persist for
+      // the whole session.
+      // ignore: avoid_catches_without_on_clauses
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Failed to toggle vote (unexpected): $e');
       }
 
-      // Rollback score adjustment
-      if (previousAdjustment != 0) {
-        _scoreAdjustments[postUri] = previousAdjustment;
-      } else {
-        _scoreAdjustments.remove(postUri);
-      }
-
-      notifyListeners();
-
+      rollbackOptimisticUpdate();
       rethrow;
     } finally {
       _pendingRequests.remove(postUri);
     }
   }
 
-  /// Initialize vote state from post data
+  /// Apply a server snapshot of the viewer's vote on [postUri].
   ///
-  /// Call this when loading posts to populate initial vote state
-  /// from the backend's viewer state.
+  /// This is the only entry point for server-delivered vote state: every
+  /// fetch path (initial load, pagination, refresh, thread hydration) calls
+  /// it and the provider — not the caller — decides whether the snapshot may
+  /// overwrite local state. No caller-side flag can make that call: "this
+  /// surface did a full refresh" does not imply "the server has seen my last
+  /// vote", because the appview indexes votes asynchronously via the
+  /// firehose. The facts that decide it live here: whether a write is in
+  /// flight, and whether this URI has an unreconciled local mutation (a
+  /// score adjustment left by [toggleVote]).
   ///
-  /// WARNING: this adopts the server snapshot unconditionally, including
-  /// clearing any optimistic score adjustment — calling it for a post this
-  /// provider already tracks ([hasStateFor]) can clobber an optimistic vote
-  /// the server hasn't indexed yet. Full-refresh paths do this deliberately
-  /// (server is truth on refresh, e.g. cross-device changes); every other
-  /// path that re-delivers server data for known posts should use
-  /// [reconcileVoteState] instead.
+  /// - Request in flight for this URI: ignore the snapshot, it predates the
+  ///   write.
+  /// - Local mutation outstanding: reconcile it
+  ///   ([_reconcileServerVoteState]).
+  /// - Otherwise: adopt the snapshot ([_adoptServerVoteState]).
+  ///
+  /// Caller contract: pass only snapshots the current response actually
+  /// delivered. A cached or merge-preserved copy of an older snapshot must
+  /// not be re-applied — once its URI has no outstanding adjustment it
+  /// would be adopted verbatim and could roll the vote back to a state the
+  /// server has since moved past.
   ///
   /// Parameters:
   /// - [postUri]: AT-URI of the post
-  /// - [voteDirection]: Current vote direction ("up", "down", or null)
-  /// - [voteUri]: AT-URI of the vote record
-  void setInitialVoteState({
+  /// - [voteDirection]: Vote direction in the snapshot ("up", "down", null)
+  /// - [voteUri]: AT-URI of the vote record in the snapshot
+  void applyServerVoteState({
+    required String postUri,
+    String? voteDirection,
+    String? voteUri,
+  }) {
+    if (_pendingRequests[postUri] ?? false) {
+      return;
+    }
+
+    if (_scoreAdjustments.containsKey(postUri)) {
+      _reconcileServerVoteState(
+        postUri: postUri,
+        serverVoteDirection: voteDirection,
+        serverVoteUri: voteUri,
+      );
+    } else {
+      _adoptServerVoteState(
+        postUri: postUri,
+        voteDirection: voteDirection,
+        voteUri: voteUri,
+      );
+    }
+  }
+
+  /// Adopts the server snapshot verbatim for a post with no outstanding
+  /// local mutation.
+  ///
+  /// A null [voteDirection] clears the local vote rather than being ignored:
+  /// that is how a vote removed on another device lands here.
+  void _adoptServerVoteState({
     required String postUri,
     String? voteDirection,
     String? voteUri,
@@ -260,26 +307,24 @@ class VoteProvider with ChangeNotifier {
       _votes.remove(postUri);
     }
 
-    // IMPORTANT: Clear any stale score adjustment for this post.
-    // When we receive fresh data from the server (via feed/comments refresh),
-    // the server's score already reflects the actual vote state. Any local
-    // delta from a previous optimistic update is now stale and would cause
-    // double-counting (e.g., server score already includes +1, plus our +1).
+    // Defensive only: the router sends every URI with an adjustment key to
+    // _reconcileServerVoteState, so no key can exist here. Double-count
+    // protection lives in that routing, not in this removal.
     _scoreAdjustments.remove(postUri);
 
-    // Don't notify listeners - this is just initial state
+    // No notify: every fetch path applies snapshots right before its own
+    // provider/setState notification, and the vote widgets re-read this
+    // provider when their surface rebuilds. Reconciliation DOES notify when
+    // it clears a non-zero adjustment, because there the displayed score
+    // changes without the surface re-rendering its list.
   }
 
-  /// Reconcile vote state for a post that was already known locally when
-  /// fresh server data arrived for it (e.g. a focused-thread subtree fetch
-  /// re-delivering stats for nodes already in the tree). Counterpart of
-  /// [setInitialVoteState], which adopts the server snapshot blindly.
+  /// Reconciles the server snapshot against an outstanding local mutation.
   ///
-  /// The server's stats snapshot may or may not include a vote we cast
-  /// optimistically (the appview indexes votes asynchronously via the
-  /// firehose), so the local score adjustment can only be cleared when the
-  /// server's viewer state confirms it has caught up:
-  /// - Request in flight for this URI: do nothing (the snapshot predates it).
+  /// The snapshot may or may not include a vote cast optimistically (the
+  /// appview indexes votes asynchronously via the firehose), so the local
+  /// score adjustment can only be cleared once the viewer state confirms
+  /// the server has caught up:
   /// - Server viewer state matches the local effective state: the server
   ///   score already includes the vote — adopt server state and clear the
   ///   adjustment so it can't double-count.
@@ -287,22 +332,23 @@ class VoteProvider with ChangeNotifier {
   ///   adjustment (stale server score + adjustment still renders correctly).
   ///   A mismatch can also mean the server is AHEAD (vote changed from
   ///   another device); favoring local state is the safe default there, and
-  ///   cross-device changes are adopted by the next full refresh, which
-  ///   re-initializes unconditionally.
+  ///   the cross-device change lands once the local mutation reconciles.
+  ///   Accepted trade-off: if the server durably never reports the local
+  ///   direction (vote removed by moderation, or a firehose event lost),
+  ///   the mismatch — and the optimistic display — persist until sign-out
+  ///   or [clear]. That beats the alternative: any time-bound or
+  ///   refresh-bound escape hatch re-opens the clobber-your-own-vote bug
+  ///   whenever indexing lag exceeds the bound.
   ///
-  /// Callers holding a possibly-stale snapshot (e.g. sibling pages preserved
-  /// across a merge) are safe by the same rule: a stale snapshot either
-  /// mismatches (kept optimistic state) or matches with a net-zero
-  /// adjustment relative to that snapshot (clearing changes nothing).
-  void reconcileVoteState({
+  /// Snapshots that are merely stale rather than lagging (e.g. a sibling
+  /// page preserved across a merge) are safe by the same rule: they either
+  /// mismatch (optimistic state kept) or match with a net-zero adjustment
+  /// relative to that snapshot (clearing changes nothing).
+  void _reconcileServerVoteState({
     required String postUri,
     String? serverVoteDirection,
     String? serverVoteUri,
   }) {
-    if (_pendingRequests[postUri] ?? false) {
-      return;
-    }
-
     final local = _votes[postUri];
     final localDirection =
         (local == null || local.deleted) ? null : local.direction;

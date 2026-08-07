@@ -68,6 +68,13 @@ class FeedViewPost {
   }
   final PostView post;
   final FeedReason? reason;
+
+  /// Returns a copy with the given fields replaced.
+  ///
+  /// Omitted fields are carried over; passing null does not clear a field.
+  FeedViewPost copyWith({PostView? post, FeedReason? reason}) {
+    return FeedViewPost(post: post ?? this.post, reason: reason ?? this.reason);
+  }
 }
 
 class ViewerState {
@@ -224,6 +231,44 @@ class PostView {
   ///
   /// Returns null when [record] is null or when the post has no facets.
   List<RichTextFacet>? get facets => record?.facets;
+
+  /// Returns a copy with the given fields replaced.
+  ///
+  /// Omitted fields are carried over; passing null does not clear a field
+  /// (nothing needs to null out a field, and rebuilding a post while
+  /// silently dropping [viewer] or the deletion flags is the bug this
+  /// exists to prevent).
+  PostView copyWith({
+    String? uri,
+    String? cid,
+    String? rkey,
+    AuthorView? author,
+    CommunityRef? community,
+    DateTime? createdAt,
+    DateTime? indexedAt,
+    PostRecord? record,
+    bool? isDeleted,
+    String? deletionReason,
+    PostStats? stats,
+    PostEmbed? embed,
+    ViewerState? viewer,
+  }) {
+    return PostView(
+      uri: uri ?? this.uri,
+      cid: cid ?? this.cid,
+      rkey: rkey ?? this.rkey,
+      author: author ?? this.author,
+      community: community ?? this.community,
+      createdAt: createdAt ?? this.createdAt,
+      indexedAt: indexedAt ?? this.indexedAt,
+      record: record ?? this.record,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletionReason: deletionReason ?? this.deletionReason,
+      stats: stats ?? this.stats,
+      embed: embed ?? this.embed,
+      viewer: viewer ?? this.viewer,
+    );
+  }
 }
 
 class AuthorView {
@@ -312,6 +357,23 @@ class PostStats {
   final int downvotes;
   final int score;
   final int commentCount;
+
+  /// Returns a copy with the given fields replaced.
+  ///
+  /// Omitted fields are carried over; passing null does not clear a field.
+  PostStats copyWith({
+    int? upvotes,
+    int? downvotes,
+    int? score,
+    int? commentCount,
+  }) {
+    return PostStats(
+      upvotes: upvotes ?? this.upvotes,
+      downvotes: downvotes ?? this.downvotes,
+      score: score ?? this.score,
+      commentCount: commentCount ?? this.commentCount,
+    );
+  }
 }
 
 /// An embed attached to a post, discriminated by its lexicon `$type`.

@@ -27,7 +27,6 @@ void main() {
   setUp(() {
     mockAuthProvider = MockAuthProvider();
     mockVoteProvider = MockVoteProvider();
-    when(mockVoteProvider.hasStateFor(any)).thenReturn(false);
     mockApiService = MockCovesApiService();
     blockProvider = BlockProvider(
       apiService: mockApiService,

@@ -286,6 +286,19 @@ class UserProfileProvider with ChangeNotifier {
             refresh ? DateTime.now() : currentState.lastRefreshTime,
       );
 
+      // Apply viewer vote state so a liked post shows a lit heart even
+      // when the profile is its first surface this session.
+      if (_authProvider.isAuthenticated && _voteProvider != null) {
+        for (final feedItem in response.feed) {
+          final viewer = feedItem.post.viewer;
+          _voteProvider.applyServerVoteState(
+            postUri: feedItem.post.uri,
+            voteDirection: viewer?.vote,
+            voteUri: viewer?.voteUri,
+          );
+        }
+      }
+
       if (kDebugMode) {
         debugPrint('✅ Author posts loaded: ${newPosts.length} posts total');
       }
@@ -410,21 +423,16 @@ class UserProfileProvider with ChangeNotifier {
         isLoadingMore: false,
       );
 
-      // Initialize vote state from viewer data in comments response.
-      // Ensures server scores are authoritative, prevents double-counting.
+      // Apply viewer vote state from the comments response. Safe on both
+      // refresh and pagination: the provider keeps an optimistic vote the
+      // appview has not indexed yet instead of adopting a stale snapshot.
       if (_authProvider.isAuthenticated && _voteProvider != null) {
-        if (refresh) {
-          // On refresh, initialize all comments - server data is truth
-          _commentsState.comments.forEach(_initializeCommentVoteState);
-        } else {
-          // On pagination, only initialize newly fetched comments
-          response.comments.forEach(_initializeCommentVoteState);
-        }
+        response.comments.forEach(_applyCommentVoteState);
       } else if (_authProvider.isAuthenticated && _voteProvider == null) {
         if (kDebugMode) {
           debugPrint(
             '⚠️ VoteProvider is null - '
-            'cannot initialize comment vote states',
+            'cannot apply comment vote states',
           );
         }
       }
@@ -545,21 +553,22 @@ class UserProfileProvider with ChangeNotifier {
     }
   }
 
-  /// Initialize vote state for a comment from viewer data.
+  /// Apply vote state for a comment from viewer data.
   ///
-  /// Unlike CommentsProvider._initializeCommentVoteState, this handles
+  /// Unlike CommentsProvider._applyCommentVoteState, this handles
   /// flat CommentView objects (no nested replies) since actor comments
   /// are returned as a flat list.
   ///
   /// If [_voteProvider] is null, this method returns early as a defensive
-  /// measure. This also handles the case where the viewer's vote is null
-  /// (vote removed on another device) - the vote state is cleared accordingly.
-  void _initializeCommentVoteState(CommentView comment) {
+  /// measure. A null viewer vote is still applied (vote removed on another
+  /// device) - the provider clears the local state unless it is protecting
+  /// an optimistic vote of its own.
+  void _applyCommentVoteState(CommentView comment) {
     final voteProvider = _voteProvider;
     if (voteProvider == null) return;
 
     final viewer = comment.viewer;
-    voteProvider.setInitialVoteState(
+    voteProvider.applyServerVoteState(
       postUri: comment.uri,
       voteDirection: viewer?.vote,
       voteUri: viewer?.voteUri,

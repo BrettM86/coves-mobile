@@ -281,7 +281,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
 
     for (final post in posts) {
       final viewer = post.post.viewer;
-      voteProvider.setInitialVoteState(
+      voteProvider.applyServerVoteState(
         postUri: post.post.uri,
         voteDirection: viewer?.vote,
         voteUri: viewer?.voteUri,
