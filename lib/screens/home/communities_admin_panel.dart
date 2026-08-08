@@ -9,10 +9,9 @@ import '../../models/community.dart';
 import '../../models/picked_image.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
-import '../../utils/image_crop_utils.dart';
-import '../../utils/image_picker_utils.dart';
-import '../../widgets/community_avatar.dart';
-import '../../widgets/image_source_picker.dart';
+import '../../utils/community_name_validator.dart';
+import 'community_avatar_upload_page.dart';
+import 'create_community_form.dart';
 
 /// Admin handles that can create communities
 const Set<String> kAdminHandles = {
@@ -20,9 +19,6 @@ const Set<String> kAdminHandles = {
   'alex.local.coves.dev', // Local development account
   'mari.local.coves.dev', // Local development account
 };
-
-/// Regex for DNS-valid community names (lowercase alphanumeric and hyphens)
-final RegExp _dnsNameRegex = RegExp(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?$');
 
 /// Admin panel pages
 enum AdminPage {
@@ -36,6 +32,11 @@ enum AdminPage {
 /// Provides admin-only functionality:
 /// - Community creation form
 /// - Profile picture management
+///
+/// A shell, not a screen: it owns which [AdminPage] is showing, the AppBar
+/// that titles it, and every piece of state that has to OUTLIVE a page —
+/// the community list, the create-form draft and the created-community
+/// receipts. Page-local, genuinely transient state stays in the pages.
 class CommunitiesAdminPanel extends StatefulWidget {
   const CommunitiesAdminPanel({super.key});
 
@@ -44,175 +45,256 @@ class CommunitiesAdminPanel extends StatefulWidget {
 }
 
 class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
-  // Current admin page
   AdminPage _currentPage = AdminPage.menu;
-
-  // Form controllers for create community
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _displayNameController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
-
-  // Form controllers for change profile pic
-  final TextEditingController _communityHandleController =
-      TextEditingController();
 
   // Shared app-wide API client (owned by main.dart) — do not dispose here
   late final CovesApiService _apiService;
 
-  // Form state
-  bool _isSubmitting = false;
-  String? _nameError;
-  List<CreateCommunityResponse> _createdCommunities = [];
-
-  // Profile pic state
+  // Community list for the profile-pic page, and the guard for its fetch.
+  //
+  // Held HERE rather than in CommunityAvatarUploadPage because that widget
+  // is destroyed every time the user returns to the menu, and both of these
+  // have to outlive it:
+  //
+  //   * _isLoadingCommunities so that leaving and re-entering DURING a fetch
+  //     does not fire a second one (test-pinned). Note the narrowness of
+  //     that guarantee: once the fetch settles the flag is false again, and
+  //     _navigateToPage calls _loadCommunities() unconditionally, so every
+  //     later visit does refetch. Only the in-flight window is protected.
+  //   * _communities so the already-fetched list is still on screen when the
+  //     admin comes back, instead of the page starting empty each time.
   bool _isLoadingCommunities = false;
   List<CommunityView> _communities = [];
-  CommunityView? _selectedCommunity;
-  PickedImage? _selectedImage;
 
-  // Computed state
-  bool get _isFormValid {
-    return _nameController.text.trim().isNotEmpty &&
-        _displayNameController.text.trim().isNotEmpty &&
-        _descriptionController.text.trim().isNotEmpty;
-  }
+  // The create form's draft and its receipt list.
+  //
+  // Held HERE for the same reason as the community list: CreateCommunityForm
+  // is only built while _currentPage is createCommunity, so anything it
+  // owned would be thrown away the moment the admin glanced at the menu.
+  // Both a half-typed draft and the receipts have to survive that trip.
+  // Test-pinned.
+  //
+  // The receipts carry the most weight: _createCommunity below runs on this
+  // State, so a create started here still finishes and still appends while
+  // the admin is off looking at the menu. That receipt is then the only
+  // record they have of the new community's handle and DID - nothing else
+  // in this panel shows it.
+  //
+  // This State owns them and therefore disposes them; the form only borrows
+  // them (see the listener note in CreateCommunityForm).
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _displayNameController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  List<CreateCommunityResponse> _createdCommunities = [];
 
-  // Generate handle preview from name
-  String get _handlePreview {
-    final name = _nameController.text.trim().toLowerCase();
-    if (name.isEmpty) return '@c-{name}.coves.social';
-    return '@c-$name.coves.social';
-  }
+  // In-flight flags for the two write requests.
+  //
+  // Here for the same reason again, and this one is the sharpest: a request
+  // started on a page that is then left behind must still land somewhere.
+  // Owned by a State that dies with the page, a succeeded create would
+  // record no receipt, clear no draft and say nothing - and the re-entered
+  // page, seeing a fresh `false`, would happily let the admin submit the
+  // same community twice. Test-pinned.
+  bool _isCreatingCommunity = false;
+  bool _isUploadingAvatar = false;
 
   @override
   void initState() {
     super.initState();
     _apiService = context.read<CovesApiService>();
-    _nameController.addListener(_onTextChanged);
-    _displayNameController.addListener(_onTextChanged);
-    _descriptionController.addListener(_onTextChanged);
   }
 
   @override
   void dispose() {
-    // Remove listeners before disposing controllers
-    _nameController.removeListener(_onTextChanged);
-    _displayNameController.removeListener(_onTextChanged);
-    _descriptionController.removeListener(_onTextChanged);
+    // Owner disposes. The form removes its own listener in its dispose,
+    // which always runs first: the body is torn down before this State is.
     _nameController.dispose();
     _displayNameController.dispose();
     _descriptionController.dispose();
-    _communityHandleController.dispose();
     super.dispose();
   }
 
-  void _onTextChanged() {
-    // Clear name error when user types
-    if (_nameError != null) {
-      setState(() {
-        _nameError = null;
-      });
-    } else {
-      setState(() {});
-    }
-  }
-
-  /// Validates the community name is DNS-valid
-  bool _validateName() {
-    final name = _nameController.text.trim().toLowerCase();
-
-    if (name.isEmpty) {
-      setState(() => _nameError = 'Name is required');
-      return false;
-    }
-
-    if (name.length > 63) {
-      setState(() => _nameError = 'Name must be 63 characters or less');
-      return false;
-    }
-
-    if (!_dnsNameRegex.hasMatch(name)) {
-      setState(() {
-        _nameError =
-            'Name must be lowercase letters, numbers, and hyphens only';
-      });
-      return false;
-    }
-
-    setState(() => _nameError = null);
-    return true;
-  }
-
+  /// Creates a community from the draft the controllers hold.
+  ///
+  /// The form has already validated the name; this owns the request and
+  /// everything that happens to its result. Note the shape of the error
+  /// handling: only the API call sits inside `try`. The success path - the
+  /// receipt, the draft clear, the confirmation - runs AFTER it, outside
+  /// every catch, because the community exists on the server by then and an
+  /// [Error] thrown while rendering a SnackBar must never be reported to the
+  /// admin as "creating the community failed".
   Future<void> _createCommunity() async {
-    if (!_isFormValid || _isSubmitting) return;
-
-    // Validate DNS-valid name before API call
-    if (!_validateName()) return;
+    if (_isCreatingCommunity) {
+      return;
+    }
 
     setState(() {
-      _isSubmitting = true;
+      _isCreatingCommunity = true;
     });
 
+    final CreateCommunityResponse response;
     try {
-      final response = await _apiService.createCommunity(
-        name: _nameController.text.trim().toLowerCase(),
+      response = await _apiService.createCommunity(
+        name: CommunityNameValidator.normalize(_nameController.text),
         displayName: _displayNameController.text.trim(),
         description: _descriptionController.text.trim(),
       );
-
-      if (mounted) {
-        setState(() {
-          _createdCommunities = [..._createdCommunities, response];
-          _isSubmitting = false;
-        });
-
-        // Clear form
-        _nameController.clear();
-        _displayNameController.clear();
-        _descriptionController.clear();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Community created: ${response.handle}'),
-            backgroundColor: Colors.green[700],
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     } on ApiException catch (e) {
       if (kDebugMode) {
         debugPrint('API error creating community: ${e.message}');
       }
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to create community: ${e.message}'),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      _finishCreate(
+        message: 'Failed to create community: ${e.message}',
+        background: Colors.red[700],
+      );
+      return;
     } catch (e, stackTrace) {
       if (kDebugMode) {
         debugPrint('Unexpected error in _createCommunity: $e');
         debugPrint('Stack trace: $stackTrace');
       }
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('An unexpected error occurred. Please try again.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
+      _finishCreate(
+        message: 'An unexpected error occurred. Please try again.',
+        background: Colors.red,
+      );
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isCreatingCommunity = false;
+      _createdCommunities = [..._createdCommunities, response];
+    });
+
+    // Clear the draft that produced it, so a returning admin is not looking
+    // at a form that invites the same submission again.
+    _nameController.clear();
+    _displayNameController.clear();
+    _descriptionController.clear();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Community created: ${response.handle}'),
+        backgroundColor: Colors.green[700],
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  /// Clears the in-flight flag and reports a failed create.
+  void _finishCreate({required String message, required Color? background}) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isCreatingCommunity = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: background,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  /// Uploads [image] as [community]'s avatar, returning whether it worked.
+  ///
+  /// Owned here rather than on the upload page for the same reason as
+  /// [_createCommunity]: a success that lands after the admin navigated away
+  /// still has to refresh the list, or the stale avatar survives on screen
+  /// and invites a pointless re-upload. Same error-handling shape too — the
+  /// API call alone is inside `try`.
+  Future<bool> _uploadAvatar({
+    required CommunityView community,
+    required PickedImage image,
+  }) async {
+    if (_isUploadingAvatar) {
+      return false;
+    }
+
+    setState(() {
+      _isUploadingAvatar = true;
+    });
+
+    try {
+      if (kDebugMode) {
+        debugPrint(
+          'Uploading image: ${image.bytes.length} bytes, ${image.mimeType}',
         );
       }
+      await _apiService.updateCommunity(
+        communityDid: community.did,
+        imageBytes: image.bytes,
+        mimeType: image.mimeType,
+      );
+    } on ApiException catch (e, stackTrace) {
+      developer.log(
+        'API error uploading avatar',
+        name: 'CommunitiesAdminPanel',
+        error: e,
+        stackTrace: stackTrace,
+        level: 1000,
+      );
+      _finishUpload(
+        message: 'Failed to upload avatar: ${e.message}',
+        background: Colors.red[700],
+      );
+      return false;
+    } catch (e, stackTrace) {
+      developer.log(
+        'Unexpected error uploading avatar',
+        name: 'CommunitiesAdminPanel',
+        error: e,
+        stackTrace: stackTrace,
+        level: 1000,
+      );
+      _finishUpload(
+        message: 'An unexpected error occurred. Please try again.',
+        background: Colors.red,
+      );
+      return false;
     }
+
+    if (!mounted) {
+      return false;
+    }
+    setState(() {
+      _isUploadingAvatar = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Avatar updated for ${community.displayName ?? community.name}',
+        ),
+        backgroundColor: Colors.green[700],
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    // Reload so the new avatar replaces the stale one in the picker.
+    await _loadCommunities();
+    return true;
+  }
+
+  /// Clears the in-flight flag and reports a failed upload.
+  void _finishUpload({required String message, required Color? background}) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isUploadingAvatar = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: background,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   String _getAdminTitle() {
@@ -230,46 +312,30 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
     setState(() {
       _currentPage = page;
     });
-    // Load communities when navigating to profile pic page
+    // Load communities when navigating to profile pic page. Not awaited
+    // because this method is void and the fetch is safe to leave running:
+    // it catches its own errors and re-checks `mounted` before touching
+    // state, so nothing is lost by not holding on to its Future.
     if (page == AdminPage.changeProfilePic) {
       _loadCommunities();
     }
   }
 
+  /// Returns to the menu.
+  ///
+  /// Nothing is reset here: the selected community and the picked image live
+  /// in [CommunityAvatarUploadPage], and swapping the body away destroys
+  /// that State, so re-entering always starts clean. Test-pinned.
   void _navigateBack() {
     setState(() {
       _currentPage = AdminPage.menu;
-      _selectedCommunity = null;
-      _selectedImage = null;
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // NOTE: system back is handled at the shell level (MainShellScreen) and
-    // only intercepted when the Create tab has a draft; here it backgrounds
-    // the app as usual — use the in-app Back arrow to return to the menu.
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        foregroundColor: Colors.white,
-        title: Text(_getAdminTitle()),
-        automaticallyImplyLeading: false,
-        leading: _currentPage != AdminPage.menu
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Back',
-                onPressed: _navigateBack,
-              )
-            : null,
-      ),
-      body: _buildAdminUI(),
-    );
-  }
-
   Future<void> _loadCommunities() async {
-    if (_isLoadingCommunities) return;
+    if (_isLoadingCommunities) {
+      return;
+    }
 
     setState(() {
       _isLoadingCommunities = true;
@@ -308,18 +374,64 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
     }
   }
 
+  @override
+  Widget build(BuildContext context) {
+    // NOTE: system back is handled at the shell level (MainShellScreen) and
+    // only intercepted when the Create tab has a draft; here it backgrounds
+    // the app as usual — use the in-app Back arrow to return to the menu.
+    // The pages below are deliberately NOT Navigator routes: real routes
+    // would let system back pop them and change that.
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        foregroundColor: Colors.white,
+        title: Text(_getAdminTitle()),
+        automaticallyImplyLeading: false,
+        leading: _currentPage != AdminPage.menu
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Back',
+                onPressed: _navigateBack,
+              )
+            : null,
+      ),
+      body: _buildAdminUI(),
+    );
+  }
+
   Widget _buildAdminUI() {
     switch (_currentPage) {
       case AdminPage.menu:
-        return _buildAdminMenu();
+        return _AdminMenu(onSelectPage: _navigateToPage);
       case AdminPage.createCommunity:
-        return _buildCreateCommunityUI();
+        return CreateCommunityForm(
+          nameController: _nameController,
+          displayNameController: _displayNameController,
+          descriptionController: _descriptionController,
+          createdCommunities: _createdCommunities,
+          isSubmitting: _isCreatingCommunity,
+          onSubmit: _createCommunity,
+        );
       case AdminPage.changeProfilePic:
-        return _buildChangeProfilePicUI();
+        return CommunityAvatarUploadPage(
+          communities: _communities,
+          isLoadingCommunities: _isLoadingCommunities,
+          isUploading: _isUploadingAvatar,
+          onUploadAvatar: _uploadAvatar,
+        );
     }
   }
+}
 
-  Widget _buildAdminMenu() {
+/// The panel's landing page: one row per admin tool.
+class _AdminMenu extends StatelessWidget {
+  const _AdminMenu({required this.onSelectPage});
+
+  final ValueChanged<AdminPage> onSelectPage;
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -339,30 +451,41 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
             style: TextStyle(fontSize: 14, color: Color(0xFFB6C2D2)),
           ),
           const SizedBox(height: 24),
-          _buildAdminMenuItem(
+          _AdminMenuItem(
             icon: Icons.add_circle_outline,
             title: 'Create Community',
             subtitle: 'Create a new community for Coves users',
-            onTap: () => _navigateToPage(AdminPage.createCommunity),
+            onTap: () => onSelectPage(AdminPage.createCommunity),
           ),
           const SizedBox(height: 12),
-          _buildAdminMenuItem(
+          _AdminMenuItem(
             icon: Icons.image_outlined,
             title: 'Change Profile Pic',
             subtitle: 'Update a community\'s profile picture',
-            onTap: () => _navigateToPage(AdminPage.changeProfilePic),
+            onTap: () => onSelectPage(AdminPage.changeProfilePic),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildAdminMenuItem({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
+/// One tappable tool row in [_AdminMenu].
+class _AdminMenuItem extends StatelessWidget {
+  const _AdminMenuItem({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -407,749 +530,9 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
                 ],
               ),
             ),
-            const Icon(
-              Icons.chevron_right,
-              color: Color(0xFFB6C2D2),
-            ),
+            const Icon(Icons.chevron_right, color: Color(0xFFB6C2D2)),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildCreateCommunityUI() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          const Text(
-            'Create Community',
-            style: TextStyle(
-              fontSize: 24,
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Create a new community for Coves users',
-            style: TextStyle(fontSize: 14, color: Color(0xFFB6C2D2)),
-          ),
-          const SizedBox(height: 24),
-
-          // Name field (DNS-valid slug)
-          _buildTextField(
-            controller: _nameController,
-            label: 'Name (unique identifier)',
-            hint: 'worldnews',
-            helperText: 'DNS-valid, lowercase, no spaces',
-            errorText: _nameError,
-          ),
-          const SizedBox(height: 16),
-
-          // Handle preview
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.backgroundSecondary,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.link, color: AppColors.primary, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _handlePreview,
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Display Name field
-          _buildTextField(
-            controller: _displayNameController,
-            label: 'Display Name',
-            hint: 'World News',
-            helperText: 'Human-readable name shown in the UI',
-          ),
-          const SizedBox(height: 16),
-
-          // Description field
-          _buildTextField(
-            controller: _descriptionController,
-            label: 'Description',
-            hint: 'Global news and current events from around the world',
-            maxLines: 3,
-          ),
-          const SizedBox(height: 24),
-
-          // Create button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed:
-                  _isFormValid && !_isSubmitting ? _createCommunity : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                disabledBackgroundColor: AppColors.backgroundSecondary,
-              ),
-              child: _isSubmitting
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text(
-                      'Create Community',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-            ),
-          ),
-
-          // Created communities list
-          if (_createdCommunities.isNotEmpty) ...[
-            const SizedBox(height: 32),
-            const Text(
-              'Created Communities',
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ..._createdCommunities
-                .map((community) => _buildCommunityTile(community)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChangeProfilePicUI() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Change Profile Picture',
-            style: TextStyle(
-              fontSize: 24,
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Select a community and upload a new profile picture',
-            style: TextStyle(fontSize: 14, color: Color(0xFFB6C2D2)),
-          ),
-          const SizedBox(height: 24),
-
-          // Community selector
-          const Text(
-            'Select Community',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          if (_isLoadingCommunities)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                ),
-              ),
-            )
-          else if (_communities.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.backgroundSecondary,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: const Center(
-                child: Text(
-                  'No communities found',
-                  style: TextStyle(color: Color(0xFFB6C2D2)),
-                ),
-              ),
-            )
-          else
-            ...(_communities.map((community) => _buildCommunitySelectTile(community))),
-
-          if (_selectedCommunity != null) ...[
-            const SizedBox(height: 24),
-
-            // Show current vs new image comparison when image is selected
-            if (_selectedImage != null) ...[
-              const Text(
-                'Preview Changes',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Current image
-                  Column(
-                    children: [
-                      Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          color: AppColors.backgroundSecondary,
-                          borderRadius: BorderRadius.circular(50),
-                          border: Border.all(color: AppColors.border, width: 2),
-                        ),
-                        child: CommunityAvatar(
-                          name: _selectedCommunity!.name,
-                          avatarUrl: _selectedCommunity!.avatar,
-                          size: 100,
-                          fallbackColor: AppColors.backgroundSecondary,
-                          fallbackIcon: const Icon(
-                            Icons.workspaces_outlined,
-                            size: 40,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Current',
-                        style: TextStyle(
-                          color: Color(0xFFB6C2D2),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Icon(
-                      Icons.arrow_forward,
-                      color: AppColors.primary,
-                      size: 24,
-                    ),
-                  ),
-                  // New image preview
-                  Column(
-                    children: [
-                      Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          color: AppColors.backgroundSecondary,
-                          borderRadius: BorderRadius.circular(50),
-                          border: Border.all(color: AppColors.primary, width: 2),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(50),
-                          child: Image.file(
-                            _selectedImage!.file,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'New',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: Text(
-                  _selectedCommunity!.displayName ?? _selectedCommunity!.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Center(
-                child: Text(
-                  '@${_selectedCommunity!.handle ?? _selectedCommunity!.name}',
-                  style: const TextStyle(
-                    color: Color(0xFFB6C2D2),
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Action buttons when image is selected
-              Row(
-                children: [
-                  // Clear button
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _clearSelectedImage,
-                      icon: const Icon(Icons.close),
-                      label: const Text('Clear'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: AppColors.border),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Upload button
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton.icon(
-                      onPressed: _isSubmitting ? null : _uploadImage,
-                      icon: const Icon(Icons.upload),
-                      label: Text(_isSubmitting ? 'Uploading...' : 'Upload'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        disabledBackgroundColor: AppColors.backgroundSecondary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              // Select different image button
-              SizedBox(
-                width: double.infinity,
-                child: TextButton.icon(
-                  onPressed: _pickAndUploadImage,
-                  icon: const Icon(Icons.photo_library, size: 18),
-                  label: const Text('Select Different Image'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.teal,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ),
-            ] else ...[
-              // Show current profile picture when no new image is selected
-              const Text(
-                'Current Profile Picture',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Center(
-                child: Column(
-                  children: [
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: AppColors.backgroundSecondary,
-                        borderRadius: BorderRadius.circular(60),
-                        border: Border.all(color: AppColors.border, width: 2),
-                      ),
-                      child: CommunityAvatar(
-                        name: _selectedCommunity!.name,
-                        avatarUrl: _selectedCommunity!.avatar,
-                        size: 120,
-                        fallbackColor: AppColors.backgroundSecondary,
-                        fallbackIcon: const Icon(
-                          Icons.workspaces_outlined,
-                          size: 48,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _selectedCommunity!.displayName ?? _selectedCommunity!.name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      '@${_selectedCommunity!.handle ?? _selectedCommunity!.name}',
-                      style: const TextStyle(
-                        color: Color(0xFFB6C2D2),
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Select image button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isSubmitting ? null : _pickAndUploadImage,
-                  icon: const Icon(Icons.add_photo_alternate),
-                  label: const Text('Select New Picture'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    disabledBackgroundColor: AppColors.backgroundSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCommunitySelectTile(CommunityView community) {
-    final isSelected = _selectedCommunity?.did == community.did;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedCommunity = community;
-        });
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.backgroundSecondary,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.border,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            CommunityAvatar(
-              name: community.name,
-              avatarUrl: community.avatar,
-              size: 40,
-              fallbackColor: AppColors.background,
-              fallbackIcon: const Icon(
-                Icons.workspaces_outlined,
-                size: 20,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    community.displayName ?? community.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Text(
-                    '@${community.handle ?? community.name}',
-                    style: const TextStyle(
-                      color: Color(0xFFB6C2D2),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              const Icon(
-                Icons.check_circle,
-                color: AppColors.primary,
-                size: 24,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pickAndUploadImage() async {
-    // Show bottom sheet to choose between gallery and camera
-    final source = await ImageSourcePicker.show(context);
-    if (source == null) return;
-
-    try {
-      // Pick image and open native cropper
-      final picked = await ImageCropUtils.pickAndCropImage(
-        source: source,
-      );
-      if (picked != null && mounted) {
-        setState(() {
-          _selectedImage = picked;
-        });
-      }
-    } on ImageValidationException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } on Exception catch (e, stackTrace) {
-      developer.log(
-        'Error picking image',
-        name: 'CommunitiesAdminPanel',
-        error: e,
-        stackTrace: stackTrace,
-        level: 1000, // Error level
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to process image: ${e.toString()}'),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _uploadImage() async {
-    if (_selectedImage == null || _selectedCommunity == null) {
-      return;
-    }
-
-    setState(() {
-      _isSubmitting = true;
-    });
-
-    try {
-      // Use bytes and mimeType from PickedImage (already read during picking)
-      final imageBytes = _selectedImage!.bytes;
-      final mimeType = _selectedImage!.mimeType;
-
-      if (kDebugMode) {
-        debugPrint(
-          'Uploading image: ${imageBytes.length} bytes, $mimeType',
-        );
-      }
-
-      await _apiService.updateCommunity(
-        communityDid: _selectedCommunity!.did,
-        imageBytes: imageBytes,
-        mimeType: mimeType,
-      );
-
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-          _selectedImage = null;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Avatar updated for ${_selectedCommunity!.displayName ?? _selectedCommunity!.name}',
-            ),
-            backgroundColor: Colors.green[700],
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-
-        // Reload communities list to show updated avatar
-        await _loadCommunities();
-      }
-    } on ApiException catch (e, stackTrace) {
-      developer.log(
-        'API error uploading avatar',
-        name: 'CommunitiesAdminPanel',
-        error: e,
-        stackTrace: stackTrace,
-        level: 1000,
-      );
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to upload avatar: ${e.message}'),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e, stackTrace) {
-      developer.log(
-        'Unexpected error uploading avatar',
-        name: 'CommunitiesAdminPanel',
-        error: e,
-        stackTrace: stackTrace,
-        level: 1000,
-      );
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('An unexpected error occurred. Please try again.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
-  void _clearSelectedImage() {
-    setState(() {
-      _selectedImage = null;
-    });
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    String? helperText,
-    String? errorText,
-    int maxLines = 1,
-  }) {
-    final hasError = errorText != null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          maxLines: maxLines,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
-            helperText: hasError ? null : helperText,
-            helperStyle: const TextStyle(color: Color(0xFFB6C2D2)),
-            errorText: errorText,
-            errorStyle: const TextStyle(color: Colors.red),
-            filled: true,
-            fillColor: AppColors.backgroundSecondary,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(
-                color: hasError ? Colors.red : AppColors.border,
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(
-                color: hasError ? Colors.red : AppColors.primary,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCommunityTile(CreateCommunityResponse community) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.backgroundSecondary,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.check_circle, color: Colors.green, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  community.handle,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  community.did,
-                  style: const TextStyle(
-                    color: Color(0xFFB6C2D2),
-                    fontSize: 12,
-                    fontFamily: 'monospace',
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

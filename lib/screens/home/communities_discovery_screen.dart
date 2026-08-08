@@ -12,6 +12,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/community_subscription_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
+import '../../services/viewer_state_hydrator.dart';
 import '../../utils/community_search_utils.dart';
 import '../../utils/responsive_utils.dart';
 import '../../widgets/community_chip.dart';
@@ -162,21 +163,23 @@ class _CommunitiesDiscoveryScreenState
     }
   }
 
+  /// Only ever called from the authenticated branch of [_loadAllSections],
+  /// which is why the provider lookup below is unconditional.
+  ///
+  /// The LIST seeding skips a community whose `viewer` is null but coerces a
+  /// present viewer's null `subscribed` to false - the opposite of how the
+  /// single-community site treats that same input.
   Future<void> _loadSubscribed() async {
-    // Capture provider before async gap to avoid context.read after await
-    final subProvider = context.read<CommunitySubscriptionProvider>();
+    // Capture providers before async gap to avoid context.read after await
+    final hydrator = ViewerStateHydrator(
+      authProvider: context.read<AuthProvider>(),
+      subscriptionProvider: context.read<CommunitySubscriptionProvider>(),
+    );
     await _loadSection(
       limit: 10,
       subscribed: true,
       onSuccess: (communities) {
-        for (final c in communities) {
-          if (c.viewer != null) {
-            subProvider.setInitialSubscriptionState(
-              communityDid: c.did,
-              isSubscribed: c.viewer!.subscribed ?? false,
-            );
-          }
-        }
+        hydrator.hydrateCommunityListSubscriptions(communities);
         _subscribedCommunities = communities;
       },
       onStateChange: (isLoading, error) {

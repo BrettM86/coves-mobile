@@ -32,6 +32,7 @@ import 'services/comment_service.dart';
 import 'services/comments_provider_cache.dart';
 import 'services/coves_api_service.dart';
 import 'services/streamable_service.dart';
+import 'services/viewer_state_hydrator.dart';
 import 'services/vote_service.dart';
 import 'widgets/loading_error_states.dart';
 
@@ -176,6 +177,27 @@ Future<Widget> bootstrapCovesApp() async {
               authProvider: authProvider,
             ),
       ),
+      // One hydrator for every fetch path that seeds viewer state (votes,
+      // community subscriptions) from a response.
+      //
+      // Registered AFTER VoteProvider and CommunitySubscriptionProvider
+      // because it reads both, and BEFORE the consumers below that read it
+      // in their `create`. Safe to capture the notifiers once: both are
+      // plain ChangeNotifierProvider(create:) instances, created once and
+      // never replaced, and every consumer proxy returns `previous ?? ...`
+      // so the `vote` and `subscription` arguments its `update` receives
+      // are discarded. (The `auth` argument is NOT discarded everywhere -
+      // UserProfileProvider's update forwards it to updateAuthProvider,
+      // which rebinds its hydrator.)
+      Provider<ViewerStateHydrator>(
+        create:
+            (context) => ViewerStateHydrator(
+              authProvider: authProvider,
+              voteProvider: context.read<VoteProvider>(),
+              subscriptionProvider:
+                  context.read<CommunitySubscriptionProvider>(),
+            ),
+      ),
       ChangeNotifierProxyProvider3<
         AuthProvider,
         VoteProvider,
@@ -186,9 +208,7 @@ Future<Widget> bootstrapCovesApp() async {
             (context) => MultiFeedProvider(
               authProvider,
               apiService: apiService,
-              voteProvider: context.read<VoteProvider>(),
-              subscriptionProvider:
-                  context.read<CommunitySubscriptionProvider>(),
+              hydrator: context.read<ViewerStateHydrator>(),
             ),
         update: (context, auth, vote, subscription, previous) {
           // Reuse existing provider to maintain state across rebuilds
@@ -196,8 +216,7 @@ Future<Widget> bootstrapCovesApp() async {
               MultiFeedProvider(
                 auth,
                 apiService: apiService,
-                voteProvider: vote,
-                subscriptionProvider: subscription,
+                hydrator: context.read<ViewerStateHydrator>(),
               );
         },
       ),
@@ -210,6 +229,7 @@ Future<Widget> bootstrapCovesApp() async {
               voteProvider: context.read<VoteProvider>(),
               commentService: commentService,
               apiService: apiService,
+              hydrator: context.read<ViewerStateHydrator>(),
             ),
         update: (context, auth, vote, previous) {
           // Reuse existing cache
@@ -219,6 +239,7 @@ Future<Widget> bootstrapCovesApp() async {
                 voteProvider: vote,
                 commentService: commentService,
                 apiService: apiService,
+                hydrator: context.read<ViewerStateHydrator>(),
               );
         },
         dispose: (_, cache) => cache.dispose(),
@@ -235,8 +256,12 @@ Future<Widget> bootstrapCovesApp() async {
             (context) => UserProfileProvider(
               authProvider,
               apiService: apiService,
-              voteProvider: context.read<VoteProvider>(),
               commentService: commentService,
+              // Fully wired, subscriptions included: this surface calls
+              // hydrateFeedVotesOnly, so "profile posts never seed
+              // subscriptions" is a property of the call, not of a missing
+              // provider.
+              hydrator: context.read<ViewerStateHydrator>(),
             ),
         update: (context, auth, vote, previous) {
           // The shared apiService/commentService auth callbacks are bound
@@ -253,8 +278,8 @@ Future<Widget> bootstrapCovesApp() async {
               UserProfileProvider(
                 auth,
                 apiService: apiService,
-                voteProvider: vote,
                 commentService: commentService,
+                hydrator: context.read<ViewerStateHydrator>(),
               );
         },
       ),

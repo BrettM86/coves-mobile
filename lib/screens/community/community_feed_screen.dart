@@ -15,6 +15,7 @@ import '../../providers/community_subscription_provider.dart';
 import '../../providers/vote_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
+import '../../services/viewer_state_hydrator.dart';
 import '../../utils/cursor_pagination_controller.dart';
 import '../../utils/display_utils.dart';
 import '../../utils/error_messages.dart';
@@ -191,16 +192,20 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
           _isLoadingCommunity = false;
         });
 
-        // Initialize subscription state from community viewer data
+        // Seed subscription state from this community's viewer data.
+        //
+        // The providers are looked up only once the snapshot is known to
+        // say something, so a provider-less tree is never asked for them.
+        // The hydrator repeats both checks; it skips a null `subscribed`
+        // rather than coercing it to false, unlike the discovery LIST site.
         final authProvider = context.read<AuthProvider>();
         if (authProvider.isAuthenticated &&
             community.viewer?.subscribed != null) {
-          final subscriptionProvider =
-              context.read<CommunitySubscriptionProvider>();
-          subscriptionProvider.setInitialSubscriptionState(
-            communityDid: community.did,
-            isSubscribed: community.viewer!.subscribed!,
-          );
+          ViewerStateHydrator(
+            authProvider: authProvider,
+            subscriptionProvider:
+                context.read<CommunitySubscriptionProvider>(),
+          ).hydrateCommunitySubscription(community);
         }
       }
     } catch (e) {
@@ -257,6 +262,16 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     );
   }
 
+  /// Seeds votes and subscription state for a landed page.
+  ///
+  /// [posts] is whatever the controller deduplicated down to - a
+  /// cursor-drift duplicate never reaches here, unlike MultiFeedProvider,
+  /// which hydrates straight off the raw response. The controller also
+  /// notifies before calling this and catches whatever it throws, keeping
+  /// the page on screen. Both belong to the controller, not the hydrator.
+  ///
+  /// The providers are read only after the auth gate so provider-less trees
+  /// never look them up.
   Future<void> _syncViewerStates(List<FeedViewPost> posts) async {
     if (!mounted) {
       return;
@@ -265,25 +280,11 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     final authProvider = context.read<AuthProvider>();
     if (!authProvider.isAuthenticated) return;
 
-    final voteProvider = context.read<VoteProvider>();
-    final subscriptionProvider = context.read<CommunitySubscriptionProvider>();
-
-    for (final post in posts) {
-      final viewer = post.post.viewer;
-      voteProvider.applyServerVoteState(
-        postUri: post.post.uri,
-        voteDirection: viewer?.vote,
-        voteUri: viewer?.voteUri,
-      );
-
-      final communityViewer = post.post.community.viewer;
-      if (communityViewer?.subscribed != null) {
-        subscriptionProvider.setInitialSubscriptionState(
-          communityDid: post.post.community.did,
-          isSubscribed: communityViewer!.subscribed!,
-        );
-      }
-    }
+    ViewerStateHydrator(
+      authProvider: authProvider,
+      voteProvider: context.read<VoteProvider>(),
+      subscriptionProvider: context.read<CommunitySubscriptionProvider>(),
+    ).hydrateFeed(posts);
   }
 
   Future<void> _onRefresh() async {

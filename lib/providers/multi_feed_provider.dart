@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../models/feed_state.dart';
 import '../models/post.dart';
 import '../services/coves_api_service.dart';
+import '../services/viewer_state_hydrator.dart';
 import 'auth_provider.dart';
 import 'community_subscription_provider.dart';
 import 'vote_provider.dart';
@@ -26,13 +27,19 @@ enum FeedType {
 /// and must not be disposed here.
 class MultiFeedProvider with ChangeNotifier {
   MultiFeedProvider(
-    this._authProvider, {
+    AuthProvider authProvider, {
     required CovesApiService apiService,
     VoteProvider? voteProvider,
     CommunitySubscriptionProvider? subscriptionProvider,
-  })  : _apiService = apiService,
-        _voteProvider = voteProvider,
-        _subscriptionProvider = subscriptionProvider {
+    ViewerStateHydrator? hydrator,
+  })  : _authProvider = authProvider,
+        _apiService = apiService,
+        _hydrator = hydrator ??
+            ViewerStateHydrator(
+              authProvider: authProvider,
+              voteProvider: voteProvider,
+              subscriptionProvider: subscriptionProvider,
+            ) {
     // Track initial auth state
     _wasAuthenticated = _authProvider.isAuthenticated;
 
@@ -73,8 +80,11 @@ class MultiFeedProvider with ChangeNotifier {
 
   final AuthProvider _authProvider;
   final CovesApiService _apiService;
-  final VoteProvider? _voteProvider;
-  final CommunitySubscriptionProvider? _subscriptionProvider;
+
+  /// Seeds vote/subscription state from each response. Injected app-wide;
+  /// when omitted, built from the raw vote/subscription providers this
+  /// constructor still accepts.
+  final ViewerStateHydrator _hydrator;
 
   // Track previous auth state to detect transitions
   bool _wasAuthenticated = false;
@@ -279,34 +289,18 @@ class MultiFeedProvider with ChangeNotifier {
         debugPrint('✅ $feedName loaded: ${newPosts.length} posts total');
       }
 
-      // Apply viewer vote state from the feed response for ALL items,
-      // including those with a null viewer.vote - the provider decides
-      // whether the snapshot may win, and a null direction is how a vote
-      // removed on another device gets cleared here.
-      if (_authProvider.isAuthenticated && _voteProvider != null) {
-        for (final feedItem in response.feed) {
-          final viewer = feedItem.post.viewer;
-          _voteProvider.applyServerVoteState(
-            postUri: feedItem.post.uri,
-            voteDirection: viewer?.vote,
-            voteUri: viewer?.voteUri,
-          );
-        }
-      }
-
-      // Initialize subscription state from community viewer data
-      // This ensures the menu shows correct subscribe/unsubscribe state
-      if (_authProvider.isAuthenticated && _subscriptionProvider != null) {
-        for (final feedItem in response.feed) {
-          final communityViewer = feedItem.post.community.viewer;
-          if (communityViewer?.subscribed != null) {
-            _subscriptionProvider.setInitialSubscriptionState(
-              communityDid: feedItem.post.community.did,
-              isSubscribed: communityViewer!.subscribed!,
-            );
-          }
-        }
-      }
+      // Seed votes and subscription state from the viewer data this
+      // response carried.
+      //
+      // The RAW response feed is passed on purpose, not the merged
+      // `newPosts`: on cursor drift a page can re-deliver a post already on
+      // screen, and this site hydrates that duplicate (the
+      // CursorPaginationController-backed sites drop it before hydrating).
+      // Hydration also sits inside the try above, so a throw here lands on
+      // the feed's error state - unlike the controller sites, which keep
+      // the page and report. Both differences are deliberate and belong to
+      // this caller, not to the hydrator.
+      _hydrator.hydrateFeed(response.feed);
     } on Exception catch (e) {
       // SECURITY: Also check session change in error path to prevent
       // leaking stale data when a fetch fails after sign-out

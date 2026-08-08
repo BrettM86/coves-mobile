@@ -9,6 +9,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/vote_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
+import '../../services/viewer_state_hydrator.dart';
 import '../../utils/error_messages.dart';
 import '../../widgets/loading_error_states.dart';
 import 'post_detail_screen.dart';
@@ -149,22 +150,25 @@ class _PostDetailLoaderState extends State<PostDetailLoader> {
   ///
   /// The response is fresh from getPost, so applying it honors
   /// [VoteProvider.applyServerVoteState]'s fresh-snapshots-only contract.
-  /// Skipped when signed out; VoteProvider is read only behind that guard
-  /// so provider-less widget trees (tests) never look it up.
+  ///
+  /// Skipped when signed out, and the [VoteProvider] lookup stays behind
+  /// that guard so provider-less widget trees (tests, and any screen that
+  /// only ever renders anonymously) never look it up. The hydrator gates on
+  /// auth too; this outer gate is about the lookup, not the work, so both
+  /// stay.
   void _applyViewerVoteState(PostGetResult result) {
     if (result is! PostGetSuccess) {
       return;
     }
-    if (!context.read<AuthProvider>().isAuthenticated) {
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.isAuthenticated) {
       return;
     }
 
-    final viewer = result.post.viewer;
-    context.read<VoteProvider>().applyServerVoteState(
-      postUri: result.post.uri,
-      voteDirection: viewer?.vote,
-      voteUri: viewer?.voteUri,
-    );
+    ViewerStateHydrator(
+      authProvider: authProvider,
+      voteProvider: context.read<VoteProvider>(),
+    ).hydratePost(result.post);
   }
 
   /// Navigate away: pop if possible, otherwise fall back to the feed

@@ -6,6 +6,7 @@ import '../providers/comments_provider.dart';
 import '../providers/vote_provider.dart';
 import 'comment_service.dart';
 import 'coves_api_service.dart';
+import 'viewer_state_hydrator.dart';
 
 /// Comments Provider Cache
 ///
@@ -31,11 +32,13 @@ class CommentsProviderCache {
     required VoteProvider voteProvider,
     required CommentService commentService,
     required CovesApiService apiService,
+    ViewerStateHydrator? hydrator,
     this.maxSize = 15,
   }) : _authProvider = authProvider,
        _voteProvider = voteProvider,
        _commentService = commentService,
-       _apiService = apiService {
+       _apiService = apiService,
+       _hydrator = hydrator {
     _wasAuthenticated = _authProvider.isAuthenticated;
     _authProvider.addListener(_onAuthChanged);
   }
@@ -44,6 +47,12 @@ class CommentsProviderCache {
   final VoteProvider _voteProvider;
   final CommentService _commentService;
   final CovesApiService _apiService;
+
+  /// Threaded into every [CommentsProvider] this cache builds — these
+  /// providers are created here rather than by the DI list, so this is the
+  /// only place the app-wide hydrator can reach them. Null lets each
+  /// provider fall back to one built from [_voteProvider].
+  final ViewerStateHydrator? _hydrator;
 
   /// Maximum number of providers to cache
   final int maxSize;
@@ -134,6 +143,7 @@ class CommentsProviderCache {
       commentService: _commentService,
       postUri: postUri,
       postCid: postCid,
+      hydrator: _hydrator,
     );
 
     _cache[postUri] = provider;

@@ -10,6 +10,7 @@ import '../models/user_profile.dart';
 import '../services/api_exceptions.dart';
 import '../services/comment_service.dart';
 import '../services/coves_api_service.dart';
+import '../services/viewer_state_hydrator.dart';
 import '../utils/cursor_pagination_controller.dart';
 import 'auth_provider.dart';
 import 'vote_provider.dart';
@@ -28,10 +29,16 @@ class UserProfileProvider with ChangeNotifier {
     required CovesApiService apiService,
     required CommentService commentService,
     VoteProvider? voteProvider,
+    ViewerStateHydrator? hydrator,
   }) : _authProvider = authProvider,
        _apiService = apiService,
        _commentService = commentService,
-       _voteProvider = voteProvider {
+       _hydrator =
+           hydrator ??
+           ViewerStateHydrator(
+             authProvider: authProvider,
+             voteProvider: voteProvider,
+           ) {
     // The two feeds are the same cursor-pagination state machine with
     // different fetchers; the controllers own items/cursor/loading/errors
     // and this provider projects them onto the FeedState / CommentsState
@@ -78,15 +85,31 @@ class UserProfileProvider with ChangeNotifier {
   }
 
   AuthProvider _authProvider;
-  final VoteProvider? _voteProvider;
+
+  /// Seeds vote state from each page this provider loads. Injected app-wide
+  /// (where it also carries a subscription provider, which this surface
+  /// deliberately never uses - see [_hydratePostVotes]); when omitted, built
+  /// from the raw vote provider this constructor still accepts.
+  ///
+  /// Rebound whenever [_authProvider] changes - see [updateAuthProvider].
+  ViewerStateHydrator _hydrator;
+
   final CommentService _commentService;
 
   /// Update auth provider reference (called by ChangeNotifierProxyProvider)
+  ///
+  /// The hydrator is rebound to the new instance, not just the listener.
+  /// Its signed-in gate closes over whichever AuthProvider it was built
+  /// with, and this provider's hydration used to consult `_authProvider`
+  /// at call time - so leaving a stale hydrator here would silently keep
+  /// gating on the previous session. main.dart asserts the instance never
+  /// actually changes, but that assert is stripped in release.
   void updateAuthProvider(AuthProvider newAuth) {
     if (_authProvider != newAuth) {
       _authProvider.removeListener(_onAuthChanged);
       _authProvider = newAuth;
       _authProvider.addListener(_onAuthChanged);
+      _hydrator = _hydrator.withAuthProvider(newAuth);
     }
   }
 
@@ -322,18 +345,16 @@ class UserProfileProvider with ChangeNotifier {
 
   /// Apply viewer vote state so a liked post shows a lit heart even when
   /// the profile is its first surface this session.
+  ///
+  /// Votes ONLY: these feed items carry `community.viewer.subscribed` too,
+  /// and this surface has never seeded it. `hydrateFeedVotesOnly` keeps that
+  /// a deliberate choice even when the injected hydrator does know about
+  /// subscriptions.
+  ///
+  /// The controller hands over only the deduplicated new items, so a
+  /// cursor-drift duplicate's stale snapshot never lands here.
   Future<void> _hydratePostVotes(List<FeedViewPost> newPosts) async {
-    final voteProvider = _voteProvider;
-    if (!_authProvider.isAuthenticated || voteProvider == null) return;
-
-    for (final feedItem in newPosts) {
-      final viewer = feedItem.post.viewer;
-      voteProvider.applyServerVoteState(
-        postUri: feedItem.post.uri,
-        voteDirection: viewer?.vote,
-        voteUri: viewer?.voteUri,
-      );
-    }
+    _hydrator.hydrateFeedVotesOnly(newPosts);
   }
 
   String _postsErrorMessage(Object error) {
@@ -417,19 +438,11 @@ class UserProfileProvider with ChangeNotifier {
   /// Apply viewer vote state from the comments response. Safe on both
   /// refresh and pagination: the vote provider keeps an optimistic vote the
   /// appview has not indexed yet instead of adopting a stale snapshot.
+  ///
+  /// Actor comments come back as a flat list, so the flat traversal is the
+  /// right one here - there are no nested replies to recurse into.
   Future<void> _hydrateCommentVotes(List<CommentView> newComments) async {
-    if (!_authProvider.isAuthenticated) return;
-
-    if (_voteProvider == null) {
-      if (kDebugMode) {
-        debugPrint(
-          '⚠️ VoteProvider is null - cannot apply comment vote states',
-        );
-      }
-      return;
-    }
-
-    newComments.forEach(_applyCommentVoteState);
+    _hydrator.hydrateComments(newComments);
   }
 
   String _commentsErrorMessage(Object error) {
@@ -490,28 +503,6 @@ class UserProfileProvider with ChangeNotifier {
       }
       rethrow;
     }
-  }
-
-  /// Apply vote state for a comment from viewer data.
-  ///
-  /// Unlike CommentsProvider._applyCommentVoteState, this handles
-  /// flat CommentView objects (no nested replies) since actor comments
-  /// are returned as a flat list.
-  ///
-  /// If [_voteProvider] is null, this method returns early as a defensive
-  /// measure. A null viewer vote is still applied (vote removed on another
-  /// device) - the provider clears the local state unless it is protecting
-  /// an optimistic vote of its own.
-  void _applyCommentVoteState(CommentView comment) {
-    final voteProvider = _voteProvider;
-    if (voteProvider == null) return;
-
-    final viewer = comment.viewer;
-    voteProvider.applyServerVoteState(
-      postUri: comment.uri,
-      voteDirection: viewer?.vote,
-      voteUri: viewer?.voteUri,
-    );
   }
 
   /// Clear current profile and reset state
