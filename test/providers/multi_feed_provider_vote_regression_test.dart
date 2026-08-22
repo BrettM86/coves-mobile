@@ -161,6 +161,34 @@ void main() {
       expect(voteProvider.getAdjustedScore(postUri, 0), 1);
     });
 
+    test('a post re-delivered by cursor drift is shown once', () async {
+      const otherUri = 'at://did:plc:author/social.coves.community.post/p2';
+      const thirdUri = 'at://did:plc:author/social.coves.community.post/p3';
+
+      stubDiscoverPages([
+        TimelineResponse(
+          feed: [buildFeedPost(uri: postUri), buildFeedPost(uri: otherUri)],
+          cursor: 'page-2',
+        ),
+        // The hot-sort cursor moved under us: page 2 starts with the post
+        // that closed page 1.
+        TimelineResponse(
+          feed: [buildFeedPost(uri: otherUri), buildFeedPost(uri: thirdUri)],
+        ),
+      ]);
+
+      await feedProvider.loadFeed(FeedType.discover, refresh: true);
+      await feedProvider.loadMore(FeedType.discover);
+
+      final uris = feedProvider
+          .getState(FeedType.discover)
+          .posts
+          .map((p) => p.post.uri)
+          .toList();
+      expect(uris, [postUri, otherUri, thirdUri]);
+      expect(feedProvider.getState(FeedType.discover).hasMore, false);
+    });
+
     test(
       'pagination still adopts viewer state for posts new to the provider',
       () async {

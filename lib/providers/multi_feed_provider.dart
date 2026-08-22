@@ -262,15 +262,22 @@ class MultiFeedProvider with ChangeNotifier {
         return;
       }
 
-      // Only update state after successful fetch
-      final List<FeedViewPost> newPosts;
-      if (refresh) {
-        newPosts = response.feed;
-      } else {
-        // Create new list instance to trigger context.select rebuilds
-        // Using spread operator instead of addAll to ensure reference changes
-        newPosts = [...currentState.posts, ...response.feed];
-      }
+      // Only update state after successful fetch.
+      //
+      // Always a new list instance so context.select rebuilds fire, and
+      // always deduplicated by post URI: keyset pagination over a mutable
+      // hot score is never perfectly stable, so a page can re-deliver a
+      // post already on screen. feed_page keys rows by that same URI, so
+      // an un-deduped append would render a second PostCard (and trip the
+      // duplicate-key assertion in debug builds). Mirrors
+      // CursorPaginationController's `idOf` guard.
+      final existing = refresh
+          ? const <FeedViewPost>[]
+          : currentState.posts;
+      final newPosts = [
+        ...existing,
+        ..._withoutDuplicates(response.feed, existing),
+      ];
 
       final hasMore = response.cursor != null;
 
@@ -292,10 +299,14 @@ class MultiFeedProvider with ChangeNotifier {
       // Seed votes and subscription state from the viewer data this
       // response carried.
       //
-      // The RAW response feed is passed on purpose, not the merged
+      // The RAW response feed is passed on purpose, not the deduplicated
       // `newPosts`: on cursor drift a page can re-deliver a post already on
-      // screen, and this site hydrates that duplicate (the
-      // CursorPaginationController-backed sites drop it before hydrating).
+      // screen, and while the list above drops that duplicate, this site
+      // still hydrates it - a re-delivered post is a fresh server snapshot
+      // of viewer state, and VoteProvider.applyServerVoteState already
+      // guards an optimistic vote against being clobbered by it (covered by
+      // multi_feed_provider_vote_regression_test). The
+      // CursorPaginationController-backed sites drop it before hydrating.
       // Hydration also sits inside the try above, so a throw here lands on
       // the feed's error state - unlike the controller sites, which keep
       // the page and report. Both differences are deliberate and belong to
@@ -340,6 +351,20 @@ class MultiFeedProvider with ChangeNotifier {
       }
       notifyListeners();
     }
+  }
+
+  /// [incoming] minus every post whose URI is already in [existing] or
+  /// earlier in [incoming] itself. Same rule as
+  /// CursorPaginationController's `idOf` dedup.
+  static List<FeedViewPost> _withoutDuplicates(
+    List<FeedViewPost> incoming,
+    List<FeedViewPost> existing,
+  ) {
+    final seen = existing.map((p) => p.post.uri).toSet();
+    return [
+      for (final post in incoming)
+        if (seen.add(post.post.uri)) post,
+    ];
   }
 
   /// Fetch timeline feed (authenticated)
