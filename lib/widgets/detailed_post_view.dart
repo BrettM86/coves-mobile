@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
@@ -184,7 +183,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
             // Handle with @ prefix - always shown in muted grey
             Text(
               '@${author.handle}',
-              style: GoogleFonts.inter(
+              style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
                 color: AppColors.textSecondary,
@@ -209,7 +208,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                 widget.post.post.createdAt,
                 currentTime: widget.currentTime,
               ),
-              style: GoogleFonts.inter(
+              style: const TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
               ),
@@ -235,7 +234,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Text(
         widget.post.post.title!,
-        style: GoogleFonts.inter(
+        style: const TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
@@ -409,7 +408,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                     Expanded(
                       child: Text(
                         hostAndPath(embed.uri),
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 13,
                           color: AppColors.textPrimary.withValues(alpha: 0.7),
                         ),
@@ -432,7 +431,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                         ),
                         child: Text(
                           '${_currentImageIndex + 1}/${images.length}',
-                          style: GoogleFonts.inter(
+                          style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w500,
                             color: AppColors.textSecondary,
@@ -527,7 +526,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                     Expanded(
                       child: Text(
                         hostAndPath(embed.uri),
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 13,
                           color: AppColors.textPrimary.withValues(alpha: 0.7),
                         ),
@@ -558,7 +557,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
       child: RichTextRenderer(
         text: widget.post.post.text,
         facets: widget.post.post.facets,
-        style: GoogleFonts.inter(
+        style: TextStyle(
           fontSize: 12.5,
           fontWeight: FontWeight.w400,
           color: AppColors.textPrimary.withValues(alpha: 0.95),
@@ -599,9 +598,9 @@ class _DetailedPostViewState extends State<DetailedPostView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          Text(
+          const Text(
             'Sources',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: AppColors.textSecondary,

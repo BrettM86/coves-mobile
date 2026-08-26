@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../constants/app_colors.dart';
+
 /// Animated heart icon with outline and filled states
 ///
 /// Features a dramatic animation sequence:
@@ -155,7 +157,9 @@ class _AnimatedHeartIconState extends State<AnimatedHeartIcon>
   Widget build(BuildContext context) {
     final effectiveColor =
         widget.color ?? Theme.of(context).iconTheme.color ?? Colors.grey;
-    final effectiveLikedColor = widget.likedColor ?? Colors.red;
+    // The palette's vote-liked red, not Material's `Colors.red` (0xFFF44336)
+    // - a third red that matches neither this nor AppColors.error.
+    final effectiveLikedColor = widget.likedColor ?? AppColors.voteLiked;
 
     // Use 2.5x size for animation overflow space (for 1.3x scale + particles)
     final containerSize = widget.size * 2.5;

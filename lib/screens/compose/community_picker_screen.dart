@@ -222,9 +222,9 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   hintText: 'Search for a community',
-                  hintStyle: const TextStyle(color: Color(0xFF5A6B7F)),
+                  hintStyle: const TextStyle(color: AppColors.textPlaceholder),
                   filled: true,
-                  fillColor: const Color(0xFF1A2028),
+                  fillColor: AppColors.backgroundTertiary,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -242,7 +242,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
                   ),
                   prefixIcon: const Icon(
                     Icons.search,
-                    color: Color(0xFF5A6B7F),
+                    color: AppColors.textPlaceholder,
                   ),
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -283,13 +283,13 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
               const Icon(
                 Icons.error_outline,
                 size: 48,
-                color: Color(0xFF5A6B7F),
+                color: AppColors.textPlaceholder,
               ),
               const SizedBox(height: 16),
               Text(
                 _error!,
                 style: const TextStyle(
-                  color: Color(0xFFB6C2D2),
+                  color: AppColors.textSecondary,
                   fontSize: 16,
                 ),
                 textAlign: TextAlign.center,
@@ -327,7 +327,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
               const Icon(
                 Icons.search_off,
                 size: 48,
-                color: Color(0xFF5A6B7F),
+                color: AppColors.textPlaceholder,
               ),
               const SizedBox(height: 16),
               Text(
@@ -335,7 +335,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
                     ? 'No communities found'
                     : 'No communities match your search',
                 style: const TextStyle(
-                  color: Color(0xFFB6C2D2),
+                  color: AppColors.textSecondary,
                   fontSize: 16,
                 ),
                 textAlign: TextAlign.center,
@@ -404,7 +404,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
           decoration: const BoxDecoration(
             border: Border(
               bottom: BorderSide(
-                color: Color(0xFF2A3441),
+                color: AppColors.inputBorder,
                 width: 1,
               ),
             ),
@@ -443,7 +443,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
                       Text(
                         descriptionLine,
                         style: const TextStyle(
-                          color: Color(0xFFB6C2D2),
+                          color: AppColors.textSecondary,
                           fontSize: 14,
                         ),
                         maxLines: 2,

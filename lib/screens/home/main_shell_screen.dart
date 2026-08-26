@@ -92,20 +92,20 @@ class _MainShellScreenState extends State<MainShellScreen> {
               // Wrap NavigationRail in a colored container that extends to
               // status bar, preventing content from bleeding behind it
               Container(
-                color: const Color(0xFF0B0F14),
+                color: AppColors.background,
                 child: SafeArea(
                   right: false,
                   bottom: false,
                   child: NavigationRail(
                     selectedIndex: _selectedIndex,
                     onDestinationSelected: _onItemTapped,
-                    backgroundColor: const Color(0xFF0B0F14),
+                    backgroundColor: AppColors.background,
                     indicatorColor: AppColors.primary.withValues(alpha: 0.2),
                     labelType: NavigationRailLabelType.all,
                     destinations: [
                       NavigationRailDestination(
                         icon: BlueSkyIcon.homeSimple(
-                          color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                          color: AppColors.textSecondary.withValues(alpha: 0.6),
                         ),
                         selectedIcon: BlueSkyIcon.homeSimple(
                           color: AppColors.primary,
@@ -115,7 +115,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                       NavigationRailDestination(
                         icon: Icon(
                           Icons.workspaces_outlined,
-                          color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                          color: AppColors.textSecondary.withValues(alpha: 0.6),
                         ),
                         selectedIcon: const Icon(
                           Icons.workspaces,
@@ -125,7 +125,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                       ),
                       NavigationRailDestination(
                         icon: BlueSkyIcon.plus(
-                          color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                          color: AppColors.textSecondary.withValues(alpha: 0.6),
                         ),
                         selectedIcon: BlueSkyIcon.plus(
                           color: AppColors.primary,
@@ -134,7 +134,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                       ),
                       NavigationRailDestination(
                         icon: BlueSkyIcon.bellOutline(
-                          color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                          color: AppColors.textSecondary.withValues(alpha: 0.6),
                         ),
                         selectedIcon: BlueSkyIcon.bellFilled(
                           color: AppColors.primary,
@@ -143,7 +143,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                       ),
                       NavigationRailDestination(
                         icon: BlueSkyIcon.personSimple(
-                          color: const Color(0xFFB6C2D2).withValues(alpha: 0.6),
+                          color: AppColors.textSecondary.withValues(alpha: 0.6),
                         ),
                         selectedIcon: BlueSkyIcon.personSimple(
                           color: AppColors.primary,
@@ -157,7 +157,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
               const VerticalDivider(
                 width: 1,
                 thickness: 1,
-                color: Color(0xFF1A2433),
+                color: AppColors.navDivider,
               ),
               Expanded(child: body),
             ],
@@ -172,9 +172,9 @@ class _MainShellScreenState extends State<MainShellScreen> {
         body: body,
         bottomNavigationBar: Container(
           decoration: const BoxDecoration(
-            color: Color(0xFF0B0F14),
+            color: AppColors.background,
             border: Border(
-              top: BorderSide(color: Color(0xFF0B0F14), width: 0.5),
+              top: BorderSide(color: AppColors.background, width: 0.5),
             ),
           ),
           child: SafeArea(
@@ -225,7 +225,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
     final color =
         isSelected
             ? AppColors.primary
-            : const Color(0xFFB6C2D2).withValues(alpha: 0.6);
+            : AppColors.textSecondary.withValues(alpha: 0.6);
 
     // Use filled variant when selected, outline when not
     Widget icon;

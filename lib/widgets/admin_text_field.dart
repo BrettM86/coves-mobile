@@ -62,7 +62,7 @@ class AdminTextField extends StatelessWidget {
             hintText: hint,
             hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
             helperText: hasError ? null : helperText,
-            helperStyle: const TextStyle(color: Color(0xFFB6C2D2)),
+            helperStyle: const TextStyle(color: AppColors.textSecondary),
             errorText: errorText,
             errorStyle: const TextStyle(color: Colors.red),
             filled: true,

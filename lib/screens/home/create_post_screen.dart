@@ -595,17 +595,17 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: const TextStyle(color: Color(0xFF5A6B7F)),
+        hintStyle: const TextStyle(color: AppColors.textPlaceholder),
         filled: true,
-        fillColor: const Color(0xFF1A2028),
+        fillColor: AppColors.backgroundTertiary,
         counterStyle: const TextStyle(color: AppColors.textSecondary),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF2A3441)),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF2A3441)),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

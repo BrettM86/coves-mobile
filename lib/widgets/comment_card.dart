@@ -185,44 +185,67 @@ class _CommentCardState extends State<CommentCard> {
                             // deleted). The author == null arm is already
                             // covered by isTombstoned; spelling it out lets
                             // Dart promote author to non-null below.
+                            // The author cluster takes the slack the Spacer
+                            // used to hold, so the timestamp still sits hard
+                            // right while the handle now has a bounded width
+                            // to ellipsize into. atProto encourages domain
+                            // handles, and an unbounded one overflowed this
+                            // row on an ordinary phone.
                             if (author == null || comment.isTombstoned)
                               // Show deletion reason as placeholder
-                              Text(
-                                comment.deletionReason == 'moderator'
-                                    ? '[removed by moderator]'
-                                    : '[deleted by user]',
-                                style: TextStyle(
-                                  color: AppColors.textPrimary.withValues(
-                                    alpha: 0.5,
+                              Expanded(
+                                child: Text(
+                                  comment.deletionReason == 'moderator'
+                                      ? '[removed by moderator]'
+                                      : '[deleted by user]',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: AppColors.textPrimary.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                    fontSize: 13,
+                                    fontStyle: FontStyle.italic,
                                   ),
-                                  fontSize: 13,
-                                  fontStyle: FontStyle.italic,
                                 ),
                               )
                             else
                               // Show tappable author for active comments
-                              TappableAuthor(
-                                authorDid: author.did,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    // Author avatar
-                                    _buildAuthorAvatar(author),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '@${author.handle}',
-                                      style: TextStyle(
-                                        color: AppColors.textPrimary.withValues(
-                                          alpha: isCollapsed ? 0.7 : 0.5,
+                              Expanded(
+                                child: TappableAuthor(
+                                  authorDid: author.did,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Author avatar
+                                      _buildAuthorAvatar(author),
+                                      const SizedBox(width: 8),
+                                      // The handle yields, never the avatar or
+                                      // the timestamp - see the note above.
+                                      Flexible(
+                                        child: Text(
+                                          '@${author.handle}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: AppColors.textPrimary
+                                                .withValues(
+                                                  alpha:
+                                                      isCollapsed ? 0.7 : 0.5,
+                                                ),
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
-                            const Spacer(),
+                            // Keeps an ellipsized handle from butting up
+                            // against the timestamp. Invisible at widths where
+                            // the row was already clean.
+                            const SizedBox(width: 8),
                             // Show collapsed count OR time ago
                             if (isCollapsed && collapsedCount > 0)
                               _buildCollapsedBadge()
@@ -644,7 +667,7 @@ class _CommentCardState extends State<CommentCard> {
                         isLiked: isLiked,
                         size: 16,
                         color: AppColors.textPrimary.withValues(alpha: 0.6),
-                        likedColor: const Color(0xFFFF0033),
+                        likedColor: AppColors.voteLiked,
                       ),
                       const SizedBox(width: 5),
                       Text(

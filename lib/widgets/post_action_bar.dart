@@ -75,11 +75,20 @@ class PostActionBar extends StatelessWidget {
                         color: AppColors.textPrimary.withValues(alpha: 0.5),
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        'Comment',
-                        style: TextStyle(
-                          color: AppColors.textPrimary.withValues(alpha: 0.5),
-                          fontSize: 14,
+                      // This pill is the only child the outer Row can squeeze,
+                      // so it is where a crowded action bar lands. The label
+                      // yields rather than the counts beside it: it is a hint
+                      // whose affordance the edit icon already carries, while
+                      // a truncated number would be misinformation.
+                      Flexible(
+                        child: Text(
+                          'Comment',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textPrimary.withValues(alpha: 0.5),
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ],
@@ -106,7 +115,7 @@ class PostActionBar extends StatelessWidget {
                     AnimatedHeartIcon(
                       isLiked: isVoted,
                       color: AppColors.textPrimary.withValues(alpha: 0.7),
-                      likedColor: const Color(0xFFFF0033),
+                      likedColor: AppColors.voteLiked,
                       size: 24,
                     ),
                     const SizedBox(width: 4),
@@ -115,7 +124,7 @@ class PostActionBar extends StatelessWidget {
                       style: TextStyle(
                         color:
                             isVoted
-                                ? const Color(0xFFFF0033)
+                                ? AppColors.voteLiked
                                 : AppColors.textPrimary.withValues(alpha: 0.7),
                         fontSize: 13,
                         fontWeight: FontWeight.w500,

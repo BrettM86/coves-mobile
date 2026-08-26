@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../constants/app_colors.dart';
 
@@ -65,7 +64,7 @@ class MediaBadge extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         child: Text(
           label,
-          style: GoogleFonts.inter(
+          style: const TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w500,
             color: AppColors.textPrimary,

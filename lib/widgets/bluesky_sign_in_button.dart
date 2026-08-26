@@ -2,7 +2,6 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../constants/bluesky_colors.dart';
@@ -109,7 +108,7 @@ class _BlueskySignInButtonState extends State<BlueskySignInButton> {
                 const SizedBox(width: 12),
                 Text(
                   widget.title,
-                  style: GoogleFonts.nunito(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: _getContentColor(),

@@ -2,7 +2,6 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../utils/responsive_utils.dart';
@@ -204,9 +203,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Icons.description_outlined,
                   color: AppColors.textSecondary,
                 ),
-                title: Text(
+                title: const Text(
                   'End User License Agreement',
-                  style: GoogleFonts.nunito(
+                  style: TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 16,
                   ),
@@ -223,9 +222,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Icons.groups_outlined,
                   color: AppColors.textSecondary,
                 ),
-                title: Text(
+                title: const Text(
                   'Community Guidelines',
-                  style: GoogleFonts.nunito(
+                  style: TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 16,
                   ),

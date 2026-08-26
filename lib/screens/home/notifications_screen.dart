@@ -8,9 +8,9 @@ class NotificationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B0F14),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0B0F14),
+        backgroundColor: AppColors.background,
         foregroundColor: Colors.white,
         title: const Text('Notifications'),
         automaticallyImplyLeading: false,
@@ -38,7 +38,7 @@ class NotificationsScreen extends StatelessWidget {
               SizedBox(height: 16),
               Text(
                 'Stay updated with your activity',
-                style: TextStyle(fontSize: 16, color: Color(0xFFB6C2D2)),
+                style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
                 textAlign: TextAlign.center,
               ),
             ],

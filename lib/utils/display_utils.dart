@@ -10,23 +10,22 @@ import '../constants/app_colors.dart';
 class DisplayUtils {
   DisplayUtils._();
 
-  /// Fallback colors for avatars when no image is available
+  /// Fallback colors for avatars when no image is available.
   ///
-  /// Used by community avatars, user avatars, and other fallback displays.
-  /// Color is deterministically selected based on name hash for consistency.
-  static const fallbackColors = [
-    AppColors.coral,
-    AppColors.teal,
-    Color(0xFF9B59B6), // Purple
-    Color(0xFF3498DB), // Blue
-    Color(0xFF27AE60), // Green
-    Color(0xFFE74C3C), // Red
-  ];
+  /// The values live in [AppColors.avatarFallbacks] so the palette stays the
+  /// one place a color is defined. This alias has no callers outside this
+  /// file - it exists so [getFallbackColor] below reads in terms of what it
+  /// is choosing from, and it is kept public because it is part of
+  /// `DisplayUtils`' existing surface. Reach for [AppColors.avatarFallbacks]
+  /// directly in new code.
+  static const fallbackColors = AppColors.avatarFallbacks;
 
   /// Get a consistent fallback color for a given name
   ///
-  /// Uses hash code to deterministically select a color from [fallbackColors].
-  /// The same name will always return the same color.
+  /// Indexes [fallbackColors] by `name.hashCode.abs() % length`, so the same
+  /// name always returns the same color - as long as the list does not
+  /// change. See [AppColors.avatarFallbacks] on why any edit to it repaints
+  /// existing accounts.
   static Color getFallbackColor(String name) {
     final colorIndex = name.hashCode.abs() % fallbackColors.length;
     return fallbackColors[colorIndex];

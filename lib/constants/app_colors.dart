@@ -56,6 +56,16 @@ class AppColors {
   /// Muted text - subtle hints, placeholders
   static const textMuted = Color(0xFF5A6B70);
 
+  /// Placeholder text inside form fields - hint text on compose surfaces.
+  ///
+  /// NOT a duplicate of [textMuted]. The two differ only in the final byte
+  /// (`…6B70` vs `…6B7F`) and read as the same gray at a glance, which makes
+  /// them a standing trap: collapsing one into the other silently shifts
+  /// every hint field's blue channel. They are kept apart deliberately - if
+  /// they should ever become one color, change both values in a commit that
+  /// says so, rather than "tidying" a reference from one to the other.
+  static const textPlaceholder = Color(0xFF5A6B7F);
+
   /// Link text - teal accent
   static const textLink = teal;
 
@@ -71,6 +81,13 @@ class AppColors {
 
   /// Border focused - coral accent
   static const borderFocused = coral;
+
+  /// Border on input fields and dividers across the compose surfaces
+  /// (create-post form, community picker).
+  static const inputBorder = Color(0xFF2A3441);
+
+  /// Divider separating the tablet navigation rail from the page body.
+  static const navDivider = Color(0xFF1A2433);
 
   /// Loading indicator
   static const loadingIndicator = Color(0xFF484F58);
@@ -90,6 +107,42 @@ class AppColors {
 
   /// Error red
   static const error = Color(0xFFEC7558);
+
+  /// The liked / upvoted vote state - the filled heart on a post or comment.
+  ///
+  /// A state color, not a severity one. Distinct from [error] on purpose:
+  /// [error] is the muted salmon used for failures and validation messages,
+  /// while this is the hot red that signals "you voted on this". Nothing
+  /// destructive uses it, so do not rename it toward that meaning, and do not
+  /// collapse the two - a liked heart is not an error.
+  static const voteLiked = Color(0xFFFF0033);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AVATAR FALLBACKS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Palette used to tint an avatar that has no image, picked by name hash.
+  ///
+  /// Deliberately one list rather than six individually named tokens: the
+  /// entries carry no role on their own - only "some stable color for this
+  /// name" - so naming them individually could only name their hue, which
+  /// this palette does not do.
+  ///
+  /// Treat this list as frozen. `DisplayUtils.getFallbackColor` indexes it by
+  /// `name.hashCode.abs() % length`, so BOTH the order and the length are
+  /// load-bearing: appending is not the safe operation it looks like, because
+  /// it changes the modulus and repartitions every existing name onto a
+  /// different color. Reordering, inserting, removing and appending are all
+  /// equally destructive - any edit repaints the avatar of every account that
+  /// has no image.
+  static const avatarFallbacks = [
+    coral,
+    teal,
+    Color(0xFF9B59B6),
+    Color(0xFF3498DB),
+    Color(0xFF27AE60),
+    Color(0xFFE74C3C),
+  ];
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DECORATIVE

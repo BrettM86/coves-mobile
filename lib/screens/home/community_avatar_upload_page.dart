@@ -174,7 +174,7 @@ class _CommunityAvatarUploadPageState extends State<CommunityAvatarUploadPage> {
           const SizedBox(height: 8),
           const Text(
             'Select a community and upload a new profile picture',
-            style: TextStyle(fontSize: 14, color: Color(0xFFB6C2D2)),
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 24),
 
@@ -209,7 +209,7 @@ class _CommunityAvatarUploadPageState extends State<CommunityAvatarUploadPage> {
               child: const Center(
                 child: Text(
                   'No communities found',
-                  style: TextStyle(color: Color(0xFFB6C2D2)),
+                  style: TextStyle(color: AppColors.textSecondary),
                 ),
               ),
             )
@@ -279,7 +279,7 @@ class _CommunityAvatarUploadPageState extends State<CommunityAvatarUploadPage> {
               const SizedBox(height: 8),
               const Text(
                 'Current',
-                style: TextStyle(color: Color(0xFFB6C2D2), fontSize: 12),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
               ),
             ],
           ),
@@ -334,7 +334,7 @@ class _CommunityAvatarUploadPageState extends State<CommunityAvatarUploadPage> {
       Center(
         child: Text(
           '@${community.handle ?? community.name}',
-          style: const TextStyle(color: Color(0xFFB6C2D2), fontSize: 14),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
         ),
       ),
       const SizedBox(height: 24),
@@ -443,7 +443,10 @@ class _CommunityAvatarUploadPageState extends State<CommunityAvatarUploadPage> {
             ),
             Text(
               '@${community.handle ?? community.name}',
-              style: const TextStyle(color: Color(0xFFB6C2D2), fontSize: 14),
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+              ),
             ),
           ],
         ),
@@ -527,7 +530,7 @@ class _CommunitySelectTile extends StatelessWidget {
                   Text(
                     '@${community.handle ?? community.name}',
                     style: const TextStyle(
-                      color: Color(0xFFB6C2D2),
+                      color: AppColors.textSecondary,
                       fontSize: 12,
                     ),
                   ),

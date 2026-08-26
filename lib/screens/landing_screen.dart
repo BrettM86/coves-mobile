@@ -3,10 +3,10 @@ import 'dart:async' show unawaited;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../constants/app_colors.dart';
+import '../constants/app_typography.dart';
 import '../widgets/bluesky_sign_in_button.dart';
 import '../widgets/primary_button.dart';
 
@@ -131,7 +131,7 @@ class LandingScreen extends StatelessWidget {
             );
             return Text(
               'Coves',
-              style: GoogleFonts.shrikhand(
+              style: AppTypography.display.copyWith(
                 fontSize: 48,
                 color: AppColors.textPrimary,
               ),
@@ -149,9 +149,9 @@ class LandingScreen extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
+            const Text(
               'Bring your atproto handle',
-              style: GoogleFonts.nunito(
+              style: TextStyle(
                 fontSize: 15,
                 color: AppColors.textSecondary,
                 fontWeight: FontWeight.w500,
@@ -172,7 +172,7 @@ class LandingScreen extends StatelessWidget {
                     },
                   ),
                 );
-                return Row(
+                return const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
@@ -180,7 +180,7 @@ class LandingScreen extends StatelessWidget {
                       size: 16,
                       color: AppColors.textSecondary,
                     ),
-                    const SizedBox(width: 4),
+                    SizedBox(width: 4),
                     Icon(
                       Icons.cloud_outlined,
                       size: 16,
@@ -217,9 +217,9 @@ class LandingScreen extends StatelessWidget {
           onPressed: () {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(
+                content: const Text(
                   'Account creation coming soon!',
-                  style: GoogleFonts.nunito(
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
                     color: AppColors.background,
                   ),
@@ -245,18 +245,18 @@ class LandingScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               color: AppColors.teal.withValues(alpha: 0.1),
             ),
-            child: Row(
+            child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.explore_outlined,
                   size: 18,
                   color: AppColors.teal,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text(
                   'Explore communities',
-                  style: GoogleFonts.nunito(
+                  style: TextStyle(
                     fontSize: 14,
                     color: AppColors.teal,
                     fontWeight: FontWeight.w600,

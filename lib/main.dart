@@ -9,6 +9,8 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'config/oauth_config.dart';
 import 'constants/app_colors.dart';
+import 'constants/app_theme.dart';
+import 'constants/app_typography.dart';
 import 'models/community.dart';
 import 'models/post.dart';
 import 'providers/auth_provider.dart';
@@ -53,10 +55,13 @@ Future<void> main() async {
     appRunner: () async {
       WidgetsFlutterBinding.ensureInitialized();
 
+      // The design-system fonts are bundled, so their OFL text ships too.
+      AppTypography.registerLicenses();
+
       // Set system UI overlay style (Android navigation bar)
       SystemChrome.setSystemUIOverlayStyle(
         const SystemUiOverlayStyle(
-          systemNavigationBarColor: Color(0xFF0B0F14),
+          systemNavigationBarColor: AppColors.background,
           systemNavigationBarIconBrightness: Brightness.light,
         ),
       );
@@ -302,13 +307,13 @@ class CovesApp extends StatelessWidget {
 
     return MaterialApp.router(
       title: 'Coves',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.dark,
+      // The app is dark-only by design. `darkTheme` being null would already
+      // make the `theme` slot win in every case, so setting both plus an
+      // explicit `themeMode` is behavior-preserving - it just stops a later
+      // light theme from landing the app in a half-migrated state.
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.dark,
       routerConfig: createRouter(
         authProvider,
         eulaProvider,

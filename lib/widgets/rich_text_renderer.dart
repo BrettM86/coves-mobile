@@ -815,9 +815,7 @@ class _RichTextRendererState extends State<RichTextRenderer> {
               if (widget.linkStyle != null) {
                 style = style.merge(widget.linkStyle);
               } else {
-                style = style.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                );
+                style = style.copyWith(color: AppColors.textLink);
                 decorations.add(TextDecoration.underline);
               }
               onTap ??= () {
@@ -826,7 +824,7 @@ class _RichTextRendererState extends State<RichTextRenderer> {
             }
           case MentionFacetFeature(did: final did):
             style = style.copyWith(
-              color: Theme.of(context).colorScheme.primary,
+              color: AppColors.coral,
               // Only set a weight when none is set yet, so an already-merged
               // bold (w700) isn't clobbered down to w600
               fontWeight: style.fontWeight ?? FontWeight.w600,

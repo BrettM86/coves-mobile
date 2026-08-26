@@ -35,8 +35,8 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
-  # Custom fonts for Coves design system (Shrikhand display + Nunito body)
-  google_fonts: ^6.2.1
+  # Design-system fonts are bundled as assets, not fetched at runtime - see
+  # the `fonts:` section below and the note in constants/app_typography.dart.
   characters: ^1.4.0  # Unicode grapheme cluster support for emoji counting
   flutter_secure_storage: ^9.2.2
   shared_preferences: ^2.3.3
@@ -105,6 +105,9 @@ flutter:
     - assets/icons/atproto/
     - assets/images/
     - assets/legal/
+    # OFL license texts, read back at startup and handed to LicenseRegistry.
+    # The display font ships inside the app, so its license has to ship too.
+    - assets/fonts/OFL-Shrikhand.txt
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -131,3 +134,17 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+  fonts:
+    # No body/UI font is bundled on purpose - the app renders in whatever the
+    # platform provides (Roboto on stock Android, One UI Sans on Samsung, SF
+    # Pro on iOS), which is what `AppTypography.fontFamily` being null means.
+    # Only the display face is shipped, because a wordmark has to be itself.
+    #
+    # Shrikhand is static, single-weight - correct for a display face used
+    # only at regular. If a body font is ever bundled here, declare it as a
+    # single VARIABLE file with no `weight:` attributes: per-weight entries
+    # pin static instances and reintroduce synthetic bold.
+    - family: Shrikhand
+      fonts:
+        - asset: assets/fonts/Shrikhand-Regular.ttf

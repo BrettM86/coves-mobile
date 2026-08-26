@@ -202,7 +202,7 @@ class _CreateCommunityFormState extends State<CreateCommunityForm> {
           const SizedBox(height: 8),
           const Text(
             'Create a new community for Coves users',
-            style: TextStyle(fontSize: 14, color: Color(0xFFB6C2D2)),
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 24),
 
@@ -361,7 +361,7 @@ class _CreatedCommunityTile extends StatelessWidget {
                 Text(
                   community.did,
                   style: const TextStyle(
-                    color: Color(0xFFB6C2D2),
+                    color: AppColors.textSecondary,
                     fontSize: 12,
                     fontFamily: 'monospace',
                   ),

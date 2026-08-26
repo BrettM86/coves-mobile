@@ -448,7 +448,7 @@ class _AdminMenu extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             'Manage communities and settings',
-            style: TextStyle(fontSize: 14, color: Color(0xFFB6C2D2)),
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
           ),
           const SizedBox(height: 24),
           _AdminMenuItem(
@@ -523,14 +523,14 @@ class _AdminMenuItem extends StatelessWidget {
                   Text(
                     subtitle,
                     style: const TextStyle(
-                      color: Color(0xFFB6C2D2),
+                      color: AppColors.textSecondary,
                       fontSize: 14,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Color(0xFFB6C2D2)),
+            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
           ],
         ),
       ),

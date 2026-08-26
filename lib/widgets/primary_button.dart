@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../constants/app_colors.dart';
 
@@ -80,7 +79,7 @@ class _PrimaryButtonState extends State<PrimaryButton> {
                     ],
                     Text(
                       widget.title,
-                      style: GoogleFonts.nunito(
+                      style: TextStyle(
                         fontSize: widget.variant == ButtonVariant.tertiary
                             ? 14
                             : 16,

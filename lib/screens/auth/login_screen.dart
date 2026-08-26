@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../../constants/app_colors.dart';
+import '../../constants/app_typography.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/coves_auth_service.dart';
 import '../../widgets/primary_button.dart';
@@ -53,14 +53,14 @@ class _LoginScreenState extends State<LoginScreen> {
         backgroundColor: AppColors.backgroundSecondary,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(
+          side: const BorderSide(
             color: AppColors.border,
             width: 1,
           ),
         ),
-        title: Text(
+        title: const Text(
           'What is a handle?',
-          style: GoogleFonts.nunito(
+          style: TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w700,
             fontSize: 20,
@@ -70,9 +70,9 @@ class _LoginScreenState extends State<LoginScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Your handle is your unique identifier on the AT Protocol network.',
-              style: GoogleFonts.nunito(
+              style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 15,
                 height: 1.5,
@@ -88,17 +88,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: AppColors.teal.withValues(alpha: 0.3),
                 ),
               ),
-              child: Row(
+              child: const Row(
                 children: [
                   Icon(
                     Icons.alternate_email,
                     color: AppColors.teal,
                     size: 20,
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: 10),
                   Text(
                     'alice.bsky.social',
-                    style: GoogleFonts.nunito(
+                    style: TextStyle(
                       color: AppColors.teal,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
@@ -108,9 +108,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            Text(
+            const Text(
               'If you don\'t have one yet, you can create an account at bsky.app.',
-              style: GoogleFonts.nunito(
+              style: TextStyle(
                 color: AppColors.textMuted,
                 fontSize: 13,
                 height: 1.5,
@@ -125,9 +125,9 @@ class _LoginScreenState extends State<LoginScreen> {
               foregroundColor: AppColors.coral,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),
-            child: Text(
+            child: const Text(
               'Got it',
-              style: GoogleFonts.nunito(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 15,
               ),
@@ -159,9 +159,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
+            content: const Text(
               'Sign in cancelled.',
-              style: GoogleFonts.nunito(fontWeight: FontWeight.w500),
+              style: TextStyle(fontWeight: FontWeight.w500),
             ),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -184,7 +184,7 @@ class _LoginScreenState extends State<LoginScreen> {
               e.message is String
                   ? e.message as String
                   : 'Invalid handle. Please check it and try again.',
-              style: GoogleFonts.nunito(fontWeight: FontWeight.w500),
+              style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
@@ -239,7 +239,7 @@ class _LoginScreenState extends State<LoginScreen> {
           SnackBar(
             content: Text(
               userMessage,
-              style: GoogleFonts.nunito(fontWeight: FontWeight.w500),
+              style: const TextStyle(fontWeight: FontWeight.w500),
             ),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
@@ -369,7 +369,7 @@ class _LoginScreenState extends State<LoginScreen> {
         children: [
           if (canGoBack)
             IconButton(
-              icon: Icon(
+              icon: const Icon(
                 Icons.arrow_back_rounded,
                 color: AppColors.textSecondary,
               ),
@@ -400,7 +400,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         Text(
           'Welcome back',
-          style: GoogleFonts.shrikhand(
+          style: AppTypography.display.copyWith(
             fontSize: 28,
             color: AppColors.textPrimary,
             height: 1.2,
@@ -411,12 +411,12 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(height: 12),
 
         // Provider logos
-        Row(
+        const Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
               'Sign in with your atproto identity',
-              style: GoogleFonts.nunito(
+              style: TextStyle(
                 fontSize: 15,
                 color: AppColors.textSecondary,
                 fontWeight: FontWeight.w500,
@@ -439,9 +439,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 scope.setTag('screen', 'login');
               },
             );
-            return Text(
+            return const Text(
               'Bluesky \u2022 ATProto',
-              style: GoogleFonts.nunito(
+              style: TextStyle(
                 fontSize: 12,
                 color: AppColors.textMuted,
                 fontWeight: FontWeight.w500,
@@ -458,11 +458,11 @@ class _LoginScreenState extends State<LoginScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Label
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
+        const Padding(
+          padding: EdgeInsets.only(left: 4, bottom: 8),
           child: Text(
             'YOUR HANDLE',
-            style: GoogleFonts.nunito(
+            style: TextStyle(
               fontSize: 11,
               color: AppColors.textMuted,
               fontWeight: FontWeight.w700,
@@ -490,14 +490,14 @@ class _LoginScreenState extends State<LoginScreen> {
             controller: _handleController,
             focusNode: _focusNode,
             enabled: !_isLoading,
-            style: GoogleFonts.nunito(
+            style: const TextStyle(
               color: AppColors.textPrimary,
               fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
             decoration: InputDecoration(
               hintText: 'alice.bsky.social',
-              hintStyle: GoogleFonts.nunito(
+              hintStyle: const TextStyle(
                 color: AppColors.textMuted,
                 fontSize: 16,
               ),
@@ -509,40 +509,40 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(
+                borderSide: const BorderSide(
                   color: AppColors.border,
                   width: 2,
                 ),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(
+                borderSide: const BorderSide(
                   color: AppColors.border,
                   width: 2,
                 ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(
+                borderSide: const BorderSide(
                   color: AppColors.coral,
                   width: 2,
                 ),
               ),
               errorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(
+                borderSide: const BorderSide(
                   color: AppColors.error,
                   width: 2,
                 ),
               ),
               focusedErrorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(
+                borderSide: const BorderSide(
                   color: AppColors.error,
                   width: 2,
                 ),
               ),
-              errorStyle: GoogleFonts.nunito(
+              errorStyle: const TextStyle(
                 color: AppColors.error,
                 fontSize: 12,
               ),
@@ -550,7 +550,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 padding: const EdgeInsets.only(left: 20, right: 4),
                 child: Text(
                   '@',
-                  style: GoogleFonts.nunito(
+                  style: TextStyle(
                     color: _isFocused ? AppColors.coral : AppColors.textMuted,
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -588,18 +588,18 @@ class _LoginScreenState extends State<LoginScreen> {
           color: AppColors.teal.withValues(alpha: 0.2),
         ),
       ),
-      child: Row(
+      child: const Row(
         children: [
           Icon(
             Icons.security_rounded,
             color: AppColors.teal,
             size: 20,
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Text(
               'You\'ll be redirected to authorize securely with your atproto provider.',
-              style: GoogleFonts.nunito(
+              style: TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,
                 height: 1.4,
@@ -617,7 +617,7 @@ class _LoginScreenState extends State<LoginScreen> {
         onTap: _showHandleHelpDialog,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
@@ -625,10 +625,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 color: AppColors.coral,
                 size: 18,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text(
                 'What is a handle?',
-                style: GoogleFonts.nunito(
+                style: TextStyle(
                   color: AppColors.coral,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,

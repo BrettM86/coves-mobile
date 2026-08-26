@@ -1,7 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../constants/app_colors.dart';
 import '../../models/post.dart';
@@ -136,10 +135,10 @@ class _StreamableVideoEmbedState extends State<StreamableVideoEmbed> {
   /// reason: an unresolvable URL and a malformed response read the same.
   void _showFailure(ScaffoldMessengerState messenger) {
     messenger.showSnackBar(
-      SnackBar(
+      const SnackBar(
         content: Text(
           _failureCopy,
-          style: GoogleFonts.inter(color: AppColors.textPrimary),
+          style: TextStyle(color: AppColors.textPrimary),
         ),
         backgroundColor: AppColors.backgroundSecondary,
       ),

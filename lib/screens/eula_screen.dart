@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -76,9 +75,9 @@ class _EulaScreenState extends State<EulaScreen> {
           ? AppBar(
               backgroundColor: AppColors.background,
               surfaceTintColor: Colors.transparent,
-              title: Text(
+              title: const Text(
                 'End User License Agreement',
-                style: GoogleFonts.nunito(
+                style: TextStyle(
                   color: AppColors.textPrimary,
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
@@ -124,22 +123,22 @@ class _EulaScreenState extends State<EulaScreen> {
             ),
           ),
           const SizedBox(width: 14),
-          Expanded(
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'License Agreement',
-                  style: GoogleFonts.nunito(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   'Please read the agreement before continuing',
-                  style: GoogleFonts.nunito(
+                  style: TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
                   ),
@@ -223,17 +222,17 @@ class _EulaScreenState extends State<EulaScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
+                    const Text(
                       'Error loading agreement',
-                      style: GoogleFonts.nunito(color: AppColors.error),
+                      style: TextStyle(color: AppColors.error),
                     ),
                     const SizedBox(height: 12),
                     TextButton.icon(
                       onPressed: _retryLoadEula,
                       icon: const Icon(Icons.refresh, size: 18),
-                      label: Text(
+                      label: const Text(
                         'Retry',
-                        style: GoogleFonts.nunito(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -249,17 +248,17 @@ class _EulaScreenState extends State<EulaScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
+                    const Text(
                       'Agreement content unavailable',
-                      style: GoogleFonts.nunito(color: AppColors.error),
+                      style: TextStyle(color: AppColors.error),
                     ),
                     const SizedBox(height: 12),
                     TextButton.icon(
                       onPressed: _retryLoadEula,
                       icon: const Icon(Icons.refresh, size: 18),
-                      label: Text(
+                      label: const Text(
                         'Retry',
-                        style: GoogleFonts.nunito(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -308,18 +307,18 @@ class _EulaScreenState extends State<EulaScreen> {
           stops: const [0.0, 0.5, 1.0],
         ),
       ),
-      child: Row(
+      child: const Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             Icons.keyboard_double_arrow_down_rounded,
             color: AppColors.textMuted,
             size: 16,
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: 6),
           Text(
             'Scroll to read full agreement',
-            style: GoogleFonts.nunito(
+            style: TextStyle(
               fontSize: 12,
               color: AppColors.textMuted,
               fontWeight: FontWeight.w600,
@@ -363,7 +362,7 @@ class _EulaScreenState extends State<EulaScreen> {
                       Expanded(
                         child: Text(
                           'I have read and agree to the End User License Agreement',
-                          style: GoogleFonts.nunito(
+                          style: TextStyle(
                             fontSize: 13,
                             color: _hasScrolledToBottom
                                 ? AppColors.textPrimary
@@ -408,7 +407,7 @@ class _EulaScreenState extends State<EulaScreen> {
                               )
                             : Text(
                                 'Accept & Continue',
-                                style: GoogleFonts.nunito(
+                                style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
                                   color: canAccept
@@ -461,46 +460,46 @@ class _EulaScreenState extends State<EulaScreen> {
 
   MarkdownStyleSheet _buildMarkdownStyle() {
     return MarkdownStyleSheet(
-      h1: GoogleFonts.nunito(
+      h1: const TextStyle(
         fontSize: 20,
         fontWeight: FontWeight.w800,
         color: AppColors.textPrimary,
         height: 1.3,
       ),
-      h2: GoogleFonts.nunito(
+      h2: const TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w700,
         color: AppColors.coral,
         height: 1.3,
       ),
-      h3: GoogleFonts.nunito(
+      h3: const TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
         height: 1.4,
       ),
-      p: GoogleFonts.nunito(
+      p: const TextStyle(
         fontSize: 13,
         color: AppColors.textSecondary,
         height: 1.6,
       ),
-      a: GoogleFonts.nunito(
+      a: const TextStyle(
         fontSize: 13,
         color: AppColors.teal,
         decoration: TextDecoration.underline,
       ),
-      listBullet: GoogleFonts.nunito(
+      listBullet: const TextStyle(
         fontSize: 13,
         color: AppColors.textSecondary,
       ),
-      strong: GoogleFonts.nunito(
+      strong: const TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
       ),
       blockSpacing: 10.0,
       listIndent: 16.0,
-      horizontalRuleDecoration: BoxDecoration(
+      horizontalRuleDecoration: const BoxDecoration(
         border: Border(
           top: BorderSide(
             color: AppColors.border,

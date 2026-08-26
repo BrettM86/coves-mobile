@@ -574,7 +574,7 @@ class _PostCardActionsState extends State<PostCardActions> {
                           AnimatedHeartIcon(
                             isLiked: isLiked,
                             color: AppColors.textPrimary.withValues(alpha: 0.6),
-                            likedColor: const Color(0xFFFF0033),
+                            likedColor: AppColors.voteLiked,
                           ),
                           const SizedBox(width: 5),
                           Text(
