@@ -108,6 +108,7 @@ void main() {
         'did': 'did:plc:community1',
         'name': 'test-community',
         'handle': 'test.coves.social',
+        'origin': 'coves.social',
         'displayName': 'Test Community',
         'description': 'A community for testing',
         'avatar': 'https://example.com/avatar.jpg',
@@ -126,6 +127,7 @@ void main() {
       expect(community.did, 'did:plc:community1');
       expect(community.name, 'test-community');
       expect(community.handle, 'test.coves.social');
+      expect(community.origin, 'coves.social');
       expect(community.displayName, 'Test Community');
       expect(community.description, 'A community for testing');
       expect(community.avatar, 'https://example.com/avatar.jpg');
@@ -187,6 +189,26 @@ void main() {
       expect(community.memberCount, null);
       expect(community.postCount, null);
       expect(community.viewer, null);
+    });
+  });
+
+  group('CommunityView.origin', () {
+    test('is null when the appview omits it', () {
+      final community = CommunityView.fromJson({
+        'did': 'did:plc:community1',
+        'name': 'test-community',
+        'handle': 'c-test-community.coves.social',
+      });
+      expect(community.origin, null);
+    });
+
+    test('ignores a non-string origin instead of failing the parse', () {
+      final community = CommunityView.fromJson({
+        'did': 'did:plc:community1',
+        'name': 'test-community',
+        'origin': 42,
+      });
+      expect(community.origin, null);
     });
   });
 

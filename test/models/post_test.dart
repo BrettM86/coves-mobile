@@ -227,6 +227,38 @@ void main() {
     });
   });
 
+  group('CommunityRef.fromJson', () {
+    test('parses the optional origin field', () {
+      final ref = CommunityRef.fromJson({
+        'did': 'did:plc:community',
+        'name': 'comicstrips',
+        'handle': 'comicstrips.lemmy-world.tdpl.io',
+        'origin': 'lemmy.world',
+      });
+      expect(ref.name, 'comicstrips');
+      expect(ref.handle, 'comicstrips.lemmy-world.tdpl.io');
+      expect(ref.origin, 'lemmy.world');
+    });
+
+    test('leaves origin null when the appview omits it', () {
+      final ref = CommunityRef.fromJson({
+        'did': 'did:plc:community',
+        'name': 'testcove',
+      });
+      expect(ref.origin, null);
+      expect(ref.handle, null);
+    });
+
+    test('ignores a non-string origin instead of failing the parse', () {
+      final ref = CommunityRef.fromJson({
+        'did': 'did:plc:community',
+        'name': 'testcove',
+        'origin': {'platform': 'lemmy'},
+      });
+      expect(ref.origin, null);
+    });
+  });
+
   group('EmbedSource.fromJson url policy', () {
     // A megathread source uri is rendered as a tappable outbound link, so it
     // must satisfy the same allowlist the rest of the app enforces: an

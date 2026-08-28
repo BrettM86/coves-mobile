@@ -16,6 +16,7 @@ import '../../providers/vote_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../services/viewer_state_hydrator.dart';
+import '../../utils/community_handle_utils.dart';
 import '../../utils/cursor_pagination_controller.dart';
 import '../../utils/display_utils.dart';
 import '../../utils/error_messages.dart';
@@ -433,15 +434,17 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                                               ),
                                               overflow: TextOverflow.ellipsis,
                                             ),
-                                            Text(
-                                              _getInstanceFromHandle(),
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w400,
-                                                color: AppColors.textSecondary
-                                                    .withValues(alpha: 0.8),
+                                            if (_resolveInstance()
+                                                case final instance?)
+                                              Text(
+                                                instance,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w400,
+                                                  color: AppColors.textSecondary
+                                                      .withValues(alpha: 0.8),
+                                                ),
                                               ),
-                                            ),
                                           ],
                                         ),
                                       ),
@@ -532,16 +535,16 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     );
   }
 
-  String _getInstanceFromHandle() {
-    final handle = _community?.handle;
-    if (handle == null || !handle.contains('.')) {
-      return 'coves.social';
+  String? _resolveInstance() {
+    final community = _community;
+    if (community == null) {
+      return null;
     }
-    final parts = handle.split('.');
-    if (parts.length >= 2) {
-      return parts.sublist(parts.length - 2).join('.');
-    }
-    return 'coves.social';
+    return CommunityHandleUtils.resolveDisplayHandle(
+      name: community.name,
+      origin: community.origin,
+      handle: community.handle,
+    )?.instance;
   }
 
   Widget _buildSubscribeButton() {

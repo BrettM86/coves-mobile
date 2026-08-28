@@ -394,36 +394,32 @@ class PostCard extends StatelessWidget {
 
   /// Builds the community handle with styled parts (name + instance)
   Widget _buildCommunityHandle(CommunityRef community) {
-    final displayHandle = CommunityHandleUtils.formatHandleForDisplay(
-      community.handle,
+    final displayHandle = CommunityHandleUtils.resolveDisplayHandle(
+      name: community.name,
+      origin: community.origin,
+      handle: community.handle,
     );
 
-    // Fallback to raw handle or name if formatting fails
-    if (displayHandle == null || !displayHandle.contains('@')) {
+    // Fallback to raw handle or name if no display form can be resolved
+    if (displayHandle == null) {
       return Text(
         community.handle ?? community.name,
         style: const TextStyle(color: AppColors.communityName, fontSize: 14),
       );
     }
 
-    // Split the handle into community name and instance
-    // Format: !gaming@coves.social
-    final atIndex = displayHandle.indexOf('@');
-    final communityPart = displayHandle.substring(0, atIndex);
-    final instancePart = displayHandle.substring(atIndex);
-
     return Text.rich(
       TextSpan(
         children: [
           TextSpan(
-            text: communityPart,
+            text: displayHandle.namePart,
             style: const TextStyle(
               color: AppColors.communityName,
               fontSize: 14,
             ),
           ),
           TextSpan(
-            text: instancePart,
+            text: displayHandle.instancePart,
             style: TextStyle(
               color: AppColors.textSecondary.withValues(alpha: 0.6),
               fontSize: 14,

@@ -23,6 +23,25 @@ class CommunityHeader extends StatelessWidget {
 
   static const double bannerHeight = 150;
 
+  /// `!name@origin` when resolvable, else the raw handle; null (no line
+  /// rendered) when the community is still loading or has neither.
+  String? _handleLabel() {
+    final c = community;
+    if (c == null) {
+      return null;
+    }
+    final resolved = CommunityHandleUtils.resolveDisplayHandle(
+      name: c.name,
+      origin: c.origin,
+      handle: c.handle,
+    );
+    if (resolved != null) {
+      return resolved.toString();
+    }
+    final handle = c.handle;
+    return (handle == null || handle.isEmpty) ? null : handle;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
@@ -193,13 +212,10 @@ class CommunityHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 // Handle
-                if (community?.handle != null) ...[
+                if (_handleLabel() case final label?) ...[
                   const SizedBox(height: 2),
                   Text(
-                    CommunityHandleUtils.formatHandleForDisplay(
-                          community!.handle,
-                        ) ??
-                        '',
+                    label,
                     style: const TextStyle(
                       fontSize: 14,
                       color: AppColors.teal,

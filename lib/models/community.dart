@@ -52,6 +52,7 @@ class CommunityView {
   CommunityView({
     required this.did,
     required this.name,
+    this.origin,
     this.handle,
     this.displayName,
     this.description,
@@ -67,6 +68,8 @@ class CommunityView {
     return CommunityView(
       did: json['did'] as String,
       name: json['name'] as String,
+      // Cosmetic field: a wrong-typed value must not sink the whole item.
+      origin: json['origin'] is String ? json['origin'] as String : null,
       handle: json['handle'] as String?,
       displayName: json['displayName'] as String?,
       description: json['description'] as String?,
@@ -88,6 +91,10 @@ class CommunityView {
 
   /// Community name (unique identifier)
   final String name;
+
+  /// Origin instance domain (e.g. `coves.social`, `lemmy.world`).
+  /// Optional until the appview ships it; display falls back to [handle].
+  final String? origin;
 
   /// Community handle
   final String? handle;

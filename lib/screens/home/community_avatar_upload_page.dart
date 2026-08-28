@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../constants/app_colors.dart';
 import '../../models/community.dart';
 import '../../models/picked_image.dart';
+import '../../utils/community_handle_utils.dart';
 import '../../utils/image_crop_utils.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../widgets/community_avatar.dart';
@@ -16,6 +17,16 @@ import '../../widgets/image_source_picker.dart';
 /// it can be a const default value.
 Future<PickedImage?> _pickAndCropImage(ImageSource source) =>
     ImageCropUtils.pickAndCropImage(source: source);
+
+/// `!name@origin` when resolvable, otherwise the raw handle or bare name.
+String _communityHandleLabel(CommunityView community) =>
+    CommunityHandleUtils.resolveDisplayHandle(
+      name: community.name,
+      origin: community.origin,
+      handle: community.handle,
+    )?.toString() ??
+    community.handle ??
+    community.name;
 
 /// The admin panel's "Change Profile Pic" page body.
 ///
@@ -333,7 +344,7 @@ class _CommunityAvatarUploadPageState extends State<CommunityAvatarUploadPage> {
       ),
       Center(
         child: Text(
-          '@${community.handle ?? community.name}',
+          _communityHandleLabel(community),
           style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
         ),
       ),
@@ -442,7 +453,7 @@ class _CommunityAvatarUploadPageState extends State<CommunityAvatarUploadPage> {
               ),
             ),
             Text(
-              '@${community.handle ?? community.name}',
+              _communityHandleLabel(community),
               style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 14,
@@ -528,7 +539,7 @@ class _CommunitySelectTile extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '@${community.handle ?? community.name}',
+                    _communityHandleLabel(community),
                     style: const TextStyle(
                       color: AppColors.textSecondary,
                       fontSize: 12,

@@ -96,6 +96,66 @@ void main() {
       expect(find.text('5'), findsOneWidget); // comment count
     });
 
+    testWidgets('renders !name@origin two-tone when origin is served', (
+      tester,
+    ) async {
+      final post = FeedViewPost(
+        post: PostView(
+          uri: 'at://did:example/post/123',
+          cid: 'cid123',
+          rkey: '123',
+          author: AuthorView(did: 'did:plc:author', handle: 'author.test'),
+          community: CommunityRef(
+            did: 'did:plc:community',
+            name: 'comicstrips',
+            origin: 'lemmy.world',
+            handle: 'comicstrips.lemmy-world.tdpl.io',
+          ),
+          createdAt: DateTime(2024),
+          indexedAt: DateTime(2024),
+          record: const PostRecord(content: 'Body', title: 'Title'),
+          stats: PostStats(upvotes: 1, downvotes: 0, score: 1, commentCount: 0),
+        ),
+      );
+
+      await tester.pumpWidget(createTestWidget(post));
+
+      // Origin wins over the bridged handle; rendered as one Text.rich so
+      // the two halves can be styled differently.
+      expect(
+        find.text('!comicstrips@lemmy.world', findRichText: true),
+        findsOneWidget,
+      );
+      expect(find.text('comicstrips'), findsNothing);
+      expect(find.text('comicstrips.lemmy-world.tdpl.io'), findsNothing);
+    });
+
+    testWidgets('falls back to the raw handle when it is unrecognised', (
+      tester,
+    ) async {
+      final post = FeedViewPost(
+        post: PostView(
+          uri: 'at://did:example/post/123',
+          cid: 'cid123',
+          rkey: '123',
+          author: AuthorView(did: 'did:plc:author', handle: 'author.test'),
+          community: CommunityRef(
+            did: 'did:plc:community',
+            name: 'weird',
+            handle: 'weird.example.org',
+          ),
+          createdAt: DateTime(2024),
+          indexedAt: DateTime(2024),
+          record: const PostRecord(content: 'Body', title: 'Title'),
+          stats: PostStats(upvotes: 1, downvotes: 0, score: 1, commentCount: 0),
+        ),
+      );
+
+      await tester.pumpWidget(createTestWidget(post));
+
+      expect(find.text('weird.example.org'), findsOneWidget);
+    });
+
     testWidgets('formats large stats through the canonical formatter', (
       tester,
     ) async {

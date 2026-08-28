@@ -11,6 +11,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
 import '../../providers/vote_provider.dart';
 import '../../services/comments_provider_cache.dart';
+import '../../utils/community_handle_utils.dart';
 import '../../utils/error_messages.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/comments_header.dart';
@@ -342,16 +343,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Widget _buildCommunityTitle() {
     final community = widget.post.post.community;
 
-    // Extract instance from handle - take last two segments
-    // e.g., "test-science.coves.social" -> "coves.social"
-    var instance = 'coves.social'; // default
-    if (community.handle != null && community.handle!.contains('.')) {
-      final parts = community.handle!.split('.');
-      if (parts.length >= 2) {
-        // Take last two segments for the instance
-        instance = parts.sublist(parts.length - 2).join('.');
-      }
-    }
+    final displayHandle = CommunityHandleUtils.resolveDisplayHandle(
+      name: community.name,
+      origin: community.origin,
+      handle: community.handle,
+    );
 
     return TappableCommunity(
       communityDid: community.did,
@@ -388,15 +384,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
-                  // Instance below - smaller
-                  Text(
-                    instance,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors.textSecondary.withValues(alpha: 0.8),
+                  // Instance below - smaller (omitted when unresolvable)
+                  if (displayHandle != null)
+                    Text(
+                      displayHandle.instance,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                        color: AppColors.textSecondary.withValues(alpha: 0.8),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

@@ -341,6 +341,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         community: CommunityRef(
           did: _selectedCommunity!.did,
           name: _selectedCommunity!.name,
+          origin: _selectedCommunity!.origin,
           handle: _selectedCommunity!.handle,
           avatar: _selectedCommunity!.avatar,
         ),

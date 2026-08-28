@@ -2,130 +2,172 @@ import 'package:coves_flutter/utils/community_handle_utils.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('CommunityHandleUtils', () {
-    group('formatHandleForDisplay', () {
-      test('converts DNS format to display format', () {
+  group('CommunityHandleUtils.resolveDisplayHandle', () {
+    group('origin precedence', () {
+      test('uses origin when present, ignoring the handle', () {
+        final result = CommunityHandleUtils.resolveDisplayHandle(
+          name: 'comicstrips',
+          origin: 'lemmy.world',
+          handle: 'comicstrips.lemmy-world.tdpl.io',
+        );
         expect(
-          CommunityHandleUtils.formatHandleForDisplay(
-            'gaming.community.coves.social',
+          result,
+          const CommunityDisplayHandle(
+            name: 'comicstrips',
+            instance: 'lemmy.world',
           ),
+        );
+        expect(result.toString(), '!comicstrips@lemmy.world');
+      });
+
+      test('uses origin with no handle at all', () {
+        expect(
+          CommunityHandleUtils.resolveDisplayHandle(
+            name: 'nba',
+            origin: 'coves.social',
+          ).toString(),
+          '!nba@coves.social',
+        );
+      });
+
+      test('treats empty origin as absent and derives from handle', () {
+        expect(
+          CommunityHandleUtils.resolveDisplayHandle(
+            name: 'gaming',
+            origin: '',
+            handle: 'c-gaming.coves.social',
+          ).toString(),
           '!gaming@coves.social',
+        );
+      });
+    });
+
+    group('handle fallback', () {
+      test('derives from new c- DNS format', () {
+        expect(
+          CommunityHandleUtils.resolveDisplayHandle(
+            name: 'gaming',
+            handle: 'c-gaming.coves.social',
+          ),
+          const CommunityDisplayHandle(
+            name: 'gaming',
+            instance: 'coves.social',
+          ),
+        );
+      });
+
+      test('derives from legacy .community. DNS format', () {
+        expect(
+          CommunityHandleUtils.resolveDisplayHandle(
+            name: 'gaming',
+            handle: 'gaming.community.coves.social',
+          ),
+          const CommunityDisplayHandle(
+            name: 'gaming',
+            instance: 'coves.social',
+          ),
         );
       });
 
       test('handles multi-part instance domains', () {
         expect(
-          CommunityHandleUtils.formatHandleForDisplay(
-            'tech.community.test.coves.social',
-          ),
+          CommunityHandleUtils.resolveDisplayHandle(
+            name: 'tech',
+            handle: 'tech.community.test.coves.social',
+          ).toString(),
+          '!tech@test.coves.social',
+        );
+        expect(
+          CommunityHandleUtils.resolveDisplayHandle(
+            name: 'tech',
+            handle: 'c-tech.test.coves.social',
+          ).toString(),
           '!tech@test.coves.social',
         );
       });
 
       test('handles hyphenated community names', () {
         expect(
-          CommunityHandleUtils.formatHandleForDisplay(
-            'world-news.community.coves.social',
-          ),
+          CommunityHandleUtils.resolveDisplayHandle(
+            name: 'world-news',
+            handle: 'world-news.community.coves.social',
+          ).toString(),
           '!world-news@coves.social',
         );
       });
 
-      test('returns null for null input', () {
-        expect(CommunityHandleUtils.formatHandleForDisplay(null), null);
-      });
-
-      test('returns null for empty string', () {
-        expect(CommunityHandleUtils.formatHandleForDisplay(''), null);
-      });
-
-      test('returns null for invalid format (missing .community.)', () {
+      test('derives from a four-label Tidepool-bridged handle', () {
         expect(
-          CommunityHandleUtils.formatHandleForDisplay('gaming.coves.social'),
-          null,
+          CommunityHandleUtils.resolveDisplayHandle(
+            name: 'comicstrips',
+            handle: 'comicstrips.lemmy-world.tdpl.io',
+          ),
+          const CommunityDisplayHandle(
+            name: 'comicstrips',
+            instance: 'lemmy-world.tdpl.io',
+          ),
         );
       });
 
-      test('returns null for too few parts', () {
+      test('does not apply the tdpl.io rule to other label counts', () {
         expect(
-          CommunityHandleUtils.formatHandleForDisplay('gaming.community'),
+          CommunityHandleUtils.resolveDisplayHandle(
+            name: 'x',
+            handle: 'a.b.c.tdpl.io',
+          ),
           null,
         );
-      });
-
-      test('returns null if second part is not "community"', () {
         expect(
-          CommunityHandleUtils.formatHandleForDisplay(
-            'gaming.other.coves.social',
+          CommunityHandleUtils.resolveDisplayHandle(
+            name: 'x',
+            handle: 'a.tdpl.io',
           ),
           null,
         );
       });
     });
 
-    group('formatHandleForDNS', () {
-      test('converts display format to DNS format', () {
+    group('null cases', () {
+      test('returns null with no origin and no handle', () {
+        expect(CommunityHandleUtils.resolveDisplayHandle(name: 'gaming'), null);
+      });
+
+      test('returns null for empty handle', () {
         expect(
-          CommunityHandleUtils.formatHandleForDNS('!gaming@coves.social'),
-          'gaming.community.coves.social',
-        );
-      });
-
-      test('handles handles without leading !', () {
-        expect(
-          CommunityHandleUtils.formatHandleForDNS('gaming@coves.social'),
-          'gaming.community.coves.social',
-        );
-      });
-
-      test('handles multi-part instance domains', () {
-        expect(
-          CommunityHandleUtils.formatHandleForDNS('!tech@test.coves.social'),
-          'tech.community.test.coves.social',
-        );
-      });
-
-      test('handles hyphenated community names', () {
-        expect(
-          CommunityHandleUtils.formatHandleForDNS('!world-news@coves.social'),
-          'world-news.community.coves.social',
-        );
-      });
-
-      test('returns null for null input', () {
-        expect(CommunityHandleUtils.formatHandleForDNS(null), null);
-      });
-
-      test('returns null for empty string', () {
-        expect(CommunityHandleUtils.formatHandleForDNS(''), null);
-      });
-
-      test('returns null for invalid format (no @)', () {
-        expect(CommunityHandleUtils.formatHandleForDNS('!gaming'), null);
-      });
-
-      test('returns null for multiple @ symbols', () {
-        expect(
-          CommunityHandleUtils.formatHandleForDNS('!gaming@coves@social'),
+          CommunityHandleUtils.resolveDisplayHandle(name: 'gaming', handle: ''),
           null,
         );
       });
+
+      test('returns null for unrecognised handle formats', () {
+        for (final handle in const [
+          'gaming.coves.social',
+          'gaming.community',
+          'gaming.other.coves.social',
+          'c-gaming.social',
+        ]) {
+          expect(
+            CommunityHandleUtils.resolveDisplayHandle(
+              name: 'gaming',
+              handle: handle,
+            ),
+            null,
+            reason: handle,
+          );
+        }
+      });
     });
+  });
 
-    group('round-trip conversions', () {
-      test('DNS → display → DNS preserves value', () {
-        const original = 'gaming.community.coves.social';
-        final display = CommunityHandleUtils.formatHandleForDisplay(original);
-        final dnsFormat = CommunityHandleUtils.formatHandleForDNS(display);
-        expect(dnsFormat, original);
-      });
-
-      test('display → DNS → display preserves value', () {
-        const original = '!gaming@coves.social';
-        final dnsFormat = CommunityHandleUtils.formatHandleForDNS(original);
-        final display = CommunityHandleUtils.formatHandleForDisplay(dnsFormat);
-        expect(display, original);
-      });
+  group('CommunityDisplayHandle', () {
+    test('exposes prefixed parts', () {
+      const handle = CommunityDisplayHandle(
+        name: 'nba',
+        instance: 'coves.social',
+      );
+      expect(handle.namePart, '!nba');
+      expect(handle.instancePart, '@coves.social');
+      expect(handle.toString(), '!nba@coves.social');
     });
   });
 }
