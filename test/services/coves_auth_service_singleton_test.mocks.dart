@@ -89,8 +89,8 @@ class _FakeWebOptions_10 extends _i1.SmartFake implements _i8.WebOptions {
     : super(parent, parentInvocation);
 }
 
-class _FakeMacOsOptions_11 extends _i1.SmartFake implements _i8.MacOsOptions {
-  _FakeMacOsOptions_11(Object parent, Invocation parentInvocation)
+class _FakeAppleOptions_11 extends _i1.SmartFake implements _i8.AppleOptions {
+  _FakeAppleOptions_11(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
@@ -901,15 +901,23 @@ class MockFlutterSecureStorage extends _i1.Mock
           as _i8.WebOptions);
 
   @override
-  _i8.MacOsOptions get mOptions =>
+  _i8.AppleOptions get mOptions =>
       (super.noSuchMethod(
             Invocation.getter(#mOptions),
-            returnValue: _FakeMacOsOptions_11(
+            returnValue: _FakeAppleOptions_11(
               this,
               Invocation.getter(#mOptions),
             ),
           )
-          as _i8.MacOsOptions);
+          as _i8.AppleOptions);
+
+  @override
+  Map<String, List<_i11.ValueChanged<String?>>> get getListeners =>
+      (super.noSuchMethod(
+            Invocation.getter(#getListeners),
+            returnValue: <String, List<_i11.ValueChanged<String?>>>{},
+          )
+          as Map<String, List<_i11.ValueChanged<String?>>>);
 
   @override
   void registerListener({
@@ -949,11 +957,11 @@ class MockFlutterSecureStorage extends _i1.Mock
   _i9.Future<void> write({
     required String? key,
     required String? value,
-    _i8.IOSOptions? iOptions,
+    _i8.AppleOptions? iOptions,
     _i8.AndroidOptions? aOptions,
     _i8.LinuxOptions? lOptions,
     _i8.WebOptions? webOptions,
-    _i8.MacOsOptions? mOptions,
+    _i8.AppleOptions? mOptions,
     _i8.WindowsOptions? wOptions,
   }) =>
       (super.noSuchMethod(
@@ -975,11 +983,11 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   _i9.Future<String?> read({
     required String? key,
-    _i8.IOSOptions? iOptions,
+    _i8.AppleOptions? iOptions,
     _i8.AndroidOptions? aOptions,
     _i8.LinuxOptions? lOptions,
     _i8.WebOptions? webOptions,
-    _i8.MacOsOptions? mOptions,
+    _i8.AppleOptions? mOptions,
     _i8.WindowsOptions? wOptions,
   }) =>
       (super.noSuchMethod(
@@ -999,11 +1007,11 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   _i9.Future<bool> containsKey({
     required String? key,
-    _i8.IOSOptions? iOptions,
+    _i8.AppleOptions? iOptions,
     _i8.AndroidOptions? aOptions,
     _i8.LinuxOptions? lOptions,
     _i8.WebOptions? webOptions,
-    _i8.MacOsOptions? mOptions,
+    _i8.AppleOptions? mOptions,
     _i8.WindowsOptions? wOptions,
   }) =>
       (super.noSuchMethod(
@@ -1023,11 +1031,11 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   _i9.Future<void> delete({
     required String? key,
-    _i8.IOSOptions? iOptions,
+    _i8.AppleOptions? iOptions,
     _i8.AndroidOptions? aOptions,
     _i8.LinuxOptions? lOptions,
     _i8.WebOptions? webOptions,
-    _i8.MacOsOptions? mOptions,
+    _i8.AppleOptions? mOptions,
     _i8.WindowsOptions? wOptions,
   }) =>
       (super.noSuchMethod(
@@ -1047,11 +1055,11 @@ class MockFlutterSecureStorage extends _i1.Mock
 
   @override
   _i9.Future<Map<String, String>> readAll({
-    _i8.IOSOptions? iOptions,
+    _i8.AppleOptions? iOptions,
     _i8.AndroidOptions? aOptions,
     _i8.LinuxOptions? lOptions,
     _i8.WebOptions? webOptions,
-    _i8.MacOsOptions? mOptions,
+    _i8.AppleOptions? mOptions,
     _i8.WindowsOptions? wOptions,
   }) =>
       (super.noSuchMethod(
@@ -1071,11 +1079,11 @@ class MockFlutterSecureStorage extends _i1.Mock
 
   @override
   _i9.Future<void> deleteAll({
-    _i8.IOSOptions? iOptions,
+    _i8.AppleOptions? iOptions,
     _i8.AndroidOptions? aOptions,
     _i8.LinuxOptions? lOptions,
     _i8.WebOptions? webOptions,
-    _i8.MacOsOptions? mOptions,
+    _i8.AppleOptions? mOptions,
     _i8.WindowsOptions? wOptions,
   }) =>
       (super.noSuchMethod(

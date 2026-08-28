@@ -77,7 +77,10 @@ class CovesAuthService {
     : _storage =
           storage ??
           const FlutterSecureStorage(
-            aOptions: AndroidOptions(encryptedSharedPreferences: true),
+            // v10 defaults: AES-GCM custom-cipher storage. Tokens written by
+            // <=9.x (EncryptedSharedPreferences) are migrated on first access
+            // via migrateOnAlgorithmChange (default true).
+            aOptions: AndroidOptions(),
             iOptions: IOSOptions(
               accessibility: KeychainAccessibility.first_unlock,
             ),
