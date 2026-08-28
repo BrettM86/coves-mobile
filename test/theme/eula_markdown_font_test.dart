@@ -1,7 +1,7 @@
 import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/screens/eula_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test_helpers/font_identity.dart';
