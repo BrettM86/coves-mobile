@@ -43,6 +43,7 @@ dependencies:
   go_router: ^16.3.0
   provider: ^6.1.5+1
   flutter_svg: ^2.2.1
+  path_parsing: ^1.1.0
   dio: ^5.9.0
   flutter_web_auth_2: ^4.1.0
   cached_network_image: ^3.4.1
@@ -103,6 +104,7 @@ flutter:
     - assets/logo/lil_dude.svg
     - assets/icons/
     - assets/icons/atproto/
+    - assets/icons/lucide/
     - assets/images/
     - assets/legal/
     # OFL license texts, read back at startup and handed to LicenseRegistry.

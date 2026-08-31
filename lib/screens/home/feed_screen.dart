@@ -5,7 +5,7 @@ import '../../constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/multi_feed_provider.dart';
 import '../../widgets/feed_page.dart';
-import '../../widgets/icons/bluesky_icons.dart';
+import '../../widgets/icons/app_icons.dart';
 
 /// Header layout constants
 const double _kHeaderHeight = 44;
@@ -250,7 +250,7 @@ class FeedScreenState extends State<FeedScreen> {
                 splashColor: AppColors.primary.withValues(alpha: 0.2),
                 child: Padding(
                   padding: const EdgeInsets.all(8),
-                  child: BlueSkyIcon.search(color: AppColors.textPrimary),
+                  child: AppIcon.search(color: AppColors.textPrimary),
                 ),
               ),
             ),
@@ -314,8 +314,8 @@ class FeedScreenState extends State<FeedScreen> {
                     isActive
                         ? AppColors.textPrimary
                         : AppColors.textSecondary.withValues(
-                            alpha: _kInactiveTabOpacity,
-                          ),
+                          alpha: _kInactiveTabOpacity,
+                        ),
                 fontSize: 16,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
               ),
@@ -487,10 +487,7 @@ class _FeedTabsWithSlidingUnderline extends StatelessWidget {
           ],
         ),
         // Sliding underline positioned absolutely
-        Positioned(
-          bottom: 0,
-          child: _buildSlidingUnderline(),
-        ),
+        Positioned(bottom: 0, child: _buildSlidingUnderline()),
       ],
     );
   }

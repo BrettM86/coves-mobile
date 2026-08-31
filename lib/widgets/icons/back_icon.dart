@@ -3,15 +3,15 @@ import 'package:flutter/material.dart';
 import 'lucide_icon_painter.dart';
 import 'lucide_paths.dart';
 
-/// Comment icon widget — Lucide `message-square`.
+/// Back-navigation icon — Lucide `arrow-left`.
 ///
-/// Supports both outline and filled states.
-class ReplyIcon extends StatelessWidget {
-  const ReplyIcon({this.size = 18, this.color, this.filled = false, super.key});
+/// Used both directly in explicit leading buttons and as the app-wide
+/// default via `actionIconTheme.backButtonIconBuilder` in AppTheme.
+class BackIcon extends StatelessWidget {
+  const BackIcon({this.size = 24, this.color, super.key});
 
   final double size;
   final Color? color;
-  final bool filled;
 
   @override
   Widget build(BuildContext context) {
@@ -20,9 +20,8 @@ class ReplyIcon extends StatelessWidget {
     return CustomPaint(
       size: Size(size, size),
       painter: LucideIconPainter(
-        paths: LucidePaths.messageSquare,
+        paths: LucidePaths.arrowLeft,
         color: effectiveColor,
-        filled: filled,
       ),
     );
   }

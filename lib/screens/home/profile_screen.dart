@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
-import '../../utils/responsive_utils.dart';
 import '../../models/comment.dart';
 import '../../models/post.dart';
 import '../../models/user_profile.dart';
@@ -12,7 +11,11 @@ import '../../providers/auth_provider.dart';
 import '../../providers/block_provider.dart';
 import '../../providers/user_profile_provider.dart';
 import '../../utils/pagination_scroll_listener.dart';
+import '../../utils/responsive_utils.dart';
 import '../../widgets/comment_card.dart';
+import '../../widgets/icons/back_icon.dart';
+import '../../widgets/icons/lucide_icon_painter.dart';
+import '../../widgets/icons/lucide_paths.dart';
 import '../../widgets/loading_error_states.dart';
 import '../../widgets/paginated_sliver_list.dart';
 import '../../widgets/post_card.dart';
@@ -205,10 +208,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 title: const Text(
                   'End User License Agreement',
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -224,10 +224,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 title: const Text(
                   'Community Guidelines',
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
                 ),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -237,16 +234,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const Divider(color: AppColors.border, height: 1),
               // Sign out option
               ListTile(
-                leading: Icon(
-                  Icons.logout,
-                  color: Colors.red.shade400,
-                ),
+                leading: Icon(Icons.logout, color: Colors.red.shade400),
                 title: Text(
                   'Sign Out',
-                  style: TextStyle(
-                    color: Colors.red.shade400,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(color: Colors.red.shade400, fontSize: 16),
                 ),
                 onTap: () async {
                   Navigator.pop(sheetContext);
@@ -356,45 +347,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
               leading:
                   widget.actor != null
                       ? IconButton(
-                        icon: const Icon(Icons.arrow_back),
+                        icon: const BackIcon(),
                         onPressed: () => context.pop(),
                       )
                       : null,
               automaticallyImplyLeading: widget.actor != null,
-              actions: profileProvider.isOwnProfile
-                  ? [
-                      if (profileProvider.profile != null)
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => _navigateToEditProfile(
-                            context,
-                            profileProvider.profile!,
+              actions:
+                  profileProvider.isOwnProfile
+                      ? [
+                        if (profileProvider.profile != null)
+                          IconButton(
+                            icon: const LucideGlyph(LucidePaths.pencil),
+                            onPressed:
+                                () => _navigateToEditProfile(
+                                  context,
+                                  profileProvider.profile!,
+                                ),
+                            tooltip: 'Edit Profile',
                           ),
-                          tooltip: 'Edit Profile',
+                        const ShareButton(
+                          useIconButton: true,
+                          color: AppColors.textPrimary,
+                          tooltip: 'Share Profile',
                         ),
-                      const ShareButton(
-                        useIconButton: true,
-                        color: AppColors.textPrimary,
-                        tooltip: 'Share Profile',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.menu),
-                        onPressed: () => _showMenuSheet(context),
-                        tooltip: 'Menu',
-                      ),
-                    ]
-                  : null,
+                        IconButton(
+                          icon: const Icon(Icons.menu),
+                          onPressed: () => _showMenuSheet(context),
+                          tooltip: 'Menu',
+                        ),
+                      ]
+                      : null,
               flexibleSpace: LayoutBuilder(
                 builder: (context, constraints) {
                   // Calculate collapse progress (0 = expanded, 1 = collapsed).
                   // The upper bound is the sliver's real max extent, which
                   // includes the status-bar inset SliverAppBar adds on top
                   // of expandedHeight.
-                  final collapsedHeight =
-                      ProfileHeader.collapsedExtentFor(context);
+                  final collapsedHeight = ProfileHeader.collapsedExtentFor(
+                    context,
+                  );
                   final maxExtent = ProfileHeader.maxExtentFor(context);
                   final currentHeight = constraints.maxHeight;
-                  final collapseProgress = 1 -
+                  final collapseProgress =
+                      1 -
                       ((currentHeight - collapsedHeight) /
                               (maxExtent - collapsedHeight))
                           .clamp(0.0, 1.0);
@@ -408,9 +403,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        child: ProfileHeader(
-                          profile: profileProvider.profile,
-                        ),
+                        child: ProfileHeader(profile: profileProvider.profile),
                       ),
                       // Frosted glass overlay when collapsed
                       if (collapseProgress > 0)
@@ -426,8 +419,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 sigmaY: 10 * collapseProgress,
                               ),
                               child: Container(
-                                color: AppColors.background
-                                    .withValues(alpha: 0.7 * collapseProgress),
+                                color: AppColors.background.withValues(
+                                  alpha: 0.7 * collapseProgress,
+                                ),
                               ),
                             ),
                           ),
@@ -476,7 +470,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       leading:
           widget.actor != null
               ? IconButton(
-                icon: const Icon(Icons.arrow_back),
+                icon: const BackIcon(),
                 onPressed: () => context.pop(),
               )
               : null,
@@ -634,9 +628,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       isLoadingMore: commentsState.isLoadingMore,
       hasMore: commentsState.hasMore,
       loadMoreError: commentsState.loadMoreError,
-      refreshError: commentsState.comments.isEmpty
-          ? null
-          : commentsState.error,
+      refreshError: commentsState.comments.isEmpty ? null : commentsState.error,
       onRetryRefresh: () => profileProvider.retryComments(),
       onRetryLoadMore: profileProvider.retryLoadMoreComments,
       idOf: (comment) => comment.uri,
@@ -772,9 +764,10 @@ class _TabItem extends StatelessWidget {
                 Icon(
                   icon,
                   size: 16,
-                  color: isSelected
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
+                  color:
+                      isSelected
+                          ? AppColors.textPrimary
+                          : AppColors.textSecondary,
                 ),
                 const SizedBox(width: 6),
                 Text(
@@ -783,9 +776,10 @@ class _TabItem extends StatelessWidget {
                     fontSize: 13,
                     fontWeight:
                         isSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isSelected
-                        ? AppColors.textPrimary
-                        : AppColors.textSecondary,
+                    color:
+                        isSelected
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
                   ),
                 ),
               ],

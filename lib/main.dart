@@ -30,6 +30,7 @@ import 'screens/home/post_detail_loader.dart';
 import 'screens/home/post_detail_screen.dart';
 import 'screens/home/profile_screen.dart';
 import 'screens/landing_screen.dart';
+import 'widgets/icons/lucide_paths.dart';
 import 'services/comment_service.dart';
 import 'services/comments_provider_cache.dart';
 import 'services/coves_api_service.dart';
@@ -59,6 +60,7 @@ Future<void> main() async {
 
       // The design-system fonts are bundled, so their OFL text ships too.
       AppTypography.registerLicenses();
+      LucidePaths.registerLicense();
 
       // Set system UI overlay style (Android navigation bar)
       SystemChrome.setSystemUIOverlayStyle(

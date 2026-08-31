@@ -19,6 +19,7 @@ import 'icons/animated_heart_icon.dart';
 import 'report_dialog.dart';
 import 'share_button.dart';
 import 'sign_in_dialog.dart';
+import 'icons/reply_icon.dart';
 
 /// Action buttons row for post cards
 ///
@@ -158,7 +159,9 @@ class _PostCardActionsState extends State<PostCardActions> {
       if (reported == true && context.mounted) {
         messenger.showSnackBar(
           const SnackBar(
-            content: Text('Report submitted. Thank you for helping keep our community safe.'),
+            content: Text(
+              'Report submitted. Thank you for helping keep our community safe.',
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -178,23 +181,24 @@ class _PostCardActionsState extends State<PostCardActions> {
       // Show confirmation dialog
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Delete Post'),
-          content: const Text(
-            'Are you sure you want to delete this post? This cannot be undone.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
+        builder:
+            (context) => AlertDialog(
+              title: const Text('Delete Post'),
+              content: const Text(
+                'Are you sure you want to delete this post? This cannot be undone.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  child: const Text('Delete'),
+                ),
+              ],
             ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
-            ),
-          ],
-        ),
       );
 
       if (confirmed != true || !context.mounted) {
@@ -251,7 +255,9 @@ class _PostCardActionsState extends State<PostCardActions> {
         if (context.mounted) {
           messenger.showSnackBar(
             const SnackBar(
-              content: Text('Post not found. It may have already been deleted.'),
+              content: Text(
+                'Post not found. It may have already been deleted.',
+              ),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -302,21 +308,36 @@ class _PostCardActionsState extends State<PostCardActions> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Three dots menu button
-            Consumer3<CommunitySubscriptionProvider, AuthProvider, BlockProvider>(
-              builder: (context, subscriptionProvider, authProvider, blockProvider, child) {
+            Consumer3<
+              CommunitySubscriptionProvider,
+              AuthProvider,
+              BlockProvider
+            >(
+              builder: (
+                context,
+                subscriptionProvider,
+                authProvider,
+                blockProvider,
+                child,
+              ) {
                 final communityDid = post.post.community.did;
                 final communityName = post.post.community.name;
-                final isSubscribed =
-                    subscriptionProvider.isSubscribed(communityDid);
+                final isSubscribed = subscriptionProvider.isSubscribed(
+                  communityDid,
+                );
                 final isPending = subscriptionProvider.isPending(communityDid);
-                final isPostAuthor =
-                    authProvider.did == post.post.author.did;
+                final isPostAuthor = authProvider.did == post.post.author.did;
                 final authorDid = post.post.author.did;
                 final authorHandle = post.post.author.handle;
                 final isUserBlocked = blockProvider.isUserBlocked(authorDid);
-                final isUserBlockPending = blockProvider.isUserBlockPending(authorDid);
-                final isCommunityBlocked = blockProvider.isCommunityBlocked(communityDid);
-                final isCommunityBlockPending = blockProvider.isCommunityBlockPending(communityDid);
+                final isUserBlockPending = blockProvider.isUserBlockPending(
+                  authorDid,
+                );
+                final isCommunityBlocked = blockProvider.isCommunityBlocked(
+                  communityDid,
+                );
+                final isCommunityBlockPending = blockProvider
+                    .isCommunityBlockPending(communityDid);
                 // TODO: Set to true when the user is the community owner.
                 // CommunityRef currently lacks an owner/creator DID field,
                 // so we cannot determine ownership from post data alone.
@@ -335,30 +356,33 @@ class _PostCardActionsState extends State<PostCardActions> {
                   ),
                   menuChildren: [
                     MenuItemButton(
-                      onPressed: isPending
-                          ? null
-                          : () => _handleMenuAction(context, 'subscribe'),
-                      leadingIcon: isPending
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
+                      onPressed:
+                          isPending
+                              ? null
+                              : () => _handleMenuAction(context, 'subscribe'),
+                      leadingIcon:
+                          isPending
+                              ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : Icon(
+                                isSubscribed
+                                    ? Icons.remove_circle_outline
+                                    : Icons.add_circle_outline,
+                                size: 20,
                               ),
-                            )
-                          : Icon(
-                              isSubscribed
-                                  ? Icons.remove_circle_outline
-                                  : Icons.add_circle_outline,
-                              size: 20,
-                            ),
-                      trailingIcon: isSubscribed && !isPending
-                          ? const Icon(
-                              Icons.check,
-                              color: AppColors.primary,
-                              size: 20,
-                            )
-                          : null,
+                      trailingIcon:
+                          isSubscribed && !isPending
+                              ? const Icon(
+                                Icons.check,
+                                color: AppColors.primary,
+                                size: 20,
+                              )
+                              : null,
                       child: Text(
                         isPending
                             ? (isSubscribed
@@ -374,31 +398,30 @@ class _PostCardActionsState extends State<PostCardActions> {
                       buildBlockMenuItem(
                         isBlocked: isCommunityBlocked,
                         isPending: isCommunityBlockPending,
-                        label: isCommunityBlocked
-                            ? 'Unblock !$communityName'
-                            : 'Block !$communityName',
-                        onPressed: () =>
-                            _handleMenuAction(context, 'blockCommunity'),
+                        label:
+                            isCommunityBlocked
+                                ? 'Unblock !$communityName'
+                                : 'Block !$communityName',
+                        onPressed:
+                            () => _handleMenuAction(context, 'blockCommunity'),
                       ),
                     // Block user option (except own posts)
                     if (!isPostAuthor)
                       buildBlockMenuItem(
                         isBlocked: isUserBlocked,
                         isPending: isUserBlockPending,
-                        label: isUserBlocked
-                            ? 'Unblock @$authorHandle'
-                            : 'Block @$authorHandle',
-                        onPressed: () =>
-                            _handleMenuAction(context, 'blockUser'),
+                        label:
+                            isUserBlocked
+                                ? 'Unblock @$authorHandle'
+                                : 'Block @$authorHandle',
+                        onPressed:
+                            () => _handleMenuAction(context, 'blockUser'),
                       ),
                     // Report option (for all authenticated users, except own posts)
                     if (!isPostAuthor)
                       MenuItemButton(
                         onPressed: () => _handleMenuAction(context, 'report'),
-                        leadingIcon: const Icon(
-                          Icons.flag_outlined,
-                          size: 20,
-                        ),
+                        leadingIcon: const Icon(Icons.flag_outlined, size: 20),
                         child: const Text('Report post'),
                       ),
                     // Delete option (only for post author)
@@ -469,9 +492,8 @@ class _PostCardActionsState extends State<PostCardActions> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.chat_bubble_outline,
-                              size: 20,
+                            ReplyIcon(
+                              size: 18,
                               color: AppColors.textPrimary.withValues(
                                 alpha: 0.6,
                               ),

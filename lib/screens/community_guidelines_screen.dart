@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../constants/app_colors.dart';
 import '../providers/community_guidelines_provider.dart';
+import '../widgets/icons/back_icon.dart';
 
 class CommunityGuidelinesScreen extends StatefulWidget {
   const CommunityGuidelinesScreen({this.viewOnly = false, super.key});
@@ -29,8 +30,9 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
   @override
   void initState() {
     super.initState();
-    _contentFuture =
-        rootBundle.loadString('assets/legal/community-guidelines.md');
+    _contentFuture = rootBundle.loadString(
+      'assets/legal/community-guidelines.md',
+    );
     if (!widget.viewOnly) {
       _scrollController.addListener(_onScroll);
     }
@@ -72,32 +74,30 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: widget.viewOnly
-          ? AppBar(
-              backgroundColor: AppColors.background,
-              surfaceTintColor: Colors.transparent,
-              title: const Text(
-                'Community Guidelines',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
+      appBar:
+          widget.viewOnly
+              ? AppBar(
+                backgroundColor: AppColors.background,
+                surfaceTintColor: Colors.transparent,
+                title: const Text(
+                  'Community Guidelines',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              leading: IconButton(
-                icon:
-                    const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-                onPressed: () => Navigator.pop(context),
-              ),
-            )
-          : null,
+                leading: IconButton(
+                  icon: const BackIcon(color: AppColors.textPrimary),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              )
+              : null,
       body: SafeArea(
         child: Column(
           children: [
             if (!widget.viewOnly) _buildHeader(),
-            Expanded(
-              child: _buildContentBody(),
-            ),
+            Expanded(child: _buildContentBody()),
             if (!widget.viewOnly) _buildBottomBar(),
           ],
         ),
@@ -154,8 +154,9 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
 
   void _retryLoad() {
     setState(() {
-      _contentFuture =
-          rootBundle.loadString('assets/legal/community-guidelines.md');
+      _contentFuture = rootBundle.loadString(
+        'assets/legal/community-guidelines.md',
+      );
     });
   }
 
@@ -219,7 +220,8 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
 
             if (snapshot.hasError) {
               debugPrint(
-                  'Error loading community guidelines: ${snapshot.error}');
+                'Error loading community guidelines: ${snapshot.error}',
+              );
               return Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -234,9 +236,7 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
                       icon: const Icon(Icons.refresh, size: 18),
                       label: const Text(
                         'Retry',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -260,9 +260,7 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
                       icon: const Icon(Icons.refresh, size: 18),
                       label: const Text(
                         'Retry',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -331,8 +329,7 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
   }
 
   Widget _buildBottomBar() {
-    final bool canAccept =
-        _hasScrolledToBottom && _hasAgreed && !_isAccepting;
+    final bool canAccept = _hasScrolledToBottom && _hasAgreed && !_isAccepting;
 
     return ClipRect(
       child: BackdropFilter(
@@ -349,9 +346,10 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               GestureDetector(
-                onTap: _hasScrolledToBottom
-                    ? () => setState(() => _hasAgreed = !_hasAgreed)
-                    : null,
+                onTap:
+                    _hasScrolledToBottom
+                        ? () => setState(() => _hasAgreed = !_hasAgreed)
+                        : null,
                 behavior: HitTestBehavior.opaque,
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 16),
@@ -364,9 +362,10 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
                           'I have read and agree to the Community Guidelines',
                           style: TextStyle(
                             fontSize: 13,
-                            color: _hasScrolledToBottom
-                                ? AppColors.textPrimary
-                                : AppColors.textMuted,
+                            color:
+                                _hasScrolledToBottom
+                                    ? AppColors.textPrimary
+                                    : AppColors.textMuted,
                             fontWeight: FontWeight.w600,
                             height: 1.4,
                           ),
@@ -383,9 +382,10 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
                   duration: const Duration(milliseconds: 200),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
-                    color: canAccept
-                        ? AppColors.coral
-                        : AppColors.coral.withValues(alpha: 0.2),
+                    color:
+                        canAccept
+                            ? AppColors.coral
+                            : AppColors.coral.withValues(alpha: 0.2),
                   ),
                   child: Material(
                     color: Colors.transparent,
@@ -395,25 +395,27 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
                       splashFactory: NoSplash.splashFactory,
                       highlightColor: Colors.transparent,
                       child: Center(
-                        child: _isAccepting
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  color: AppColors.background,
-                                  strokeWidth: 2,
+                        child:
+                            _isAccepting
+                                ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    color: AppColors.background,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : Text(
+                                  'Accept & Continue',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color:
+                                        canAccept
+                                            ? AppColors.background
+                                            : AppColors.textMuted,
+                                  ),
                                 ),
-                              )
-                            : Text(
-                                'Accept & Continue',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: canAccept
-                                      ? AppColors.background
-                                      : AppColors.textMuted,
-                                ),
-                              ),
                       ),
                     ),
                   ),
@@ -437,21 +439,23 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
         borderRadius: BorderRadius.circular(6),
         color: _hasAgreed ? AppColors.coral : Colors.transparent,
         border: Border.all(
-          color: _hasAgreed
-              ? AppColors.coral
-              : enabled
+          color:
+              _hasAgreed
+                  ? AppColors.coral
+                  : enabled
                   ? AppColors.textSecondary
                   : AppColors.textMuted.withValues(alpha: 0.4),
           width: 2,
         ),
       ),
-      child: _hasAgreed
-          ? const Icon(
-              Icons.check_rounded,
-              size: 16,
-              color: AppColors.background,
-            )
-          : null,
+      child:
+          _hasAgreed
+              ? const Icon(
+                Icons.check_rounded,
+                size: 16,
+                color: AppColors.background,
+              )
+              : null,
     );
   }
 
@@ -485,10 +489,7 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
         color: AppColors.teal,
         decoration: TextDecoration.underline,
       ),
-      listBullet: const TextStyle(
-        fontSize: 13,
-        color: AppColors.textSecondary,
-      ),
+      listBullet: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
       strong: const TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w700,
@@ -497,12 +498,7 @@ class _CommunityGuidelinesScreenState extends State<CommunityGuidelinesScreen> {
       blockSpacing: 10.0,
       listIndent: 16.0,
       horizontalRuleDecoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: AppColors.border,
-            width: 1,
-          ),
-        ),
+        border: Border(top: BorderSide(color: AppColors.border, width: 1)),
       ),
     );
   }

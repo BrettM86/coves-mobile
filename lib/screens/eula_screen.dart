@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../constants/app_colors.dart';
 import '../providers/eula_provider.dart';
+import '../widgets/icons/back_icon.dart';
 
 class EulaScreen extends StatefulWidget {
   const EulaScreen({this.viewOnly = false, super.key});
@@ -71,32 +72,30 @@ class _EulaScreenState extends State<EulaScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: widget.viewOnly
-          ? AppBar(
-              backgroundColor: AppColors.background,
-              surfaceTintColor: Colors.transparent,
-              title: const Text(
-                'End User License Agreement',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
+      appBar:
+          widget.viewOnly
+              ? AppBar(
+                backgroundColor: AppColors.background,
+                surfaceTintColor: Colors.transparent,
+                title: const Text(
+                  'End User License Agreement',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              leading: IconButton(
-                icon:
-                    const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-                onPressed: () => Navigator.pop(context),
-              ),
-            )
-          : null,
+                leading: IconButton(
+                  icon: const BackIcon(color: AppColors.textPrimary),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              )
+              : null,
       body: SafeArea(
         child: Column(
           children: [
             if (!widget.viewOnly) _buildHeader(),
-            Expanded(
-              child: _buildAgreementBody(),
-            ),
+            Expanded(child: _buildAgreementBody()),
             if (!widget.viewOnly) _buildBottomBar(),
           ],
         ),
@@ -216,8 +215,7 @@ class _EulaScreenState extends State<EulaScreen> {
             }
 
             if (snapshot.hasError) {
-              debugPrint(
-                  'Error loading EULA: ${snapshot.error}');
+              debugPrint('Error loading EULA: ${snapshot.error}');
               return Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -232,9 +230,7 @@ class _EulaScreenState extends State<EulaScreen> {
                       icon: const Icon(Icons.refresh, size: 18),
                       label: const Text(
                         'Retry',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -258,9 +254,7 @@ class _EulaScreenState extends State<EulaScreen> {
                       icon: const Icon(Icons.refresh, size: 18),
                       label: const Text(
                         'Retry',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -330,8 +324,7 @@ class _EulaScreenState extends State<EulaScreen> {
   }
 
   Widget _buildBottomBar() {
-    final bool canAccept =
-        _hasScrolledToBottom && _hasAgreed && !_isAccepting;
+    final bool canAccept = _hasScrolledToBottom && _hasAgreed && !_isAccepting;
 
     return ClipRect(
       child: BackdropFilter(
@@ -349,9 +342,10 @@ class _EulaScreenState extends State<EulaScreen> {
             children: [
               // Checkbox row
               GestureDetector(
-                onTap: _hasScrolledToBottom
-                    ? () => setState(() => _hasAgreed = !_hasAgreed)
-                    : null,
+                onTap:
+                    _hasScrolledToBottom
+                        ? () => setState(() => _hasAgreed = !_hasAgreed)
+                        : null,
                 behavior: HitTestBehavior.opaque,
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 16),
@@ -364,9 +358,10 @@ class _EulaScreenState extends State<EulaScreen> {
                           'I have read and agree to the End User License Agreement',
                           style: TextStyle(
                             fontSize: 13,
-                            color: _hasScrolledToBottom
-                                ? AppColors.textPrimary
-                                : AppColors.textMuted,
+                            color:
+                                _hasScrolledToBottom
+                                    ? AppColors.textPrimary
+                                    : AppColors.textMuted,
                             fontWeight: FontWeight.w600,
                             height: 1.4,
                           ),
@@ -384,9 +379,10 @@ class _EulaScreenState extends State<EulaScreen> {
                   duration: const Duration(milliseconds: 200),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
-                    color: canAccept
-                        ? AppColors.coral
-                        : AppColors.coral.withValues(alpha: 0.2),
+                    color:
+                        canAccept
+                            ? AppColors.coral
+                            : AppColors.coral.withValues(alpha: 0.2),
                   ),
                   child: Material(
                     color: Colors.transparent,
@@ -396,25 +392,27 @@ class _EulaScreenState extends State<EulaScreen> {
                       splashFactory: NoSplash.splashFactory,
                       highlightColor: Colors.transparent,
                       child: Center(
-                        child: _isAccepting
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  color: AppColors.background,
-                                  strokeWidth: 2,
+                        child:
+                            _isAccepting
+                                ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    color: AppColors.background,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : Text(
+                                  'Accept & Continue',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color:
+                                        canAccept
+                                            ? AppColors.background
+                                            : AppColors.textMuted,
+                                  ),
                                 ),
-                              )
-                            : Text(
-                                'Accept & Continue',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: canAccept
-                                      ? AppColors.background
-                                      : AppColors.textMuted,
-                                ),
-                              ),
                       ),
                     ),
                   ),
@@ -436,25 +434,25 @@ class _EulaScreenState extends State<EulaScreen> {
       height: 22,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(6),
-        color: _hasAgreed
-            ? AppColors.coral
-            : Colors.transparent,
+        color: _hasAgreed ? AppColors.coral : Colors.transparent,
         border: Border.all(
-          color: _hasAgreed
-              ? AppColors.coral
-              : enabled
+          color:
+              _hasAgreed
+                  ? AppColors.coral
+                  : enabled
                   ? AppColors.textSecondary
                   : AppColors.textMuted.withValues(alpha: 0.4),
           width: 2,
         ),
       ),
-      child: _hasAgreed
-          ? const Icon(
-              Icons.check_rounded,
-              size: 16,
-              color: AppColors.background,
-            )
-          : null,
+      child:
+          _hasAgreed
+              ? const Icon(
+                Icons.check_rounded,
+                size: 16,
+                color: AppColors.background,
+              )
+              : null,
     );
   }
 
@@ -488,10 +486,7 @@ class _EulaScreenState extends State<EulaScreen> {
         color: AppColors.teal,
         decoration: TextDecoration.underline,
       ),
-      listBullet: const TextStyle(
-        fontSize: 13,
-        color: AppColors.textSecondary,
-      ),
+      listBullet: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
       strong: const TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w700,
@@ -500,12 +495,7 @@ class _EulaScreenState extends State<EulaScreen> {
       blockSpacing: 10.0,
       listIndent: 16.0,
       horizontalRuleDecoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: AppColors.border,
-            width: 1,
-          ),
-        ),
+        border: Border(top: BorderSide(color: AppColors.border, width: 1)),
       ),
     );
   }

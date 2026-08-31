@@ -27,6 +27,7 @@ import '../../widgets/loading_error_states.dart';
 import '../../widgets/paginated_sliver_list.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/share_button.dart';
+import '../../widgets/icons/back_icon.dart';
 
 /// Screen displaying a community's feed with header info
 ///
@@ -204,8 +205,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
             community.viewer?.subscribed != null) {
           ViewerStateHydrator(
             authProvider: authProvider,
-            subscriptionProvider:
-                context.read<CommunitySubscriptionProvider>(),
+            subscriptionProvider: context.read<CommunitySubscriptionProvider>(),
           ).hydrateCommunitySubscription(community);
         }
       }
@@ -338,7 +338,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
               pinned: true,
               stretch: true,
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
+                icon: const BackIcon(),
                 onPressed: () => context.pop(),
               ),
               actions: [
@@ -355,7 +355,8 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                   final collapsedHeight =
                       kToolbarHeight + MediaQuery.of(context).padding.top;
                   final currentHeight = constraints.maxHeight;
-                  final collapseProgress = 1 -
+                  final collapseProgress =
+                      1 -
                       ((currentHeight - collapsedHeight) /
                               (expandedHeight - collapsedHeight))
                           .clamp(0.0, 1.0);
@@ -385,8 +386,9 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                                 sigmaY: 10 * collapseProgress,
                               ),
                               child: Container(
-                                color: AppColors.background
-                                    .withValues(alpha: 0.7 * collapseProgress),
+                                color: AppColors.background.withValues(
+                                  alpha: 0.7 * collapseProgress,
+                                ),
                               ),
                             ),
                           ),
@@ -401,13 +403,17 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                           child: SafeArea(
                             bottom: false,
                             child: Opacity(
-                              opacity:
-                                  ((collapseProgress - 0.5) * 2).clamp(0.0, 1.0),
+                              opacity: ((collapseProgress - 0.5) * 2).clamp(
+                                0.0,
+                                1.0,
+                              ),
                               child: Padding(
                                 // Left padding: back button (48) + small gap (8)
                                 // Right padding: action buttons space
-                                padding:
-                                    const EdgeInsets.only(left: 56, right: 100),
+                                padding: const EdgeInsets.only(
+                                  left: 56,
+                                  right: 100,
+                                ),
                                 child: Align(
                                   alignment: Alignment.centerLeft,
                                   child: Row(
@@ -479,11 +485,15 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                 pinned: true,
                 delegate: _FeedSortDelegate(
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: const BoxDecoration(
                       color: AppColors.background,
-                      border: Border(bottom: BorderSide(color: AppColors.border)),
+                      border: Border(
+                        bottom: BorderSide(color: AppColors.border),
+                      ),
                     ),
                     child: Row(
                       children: [
@@ -529,7 +539,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
       foregroundColor: AppColors.textPrimary,
       title: const Text('Community'),
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
+        icon: const BackIcon(),
         onPressed: () => context.pop(),
       ),
     );
@@ -560,23 +570,24 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
 
         return AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
-          child: isPending
-              ? Container(
-                  key: const ValueKey('loading'),
-                  width: 32,
-                  height: 32,
-                  alignment: Alignment.center,
-                  child: const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 1.5,
-                      color: AppColors.textPrimary,
+          child:
+              isPending
+                  ? Container(
+                    key: const ValueKey('loading'),
+                    width: 32,
+                    height: 32,
+                    alignment: Alignment.center,
+                    child: const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
-                  ),
-                )
-              : Material(
-                  key: ValueKey('button_$isSubscribed'),
+                  )
+                  : Material(
+                    key: ValueKey('button_$isSubscribed'),
                     color: Colors.transparent,
                     borderRadius: BorderRadius.circular(14),
                     child: InkWell(
@@ -610,9 +621,12 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: isSubscribed
-                                ? AppColors.teal
-                                : AppColors.textSecondary.withValues(alpha: 0.5),
+                            color:
+                                isSubscribed
+                                    ? AppColors.teal
+                                    : AppColors.textSecondary.withValues(
+                                      alpha: 0.5,
+                                    ),
                             width: 1,
                           ),
                         ),
@@ -624,9 +638,10 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                                   ? Icons.check
                                   : Icons.add_circle_outline,
                               size: 12,
-                              color: isSubscribed
-                                  ? AppColors.teal
-                                  : AppColors.textSecondary,
+                              color:
+                                  isSubscribed
+                                      ? AppColors.teal
+                                      : AppColors.textSecondary,
                             ),
                             const SizedBox(width: 3),
                             Text(
@@ -634,9 +649,10 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: isSubscribed
-                                    ? AppColors.teal
-                                    : AppColors.textSecondary,
+                                color:
+                                    isSubscribed
+                                        ? AppColors.teal
+                                        : AppColors.textSecondary,
                               ),
                             ),
                           ],
@@ -867,13 +883,15 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
               child: Column(
                 children: [
                   _AboutStatRow(
-                    icon: _community!.visibility == 'public'
-                        ? Icons.public
-                        : Icons.lock_outline,
+                    icon:
+                        _community!.visibility == 'public'
+                            ? Icons.public
+                            : Icons.lock_outline,
                     label: 'Visibility',
-                    value: _community!.visibility == 'public'
-                        ? 'Public'
-                        : 'Private',
+                    value:
+                        _community!.visibility == 'public'
+                            ? 'Public'
+                            : 'Private',
                   ),
                   const SizedBox(height: 12),
                   _AboutStatRow(
@@ -965,19 +983,22 @@ class _TabItem extends StatelessWidget {
                 Icon(
                   icon,
                   size: 16,
-                  color: isSelected
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
+                  color:
+                      isSelected
+                          ? AppColors.textPrimary
+                          : AppColors.textSecondary,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   label,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isSelected
-                        ? AppColors.textPrimary
-                        : AppColors.textSecondary,
+                    fontWeight:
+                        isSelected ? FontWeight.bold : FontWeight.normal,
+                    color:
+                        isSelected
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -1090,11 +1111,7 @@ class _AboutStatRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(
-          icon,
-          size: 18,
-          color: AppColors.teal,
-        ),
+        Icon(icon, size: 18, color: AppColors.teal),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -1148,9 +1165,10 @@ class _FeedSortChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.teal.withValues(alpha: 0.15)
-              : Colors.transparent,
+          color:
+              isSelected
+                  ? AppColors.teal.withValues(alpha: 0.15)
+                  : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected ? AppColors.teal : AppColors.border,
@@ -1180,4 +1198,3 @@ class _FeedSortChip extends StatelessWidget {
     );
   }
 }
-

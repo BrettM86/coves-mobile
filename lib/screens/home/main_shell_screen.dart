@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../constants/app_colors.dart';
 import '../../utils/responsive_utils.dart';
-import '../../widgets/icons/bluesky_icons.dart';
+import '../../widgets/icons/app_icons.dart';
 import 'communities_screen.dart';
 import 'create_post_screen.dart';
 import 'feed_screen.dart';
@@ -104,48 +104,42 @@ class _MainShellScreenState extends State<MainShellScreen> {
                     labelType: NavigationRailLabelType.all,
                     destinations: [
                       NavigationRailDestination(
-                        icon: BlueSkyIcon.homeSimple(
-                          color: AppColors.textSecondary.withValues(alpha: 0.6),
+                        icon: AppIcon.homeSimple(
+                          color: AppColors.textSecondary,
                         ),
-                        selectedIcon: BlueSkyIcon.homeSimple(
+                        selectedIcon: AppIcon.homeSimple(
                           color: AppColors.primary,
                         ),
                         label: const Text('Home'),
                       ),
                       NavigationRailDestination(
-                        icon: Icon(
-                          Icons.workspaces_outlined,
-                          color: AppColors.textSecondary.withValues(alpha: 0.6),
+                        icon: AppIcon.communities(
+                          color: AppColors.textSecondary,
                         ),
-                        selectedIcon: const Icon(
-                          Icons.workspaces,
+                        selectedIcon: AppIcon.communities(
                           color: AppColors.primary,
                         ),
                         label: const Text('Communities'),
                       ),
                       NavigationRailDestination(
-                        icon: BlueSkyIcon.plus(
-                          color: AppColors.textSecondary.withValues(alpha: 0.6),
-                        ),
-                        selectedIcon: BlueSkyIcon.plus(
-                          color: AppColors.primary,
-                        ),
+                        icon: AppIcon.create(color: AppColors.textSecondary),
+                        selectedIcon: AppIcon.create(color: AppColors.primary),
                         label: const Text('Create'),
                       ),
                       NavigationRailDestination(
-                        icon: BlueSkyIcon.bellOutline(
-                          color: AppColors.textSecondary.withValues(alpha: 0.6),
+                        icon: AppIcon.bellOutline(
+                          color: AppColors.textSecondary,
                         ),
-                        selectedIcon: BlueSkyIcon.bellFilled(
+                        selectedIcon: AppIcon.bellOutline(
                           color: AppColors.primary,
                         ),
                         label: const Text('Notifications'),
                       ),
                       NavigationRailDestination(
-                        icon: BlueSkyIcon.personSimple(
-                          color: AppColors.textSecondary.withValues(alpha: 0.6),
+                        icon: AppIcon.personSimple(
+                          color: AppColors.textSecondary,
                         ),
-                        selectedIcon: BlueSkyIcon.personSimple(
+                        selectedIcon: AppIcon.personSimple(
                           color: AppColors.primary,
                         ),
                         label: const Text('Me'),
@@ -222,38 +216,28 @@ class _MainShellScreenState extends State<MainShellScreen> {
 
   Widget _buildNavItem(int index, String iconName, String label) {
     final isSelected = _selectedIndex == index;
-    final color =
-        isSelected
-            ? AppColors.primary
-            : AppColors.textSecondary.withValues(alpha: 0.6);
+    final color = isSelected ? AppColors.primary : AppColors.textSecondary;
 
     // Use filled variant when selected, outline when not
     Widget icon;
     switch (iconName) {
       case 'home':
-        icon = BlueSkyIcon.homeSimple(color: color);
+        icon = AppIcon.homeSimple(color: color);
         break;
       case 'communities':
-        icon = Icon(
-          isSelected ? Icons.workspaces : Icons.workspaces_outlined,
-          color: color,
-          size: 24,
-        );
+        icon = AppIcon.communities(color: color);
         break;
       case 'plus':
-        icon = BlueSkyIcon.plus(color: color);
+        icon = AppIcon.create(color: color);
         break;
       case 'bell':
-        icon =
-            isSelected
-                ? BlueSkyIcon.bellFilled(color: color)
-                : BlueSkyIcon.bellOutline(color: color);
+        icon = AppIcon.bellOutline(color: color);
         break;
       case 'person':
-        icon = BlueSkyIcon.personSimple(color: color);
+        icon = AppIcon.personSimple(color: color);
         break;
       default:
-        icon = BlueSkyIcon.homeOutline(color: color);
+        icon = AppIcon.homeOutline(color: color);
     }
 
     return Expanded(

@@ -4,6 +4,9 @@ import '../constants/app_colors.dart';
 import '../models/post.dart';
 import '../utils/display_utils.dart';
 import 'icons/animated_heart_icon.dart';
+import 'icons/lucide_icon_painter.dart';
+import 'icons/lucide_paths.dart';
+import 'icons/reply_icon.dart';
 
 /// Post Action Bar
 ///
@@ -46,6 +49,7 @@ class PostActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final commentCount = post.post.stats.commentCount;
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.background,
@@ -69,8 +73,8 @@ class PostActionBar extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.edit_outlined,
+                      LucideGlyph(
+                        LucidePaths.pencilSparkles,
                         size: 16,
                         color: AppColors.textPrimary.withValues(alpha: 0.5),
                       ),
@@ -148,12 +152,12 @@ class PostActionBar extends StatelessWidget {
 
             // Comment count button
             _ActionButton(
-              icon: Icons.chat_bubble_outline,
-              count: post.post.stats.commentCount,
+              iconWidget: const ReplyIcon(size: 22),
+              count: commentCount,
               onTap: onCommentCountTap ?? onCommentTap,
               semanticLabel:
-                  'View ${post.post.stats.commentCount} '
-                  '${post.post.stats.commentCount == 1 ? "comment" : "comments"}',
+                  'View $commentCount '
+                  '${commentCount == 1 ? "comment" : "comments"}',
             ),
           ],
         ),
@@ -165,14 +169,21 @@ class PostActionBar extends StatelessWidget {
 /// Action button with icon and count
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
-    required this.icon,
+    this.icon,
+    this.iconWidget,
     required this.count,
     this.color,
     this.onTap,
     this.semanticLabel,
-  });
+  }) : assert(
+         (icon == null) != (iconWidget == null),
+         'Provide exactly one of icon or iconWidget',
+       );
 
-  final IconData icon;
+  final IconData? icon;
+
+  /// Custom-painted icon (e.g. a Lucide glyph); tinted [color] like [icon].
+  final Widget? iconWidget;
   final int count;
   final Color? color;
   final VoidCallback? onTap;
@@ -194,7 +205,13 @@ class _ActionButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 24, color: effectiveColor),
+            if (icon != null)
+              Icon(icon, size: 24, color: effectiveColor)
+            else
+              IconTheme(
+                data: IconThemeData(color: effectiveColor),
+                child: iconWidget!,
+              ),
             const SizedBox(width: 4),
             Text(
               DisplayUtils.formatCount(count),

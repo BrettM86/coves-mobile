@@ -10,6 +10,7 @@ import '../../models/picked_image.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../utils/community_name_validator.dart';
+import '../../widgets/icons/back_icon.dart';
 import 'community_avatar_upload_page.dart';
 import 'create_community_form.dart';
 
@@ -21,11 +22,7 @@ const Set<String> kAdminHandles = {
 };
 
 /// Admin panel pages
-enum AdminPage {
-  menu,
-  createCommunity,
-  changeProfilePic,
-}
+enum AdminPage { menu, createCommunity, changeProfilePic }
 
 /// Admin Panel for Communities
 ///
@@ -388,13 +385,14 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
         foregroundColor: Colors.white,
         title: Text(_getAdminTitle()),
         automaticallyImplyLeading: false,
-        leading: _currentPage != AdminPage.menu
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                tooltip: 'Back',
-                onPressed: _navigateBack,
-              )
-            : null,
+        leading:
+            _currentPage != AdminPage.menu
+                ? IconButton(
+                  icon: const BackIcon(),
+                  tooltip: 'Back',
+                  onPressed: _navigateBack,
+                )
+                : null,
       ),
       body: _buildAdminUI(),
     );

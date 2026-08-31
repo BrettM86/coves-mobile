@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import '../widgets/icons/back_icon.dart';
 import 'app_typography.dart';
 
 /// Application theme
@@ -73,6 +74,12 @@ class AppTheme {
     // palette's warm off-white makes a post card's action row (reply, share,
     // heart) read at the same temperature as the text beside it.
     iconTheme: const IconThemeData(color: AppColors.textPrimary),
+    // Implicit AppBar back buttons (post detail, any pushed route without an
+    // explicit leading) render the Lucide arrow instead of Material's, so
+    // navigation chrome matches the Lucide icon set used everywhere else.
+    actionIconTheme: ActionIconThemeData(
+      backButtonIconBuilder: (context) => const BackIcon(),
+    ),
     // A step below `colorScheme.surface` on purpose: the page is the deep
     // 0xFF0B0F14 while the elevated containers sit above it on 0xFF1A1F26,
     // which is what gives them their elevation. Under Material 3 those
