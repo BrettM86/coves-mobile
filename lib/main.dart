@@ -381,8 +381,14 @@ GoRouter createRouter(
         builder: (context, state) {
           // Fast path: post passed via state.extra (in-app navigation)
           final post = state.extra as FeedViewPost?;
+          // Optional `?comment=<at-uri>` scrolls to and highlights a comment
+          // (used by profile → "your comment" links).
+          final focusCommentUri = state.uri.queryParameters['comment'];
           if (post != null) {
-            return PostDetailScreen(post: post);
+            return PostDetailScreen(
+              post: post,
+              focusCommentUri: focusCommentUri,
+            );
           }
 
           // Cold path: no extra (state restoration, deep links) - load the
@@ -409,7 +415,10 @@ GoRouter createRouter(
           if (kDebugMode) {
             debugPrint('🔄 PostDetailScreen: Cold-loading post from URI');
           }
-          return PostDetailLoader(postUri: postUri);
+          return PostDetailLoader(
+            postUri: postUri,
+            focusCommentUri: focusCommentUri,
+          );
         },
       ),
     ],

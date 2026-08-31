@@ -31,10 +31,18 @@ typedef PostFetcher = Future<PostGetResult> Function(String uri);
 /// - Not found / blocked: user-friendly error with navigation back
 /// - Fetch failure: error state with retry
 class PostDetailLoader extends StatefulWidget {
-  const PostDetailLoader({required this.postUri, this.fetchPost, super.key});
+  const PostDetailLoader({
+    required this.postUri,
+    this.fetchPost,
+    this.focusCommentUri,
+    super.key,
+  });
 
   /// Decoded AT-URI of the post to load (must start with `at://`)
   final String postUri;
+
+  /// Optional AT-URI of a comment to scroll to and highlight once loaded.
+  final String? focusCommentUri;
 
   /// Optional fetcher override for testing.
   ///
@@ -230,7 +238,10 @@ class _PostDetailLoaderState extends State<PostDetailLoader> {
 
     switch (result) {
       case PostGetSuccess(:final post):
-        return PostDetailScreen(post: FeedViewPost(post: post));
+        return PostDetailScreen(
+          post: FeedViewPost(post: post),
+          focusCommentUri: widget.focusCommentUri,
+        );
       case PostGetNotFound():
         return NotFoundError(
           title: 'Post Not Found',

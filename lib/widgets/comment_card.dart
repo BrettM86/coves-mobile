@@ -56,6 +56,7 @@ class CommentCard extends StatefulWidget {
     this.isCollapsed = false,
     this.collapsedCount = 0,
     this.onDelete,
+    this.isHighlighted = false,
     super.key,
   });
 
@@ -77,6 +78,10 @@ class CommentCard extends StatefulWidget {
 
   /// Callback when the comment is deleted
   final Future<void> Function(String commentUri)? onDelete;
+
+  /// Tints the card so a comment the user navigated to directly (e.g. from
+  /// their profile) stands out from its siblings.
+  final bool isHighlighted;
 
   @override
   State<CommentCard> createState() => _CommentCardState();
@@ -144,7 +149,12 @@ class _CommentCardState extends State<CommentCard> {
                 }
               : null,
           child: Container(
-            decoration: const BoxDecoration(color: AppColors.background),
+            decoration: BoxDecoration(
+              color:
+                  widget.isHighlighted
+                      ? AppColors.primary.withValues(alpha: 0.08)
+                      : AppColors.background,
+            ),
             child: Stack(
               children: [
                 // Threading indicators - vertical lines showing

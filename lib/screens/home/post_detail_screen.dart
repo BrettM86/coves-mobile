@@ -43,11 +43,20 @@ class PostDetailScreen extends StatefulWidget {
   const PostDetailScreen({
     required this.post,
     this.isOptimistic = false,
+    this.focusCommentUri,
     super.key,
   });
 
   /// Post to display (passed via route extras)
   final FeedViewPost post;
+
+  /// Optional AT-URI of a comment to scroll to and highlight after the
+  /// thread loads (e.g. tapping one of your comments on your profile).
+  ///
+  /// If the comment isn't in the loaded top-level tree (later page, or
+  /// beyond the nesting cutoff), its subtree is fetched and opened in a
+  /// [FocusedThreadScreen] on top of this one instead.
+  final String? focusCommentUri;
 
   /// Whether this is an optimistic post (just created, not yet indexed)
   /// When true, skips initial comment load since we know there are no comments
@@ -95,6 +104,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   // Track if provider has been invalidated (e.g., by sign-out)
   bool _providerInvalidated = false;
+
+  // Deep-link comment focus: attached to the target CommentCard by
+  // CommentThread so it can be scrolled into view once built.
+  final GlobalKey _focusedCommentKey = GlobalKey();
+  bool _focusPending = false;
+  bool _focusInProgress = false;
 
   @override
   void initState() {
@@ -214,6 +229,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       // No cached data - load fresh
       _commentsProvider.loadComments(refresh: true);
     }
+
+    if (widget.focusCommentUri != null) {
+      _focusPending = true;
+      // Cached data renders on the first frame with no provider change
+      // event, so kick the focus attempt from here as well.
+      if (_commentsProvider.comments.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _tryFocusComment(),
+        );
+      }
+    }
   }
 
   @override
@@ -256,7 +282,122 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   void _onProviderChanged() {
     if (mounted) {
       setState(() {});
+      if (_focusPending && !_commentsProvider.isLoading) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _tryFocusComment(),
+        );
+      }
     }
+  }
+
+  /// Scroll to and highlight [PostDetailScreen.focusCommentUri].
+  ///
+  /// Runs once after the first successful thread load. The comment list is
+  /// a lazy sliver, so the target's key has no context until its top-level
+  /// ancestor has been laid out: we page the viewport down until it appears,
+  /// then `ensureVisible` it. If the comment isn't in the loaded tree at all,
+  /// its subtree is fetched by rkey and opened as a focused thread.
+  Future<void> _tryFocusComment() async {
+    final targetUri = widget.focusCommentUri;
+    if (targetUri == null ||
+        !_focusPending ||
+        _focusInProgress ||
+        !mounted ||
+        _providerInvalidated) {
+      return;
+    }
+    final provider = _commentsProvider;
+    if (provider.isLoading) {
+      return;
+    }
+    if (provider.comments.isEmpty && provider.error != null) {
+      // Thread failed to load; nothing to focus. Retry re-triggers via
+      // _onProviderChanged, so leave _focusPending set.
+      return;
+    }
+    _focusInProgress = true;
+    _focusPending = false;
+    // Captured before the awaits below so the failure toast never touches
+    // BuildContext across an async gap.
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final inTree = provider.comments.any(
+        (thread) => thread.findByUri(targetUri) != null,
+      );
+
+      if (inTree) {
+        await _scrollToFocusedComment();
+        return;
+      }
+
+      // Not on the loaded page(s) / past the depth cutoff: fetch its subtree
+      // and present it focused, with this full thread underneath.
+      final subtree = await provider.loadMoreReplies(targetUri);
+      if (!mounted) {
+        return;
+      }
+      if (subtree == null) {
+        _showFocusFailed(messenger);
+        return;
+      }
+      _onContinueThread(subtree, const []);
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Could not focus comment: $e');
+      }
+      if (mounted) {
+        _showFocusFailed(messenger);
+      }
+    } finally {
+      _focusInProgress = false;
+    }
+  }
+
+  Future<void> _scrollToFocusedComment() async {
+    // Lazy sliver: page down until the keyed card is built, then align it.
+    for (var attempt = 0; attempt < 60; attempt++) {
+      if (!mounted) {
+        return;
+      }
+      final targetContext = _focusedCommentKey.currentContext;
+      if (targetContext != null) {
+        // The context is re-read from the key on every iteration after the
+        // frame await above, so it is never stale here.
+        // ignore: use_build_context_synchronously
+        await Scrollable.ensureVisible(
+          targetContext,
+          alignment: 0.15,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+        return;
+      }
+      if (!_scrollController.hasClients) {
+        return;
+      }
+      final position = _scrollController.position;
+      if (position.pixels >= position.maxScrollExtent) {
+        // Reached the end without finding it (it was collapsed or removed).
+        return;
+      }
+      _scrollController.jumpTo(
+        (position.pixels + position.viewportDimension).clamp(
+          0.0,
+          position.maxScrollExtent,
+        ),
+      );
+      await WidgetsBinding.instance.endOfFrame;
+    }
+  }
+
+  void _showFocusFailed(ScaffoldMessengerState messenger) {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text("Couldn't find that comment. It may have been deleted."),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   /// Handle sort changes from dropdown
@@ -956,6 +1097,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   (uri) => commentsProvider.deleteComment(
                                     commentUri: uri,
                                   ),
+                              focusedCommentUri: widget.focusCommentUri,
+                              focusedCommentKey: _focusedCommentKey,
                             ),
                           );
                         },
@@ -1018,6 +1161,8 @@ class _CommentItem extends StatelessWidget {
     this.onLoadMoreReplies,
     this.loadingMoreReplies = const {},
     this.onDelete,
+    this.focusedCommentUri,
+    this.focusedCommentKey,
   });
 
   final ThreadViewComment comment;
@@ -1030,6 +1175,8 @@ class _CommentItem extends StatelessWidget {
   final void Function(ThreadViewComment)? onLoadMoreReplies;
   final Set<String> loadingMoreReplies;
   final Future<void> Function(String commentUri)? onDelete;
+  final String? focusedCommentUri;
+  final Key? focusedCommentKey;
 
   @override
   Widget build(BuildContext context) {
@@ -1047,6 +1194,8 @@ class _CommentItem extends StatelessWidget {
           onLoadMoreReplies: onLoadMoreReplies,
           loadingMoreReplies: loadingMoreReplies,
           onDelete: onDelete,
+          focusedCommentUri: focusedCommentUri,
+          focusedCommentKey: focusedCommentKey,
         );
       },
     );

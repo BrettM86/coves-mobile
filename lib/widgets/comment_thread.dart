@@ -36,6 +36,8 @@ class CommentThread extends StatelessWidget {
     this.onContinueThread,
     this.ancestors = const [],
     this.onDelete,
+    this.focusedCommentUri,
+    this.focusedCommentKey,
     super.key,
   });
 
@@ -74,6 +76,13 @@ class CommentThread extends StatelessWidget {
   /// Callback when a comment is deleted
   final Future<void> Function(String commentUri)? onDelete;
 
+  /// URI of the comment to render highlighted (deep-link target), if any.
+  final String? focusedCommentUri;
+
+  /// Key attached to the focused comment's card so the parent can
+  /// `Scrollable.ensureVisible` it once it is built.
+  final Key? focusedCommentKey;
+
   @override
   Widget build(BuildContext context) {
     // Check if this comment is collapsed
@@ -95,6 +104,9 @@ class CommentThread extends StatelessWidget {
 
     // Build updated ancestors list including current thread
     final childAncestors = [...ancestors, thread];
+
+    final isFocused =
+        focusedCommentUri != null && thread.comment.uri == focusedCommentUri;
 
     // Only build replies widget when NOT collapsed and NOT at max depth
     // When at max depth, we show "Read more replies" link instead
@@ -122,6 +134,8 @@ class CommentThread extends StatelessWidget {
                       onContinueThread: onContinueThread,
                       ancestors: childAncestors,
                       onDelete: onDelete,
+                      focusedCommentUri: focusedCommentUri,
+                      focusedCommentKey: focusedCommentKey,
                     );
                   }).toList(),
             )
@@ -131,18 +145,22 @@ class CommentThread extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Render the comment with tap and long-press handlers
-        CommentCard(
-          comment: thread.comment,
-          depth: depth,
-          currentTime: currentTime,
-          onTap: onCommentTap != null ? () => onCommentTap!(thread) : null,
-          onLongPress:
-              onCollapseToggle != null
-                  ? () => onCollapseToggle!(thread.comment.uri)
-                  : null,
-          isCollapsed: isCollapsed,
-          collapsedCount: collapsedCount,
-          onDelete: onDelete,
+        KeyedSubtree(
+          key: isFocused ? focusedCommentKey : null,
+          child: CommentCard(
+            comment: thread.comment,
+            depth: depth,
+            currentTime: currentTime,
+            onTap: onCommentTap != null ? () => onCommentTap!(thread) : null,
+            onLongPress:
+                onCollapseToggle != null
+                    ? () => onCollapseToggle!(thread.comment.uri)
+                    : null,
+            isCollapsed: isCollapsed,
+            collapsedCount: collapsedCount,
+            onDelete: onDelete,
+            isHighlighted: isFocused,
+          ),
         ),
 
         // Render replies with animation (only when NOT at max depth)

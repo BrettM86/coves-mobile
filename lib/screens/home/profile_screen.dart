@@ -843,6 +843,13 @@ class _ProfileCommentCard extends StatelessWidget {
     return CommentCard(
       comment: comment,
       depth: 0,
+      onTap: () {
+        // Open the parent post's thread, scrolled to and highlighting this
+        // comment. The post is cold-loaded by URI (no FeedViewPost here).
+        final encodedPost = Uri.encodeComponent(comment.post.uri);
+        final encodedComment = Uri.encodeQueryComponent(comment.uri);
+        context.push('/post/$encodedPost?comment=$encodedComment');
+      },
       onDelete: (commentUri) async {
         await profileProvider.deleteComment(commentUri: commentUri);
       },

@@ -3,6 +3,7 @@ import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
+import 'package:coves_flutter/widgets/comment_card.dart';
 import 'package:coves_flutter/widgets/comment_thread.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -111,6 +112,8 @@ void main() {
     Set<String> loadingMoreReplies = const {},
     Set<String> collapsedComments = const {},
     List<ThreadViewComment> ancestors = const [],
+    String? focusedCommentUri,
+    Key? focusedCommentKey,
   }) {
     return MultiProvider(
       providers: [
@@ -132,6 +135,8 @@ void main() {
               loadingMoreReplies: loadingMoreReplies,
               collapsedComments: collapsedComments,
               ancestors: ancestors,
+              focusedCommentUri: focusedCommentUri,
+              focusedCommentKey: focusedCommentKey,
             ),
           ),
         ),
@@ -337,6 +342,71 @@ void main() {
       // Placeholder shown instead of content; reply still renders
       expect(find.text('[deleted by user]'), findsOneWidget);
       expect(find.text('Surviving reply'), findsOneWidget);
+    });
+  });
+
+  group('Focused comment (deep link)', () {
+    testWidgets(
+      'attaches the key and highlight to the exact nested comment only',
+      (tester) async {
+        final thread = createThread(
+          uri: 'comment/root',
+          content: 'Root',
+          replies: [
+            createThread(uri: 'comment/a', content: 'Sibling'),
+            createThread(
+              uri: 'comment/b',
+              content: 'Parent of target',
+              replies: [createThread(uri: 'comment/target', content: 'Me')],
+            ),
+          ],
+        );
+        final focusKey = GlobalKey();
+
+        await tester.pumpWidget(
+          createTestWidget(
+            thread,
+            focusedCommentUri: 'comment/target',
+            focusedCommentKey: focusKey,
+          ),
+        );
+
+        // The key lands on the target's card so the screen can
+        // Scrollable.ensureVisible it.
+        expect(focusKey.currentContext, isNotNull);
+        expect(
+          find.descendant(
+            of: find.byKey(focusKey),
+            matching: find.text('Me'),
+          ),
+          findsOneWidget,
+        );
+
+        // Only the target is tinted.
+        final cards = tester.widgetList<CommentCard>(find.byType(CommentCard));
+        final highlighted =
+            cards.where((c) => c.isHighlighted).map((c) => c.comment.uri);
+        expect(highlighted, ['comment/target']);
+      },
+    );
+
+    testWidgets('no focus uri: nothing highlighted, key unattached', (
+      tester,
+    ) async {
+      final thread = createThread(uri: 'comment/root', content: 'Root');
+      final focusKey = GlobalKey();
+
+      await tester.pumpWidget(
+        createTestWidget(thread, focusedCommentKey: focusKey),
+      );
+
+      expect(focusKey.currentContext, isNull);
+      expect(
+        tester.widgetList<CommentCard>(find.byType(CommentCard)).any(
+          (c) => c.isHighlighted,
+        ),
+        isFalse,
+      );
     });
   });
 
