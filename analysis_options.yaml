@@ -15,6 +15,10 @@ analyzer:
     - '**/*.freezed.dart'
     - '**/generated/**'
     - 'packages/atproto_oauth_flutter/**'
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
 
 linter:
   rules:

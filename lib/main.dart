@@ -50,6 +50,8 @@ Future<void> main() async {
       options.environment = kDebugMode ? 'development' : 'production';
       options.sendDefaultPii = false;
       options.attachScreenshot = true;
+      // Kept from sentry 8.x; the API is flagged experimental in 9.x.
+      // ignore: experimental_member_use
       options.attachViewHierarchy = true;
     },
     appRunner: () async {

@@ -50,7 +50,7 @@ dependencies:
   flutter_markdown_plus: ^1.0.12
   video_player: ^2.8.7  # Pinned for stability
   share_plus: ^10.1.4
-  sentry_flutter: ^8.10.1
+  sentry_flutter: ^9.6.0
   image_picker: ^1.1.2
   image_cropper: ^8.0.2
 
