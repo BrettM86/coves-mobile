@@ -1,0 +1,298 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Cut a Coves release and ship it to Google Play and the App Store.
+#
+#   tool/release <version-name> [--dry-run] [--skip-tests]
+#
+# The version *name* (1.4.0) is the one judgment call, so it is the one
+# argument. The build number is never chosen by hand: both stores are asked
+# what they already hold and the next number above everything is used. That
+# is what keeps pubspec.yaml from drifting behind production again.
+#
+# What it does, in order:
+#   1. Preflight: clean tree on main, exactly in sync with origin, analyze
+#      (errors fatal), tests.
+#   2. Ask Play (the four built-in tracks) and App Store Connect (every build
+#      ever uploaded) for their build numbers.
+#   3. Write version: <name>+<build> to pubspec.yaml and copy
+#      release_notes/<name>.txt into both stores' metadata directories.
+#   4. Build the AAB, then the IPA, and verify both are release-signed.
+#   5. Upload: Play production at 100%, App Store submitted for review with
+#      automatic release on approval.
+#   6. Commit the bump + notes and push, so the release has a git trace.
+#
+# There is no confirmation prompt; the store numbers are printed before the
+# builds start and nothing is uploaded until step 5, so Ctrl-C is safe until
+# then and the tree is restored on any exit before the first upload.
+#
+# --dry-run stops after step 4, restores the tree, and may be run from any
+# branch (the main/origin checks are skipped). It still needs both stores'
+# credentials, described in RELEASING.md.
+
+require "fileutils"
+require "json"
+require "open3"
+require "tmpdir"
+
+ROOT = File.expand_path("..", __dir__)
+KEYTOOL = "/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/keytool"
+ANDROID_CHANGELOGS = File.join(ROOT, "android/fastlane/metadata/android/en-US/changelogs")
+IOS_RELEASE_NOTES = File.join(ROOT, "ios/fastlane/metadata/en-US/release_notes.txt")
+PLAY_CHANGELOG_LIMIT = 500
+
+def step(title)
+  puts "\n\e[1m==> #{title}\e[0m"
+end
+
+def fail!(message)
+  warn "\e[31merror:\e[0m #{message}"
+  exit 1
+end
+
+# Runs a command, streaming its output, and aborts the release if it fails.
+def run(*cmd, chdir: ROOT, env: {})
+  puts "$ #{cmd.join(' ')}"
+  ok = system(env, *cmd, chdir: chdir)
+  fail!("`#{cmd.join(' ')}` failed") unless ok
+end
+
+# Runs a command and returns its stdout, aborting on failure.
+def capture(*cmd, chdir: ROOT)
+  out, err, status = Open3.capture3(*cmd, chdir: chdir)
+  fail!("`#{cmd.join(' ')}` failed:\n#{err}") unless status.success?
+  out
+end
+
+def fastlane(platform, lane)
+  run("fastlane", lane, chdir: File.join(ROOT, platform))
+end
+
+def read_store_state(name)
+  path = File.join(ROOT, "dist/store/#{name}.json")
+  fail!("#{path} was not written by fastlane") unless File.exist?(path)
+  JSON.parse(File.read(path))
+end
+
+def pubspec_path
+  File.join(ROOT, "pubspec.yaml")
+end
+
+def current_pubspec_version
+  File.read(pubspec_path)[/^version:\s*(\S+)/, 1] or fail!("no version: in pubspec.yaml")
+end
+
+def write_pubspec_version(version)
+  pubspec = File.read(pubspec_path)
+  updated = pubspec.sub(/^version:\s*\S+/, "version: #{version}")
+  fail!("could not rewrite version: in pubspec.yaml") if updated == pubspec
+  File.write(pubspec_path, updated)
+end
+
+# Compares dotted version names numerically: "1.10.0" > "1.9.0".
+def version_key(name)
+  name.split(".").map(&:to_i)
+end
+
+# --- arguments ---------------------------------------------------------------
+
+args = ARGV.dup
+dry_run = args.delete("--dry-run")
+skip_tests = args.delete("--skip-tests")
+name = args.shift
+if name.nil? || !args.empty? || name !~ /\A\d+\.\d+\.\d+\z/
+  warn "usage: tool/release <major.minor.patch> [--dry-run] [--skip-tests]"
+  exit 2
+end
+
+notes_path = File.join(ROOT, "release_notes/#{name}.txt")
+unless File.exist?(notes_path)
+  fail!("write the What's New text to release_notes/#{name}.txt first")
+end
+notes = File.read(notes_path).strip
+fail!("release_notes/#{name}.txt is empty") if notes.empty?
+if notes.length > PLAY_CHANGELOG_LIMIT
+  fail!("release notes are #{notes.length} chars; Play allows #{PLAY_CHANGELOG_LIMIT}")
+end
+
+# --- 1. preflight --------------------------------------------------------------
+
+step "Preflight"
+dirty = capture("git", "status", "--porcelain").strip
+fail!("working tree is not clean:\n#{dirty}") unless dirty.empty?
+
+# A dry run may be exercised from a feature branch; a real release may not.
+unless dry_run
+  branch = capture("git", "rev-parse", "--abbrev-ref", "HEAD").strip
+  fail!("releases are cut from main, not #{branch}") unless branch == "main"
+  run("git", "fetch", "--quiet", "origin", "main")
+  # Exactly in sync: behind means a stale release, ahead means the final
+  # push would publish commits that were never reviewed as part of it.
+  behind = capture("git", "rev-list", "--count", "HEAD..origin/main").strip.to_i
+  ahead = capture("git", "rev-list", "--count", "origin/main..HEAD").strip.to_i
+  fail!("main is #{behind} commit(s) behind origin/main; pull first") unless behind.zero?
+  fail!("main is #{ahead} commit(s) ahead of origin/main; push first") unless ahead.zero?
+end
+
+fail!("#{KEYTOOL} not found; install Android Studio") unless File.executable?(KEYTOOL)
+# fastlane loads ios/fastlane/.env itself; read it here only to fail early.
+env_file = File.join(ROOT, "ios/fastlane/.env")
+dotenv = File.exist?(env_file) ? File.read(env_file) : ""
+%w[ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_PATH].each do |var|
+  next if ENV[var] || dotenv.match?(/^#{var}=\S/)
+  fail!("#{var} is not set in the environment or ios/fastlane/.env -- see RELEASING.md")
+end
+
+# Errors are fatal. Infos and warnings are not: the repo carries a standing
+# tail of style infos and a handful of test-file warnings, and a release
+# should not be blocked on lint hygiene that the build does not depend on.
+run("flutter", "analyze", "--no-fatal-infos", "--no-fatal-warnings")
+
+if skip_tests
+  puts "flutter test: skipped (--skip-tests)"
+else
+  run("flutter", "test")
+end
+
+# --- 2. store truth ----------------------------------------------------------
+
+step "Asking the stores what they already hold"
+fastlane("android", "store_state")
+fastlane("ios", "latest_builds")
+play = read_store_state("play")
+asc = read_store_state("asc")
+
+seen = [
+  play["highest_version_code"],
+  asc["live_build"],
+  asc["latest_build"],
+  current_pubspec_version.split("+").last,
+].compact.map(&:to_i)
+build = seen.max + 1
+version = "#{name}+#{build}"
+
+live_name = asc["live_version"]
+if live_name && (version_key(name) <=> version_key(live_name)) <= 0
+  fail!("#{name} is not above the App Store's live version #{live_name}")
+end
+committed_name = current_pubspec_version.split("+").first
+if (version_key(name) <=> version_key(committed_name)) < 0
+  fail!("#{name} is below the committed pubspec version #{committed_name}")
+end
+# deliver cannot create a second version while one is still in Prepare for
+# Submission or review. Reusing the same name (a resubmission after a
+# rejection) is fine; a different one is not.
+edit_name = asc["edit_version"]
+if edit_name && edit_name != name
+  fail!("App Store Connect already has #{edit_name} in preparation or review; " \
+        "release that (or delete it in the console) before starting #{name}")
+end
+
+puts
+puts "Play highest version code: #{play['highest_version_code'].inspect}"
+puts "App Store live:            #{live_name.inspect} build #{asc['live_build'].inspect}"
+puts "App Store latest build:    #{asc['latest_build'].inspect}"
+puts "pubspec.yaml:              #{current_pubspec_version}"
+puts
+puts "\e[1mReleasing #{version}\e[0m"
+
+# --- 3. version + notes ------------------------------------------------------
+
+step "Writing #{version} and release notes"
+android_changelog = File.join(ANDROID_CHANGELOGS, "#{build}.txt")
+originals = {
+  pubspec_path => File.read(pubspec_path),
+  android_changelog => (File.read(android_changelog) if File.exist?(android_changelog)),
+  IOS_RELEASE_NOTES => (File.read(IOS_RELEASE_NOTES) if File.exist?(IOS_RELEASE_NOTES)),
+}
+write_pubspec_version(version)
+FileUtils.mkdir_p(ANDROID_CHANGELOGS)
+File.write(android_changelog, "#{notes}\n")
+File.write(IOS_RELEASE_NOTES, "#{notes}\n")
+
+restore_tree = lambda do
+  originals.each do |path, content|
+    content ? File.write(path, content) : FileUtils.rm_f(path)
+  end
+end
+
+# Until the first upload nothing is irreversible, so any failure (or a
+# Ctrl-C) puts the tree back. After an upload the bump must stay on disk,
+# and the operator needs to know exactly what is half-shipped.
+shipped = []
+committed = false
+pushed = false
+at_exit do
+  next if pushed
+  if committed
+    warn "\e[31m#{version} is committed locally but not pushed.\e[0m Run: git push origin main"
+  elsif shipped.empty?
+    restore_tree.call
+    warn "Nothing was uploaded; pubspec.yaml and the notes files were restored." unless dry_run
+  else
+    warn ""
+    warn "\e[31m#{version} is PARTIALLY SHIPPED: #{shipped.join(', ')}.\e[0m"
+    warn "Do not re-run tool/release; it would pick build #{build + 1}. Finish by hand:"
+    warn "  cd ios && fastlane ship" unless shipped.include?("App Store Connect")
+    warn "  git add pubspec.yaml #{android_changelog} #{IOS_RELEASE_NOTES}"
+    warn "  git commit -m 'chore(release): #{version}' && git push origin main"
+  end
+end
+
+# --- 4. build + verify -------------------------------------------------------
+
+dist = File.join(ROOT, "dist", version)
+step "Building Android"
+fastlane("android", "build")
+aab = Dir[File.join(dist, "*.aab")].first or fail!("no AAB in dist/#{version}")
+
+step "Building iOS"
+fastlane("ios", "build")
+ipa = Dir[File.join(dist, "*.ipa")].first or fail!("no IPA in dist/#{version}")
+
+step "Verifying artifacts"
+cert = capture(KEYTOOL, "-printcert", "-jarfile", aab)
+owner = cert[/^Owner: (.*)$/, 1].to_s
+fail!("AAB is not signed with the Coves upload key: #{owner}") unless owner.include?("CN=Coves")
+puts "AAB signer: #{owner}"
+
+Dir.mktmpdir do |tmp|
+  run("unzip", "-q", "-o", ipa, "Payload/*/embedded.mobileprovision", "-d", tmp)
+  profile = Dir[File.join(tmp, "Payload/*/embedded.mobileprovision")].first
+  fail!("IPA has no embedded provisioning profile") unless profile
+  plist = capture("security", "cms", "-D", "-i", profile)
+  unless plist =~ %r{<key>get-task-allow</key>\s*<false/>}
+    fail!("IPA is not signed with a distribution profile (get-task-allow is not false)")
+  end
+  puts "IPA profile: distribution (get-task-allow=false)"
+end
+
+if dry_run
+  step "Dry run: not uploading"
+  puts "Artifacts left in dist/#{version}/; pubspec and notes restored."
+  exit 0
+end
+
+# --- 5. upload ---------------------------------------------------------------
+
+step "Shipping Android (Play production, 100%)"
+fastlane("android", "ship")
+shipped << "Play production"
+
+step "Shipping iOS (App Store Connect, submit for review)"
+fastlane("ios", "ship")
+shipped << "App Store Connect"
+
+# --- 6. record it ------------------------------------------------------------
+
+step "Committing #{version}"
+run("git", "add", pubspec_path, android_changelog, IOS_RELEASE_NOTES)
+run("git", "commit", "--quiet", "-m", "chore(release): #{version}")
+committed = true
+run("git", "push", "--quiet", "origin", "main")
+pushed = true
+
+puts
+puts "\e[32mShipped #{version}.\e[0m"
+puts "Play: rolling out to 100% once Google's review finishes."
+puts "App Store: in review; releases automatically on approval."

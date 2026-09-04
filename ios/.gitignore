@@ -39,3 +39,5 @@ fastlane/Preview.html
 fastlane/README.md
 fastlane/*.p8
 fastlane/.env
+# App review contact + demo login pulled by `fastlane pull_metadata`; never commit.
+fastlane/metadata/review_information/

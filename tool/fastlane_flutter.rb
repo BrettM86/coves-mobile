@@ -11,6 +11,8 @@
 # behave exactly as it does in a plain shell.
 
 require "fileutils"
+require "json"
+require "tmpdir"
 
 # Passing nil as a value to Kernel#system removes the variable from the child
 # environment rather than setting it to an empty string.
@@ -31,6 +33,30 @@ def stash_artifact(project_root, artifact, version)
   FileUtils.cp(artifact, dest)
   FastlaneCore::UI.success("Stashed #{File.basename(dest)} in dist/#{version}/")
   dest
+end
+
+# Finds the artifact a `build` lane stashed for this version, e.g.
+# stashed_artifact(root, "1.3.0+10", "*.ipa"). The upload lanes read from
+# here so that both platforms can be built before either is uploaded.
+def stashed_artifact(project_root, version, glob)
+  matches = Dir[File.join(project_root, "dist", version, glob)]
+  if matches.empty?
+    FastlaneCore::UI.user_error!(
+      "No #{glob} in dist/#{version}/ -- run the build lane first"
+    )
+  end
+  matches.max_by { |f| File.mtime(f) }
+end
+
+# Records what a store reported so tool/release can pick the next build
+# number without parsing lane output. Written to dist/store/<name>.json.
+def write_store_state(project_root, name, state)
+  dir = File.join(project_root, "dist", "store")
+  FileUtils.mkdir_p(dir)
+  path = File.join(dir, "#{name}.json")
+  File.write(path, JSON.pretty_generate(state))
+  FastlaneCore::UI.message("Wrote dist/store/#{name}.json")
+  path
 end
 
 # Reads `version: <name>+<build>` out of pubspec.yaml, e.g. "1.1.0+7".

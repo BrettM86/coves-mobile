@@ -56,7 +56,9 @@ published manually (not an issue here -- Coves has shipped since 1.0.4+4).
 1. App Store Connect > **Users and Access > Integrations > App Store Connect
    API** > generate a key with the **App Manager** role.
 2. Download the `AuthKey_<KEY_ID>.p8` -- Apple only serves it once.
-3. Export the three values fastlane needs:
+3. Export the three values fastlane needs, or put the same three lines
+   (without `export`) in `ios/fastlane/.env`, which is gitignored and which
+   fastlane loads automatically:
 
    ```sh
    export ASC_KEY_ID=XXXXXXXXXX
@@ -67,54 +69,105 @@ published manually (not an issue here -- Coves has shipped since 1.0.4+4).
 Keep the `.p8` outside the repo. `ios/fastlane/*.p8` is gitignored as a
 backstop, not as an invitation.
 
+### Android signing
+
+The upload keystore is the third credential. `android/key.properties`
+(gitignored) names it via `storeFile`, relative to `android/app/`, plus
+`storePassword`, `keyPassword` and `keyAlias`; `app/build.gradle.kts` reads
+those four keys. The keystore itself (`*.jks`, also gitignored) is maintainer
+provided. `tool/release` verifies every AAB is signed by `CN=Coves` before
+uploading.
+
 ## Cutting a release
 
-1. **Check what is actually live first -- do not trust `pubspec.yaml`.** A build
-   uploaded straight from a working copy leaves no trace in git, so the pubspec
-   can sit *behind* the store. This has already happened once: production was
-   serving `1.0.5+7` while the committed pubspec still said `1.0.5+6`.
+One command ships both stores:
 
-   ```sh
-   cd android && fastlane run google_play_track_version_codes track:production
-   cd android && fastlane run google_play_track_release_names  track:production
-   cd ios     && fastlane latest_builds
-   ```
+```sh
+tool/release 1.4.0            # the version name is the only argument
+tool/release 1.4.0 --dry-run  # everything up to and including the builds
+```
 
-   Check both stores -- they drift apart. Play production was on `1.0.5+7`
-   while the App Store was live on `1.0.6+8`. Play version codes are global to
-   the app and must always increase; iOS scopes build numbers to the version
-   string, so a build number may recur under a new version name (which is why
-   `latest_builds` reports the live version string too). Going above the
-   highest number seen anywhere is always safe.
+Before running it, write the "What's New" text to `release_notes/<name>.txt`.
+Plain text, at most 500 characters (Play's limit), and do not name other
+platforms -- Apple's precheck flags "Android" in metadata.
 
-   (A track with no releases fails with `undefined method 'flat_map' for nil`
-   rather than returning empty -- that is a fastlane bug, not a permissions
-   problem.)
+There is no confirmation prompt. The store numbers are printed before the
+builds start, and nothing is uploaded until step 5, so Ctrl-C is safe until
+then; any exit before the first upload restores the tree. A dry run may be
+run from any branch (the `main`/`origin` checks are skipped) but still needs
+both stores' credentials.
 
-2. Bump `version:` in `pubspec.yaml` to **above the highest build number live on
-   any track**. The format is `<name>+<build>`; the build number must strictly
-   increase and is shared across both stores here. Neither store accepts a
-   reused build number.
-3. `flutter analyze && flutter test`
-4. Build and upload:
+The script, in order:
 
-   ```sh
-   cd android && fastlane internal      # or: fastlane production
-   cd ios     && fastlane beta          # or: fastlane release
-   ```
+1. **Preflight.** Clean tree on `main`, exactly in sync with `origin/main`
+   (neither behind nor ahead), `flutter analyze` with no errors (the standing
+   tail of infos and test-file warnings does not block), `flutter test` green. `--skip-tests` skips the suite; use it only when the
+   same tree has just passed it.
+2. **Ask the stores.** `fastlane store_state` (Android: the production, beta,
+   alpha and internal tracks) and `fastlane latest_builds` (iOS: every build
+   ever uploaded) each write `dist/store/<store>.json`. Any App Store Connect
+   error other than "no live version yet" stops the release here. The build
+   number is one above the highest number seen anywhere, including the
+   committed pubspec. **`pubspec.yaml` is never the source of truth for the
+   build number** -- a build uploaded from a working copy leaves no git trace,
+   and production once served `1.0.5+7` while the pubspec said `1.0.5+6`.
+   Play version codes are global to the app; iOS scopes build numbers to the
+   version string. Going above everything is always safe on both, so that is
+   what happens. The name must be above the App Store's live version and not
+   below the committed pubspec, and if App Store Connect already has a
+   *different* version in preparation or review the script refuses to start.
+3. **Write.** `version: <name>+<build>` into `pubspec.yaml`; the notes into
+   `android/fastlane/metadata/android/en-US/changelogs/<build>.txt` and
+   `ios/fastlane/metadata/en-US/release_notes.txt`.
+4. **Build and verify.** `fastlane build` on Android, then iOS. Each lane
+   starts with `flutter clean`, which wipes `build/` for *both* platforms, so
+   each copies its artifact to `dist/<version>/` (gitignored) first. The AAB
+   must be signed by `CN=Coves` and the IPA must carry a distribution profile
+   (`get-task-allow` false) or the script stops here.
+5. **Ship.** `fastlane ship` on each platform, reading from `dist/<version>/`:
+   - Play: production track, `release_status: completed`, 100% rollout, with
+     the changelog. Google's review runs first; the release goes live when it
+     passes.
+   - App Store: uploads the build, pushes the whole text listing from
+     `ios/fastlane/metadata` (not screenshots), creates the version, submits
+     for review, releases automatically on approval, and then checks that the
+     version is actually in a submitted state. Export compliance is answered
+     by `ITSAppUsesNonExemptEncryption` in `Info.plist`. Precheck runs at
+     warning level: its URL rule sends `HEAD` and coves.social answers 405,
+     so it reports the listing links as broken when they are not.
+6. **Record.** Commits `chore(release): <version>` with the pubspec and notes
+   and pushes to `origin`.
 
-   Use `fastlane build` on either platform to produce the artifact without
-   uploading anything.
+If it fails after one store has shipped, the script prints exactly what is
+half-done and how to finish: `cd ios && fastlane ship` if needed, then commit
+`pubspec.yaml` and the two notes files and push. Do not re-run
+`tool/release`; it would pick the next build number and leave the shipped one
+uncommitted. If only the final push failed, the commit is local: push it.
 
-Every lane starts with `flutter clean`, which wipes `build/` for *both*
-platforms. So each `build` lane copies its finished artifact into
-`dist/<version>/` (gitignored) and the upload lanes read from there --
-otherwise building Android and then iOS would leave you holding only the IPA.
+The pre-automation lanes still exist for staging: `android internal`,
+`android production` (draft), `ios beta` (TestFlight), `ios release` (upload
+only). `fastlane build` on either platform produces the artifact without
+uploading.
 
-Both upload lanes deliberately stop short of shipping: Play uploads land as a
-**draft** release and `ios release` passes `submit_for_review: false`. Store
-listing copy, screenshots, "What's New", and the actual submit stay manual
-clicks in the two consoles.
+### Store listings live in the repo
+
+`android/fastlane/metadata` and `ios/fastlane/metadata` hold the listing
+text, and Android's also holds the images; iOS screenshots are managed in App
+Store Connect and are never pushed from here. Both were seeded from the
+consoles. Android's `ship` pushes only the changelog; iOS's `ship` pushes the
+full text listing, so a console-side edit to the iOS listing is overwritten
+on the next release. Edit the files, not the console:
+
+```sh
+cd android && fastlane supply                   # text + images
+cd ios     && fastlane push_metadata            # text, no build
+cd ios     && fastlane pull_metadata            # re-seed from ASC
+cd ios     && fastlane precheck                 # Apple's metadata rules
+```
+
+`ios/fastlane/metadata/review_information/` comes down with `pull_metadata`
+and holds the App Review contact and demo login. It is gitignored; keep it that
+way.
 
 ## Platform notes
 

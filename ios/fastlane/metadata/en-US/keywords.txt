@@ -1,0 +1,1 @@
+forum, aggregator, atproto, reddit, lemmy, community

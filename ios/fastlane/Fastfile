@@ -6,9 +6,16 @@
 #   ASC_KEY_PATH    Path to the downloaded AuthKey_<KEY_ID>.p8
 #
 # Usage:
-#   cd ios && fastlane build     # IPA only, no upload
-#   cd ios && fastlane beta      # build + upload to TestFlight
-#   cd ios && fastlane release   # build + upload to App Store Connect (no submit)
+#   cd ios && fastlane latest_builds   # what ASC knows; writes dist/store/asc.json
+#   cd ios && fastlane build           # IPA only, no upload
+#   cd ios && fastlane beta            # build + upload to TestFlight
+#   cd ios && fastlane release         # build + upload to ASC, no submit
+#   cd ios && fastlane ship            # upload dist/ IPA + notes, submit for review
+#   cd ios && fastlane precheck        # run ASC precheck rules against the listing
+#   cd ios && fastlane pull_metadata   # download the ASC listing into fastlane/metadata
+#   cd ios && fastlane push_metadata   # upload fastlane/metadata text, no build
+#
+# The whole release, both platforms, is driven by tool/release -- see RELEASING.md.
 
 default_platform(:ios)
 
@@ -16,6 +23,8 @@ default_platform(:ios)
 PROJECT_ROOT = File.expand_path("../..", __dir__)
 
 require_relative File.join(PROJECT_ROOT, "tool/fastlane_flutter")
+
+APP_IDENTIFIER = "social.coves"
 
 # NOTE: no --flavor here. The Xcode project only defines Debug/Profile/Release
 # and a single Runner scheme; the Prod-*/Dev-* xcconfigs are not wired into it.
@@ -34,44 +43,54 @@ end
 
 platform :ios do
   desc "Report the build numbers App Store Connect already knows about"
-  desc "Run this before bumping pubspec.yaml -- a build uploaded from a working"
-  desc "copy leaves no git trace, so the pubspec can sit behind the store."
+  desc "Writes dist/store/asc.json for tool/release. A build uploaded from a"
+  desc "working copy leaves no git trace, so the pubspec can sit behind the store."
   lane :latest_builds do
     key = asc_api_key
 
-    fetch = lambda do |live|
-      app_store_build_number(
-        api_key: key,
-        app_identifier: "social.coves",
-        live: live,
-      )
-    rescue StandardError => e
-      # Raises rather than returning nil when the app has no build in that
-      # state at all, which is a legitimate answer for a first release.
-      UI.verbose("app_store_build_number(live: #{live}) failed: #{e.message}")
-      nil
-    end
+    # Anything other than "the app has no live version yet" is a real failure
+    # (expired key, missing agreement, network) and must stop the release
+    # here, before Android has shipped anything.
+    app = Spaceship::ConnectAPI::App.find(APP_IDENTIFIER)
+    UI.user_error!("No app #{APP_IDENTIFIER} on App Store Connect") if app.nil?
+    live_version = app.get_live_app_store_version&.version_string
+    edit_version = app.get_edit_app_store_version&.version_string
 
-    live = fetch.call(true)
-    latest = fetch.call(false)
-    UI.success("Live on the App Store:        #{live || 'none'}")
-    UI.success("Latest seen (incl TestFlight): #{latest || 'none'}")
-
-    # A bare build number is not enough to pick the next one. Apple scopes
-    # CFBundleVersion uniqueness to the CFBundleShortVersionString train, so
-    # "build 8 exists" only blocks us if it exists under the same version
-    # string we are about to ship.
+    live = nil
     begin
-      app = Spaceship::ConnectAPI::App.find("social.coves")
-      live_version = app.get_live_app_store_version
-      UI.success("Live version string:          #{live_version&.version_string || 'none'}")
-      edit_version = app.get_edit_app_store_version
-      UI.success("Version in edit/prepare:      #{edit_version&.version_string || 'none'}")
-    rescue StandardError => e
-      UI.verbose("version lookup failed: #{e.message}")
+      live = app_store_build_number(
+        api_key: key,
+        app_identifier: APP_IDENTIFIER,
+        live: true,
+      )
+    rescue FastlaneCore::Interface::FastlaneError => e
+      raise unless e.message.include?("Could not find a live-version")
+      UI.important(e.message)
     end
 
-    { live: live, latest: latest }
+    # app_store_build_number(live: false) returns the most recently *uploaded*
+    # build, which is not necessarily the highest number. Walk every build
+    # instead; tool/release goes above the highest number seen anywhere.
+    all_builds = app.get_builds(sort: "-uploadedDate")
+    latest = all_builds.map { |b| b.version.to_i }.max
+
+    UI.success("Live on the App Store:        #{live || 'none'}")
+    UI.success("Highest build ever uploaded:  #{latest || 'none'}")
+    # Apple scopes CFBundleVersion uniqueness to the version string, but
+    # tool/release does not exploit that; it only uses live_version to insist
+    # the new name is above what is live, and edit_version to refuse to run
+    # while a *different* version is already in Prepare for Submission.
+    UI.success("Live version string:          #{live_version || 'none'}")
+    UI.success("Version in edit/prepare:      #{edit_version || 'none'}")
+
+    state = {
+      live_build: live,
+      latest_build: latest,
+      live_version: live_version,
+      edit_version: edit_version,
+    }
+    write_store_state(PROJECT_ROOT, "asc", state)
+    state
   end
 
   desc "Build a signed release IPA"
@@ -112,12 +131,107 @@ platform :ios do
     upload_to_app_store(
       api_key: asc_api_key,
       ipa: ipa,
-      # Review submission and metadata stay a deliberate click in the
-      # App Store Connect UI.
       submit_for_review: false,
       skip_metadata: true,
       skip_screenshots: true,
       precheck_include_in_app_purchases: false,
     )
+  end
+
+  desc "Upload the already-built dist/<version>/ IPA, push release notes and"
+  desc "listing text from fastlane/metadata, submit for review, and release"
+  desc "automatically once approved. This is the lane tool/release runs."
+  lane :ship do
+    version = pubspec_version(PROJECT_ROOT)
+    name = version.split("+").first
+    ipa = stashed_artifact(PROJECT_ROOT, version, "*.ipa")
+
+    upload_to_app_store(
+      api_key: asc_api_key,
+      ipa: ipa,
+      app_version: name,
+      # Pushes the whole text listing from fastlane/metadata, not just the
+      # release notes: the repo is the source of truth for listing copy.
+      skip_metadata: false,
+      # iOS screenshots are managed in App Store Connect; nothing in the repo.
+      skip_screenshots: true,
+      # Without this deliver opens an HTML preview and waits for a "y" at the
+      # terminal, which hangs (or, non-interactively, aborts) after Play has
+      # already shipped.
+      force: true,
+      submit_for_review: true,
+      automatic_release: true,
+      phased_release: false,
+      precheck_include_in_app_purchases: false,
+      # Precheck still runs and prints, but does not block the submission:
+      # its URL rule sends HEAD requests and coves.social answers 405 to
+      # those, so "unreachable URL" fires on links that work in a browser.
+      precheck_default_rule_level: :warn,
+      submission_information: {
+        add_id_info_uses_idfa: false,
+        # Info.plist already declares ITSAppUsesNonExemptEncryption=false;
+        # this keeps deliver from asking again.
+        export_compliance_uses_encryption: false,
+      },
+    )
+
+    # deliver can upload the build and metadata and still leave the version
+    # sitting in Prepare for Submission (missing review contact, a rejected
+    # precheck). Trust the state, not the success banner.
+    app = Spaceship::ConnectAPI::App.find(APP_IDENTIFIER)
+    version_record = app.get_edit_app_store_version || app.get_live_app_store_version
+    state = version_record&.app_store_state
+    submitted = %w[WAITING_FOR_REVIEW IN_REVIEW PENDING_DEVELOPER_RELEASE READY_FOR_SALE]
+    unless version_record&.version_string == name && submitted.include?(state)
+      UI.user_error!("#{name} is #{state.inspect} on App Store Connect, not submitted")
+    end
+    UI.success("#{name} build #{version.split('+').last} is #{state} on App Store Connect")
+  end
+
+  desc "Push the text listing in fastlane/metadata to App Store Connect"
+  desc "without a build. iOS screenshots are managed in App Store Connect."
+  lane :push_metadata do
+    upload_to_app_store(
+      api_key: asc_api_key,
+      skip_binary_upload: true,
+      skip_metadata: false,
+      skip_screenshots: true,
+      skip_app_version_update: true,
+      force: true,
+      submit_for_review: false,
+      precheck_include_in_app_purchases: false,
+      precheck_default_rule_level: :warn,
+    )
+  end
+
+  desc "Run App Store precheck rules against the listing without uploading"
+  # Named after the built-in tool on purpose; fastlane runs a lane over a
+  # tool of the same name, and this one carries the API key.
+  lane :precheck do
+    check_app_store_metadata(
+      api_key: asc_api_key,
+      app_identifier: APP_IDENTIFIER,
+      include_in_app_purchases: false,
+    )
+  end
+
+  desc "Download the current App Store listing into fastlane/metadata"
+  lane :pull_metadata do
+    # `deliver download_metadata` is a subcommand, not an action, so it cannot
+    # take the in-memory api_key; hand it the same key as a JSON file.
+    Dir.mktmpdir do |dir|
+      key_json = File.join(dir, "asc_key.json")
+      File.write(key_json, JSON.generate(
+        key_id: ENV.fetch("ASC_KEY_ID"),
+        issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+        key: File.read(ENV.fetch("ASC_KEY_PATH")),
+        in_house: false,
+      ))
+      File.chmod(0o600, key_json)
+      sh("fastlane", "deliver", "download_metadata",
+         "--api_key_path", key_json,
+         "--app_identifier", APP_IDENTIFIER,
+         "--force")
+    end
   end
 end

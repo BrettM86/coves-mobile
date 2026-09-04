@@ -1,0 +1,9 @@
+Coves brings forum-style communities to the Atmosphere — cooperatively run and community-governed.
+
+Find your people. Join the conversation. Build communities that belong to their members, not a corporation.
+
+- Community-governed — Members shape their spaces together
+- Federated & open — Built on AT Protocol, your communities portable
+- Forum-style discussions — Threaded conversations
+
+Open source. No ads. No algorithms deciding what you see.

@@ -7,9 +7,15 @@
 #                                         provided -- see RELEASING.md.
 #
 # Usage:
+#   cd android && fastlane store_state    # highest version code on any track;
+#                                         # writes dist/store/play.json
 #   cd android && fastlane build          # signed AAB only, no upload
 #   cd android && fastlane internal       # build + upload to Internal testing
 #   cd android && fastlane production     # build + upload to Production (draft)
+#   cd android && fastlane ship           # upload dist/ AAB + changelog to
+#                                         # Production and start a 100% rollout
+#
+# The whole release, both platforms, is driven by tool/release -- see RELEASING.md.
 
 default_platform(:android)
 
@@ -24,7 +30,36 @@ AAB_PATH = File.join(
   PROJECT_ROOT, "build/app/outputs/bundle/prodRelease/app-prod-release.aab"
 )
 
+# Play version codes are global to the app, so the next one must exceed the
+# highest code on every track, not just production. These are the four
+# built-in tracks; a custom closed-testing track would need adding here.
+PLAY_TRACKS = %w[production beta alpha internal].freeze
+
 platform :android do
+  desc "Report the highest version code on any Play track"
+  desc "Writes dist/store/play.json for tool/release."
+  lane :store_state do
+    codes = {}
+    PLAY_TRACKS.each do |track|
+      codes[track] = google_play_track_version_codes(track: track)
+    rescue StandardError => e
+      # A track that has never had a release fails inside fastlane (2.231.1)
+      # with `undefined method 'flat_map' for nil` instead of returning [].
+      # Treat that as empty, but surface anything else (auth, network) loudly.
+      # If a newer fastlane returns [] or changes the message, drop this.
+      raise unless e.message.include?("flat_map")
+      UI.important("#{track}: no releases on this track")
+      codes[track] = []
+    end
+    highest = codes.values.flatten.max
+    codes.each { |track, list| UI.message("#{track.ljust(10)} #{list.inspect}") }
+    UI.success("Highest version code on Play: #{highest || 'none'}")
+
+    state = { tracks: codes, highest_version_code: highest }
+    write_store_state(PROJECT_ROOT, "play", state)
+    state
+  end
+
   desc "Build a signed release AAB (prod flavor)"
   lane :build do
     flutter(PROJECT_ROOT, "clean")
@@ -69,5 +104,40 @@ platform :android do
       skip_upload_images: true,
       skip_upload_screenshots: true,
     )
+  end
+
+  desc "Upload the already-built dist/<version>/ AAB to Production with its"
+  desc "changelog and start a full rollout. This is the lane tool/release runs."
+  lane :ship do
+    version = pubspec_version(PROJECT_ROOT)
+    build_number = version.split("+").last
+    aab = stashed_artifact(PROJECT_ROOT, version, "*.aab")
+
+    changelog = File.join(
+      __dir__, "metadata/android/en-US/changelogs/#{build_number}.txt"
+    )
+    unless File.exist?(changelog)
+      UI.user_error!("Missing Play changelog #{changelog} -- tool/release writes it")
+    end
+
+    upload_to_play_store(
+      track: "production",
+      aab: aab,
+      release_status: "completed",
+      rollout: "1",
+      skip_upload_apk: true,
+      # Listing text and images live in fastlane/metadata; push them
+      # deliberately with `fastlane supply` rather than on every release.
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: false,
+    )
+
+    live = google_play_track_version_codes(track: "production")
+    unless live.include?(build_number.to_i)
+      UI.user_error!("Play production does not list #{build_number} after upload: #{live.inspect}")
+    end
+    UI.success("Play production now carries version codes #{live.inspect}")
   end
 end
