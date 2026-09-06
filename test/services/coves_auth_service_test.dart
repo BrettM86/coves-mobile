@@ -173,6 +173,59 @@ void main() {
     });
 
     group('refreshToken()', () {
+      for (final failure in <Object>[
+        Exception('storage unavailable'),
+        StateError('storage unavailable'),
+      ]) {
+        test(
+          'refresh 401 completes all waiters on storage ${failure.runtimeType}',
+          () async {
+            const session = CovesSession(
+              token: 'expired-token',
+              did: 'did:plc:test123',
+              sessionId: 'expired-session',
+            );
+            when(mockStorage.read(key: storageKey))
+                .thenAnswer((_) async => session.toJsonString());
+            await authService.restoreSession();
+            final response = Completer<Response<Map<String, dynamic>>>();
+            when(
+              mockDio.post<Map<String, dynamic>>(
+                '/oauth/refresh',
+                data: anyNamed('data'),
+              ),
+            ).thenAnswer((_) => response.future);
+            when(mockStorage.delete(key: storageKey)).thenThrow(failure);
+            final first = expectLater(
+              authService.refreshToken().timeout(const Duration(seconds: 1)),
+              throwsA(isA<SessionExpiredException>()),
+            );
+            final second = expectLater(
+              authService.refreshToken().timeout(const Duration(seconds: 1)),
+              throwsA(isA<SessionExpiredException>()),
+            );
+            final request = RequestOptions(path: '/oauth/refresh');
+            response.completeError(
+              DioException(
+                requestOptions: request,
+                type: DioExceptionType.badResponse,
+                response: Response<Map<String, dynamic>>(
+                  requestOptions: request,
+                  statusCode: 401,
+                ),
+              ),
+            );
+            await Future.wait([first, second]);
+            expect(authService.session, isNull);
+            expect(authService.isAuthenticated, isFalse);
+            verify(mockStorage.delete(key: storageKey)).called(1);
+            verifyNever(
+              mockDio.post<void>('/oauth/logout', options: anyNamed('options')),
+            );
+          },
+        );
+      }
+
       test('should throw StateError when no session exists', () async {
         // Act & Assert
         expect(() => authService.refreshToken(), throwsA(isA<StateError>()));
@@ -235,48 +288,59 @@ void main() {
         },
       );
 
-      test('should throw "Session expired" on 401 response', () async {
-        // Arrange - First restore a session
-        const session = CovesSession(
-          token: 'old-token',
-          did: 'did:plc:test123',
-          sessionId: 'session-123',
-        );
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => session.toJsonString());
-        await authService.restoreSession();
+      test(
+        'should delete the expired session locally on refresh 401',
+        () async {
+          // Arrange - First restore a session
+          const session = CovesSession(
+            token: 'old-token',
+            did: 'did:plc:test123',
+            sessionId: 'session-123',
+          );
+          when(
+            mockStorage.read(key: storageKey),
+          ).thenAnswer((_) async => session.toJsonString());
+          await authService.restoreSession();
 
-        // Mock 401 response
-        when(
-          mockDio.post<Map<String, dynamic>>(
-            '/oauth/refresh',
-            data: anyNamed('data'),
-          ),
-        ).thenThrow(
-          DioException(
-            requestOptions: RequestOptions(path: '/oauth/refresh'),
-            type: DioExceptionType.badResponse,
-            response: Response(
+          // Mock 401 response
+          when(
+            mockDio.post<Map<String, dynamic>>(
+              '/oauth/refresh',
+              data: anyNamed('data'),
+            ),
+          ).thenThrow(
+            DioException(
               requestOptions: RequestOptions(path: '/oauth/refresh'),
-              statusCode: 401,
+              type: DioExceptionType.badResponse,
+              response: Response(
+                requestOptions: RequestOptions(path: '/oauth/refresh'),
+                statusCode: 401,
+              ),
             ),
-          ),
-        );
+          );
 
-        // Act & Assert - typed so the startup probe can distinguish a dead
-        // session from a transient refresh failure.
-        expect(
-          () => authService.refreshToken(),
-          throwsA(
-            isA<SessionExpiredException>().having(
-              (e) => e.toString(),
-              'message',
-              contains('Session expired'),
+          when(mockStorage.delete(key: storageKey)).thenAnswer((_) async {});
+
+          // Act & Assert - typed so the startup probe can distinguish a dead
+          // session from a transient refresh failure.
+          await expectLater(
+            authService.refreshToken(),
+            throwsA(
+              isA<SessionExpiredException>().having(
+                (e) => e.toString(),
+                'message',
+                contains('Session expired'),
+              ),
             ),
-          ),
-        );
-      });
+          );
+          expect(authService.session, isNull);
+          expect(authService.isAuthenticated, isFalse);
+          verify(mockStorage.delete(key: storageKey)).called(1);
+          verifyNever(
+            mockDio.post<void>('/oauth/logout', options: anyNamed('options')),
+          );
+        },
+      );
 
       test(
         'should discard the refresh result when the session changes while '
@@ -648,6 +712,59 @@ void main() {
 
     group('signOut()', () {
       test(
+        'pending logout blocks new refreshes and shares duplicate sign out',
+        () async {
+          const session = CovesSession(
+            token: 'test-token',
+            did: 'did:plc:test123',
+            sessionId: 'session-123',
+          );
+          when(mockStorage.read(key: storageKey))
+              .thenAnswer((_) async => session.toJsonString());
+          when(mockStorage.delete(key: storageKey)).thenAnswer((_) async {});
+          await authService.restoreSession();
+          final response = Completer<Response<void>>();
+          when(
+            mockDio.post<void>('/oauth/logout', options: anyNamed('options')),
+          ).thenAnswer((_) => response.future);
+          when(
+            mockDio.post<Map<String, dynamic>>(
+              '/oauth/refresh',
+              data: anyNamed('data'),
+            ),
+          ).thenThrow(Exception('unexpected refresh during logout'));
+          final first = authService.signOut();
+          final second = authService.signOut();
+          final refresh = expectLater(
+            authService.refreshToken(),
+            throwsA(anything),
+          );
+          await pumpEventQueue();
+          verifyNever(
+            mockDio.post<Map<String, dynamic>>(
+              '/oauth/refresh',
+              data: anyNamed('data'),
+            ),
+          );
+          response.complete(
+            Response<void>(
+              requestOptions: RequestOptions(path: '/oauth/logout'),
+              statusCode: 200,
+            ),
+          );
+          await Future.wait([first, second, refresh]);
+          expect(authService.session, isNull);
+          verify(
+            mockDio.post<void>('/oauth/logout', options: anyNamed('options')),
+          ).called(1);
+          verify(mockStorage.delete(key: storageKey)).called(1);
+          verifyNever(
+            mockStorage.write(key: storageKey, value: anyNamed('value')),
+          );
+        },
+      );
+
+      test(
         'should wait for an in-flight refresh so sign-out always wins '
         '(no session resurrection)',
         () async {
@@ -753,42 +870,92 @@ void main() {
         },
       );
 
-      test(
-        'should clear local state even when server revocation fails',
-        () async {
-          // Arrange - First restore a session
-          const session = CovesSession(
-            token: 'test-token',
-            did: 'did:plc:test123',
-            sessionId: 'session-123',
-          );
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => session.toJsonString());
-          await authService.restoreSession();
+      for (final failure in ['network', '503', '202', '204', '302']) {
+        test(
+          'retains credentials after logout $failure and clears on retry',
+          () async {
+            const session = CovesSession(
+              token: 'test-token',
+              did: 'did:plc:test123',
+              sessionId: 'session-123',
+            );
+            var storedSession = session.toJsonString();
+            when(
+              mockStorage.read(key: storageKey),
+            ).thenAnswer((_) async => storedSession);
+            when(mockStorage.delete(key: storageKey)).thenAnswer((_) async {
+              storedSession = '';
+            });
+            await authService.restoreSession();
+            final restoredSession = authService.session;
+            final request = RequestOptions(path: '/oauth/logout');
+            if (failure == 'network' || failure == '503') {
+              when(
+                mockDio.post<void>(
+                  '/oauth/logout',
+                  options: anyNamed('options'),
+                ),
+              ).thenThrow(
+                DioException(
+                  requestOptions: request,
+                  type:
+                      failure == 'network'
+                          ? DioExceptionType.connectionError
+                          : DioExceptionType.badResponse,
+                  response:
+                      failure == '503'
+                          ? Response<void>(
+                            requestOptions: request,
+                            statusCode: 503,
+                          )
+                          : null,
+                ),
+              );
+            } else {
+              when(
+                mockDio.post<void>(
+                  '/oauth/logout',
+                  options: anyNamed('options'),
+                ),
+              ).thenAnswer(
+                (_) async => Response<void>(
+                  requestOptions: request,
+                  statusCode: int.parse(failure),
+                ),
+              );
+            }
 
-          // Mock server error
-          when(
-            mockDio.post<void>('/oauth/logout', options: anyNamed('options')),
-          ).thenThrow(
-            DioException(
-              requestOptions: RequestOptions(path: '/oauth/logout'),
-              type: DioExceptionType.connectionError,
-              message: 'Connection failed',
-            ),
-          );
+            await expectLater(authService.signOut(), throwsA(isA<Exception>()));
+            expect(authService.session, same(restoredSession));
+            expect(authService.isAuthenticated, isTrue);
+            expect(storedSession, session.toJsonString());
+            verifyNever(mockStorage.delete(key: storageKey));
 
-          when(mockStorage.delete(key: storageKey)).thenAnswer((_) async => {});
-
-          // Act
-          await authService.signOut();
-
-          // Assert
-          expect(authService.session, isNull);
-          expect(authService.isAuthenticated, isFalse);
-          verify(mockStorage.delete(key: storageKey)).called(1);
-        },
-      );
+            when(
+              mockDio.post<void>('/oauth/logout', options: anyNamed('options')),
+            ).thenAnswer(
+              (_) async =>
+                  Response<void>(requestOptions: request, statusCode: 200),
+            );
+            await authService.signOut();
+            expect(authService.session, isNull);
+            expect(authService.isAuthenticated, isFalse);
+            expect(storedSession, isEmpty);
+            verify(mockStorage.delete(key: storageKey)).called(1);
+            final options =
+                verify(
+                  mockDio.post<void>(
+                    '/oauth/logout',
+                    options: captureAnyNamed('options'),
+                  ),
+                ).captured;
+            expect(options, hasLength(2));
+            for (final option in options.cast<Options>()) {
+              expect(option.headers?['Authorization'], 'Bearer test-token');
+            }
+          },
+        );
+      }
 
       test('should work even when no session exists', () async {
         // Arrange

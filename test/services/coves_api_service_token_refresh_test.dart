@@ -1,3 +1,4 @@
+import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -148,16 +149,54 @@ void main() {
     // a previous test here claimed to cover it but only duplicated the
     // refresh-failure scenario above without driving that path.
 
-    test(
-      'should NOT sign out when token refresh throws exception',
-      () async {
-        // Skipped: causes retry loops with http_mock_adapter after disposal.
-        // The contract (refresher owns the sign-out decision; an exception
-        // here must not sign out) is covered by the "should NOT sign out
-        // here when token refresh fails" test above.
-      },
-      skip: 'Causes retry issues with http_mock_adapter',
-    );
+    test('should NOT sign out when token refresh throws exception', () async {
+      final throwingDio = Dio(
+        BaseOptions(baseUrl: 'https://api.test.coves.social'),
+      );
+      final throwingAdapter = DioAdapter(dio: throwingDio);
+      var requestCount = 0;
+      throwingDio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            requestCount++;
+            handler.next(options);
+          },
+        ),
+      );
+      final throwingApiService = CovesApiService(
+        dio: throwingDio,
+        tokenGetter: mockTokenGetter,
+        tokenRefresher: () async {
+          tokenRefreshCallCount++;
+          throw Exception('Refresh connection failed');
+        },
+        signOutHandler: mockSignOutHandler,
+      );
+      addTearDown(throwingApiService.dispose);
+      const postUri = 'at://did:plc:test/social.coves.post.record/123';
+      throwingAdapter.onGet(
+        '/xrpc/social.coves.community.comment.getComments',
+        (server) => server.reply(401, {'error': 'Unauthorized'}),
+        queryParameters: {
+          'post': postUri,
+          'sort': 'hot',
+          'depth': 10,
+          'limit': 50,
+        },
+      );
+
+      await expectLater(
+        throwingApiService
+            .getComments(postUri: postUri)
+            .timeout(const Duration(seconds: 5)),
+        throwsA(isA<AuthenticationException>()),
+      );
+
+      expect(requestCount, 1);
+      expect(tokenRefreshCallCount, 1);
+      expect(signOutCallCount, 0);
+      expect(currentToken, 'initial-token');
+    });
 
     test(
       'should handle 401 gracefully when no refresher is provided',

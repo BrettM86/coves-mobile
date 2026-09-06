@@ -122,6 +122,9 @@ class CovesAuthService {
   // Ensures only one refresh happens at a time, even with concurrent calls
   Completer<CovesSession>? _refreshCompleter;
 
+  // Share logout attempts and keep new refreshes behind their outcome.
+  Completer<void>? _signOutCompleter;
+
   /// Get the current session (if any)
   CovesSession? get session => _session;
 
@@ -381,8 +384,15 @@ class CovesAuthService {
   /// will all wait for and receive the same refreshed session.
   ///
   /// Returns the updated session on success.
-  /// Throws on error (caller should handle by signing out).
+  /// Transient failures retain credentials. [SessionExpiredException] means
+  /// the rejected session has been invalidated locally.
   Future<CovesSession> refreshToken() async {
+    final pendingSignOut = _signOutCompleter;
+    if (pendingSignOut != null) {
+      await pendingSignOut.future;
+      throw const SessionRefreshDiscardedException();
+    }
+
     if (_session == null) {
       throw StateError('No session to refresh');
     }
@@ -467,11 +477,19 @@ class CovesAuthService {
         return _refreshCompleter!.future;
       }
 
-      // 401 means session is invalid/expired - caller should sign out.
-      // Typed so callers can distinguish "definitively dead" from transient
-      // refresh failures (which must NOT destroy the session on the
-      // startup-validation path).
+      // A definitive rejection needs local cleanup, not another network
+      // logout request. Transient failures below preserve the session.
       if (e.response?.statusCode == 401) {
+        _session = null;
+        try {
+          await _clearSession();
+          // Plugin errors must not strand callers awaiting the shared refresh.
+          // ignore: avoid_catches_without_on_clauses
+        } catch (_) {
+          if (kDebugMode) {
+            print('Failed to remove expired session from secure storage');
+          }
+        }
         const error = SessionExpiredException();
         _refreshCompleter!.completeError(error);
         // Return the future to rethrow the error (don't throw directly)
@@ -539,58 +557,51 @@ class CovesAuthService {
     }
   }
 
-  /// Sign out and revoke the session
-  ///
-  /// Calls the backend's /oauth/logout endpoint to revoke the session.
-  /// The backend handles token revocation with the PDS.
-  /// Always clears local storage even if server call fails.
+  /// Revoke the server session before clearing local credentials.
+  /// Failures preserve the session so the user can retry.
   Future<void> signOut() async {
-    // Serialize against any in-flight token refresh: the refresh's save must
-    // land before this method's storage delete, or a refresh resolving after
-    // sign-out would write a live token back to secure storage and resurrect
-    // the session on the next cold start.
-    if (_refreshCompleter != null) {
-      try {
-        await _refreshCompleter!.future;
-      } on Exception {
-        // The refresh failing changes nothing about signing out.
-      }
+    if (_signOutCompleter != null) {
+      return _signOutCompleter!.future;
     }
-
+    final completer = Completer<void>();
+    _signOutCompleter = completer;
     try {
-      if (_session != null) {
-        if (kDebugMode) {
-          print('Signing out...');
-        }
-
-        // Best-effort server-side revocation
+      // A refresh already in flight must finish before credentials are deleted.
+      if (_refreshCompleter != null) {
         try {
-          await _dio!.post<void>(
-            '/oauth/logout',
-            options: Options(
-              headers: {'Authorization': 'Bearer ${_session!.token}'},
-            ),
-          );
-
-          if (kDebugMode) {
-            print('Server-side logout successful');
-          }
-        } on DioException catch (e) {
-          // Log but don't fail - we still want to clear local state
-          if (kDebugMode) {
-            print('Server-side logout failed: ${e.message}');
-          }
+          await _refreshCompleter!.future;
+        } on SessionExpiredException {
+          // Expiry cleanup already ran; no further request is needed.
+          completer.complete();
+          return await completer.future;
+        } on Exception {
+          // A transient refresh failure allows logout with the old token.
         }
       }
-    } finally {
-      // Always clear local state
+
+      if (_session != null) {
+        final response = await _dio!.post<void>(
+          '/oauth/logout',
+          options: Options(
+            headers: {'Authorization': 'Bearer ${_session!.token}'},
+          ),
+        );
+        if (response.statusCode != 200) {
+          throw Exception('Server did not confirm sign-out');
+        }
+      }
+
       await _clearSession();
       _session = null;
-
-      if (kDebugMode) {
-        print('Local session cleared');
-      }
+      completer.complete();
+      // All waiters must finish even if a plugin throws an Error.
+      // ignore: avoid_catches_without_on_clauses
+    } catch (error, stackTrace) {
+      completer.completeError(error, stackTrace);
+    } finally {
+      _signOutCompleter = null;
     }
+    return completer.future;
   }
 
   /// Get the current access token

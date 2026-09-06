@@ -259,7 +259,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // Check mounted after async gap
     if (!mounted) return;
 
-    // Navigate to login screen
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    if (authProvider.isAuthenticated) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Text("Couldn't sign out. Please try again."),
+          action: SnackBarAction(label: 'Retry', onPressed: _handleSignOut),
+        ),
+      );
+      return;
+    }
+
     context.go('/login');
   }
 

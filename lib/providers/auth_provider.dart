@@ -158,8 +158,8 @@ class AuthProvider with ChangeNotifier {
           print('Restored session refreshed after rejected probe');
         }
       } on SessionExpiredException {
-        // Definitively dead - force the signed-out state.
-        await signOut();
+        // The service already removed the expired credentials locally.
+        _clearExpiredSessionState();
       } on SessionRefreshDiscardedException {
         // Sign-out or re-login raced the refresh; nothing to do.
       } on Exception catch (e) {
@@ -258,15 +258,10 @@ class AuthProvider with ChangeNotifier {
       if (kDebugMode) {
         print('Successfully signed out');
       }
-    } on Exception catch (e) {
-      _error = e.toString();
-      if (kDebugMode) {
-        print('Sign out failed: $e');
-      }
-
-      // Even if server revocation fails, clear local state
-      _session = null;
-      _isAuthenticated = false;
+    } on Object {
+      // This UI boundary also handles storage-plugin Errors. Keep the session
+      // available for another revocation attempt without exposing raw errors.
+      _error = "Couldn't sign out. Please try again.";
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -313,7 +308,7 @@ class AuthProvider with ChangeNotifier {
       if (kDebugMode) {
         print('Session expired - signing out');
       }
-      await signOut();
+      _clearExpiredSessionState();
       return false;
     } on Exception catch (e) {
       // Transient failure (network drop, timeout, 5xx): the session may
@@ -324,6 +319,14 @@ class AuthProvider with ChangeNotifier {
       }
       return false;
     }
+  }
+
+  // Only called after a definitive refresh rejection; never for network errors.
+  void _clearExpiredSessionState() {
+    _session = null;
+    _isAuthenticated = false;
+    _error = null;
+    notifyListeners();
   }
 
   /// Clear error message

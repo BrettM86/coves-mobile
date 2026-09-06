@@ -168,7 +168,7 @@ void main() {
           // instead of silently degrading to anonymous browsing.
           expect(authProvider.isAuthenticated, false);
           expect(authProvider.session, isNull);
-          verify(mockAuthService.signOut()).called(1);
+          verifyNever(mockAuthService.signOut());
         },
       );
 
@@ -372,30 +372,45 @@ void main() {
         expect(authProvider.handle, null);
       });
 
-      test('should clear state even if server revocation fails', () async {
-        // Sign in first
-        const mockSession = CovesSession(
-          token: 'mock_sealed_token',
-          did: 'did:plc:test123',
-          sessionId: 'session123',
-          handle: 'alice.bsky.social',
-        );
-        when(
-          mockAuthService.signIn('alice.bsky.social'),
-        ).thenAnswer((_) async => mockSession);
+      for (final failure in <Object>[
+        Exception('Revocation failed'),
+        StateError('Plugin failed'),
+      ]) {
+        test('retains state and allows retry after ${failure.runtimeType}',
+            () async {
+          // Sign in first
+          const mockSession = CovesSession(
+            token: 'mock_sealed_token',
+            did: 'did:plc:test123',
+            sessionId: 'session123',
+            handle: 'alice.bsky.social',
+          );
+          when(
+            mockAuthService.signIn('alice.bsky.social'),
+          ).thenAnswer((_) async => mockSession);
 
-        await authProvider.signIn('alice.bsky.social');
+          await authProvider.signIn('alice.bsky.social');
 
-        // Sign out with error
-        when(
-          mockAuthService.signOut(),
-        ).thenThrow(Exception('Revocation failed'));
+          // Sign out with error
+          when(
+            mockAuthService.signOut(),
+          ).thenThrow(failure);
 
-        await authProvider.signOut();
+          await authProvider.signOut();
 
-        expect(authProvider.isAuthenticated, false);
-        expect(authProvider.session, null);
-      });
+          expect(authProvider.isAuthenticated, true);
+          expect(authProvider.session, mockSession);
+          expect(authProvider.error, "Couldn't sign out. Please try again.");
+          expect(authProvider.isLoading, false);
+
+          when(mockAuthService.signOut()).thenAnswer((_) async {});
+          await authProvider.signOut();
+          expect(authProvider.isAuthenticated, false);
+          expect(authProvider.session, isNull);
+          expect(authProvider.error, isNull);
+          expect(authProvider.isLoading, false);
+        });
+      }
     });
 
     group('getAccessToken', () {
@@ -477,7 +492,7 @@ void main() {
 
           expect(result, false);
           expect(authProvider.isAuthenticated, false);
-          verify(mockAuthService.signOut()).called(1);
+          verifyNever(mockAuthService.signOut());
         },
       );
 
