@@ -15,45 +15,42 @@ import 'models/community.dart';
 import 'models/post.dart';
 import 'providers/auth_provider.dart';
 import 'providers/block_provider.dart';
-import 'providers/community_subscription_provider.dart';
 import 'providers/community_guidelines_provider.dart';
+import 'providers/community_subscription_provider.dart';
 import 'providers/eula_provider.dart';
 import 'providers/multi_feed_provider.dart';
 import 'providers/user_profile_provider.dart';
 import 'providers/vote_provider.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/community/community_feed_screen.dart';
 import 'screens/community_guidelines_screen.dart';
 import 'screens/eula_screen.dart';
-import 'screens/community/community_feed_screen.dart';
 import 'screens/home/main_shell_screen.dart';
 import 'screens/home/post_detail_loader.dart';
 import 'screens/home/post_detail_screen.dart';
 import 'screens/home/profile_screen.dart';
 import 'screens/landing_screen.dart';
-import 'widgets/icons/lucide_paths.dart';
 import 'services/comment_service.dart';
 import 'services/comments_provider_cache.dart';
 import 'services/coves_api_service.dart';
 import 'services/streamable_service.dart';
 import 'services/viewer_state_hydrator.dart';
 import 'services/vote_service.dart';
+import 'widgets/icons/lucide_paths.dart';
 import 'widgets/loading_error_states.dart';
 
 Future<void> main() async {
   await SentryFlutter.init(
     (options) {
-      // TODO: Replace with your actual Sentry DSN from sentry.io
-      options.dsn = const String.fromEnvironment(
-        'SENTRY_DSN',
-        defaultValue: '',
-      );
-      options.tracesSampleRate = kDebugMode ? 1.0 : 0.2;
-      options.environment = kDebugMode ? 'development' : 'production';
-      options.sendDefaultPii = false;
-      options.attachScreenshot = true;
-      // Kept from sentry 8.x; the API is flagged experimental in 9.x.
-      // ignore: experimental_member_use
-      options.attachViewHierarchy = true;
+      options
+        ..dsn = const String.fromEnvironment('SENTRY_DSN')
+        ..tracesSampleRate = kDebugMode ? 1.0 : 0.2
+        ..environment = kDebugMode ? 'development' : 'production'
+        ..sendDefaultPii = false
+        ..attachScreenshot = true
+        // Kept from sentry 8.x; the API is flagged experimental in 9.x.
+        // ignore: experimental_member_use
+        ..attachViewHierarchy = true;
     },
     appRunner: () async {
       WidgetsFlutterBinding.ensureInitialized();
@@ -164,27 +161,20 @@ Future<Widget> bootstrapCovesApp() async {
       ChangeNotifierProvider.value(value: eulaProvider),
       ChangeNotifierProvider.value(value: communityGuidelinesProvider),
       ChangeNotifierProvider(
-        create:
-            (_) => VoteProvider(
-              voteService: voteService,
-              authProvider: authProvider,
-            ),
+        create: (_) =>
+            VoteProvider(voteService: voteService, authProvider: authProvider),
       ),
       // Expose the shared API client so screens/widgets can context.read it
       Provider<CovesApiService>.value(value: apiService),
       ChangeNotifierProvider(
-        create:
-            (_) => CommunitySubscriptionProvider(
-              authProvider: authProvider,
-              apiService: apiService,
-            ),
+        create: (_) => CommunitySubscriptionProvider(
+          authProvider: authProvider,
+          apiService: apiService,
+        ),
       ),
       ChangeNotifierProvider(
-        create:
-            (_) => BlockProvider(
-              apiService: apiService,
-              authProvider: authProvider,
-            ),
+        create: (_) =>
+            BlockProvider(apiService: apiService, authProvider: authProvider),
       ),
       // One hydrator for every fetch path that seeds viewer state (votes,
       // community subscriptions) from a response.
@@ -199,13 +189,11 @@ Future<Widget> bootstrapCovesApp() async {
       // UserProfileProvider's update forwards it to updateAuthProvider,
       // which rebinds its hydrator.)
       Provider<ViewerStateHydrator>(
-        create:
-            (context) => ViewerStateHydrator(
-              authProvider: authProvider,
-              voteProvider: context.read<VoteProvider>(),
-              subscriptionProvider:
-                  context.read<CommunitySubscriptionProvider>(),
-            ),
+        create: (context) => ViewerStateHydrator(
+          authProvider: authProvider,
+          voteProvider: context.read<VoteProvider>(),
+          subscriptionProvider: context.read<CommunitySubscriptionProvider>(),
+        ),
       ),
       ChangeNotifierProxyProvider3<
         AuthProvider,
@@ -213,12 +201,11 @@ Future<Widget> bootstrapCovesApp() async {
         CommunitySubscriptionProvider,
         MultiFeedProvider
       >(
-        create:
-            (context) => MultiFeedProvider(
-              authProvider,
-              apiService: apiService,
-              hydrator: context.read<ViewerStateHydrator>(),
-            ),
+        create: (context) => MultiFeedProvider(
+          authProvider,
+          apiService: apiService,
+          hydrator: context.read<ViewerStateHydrator>(),
+        ),
         update: (context, auth, vote, subscription, previous) {
           // Reuse existing provider to maintain state across rebuilds
           return previous ??
@@ -232,14 +219,13 @@ Future<Widget> bootstrapCovesApp() async {
       // CommentsProviderCache manages per-post CommentsProvider instances
       // with LRU eviction and sign-out cleanup
       ProxyProvider2<AuthProvider, VoteProvider, CommentsProviderCache>(
-        create:
-            (context) => CommentsProviderCache(
-              authProvider: authProvider,
-              voteProvider: context.read<VoteProvider>(),
-              commentService: commentService,
-              apiService: apiService,
-              hydrator: context.read<ViewerStateHydrator>(),
-            ),
+        create: (context) => CommentsProviderCache(
+          authProvider: authProvider,
+          voteProvider: context.read<VoteProvider>(),
+          commentService: commentService,
+          apiService: apiService,
+          hydrator: context.read<ViewerStateHydrator>(),
+        ),
         update: (context, auth, vote, previous) {
           // Reuse existing cache
           return previous ??
@@ -261,17 +247,16 @@ Future<Widget> bootstrapCovesApp() async {
         VoteProvider,
         UserProfileProvider
       >(
-        create:
-            (context) => UserProfileProvider(
-              authProvider,
-              apiService: apiService,
-              commentService: commentService,
-              // Fully wired, subscriptions included: this surface calls
-              // hydrateFeedVotesOnly, so "profile posts never seed
-              // subscriptions" is a property of the call, not of a missing
-              // provider.
-              hydrator: context.read<ViewerStateHydrator>(),
-            ),
+        create: (context) => UserProfileProvider(
+          authProvider,
+          apiService: apiService,
+          commentService: commentService,
+          // Fully wired, subscriptions included: this surface calls
+          // hydrateFeedVotesOnly, so "profile posts never seed
+          // subscriptions" is a property of the call, not of a missing
+          // provider.
+          hydrator: context.read<ViewerStateHydrator>(),
+        ),
         update: (context, auth, vote, previous) {
           // The shared apiService/commentService auth callbacks are bound
           // to the bootstrap AuthProvider instance; a different instance
@@ -454,7 +439,8 @@ GoRouter createRouter(
         return '/community-guidelines';
       }
 
-      // Prevent navigating to acceptance screens in accept mode after already accepting
+      // Prevent navigating to acceptance screens in accept mode after
+      // already accepting
       final isViewOnly = state.uri.queryParameters['viewOnly'] == 'true';
       if (!isViewOnly) {
         if (eulaAccepted && currentPath == '/eula') {
@@ -464,6 +450,14 @@ GoRouter createRouter(
         if (guidelinesAccepted && currentPath == '/community-guidelines') {
           return '/';
         }
+      }
+
+      // Native web authentication owns the callback payload. Flutter can also
+      // deliver its URL to the router; keep a valid screen while authentication
+      // completes.
+      if (state.uri.scheme == OAuthConfig.customScheme &&
+          currentPath == '/callback') {
+        return isAuthenticated ? '/feed' : '/login';
       }
 
       // If authenticated and on landing/login screen, redirect to feed
@@ -479,23 +473,9 @@ GoRouter createRouter(
       return null;
     },
     errorBuilder: (context, state) {
-      // Check if this is an OAuth callback
-      if (state.uri.scheme == OAuthConfig.customScheme) {
-        if (kDebugMode) {
-          print(
-            '⚠️ OAuth callback in errorBuilder - '
-            'flutter_web_auth_2 should handle it',
-          );
-          print('   URI: ${state.uri}');
-        }
-        // Return nothing - just stay on current screen
-        // flutter_web_auth_2 will process the callback at native level
-        return const SizedBox.shrink();
-      }
-
       // For other errors, show landing page
       if (kDebugMode) {
-        print('⚠️ Router error: ${state.uri}');
+        print('⚠️ Router could not resolve the requested route');
       }
       return const LandingScreen();
     },

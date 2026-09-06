@@ -130,7 +130,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     // Use a debounce to avoid false positives during keyboard animations
     if (_lastKeyboardHeight > 0 && keyboardHeight == 0) {
       Future.delayed(const Duration(milliseconds: 100), () {
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
         final currentHeight = View.of(context).viewInsets.bottom;
         // Only unfocus if keyboard is still closed after delay
         if (currentHeight == 0) {
@@ -198,10 +200,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
         embed = ExternalEmbedInput(
           uri: url,
-          title:
-              _titleController.text.trim().isNotEmpty
-                  ? _titleController.text.trim()
-                  : null,
+          title: _titleController.text.trim().isNotEmpty
+              ? _titleController.text.trim()
+              : null,
         );
       }
 
@@ -213,18 +214,16 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
       // Detect link facets in the body content
       final bodyContent = _bodyController.text.trim();
-      final facets =
-          bodyContent.isNotEmpty
-              ? FacetDetector.detectLinks(bodyContent)
-              : null;
+      final facets = bodyContent.isNotEmpty
+          ? FacetDetector.detectLinks(bodyContent)
+          : null;
 
       // Create post
       final response = await apiService.createPost(
         community: _selectedCommunity!.did,
-        title:
-            _titleController.text.trim().isNotEmpty
-                ? _titleController.text.trim()
-                : null,
+        title: _titleController.text.trim().isNotEmpty
+            ? _titleController.text.trim()
+            : null,
         content: bodyContent.isNotEmpty ? bodyContent : null,
         facets: facets,
         embed: embed,
@@ -246,9 +245,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder:
-                (context) =>
-                    PostDetailScreen(post: optimisticPost, isOptimistic: true),
+            builder: (context) =>
+                PostDetailScreen(post: optimisticPost, isOptimistic: true),
           ),
         );
       }
@@ -309,10 +307,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         type: EmbedTypes.external,
         external: ExternalEmbed(
           uri: url,
-          title:
-              _titleController.text.trim().isNotEmpty
-                  ? _titleController.text.trim()
-                  : null,
+          title: _titleController.text.trim().isNotEmpty
+              ? _titleController.text.trim()
+              : null,
         ),
         data: {
           r'$type': EmbedTypes.external,
@@ -335,8 +332,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         author: AuthorView(
           did: authProvider.did ?? '',
           handle: authProvider.handle ?? 'unknown',
-          displayName: null,
-          avatar: null,
         ),
         community: CommunityRef(
           did: _selectedCommunity!.did,
@@ -349,10 +344,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         indexedAt: now,
         record: PostRecord(
           content: _bodyController.text.trim(),
-          title:
-              _titleController.text.trim().isNotEmpty
-                  ? _titleController.text.trim()
-                  : null,
+          title: _titleController.text.trim().isNotEmpty
+              ? _titleController.text.trim()
+              : null,
         ),
         stats: PostStats(upvotes: 0, downvotes: 0, score: 0, commentCount: 0),
         embed: embed,
@@ -397,10 +391,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
             child: TextButton(
               onPressed: _isFormValid && !_isSubmitting ? _handleSubmit : null,
               style: TextButton.styleFrom(
-                backgroundColor:
-                    _isFormValid && !_isSubmitting
-                        ? AppColors.primary
-                        : AppColors.textSecondary.withValues(alpha: 0.3),
+                backgroundColor: _isFormValid && !_isSubmitting
+                    ? AppColors.primary
+                    : AppColors.textSecondary.withValues(alpha: 0.3),
                 foregroundColor: AppColors.textPrimary,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -410,19 +403,18 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
-              child:
-                  _isSubmitting
-                      ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            AppColors.textPrimary,
-                          ),
+              child: _isSubmitting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AppColors.textPrimary,
                         ),
-                      )
-                      : const Text('Post'),
+                      ),
+                    )
+                  : const Text('Post'),
             ),
           ),
         ],
@@ -475,7 +467,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                 focusNode: _bodyFocusNode,
                 hintText: 'What are your thoughts?',
                 minLines: 8,
-                maxLines: null,
                 maxLength: kContentMaxLength,
               ),
 
@@ -529,10 +520,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
                       _selectedCommunity?.name ??
                       'Select a community',
                   style: TextStyle(
-                    color:
-                        _selectedCommunity != null
-                            ? AppColors.textPrimary
-                            : AppColors.textSecondary,
+                    color: _selectedCommunity != null
+                        ? AppColors.textPrimary
+                        : AppColors.textSecondary,
                     fontSize: 16,
                   ),
                   maxLines: 1,
@@ -634,13 +624,12 @@ class _CreatePostScreenState extends State<CreatePostScreen>
             Icons.arrow_drop_down,
             color: AppColors.textSecondary,
           ),
-          items:
-              languages.entries.map((entry) {
-                return DropdownMenuItem<String>(
-                  value: entry.key,
-                  child: Text(entry.value),
-                );
-              }).toList(),
+          items: languages.entries.map((entry) {
+            return DropdownMenuItem<String>(
+              value: entry.key,
+              child: Text(entry.value),
+            );
+          }).toList(),
           onChanged: (value) {
             if (value != null) {
               setState(() {

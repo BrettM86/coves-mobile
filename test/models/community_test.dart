@@ -32,10 +32,7 @@ void main() {
     });
 
     test('should handle null communities array', () {
-      final json = {
-        'communities': null,
-        'cursor': null,
-      };
+      final json = {'communities': null, 'cursor': null};
 
       final response = CommunitiesResponse.fromJson(json);
 
@@ -44,10 +41,7 @@ void main() {
     });
 
     test('should handle empty communities array', () {
-      final json = {
-        'communities': [],
-        'cursor': null,
-      };
+      final json = {'communities': [], 'cursor': null};
 
       final response = CommunitiesResponse.fromJson(json);
 
@@ -58,10 +52,7 @@ void main() {
     test('should parse without cursor', () {
       final json = {
         'communities': [
-          {
-            'did': 'did:plc:community1',
-            'name': 'test-community',
-          },
+          {'did': 'did:plc:community1', 'name': 'test-community'},
         ],
       };
 
@@ -116,10 +107,7 @@ void main() {
         'subscriberCount': 1000,
         'memberCount': 500,
         'postCount': 2500,
-        'viewer': {
-          'subscribed': true,
-          'member': false,
-        },
+        'viewer': {'subscribed': true, 'member': false},
       };
 
       final community = CommunityView.fromJson(json);
@@ -141,10 +129,7 @@ void main() {
     });
 
     test('should parse minimal JSON with required fields only', () {
-      final json = {
-        'did': 'did:plc:community1',
-        'name': 'test-community',
-      };
+      final json = {'did': 'did:plc:community1', 'name': 'test-community'};
 
       final community = CommunityView.fromJson(json);
 
@@ -214,10 +199,7 @@ void main() {
 
   group('CommunityViewerState', () {
     test('should parse with all fields', () {
-      final json = {
-        'subscribed': true,
-        'member': true,
-      };
+      final json = {'subscribed': true, 'member': true};
 
       final viewer = CommunityViewerState.fromJson(json);
 
@@ -226,10 +208,7 @@ void main() {
     });
 
     test('should parse with false values', () {
-      final json = {
-        'subscribed': false,
-        'member': false,
-      };
+      final json = {'subscribed': false, 'member': false};
 
       final viewer = CommunityViewerState.fromJson(json);
 
@@ -238,10 +217,7 @@ void main() {
     });
 
     test('should handle null values', () {
-      final json = {
-        'subscribed': null,
-        'member': null,
-      };
+      final json = {'subscribed': null, 'member': null};
 
       final viewer = CommunityViewerState.fromJson(json);
 
@@ -300,9 +276,7 @@ void main() {
     });
 
     test('should serialize minimal JSON with only required fields', () {
-      final embed = ExternalEmbedInput(
-        uri: 'https://example.com/article',
-      );
+      final embed = ExternalEmbedInput(uri: 'https://example.com/article');
 
       final json = embed.toJson();
 
@@ -419,9 +393,7 @@ void main() {
     });
 
     test('should be const constructible', () {
-      const labels = SelfLabels(
-        values: [SelfLabel(val: 'nsfw')],
-      );
+      const labels = SelfLabels(values: [SelfLabel(val: 'nsfw')]);
 
       expect(labels.values.length, 1);
       expect(labels.values[0].val, 'nsfw');
@@ -469,9 +441,7 @@ void main() {
     });
 
     test('should serialize minimal request with only required fields', () {
-      final request = CreatePostRequest(
-        community: 'did:plc:community1',
-      );
+      final request = CreatePostRequest(community: 'did:plc:community1');
 
       final json = request.toJson();
 

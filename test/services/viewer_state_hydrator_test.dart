@@ -236,18 +236,16 @@ void main() {
     });
 
     test('hydrateCommunityListSubscriptions seeds each community', () {
-      buildHydrator(
-        authenticated: true,
-      ).hydrateCommunityListSubscriptions(communities);
+      buildHydrator(authenticated: true)
+          .hydrateCommunityListSubscriptions(communities);
 
       expect(subscriptions.seeds, [(did: communityDid, subscribed: true)]);
       verifyZeroInteractions(mockVoteProvider);
     });
 
     test('hydrateCommunitySubscription seeds the single community', () {
-      buildHydrator(
-        authenticated: true,
-      ).hydrateCommunitySubscription(buildCommunity());
+      buildHydrator(authenticated: true)
+          .hydrateCommunitySubscription(buildCommunity());
 
       expect(subscriptions.seeds, [(did: communityDid, subscribed: true)]);
       verifyZeroInteractions(mockVoteProvider);

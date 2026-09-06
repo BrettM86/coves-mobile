@@ -147,11 +147,9 @@ void main() {
 
     test('maps by status code regardless of DioExceptionType', () {
       final exception = ApiException.fromDioError(
-        responseError(
-          401,
-          {'message': 'Token expired'},
-          type: DioExceptionType.unknown,
-        ),
+        responseError(401, {
+          'message': 'Token expired',
+        }, type: DioExceptionType.unknown),
       );
 
       expect(exception, isA<AuthenticationException>());
@@ -170,6 +168,20 @@ void main() {
         expect(exception, isA<NetworkException>());
         expect(exception.message, contains('timeout'));
       }
+    });
+
+    test('maps transformation timeout to a response processing error', () {
+      final error = DioException.transformTimeout(
+        timeout: const Duration(seconds: 5),
+        requestOptions: RequestOptions(path: '/test'),
+      );
+
+      final exception = ApiException.fromDioError(error);
+
+      expect(exception, isA<ApiException>());
+      expect(exception, isNot(isA<NetworkException>()));
+      expect(exception.message, 'Timed out processing server response');
+      expect(exception.originalError, same(error));
     });
 
     test('maps connection errors to NetworkException', () {
@@ -223,8 +235,7 @@ void main() {
       expect(exception.message, contains('cancelled'));
     });
 
-    test('maps unknown errors wrapping an IOException to NetworkException',
-        () {
+    test('maps unknown errors wrapping an IOException to NetworkException', () {
       final exception = ApiException.fromDioError(
         DioException(
           requestOptions: RequestOptions(path: '/test'),
@@ -236,8 +247,7 @@ void main() {
       expect(exception.message, contains('Network error'));
     });
 
-    test(
-        'maps unknown errors wrapping a FormatException to a parse '
+    test('maps unknown errors wrapping a FormatException to a parse '
         'ApiException, not a network error', () {
       // A truncated 200 body must not tell the user to check their
       // connection.

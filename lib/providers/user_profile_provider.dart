@@ -26,13 +26,11 @@ import 'vote_provider.dart';
 class UserProfileProvider with ChangeNotifier {
   UserProfileProvider(
     AuthProvider authProvider, {
-    required CovesApiService apiService,
-    required CommentService commentService,
+    required this._apiService,
+    required this._commentService,
     VoteProvider? voteProvider,
     ViewerStateHydrator? hydrator,
   }) : _authProvider = authProvider,
-       _apiService = apiService,
-       _commentService = commentService,
        _hydrator =
            hydrator ??
            ViewerStateHydrator(
@@ -139,10 +137,10 @@ class UserProfileProvider with ChangeNotifier {
     final did = profile.did;
 
     // Remove from current position in access order
-    _cacheAccessOrder.remove(did);
-
-    // Add to end (most recently used)
-    _cacheAccessOrder.add(did);
+    _cacheAccessOrder
+      ..remove(did)
+      // Add to end (most recently used)
+      ..add(did);
     _profileCache[did] = profile;
 
     // Evict oldest entries if over capacity
@@ -157,8 +155,9 @@ class UserProfileProvider with ChangeNotifier {
     final profile = _profileCache[did];
     if (profile != null) {
       // Update access order (move to end)
-      _cacheAccessOrder.remove(did);
-      _cacheAccessOrder.add(did);
+      _cacheAccessOrder
+        ..remove(did)
+        ..add(did);
     }
     return profile;
   }
@@ -173,7 +172,9 @@ class UserProfileProvider with ChangeNotifier {
 
   /// Check if currently viewing own profile
   bool get isOwnProfile {
-    if (_currentProfileDid == null) return false;
+    if (_currentProfileDid == null) {
+      return false;
+    }
     return _currentProfileDid == _authProvider.did;
   }
 
@@ -209,7 +210,9 @@ class UserProfileProvider with ChangeNotifier {
       return;
     }
 
-    if (_isLoadingProfile) return;
+    if (_isLoadingProfile) {
+      return;
+    }
 
     _isLoadingProfile = true;
     _profileError = null;
@@ -315,7 +318,7 @@ class UserProfileProvider with ChangeNotifier {
   /// footer's Retry, otherwise the scroll trigger would re-fire the failing
   /// request on every scroll tick.
   Future<void> loadMorePosts() async {
-    await loadPosts(refresh: false);
+    await loadPosts();
   }
 
   /// The posts footer's Retry: clears the pagination error and tries again.
@@ -326,7 +329,9 @@ class UserProfileProvider with ChangeNotifier {
 
   Future<CursorPage<FeedViewPost>> _fetchPostsPage(String? cursor) async {
     final actor = _currentProfileDid;
-    if (actor == null) throw ApiException('No profile loaded');
+    if (actor == null) {
+      throw ApiException('No profile loaded');
+    }
 
     final response = await _apiService.getAuthorPosts(
       actor: actor,
@@ -360,12 +365,18 @@ class UserProfileProvider with ChangeNotifier {
   String _postsErrorMessage(Object error) {
     // 404 means the actor doesn't exist (not "no posts") — an empty feed
     // comes back as an empty array.
-    if (error is AuthenticationException) return 'Please sign in to view posts';
-    if (error is NotFoundException) return 'User not found';
+    if (error is AuthenticationException) {
+      return 'Please sign in to view posts';
+    }
+    if (error is NotFoundException) {
+      return 'User not found';
+    }
     if (error is NetworkException) {
       return 'Network error. Check your connection.';
     }
-    if (error is ApiException) return error.message;
+    if (error is ApiException) {
+      return error.message;
+    }
     return 'Failed to load posts. Please try again.';
   }
 
@@ -411,12 +422,14 @@ class UserProfileProvider with ChangeNotifier {
   /// Failures land on `commentsState.loadMoreError`, never on
   /// `commentsState.error`.
   Future<void> loadMoreComments() async {
-    await loadComments(refresh: false);
+    await loadComments();
   }
 
   Future<CursorPage<CommentView>> _fetchCommentsPage(String? cursor) async {
     final actor = _currentProfileDid;
-    if (actor == null) throw ApiException('No profile loaded');
+    if (actor == null) {
+      throw ApiException('No profile loaded');
+    }
 
     final response = await _apiService.getActorComments(
       actor: actor,
@@ -450,11 +463,15 @@ class UserProfileProvider with ChangeNotifier {
     if (error is AuthenticationException) {
       return 'Please sign in to view comments';
     }
-    if (error is NotFoundException) return 'User not found';
+    if (error is NotFoundException) {
+      return 'User not found';
+    }
     if (error is NetworkException) {
       return 'Network error. Check your connection.';
     }
-    if (error is ApiException) return error.message;
+    if (error is ApiException) {
+      return error.message;
+    }
     return 'Failed to load comments. Please try again.';
   }
 

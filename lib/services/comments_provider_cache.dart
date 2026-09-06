@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
+
 import '../providers/auth_provider.dart';
 import '../providers/comments_provider.dart';
 import '../providers/vote_provider.dart';
@@ -28,17 +29,13 @@ import 'viewer_state_hydrator.dart';
 /// ```
 class CommentsProviderCache {
   CommentsProviderCache({
-    required AuthProvider authProvider,
-    required VoteProvider voteProvider,
-    required CommentService commentService,
-    required CovesApiService apiService,
-    ViewerStateHydrator? hydrator,
+    required this._authProvider,
+    required this._voteProvider,
+    required this._commentService,
+    required this._apiService,
+    this._hydrator,
     this.maxSize = 15,
-  }) : _authProvider = authProvider,
-       _voteProvider = voteProvider,
-       _commentService = commentService,
-       _apiService = apiService,
-       _hydrator = hydrator {
+  }) {
     _wasAuthenticated = _authProvider.isAuthenticated;
     _authProvider.addListener(_onAuthChanged);
   }
@@ -204,7 +201,10 @@ class CommentsProviderCache {
     // Clear all cached providers on sign-out
     if (_wasAuthenticated && !isAuthenticated) {
       if (kDebugMode) {
-        debugPrint('🔒 User signed out - clearing ${_cache.length} cached comment providers');
+        debugPrint(
+          '🔒 User signed out - clearing '
+          '${_cache.length} cached comment providers',
+        );
       }
       clearAll();
     }

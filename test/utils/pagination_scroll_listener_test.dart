@@ -57,10 +57,8 @@ void main() {
           body: ListView.builder(
             controller: controller,
             itemCount: 50,
-            itemBuilder: (context, index) => SizedBox(
-              height: 100,
-              child: Text('item $index'),
-            ),
+            itemBuilder: (context, index) =>
+                SizedBox(height: 100, child: Text('item $index')),
           ),
         ),
       ),
@@ -81,9 +79,7 @@ void main() {
     expect(calls, 0);
   });
 
-  testWidgets('fires when scrolled within 200px of the bottom', (
-    tester,
-  ) async {
+  testWidgets('fires when scrolled within 200px of the bottom', (tester) async {
     await pumpList(tester);
     final listener = buildListener()..attach();
     addTearDown(listener.dispose);
@@ -220,10 +216,8 @@ void main() {
             body: ListView.builder(
               controller: controller,
               itemCount: items,
-              itemBuilder: (context, index) => SizedBox(
-                height: 100,
-                child: Text('item $index'),
-              ),
+              itemBuilder: (context, index) =>
+                  SizedBox(height: 100, child: Text('item $index')),
             ),
           ),
         ),
@@ -305,9 +299,9 @@ void main() {
     tester,
   ) async {
     await pumpList(tester);
-    final listener = buildListener()..attach();
-
-    listener.dispose();
+    buildListener()
+      ..attach()
+      ..dispose();
 
     // Still usable by its owner.
     controller.jumpTo(bottomMinus(150));

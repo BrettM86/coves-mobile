@@ -8,8 +8,10 @@
 > identifier; the automation here is reusable, the credentials are not.
 
 Release automation lives in `android/fastlane` and `ios/fastlane`, driven by
-[fastlane](https://fastlane.tools) (installed via Homebrew; verified against
-2.231.1). Both platforms share `tool/fastlane_flutter.rb`.
+[fastlane](https://fastlane.tools) and CocoaPods, both pinned in `Gemfile.lock`.
+Complete [toolchain setup](docs/TOOLCHAIN.md) and activate mise before running
+the commands below, so `fastlane` and `pod` use the project binstubs. Both
+platforms share `tool/fastlane_flutter.rb`.
 
 ## One-time credential setup
 
@@ -100,9 +102,9 @@ both stores' credentials.
 The script, in order:
 
 1. **Preflight.** Clean tree on `main`, exactly in sync with `origin/main`
-   (neither behind nor ahead), `flutter analyze` with no errors (the standing
-   tail of infos and test-file warnings does not block), `flutter test` green. `--skip-tests` skips the suite; use it only when the
-   same tree has just passed it.
+   (neither behind nor ahead), installed locked Ruby dependencies, clean
+   `flutter analyze`, unchanged Dart formatting, and a complete `flutter test`
+   run with no failures or skips. The test gate cannot be bypassed.
 2. **Ask the stores.** `fastlane store_state` (Android: the production, beta,
    alpha and internal tracks) and `fastlane latest_builds` (iOS: every build
    ever uploaded) each write `dist/store/<store>.json`. Any App Store Connect
@@ -182,6 +184,7 @@ way.
   with `destination` set to `export` rather than `upload`, so xcodebuild leaves
   an IPA on disk for fastlane to upload instead of shipping it directly.
 - `tool/fastlane_flutter.rb` strips `GEM_*`/`RUBY*`/`BUNDLE*` from the
-  environment before invoking `flutter`. Without it, fastlane's Ruby leaks into
-  the Homebrew `pod` shim and Flutter reports "CocoaPods is installed but
-  broken", skips `pod install`, and the iOS archive fails.
+  environment before invoking `flutter`. The project `bin/pod` must derive its
+  own `BUNDLE_GEMFILE` and reload the locked bundle without inheriting fastlane's
+  Ruby bootstrap settings. The helper keeps project binstubs first on PATH so
+  Flutter uses the pinned CocoaPods executable.

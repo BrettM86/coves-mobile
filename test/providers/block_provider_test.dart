@@ -11,8 +11,7 @@ import '../test_helpers/test_mocks.dart';
 /// Fake AuthProvider with controllable auth state and real ChangeNotifier
 /// behavior (the provider under test listens for sign-out).
 class FakeAuthProvider extends AuthProvider {
-  FakeAuthProvider({bool isAuthenticated = true})
-    : _isAuthenticated = isAuthenticated;
+  FakeAuthProvider({this._isAuthenticated = true});
 
   bool _isAuthenticated;
 
@@ -42,18 +41,14 @@ void main() {
       mockApiService = MockCovesApiService();
 
       // Default stubs: API calls succeed
-      when(
-        mockApiService.blockUser(actor: anyNamed('actor')),
-      ).thenAnswer((_) async => 'at://$userDid/social.coves.block/1');
-      when(
-        mockApiService.unblockUser(actor: anyNamed('actor')),
-      ).thenAnswer((_) async {});
-      when(
-        mockApiService.blockCommunity(community: anyNamed('community')),
-      ).thenAnswer((_) async => 'at://$communityDid/social.coves.block/1');
-      when(
-        mockApiService.unblockCommunity(community: anyNamed('community')),
-      ).thenAnswer((_) async {});
+      when(mockApiService.blockUser(actor: anyNamed('actor')))
+          .thenAnswer((_) async => 'at://$userDid/social.coves.block/1');
+      when(mockApiService.unblockUser(actor: anyNamed('actor')))
+          .thenAnswer((_) async {});
+      when(mockApiService.blockCommunity(community: anyNamed('community')))
+          .thenAnswer((_) async => 'at://$communityDid/social.coves.block/1');
+      when(mockApiService.unblockCommunity(community: anyNamed('community')))
+          .thenAnswer((_) async {});
 
       provider = BlockProvider(
         apiService: mockApiService,
@@ -76,80 +71,85 @@ void main() {
       verifyNever(mockApiService.blockUser(actor: anyNamed('actor')));
     });
 
-    test('toggle-then-refetch: user toggle beats a stale server seed',
-        () async {
-      await provider.toggleUserBlock(userDid: userDid);
-      expect(provider.isUserBlocked(userDid), isTrue);
+    test(
+      'toggle-then-refetch: user toggle beats a stale server seed',
+      () async {
+        await provider.toggleUserBlock(userDid: userDid);
+        expect(provider.isUserBlocked(userDid), isTrue);
 
-      // A stale profile refetch reports the pre-toggle state
-      provider.setInitialUserBlockState(userDid: userDid, isBlocked: false);
+        // A stale profile refetch reports the pre-toggle state
+        provider.setInitialUserBlockState(userDid: userDid, isBlocked: false);
 
-      expect(provider.isUserBlocked(userDid), isTrue);
-    });
+        expect(provider.isUserBlocked(userDid), isTrue);
+      },
+    );
 
-    test('spinner settles: pending clears and notifies on completion',
-        () async {
-      final completer = Completer<String>();
-      when(
-        mockApiService.blockUser(actor: anyNamed('actor')),
-      ).thenAnswer((_) => completer.future);
+    test(
+      'spinner settles: pending clears and notifies on completion',
+      () async {
+        final completer = Completer<String>();
+        when(mockApiService.blockUser(actor: anyNamed('actor')))
+            .thenAnswer((_) => completer.future);
 
-      final future = provider.toggleUserBlock(userDid: userDid);
+        final future = provider.toggleUserBlock(userDid: userDid);
 
-      expect(provider.isUserBlockPending(userDid), isTrue);
-      final notificationsMidFlight = notifyCount;
+        expect(provider.isUserBlockPending(userDid), isTrue);
+        final notificationsMidFlight = notifyCount;
 
-      completer.complete('at://$userDid/social.coves.block/1');
-      await future;
+        completer.complete('at://$userDid/social.coves.block/1');
+        await future;
 
-      expect(provider.isUserBlockPending(userDid), isFalse);
-      expect(
-        notifyCount,
-        greaterThan(notificationsMidFlight),
-        reason: 'completion must notify so pending spinners are rebuilt',
-      );
-    });
+        expect(provider.isUserBlockPending(userDid), isFalse);
+        expect(
+          notifyCount,
+          greaterThan(notificationsMidFlight),
+          reason: 'completion must notify so pending spinners are rebuilt',
+        );
+      },
+    );
 
-    test('rollback: failed toggle reverts, notifies, and unblocks seeds',
-        () async {
-      when(
-        mockApiService.blockUser(actor: anyNamed('actor')),
-      ).thenThrow(ApiException('Server error', statusCode: 500));
+    test(
+      'rollback: failed toggle reverts, notifies, and unblocks seeds',
+      () async {
+        when(mockApiService.blockUser(actor: anyNamed('actor')))
+            .thenThrow(ApiException('Server error', statusCode: 500));
 
-      await expectLater(
-        provider.toggleUserBlock(userDid: userDid),
-        throwsA(isA<ApiException>()),
-      );
+        await expectLater(
+          provider.toggleUserBlock(userDid: userDid),
+          throwsA(isA<ApiException>()),
+        );
 
-      expect(provider.isUserBlocked(userDid), isFalse);
-      expect(notifyCount, greaterThan(0));
+        expect(provider.isUserBlocked(userDid), isFalse);
+        expect(notifyCount, greaterThan(0));
 
-      // The failed toggle must not stay authoritative: a later server
-      // seed applies again (pins the toggled-set rollback fix)
-      provider.setInitialUserBlockState(userDid: userDid, isBlocked: true);
-      expect(provider.isUserBlocked(userDid), isTrue);
-    });
+        // The failed toggle must not stay authoritative: a later server
+        // seed applies again (pins the toggled-set rollback fix)
+        provider.setInitialUserBlockState(userDid: userDid, isBlocked: true);
+        expect(provider.isUserBlocked(userDid), isTrue);
+      },
+    );
 
-    test('seed during in-flight toggle does not clobber optimistic state',
-        () async {
-      final completer = Completer<String>();
-      when(
-        mockApiService.blockUser(actor: anyNamed('actor')),
-      ).thenAnswer((_) => completer.future);
+    test(
+      'seed during in-flight toggle does not clobber optimistic state',
+      () async {
+        final completer = Completer<String>();
+        when(mockApiService.blockUser(actor: anyNamed('actor')))
+            .thenAnswer((_) => completer.future);
 
-      final future = provider.toggleUserBlock(userDid: userDid);
-      expect(provider.isUserBlocked(userDid), isTrue);
+        final future = provider.toggleUserBlock(userDid: userDid);
+        expect(provider.isUserBlocked(userDid), isTrue);
 
-      provider.setInitialUserBlockState(userDid: userDid, isBlocked: false);
-      expect(provider.isUserBlocked(userDid), isTrue);
+        provider.setInitialUserBlockState(userDid: userDid, isBlocked: false);
+        expect(provider.isUserBlocked(userDid), isTrue);
 
-      completer.complete('at://$userDid/social.coves.block/1');
-      await future;
+        completer.complete('at://$userDid/social.coves.block/1');
+        await future;
 
-      // Successful toggle keeps authority even after completion
-      provider.setInitialUserBlockState(userDid: userDid, isBlocked: false);
-      expect(provider.isUserBlocked(userDid), isTrue);
-    });
+        // Successful toggle keeps authority even after completion
+        provider.setInitialUserBlockState(userDid: userDid, isBlocked: false);
+        expect(provider.isUserBlocked(userDid), isTrue);
+      },
+    );
 
     test('seed freshness: non-toggled seeds stay refreshable', () {
       // e.g. a block made from another device shows up on refetch
@@ -171,24 +171,25 @@ void main() {
       expect(notifyCount, notificationsAfterFirstSeed + 1);
     });
 
-    test('sign-out lifecycle: clears toggle authority so seeds apply again',
-        () async {
-      await provider.toggleUserBlock(userDid: userDid);
-      expect(provider.isUserBlocked(userDid), isTrue);
+    test(
+      'sign-out lifecycle: clears toggle authority so seeds apply again',
+      () async {
+        await provider.toggleUserBlock(userDid: userDid);
+        expect(provider.isUserBlocked(userDid), isTrue);
 
-      authProvider.setAuthenticated(value: false);
-      expect(provider.isUserBlocked(userDid), isFalse);
+        authProvider.setAuthenticated(value: false);
+        expect(provider.isUserBlocked(userDid), isFalse);
 
-      // Toggle authority was cleared: a fresh seed applies
-      provider.setInitialUserBlockState(userDid: userDid, isBlocked: true);
-      expect(provider.isUserBlocked(userDid), isTrue);
-    });
+        // Toggle authority was cleared: a fresh seed applies
+        provider.setInitialUserBlockState(userDid: userDid, isBlocked: true);
+        expect(provider.isUserBlocked(userDid), isTrue);
+      },
+    );
 
     test('concurrent toggle while pending makes no second API call', () async {
       final completer = Completer<String>();
-      when(
-        mockApiService.blockUser(actor: anyNamed('actor')),
-      ).thenAnswer((_) => completer.future);
+      when(mockApiService.blockUser(actor: anyNamed('actor')))
+          .thenAnswer((_) => completer.future);
 
       final first = provider.toggleUserBlock(userDid: userDid);
       final second = await provider.toggleUserBlock(userDid: userDid);
@@ -242,9 +243,8 @@ void main() {
       });
 
       test('failed community toggle reverts and unblocks seeds', () async {
-        when(
-          mockApiService.blockCommunity(community: anyNamed('community')),
-        ).thenThrow(ApiException('Server error', statusCode: 500));
+        when(mockApiService.blockCommunity(community: anyNamed('community')))
+            .thenThrow(ApiException('Server error', statusCode: 500));
 
         await expectLater(
           provider.toggleCommunityBlock(communityDid: communityDid),

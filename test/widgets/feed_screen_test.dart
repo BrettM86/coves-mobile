@@ -330,7 +330,7 @@ void main() {
           ),
           createdAt: DateTime.now(),
           indexedAt: DateTime.now(),
-          record: PostRecord(
+          record: const PostRecord(
             content: 'Test body',
             title: 'Test Post',
             facets: [],

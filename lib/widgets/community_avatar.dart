@@ -87,15 +87,11 @@ class CommunityAvatar extends StatelessWidget {
           height: size,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(borderRadius),
-            image: DecorationImage(
-              image: imageProvider,
-              fit: BoxFit.cover,
-            ),
+            image: DecorationImage(image: imageProvider, fit: BoxFit.cover),
           ),
         ),
-        placeholder: (context, url) => showLoadingIndicator
-            ? _buildLoading()
-            : fallback,
+        placeholder: (context, url) =>
+            showLoadingIndicator ? _buildLoading() : fallback,
         errorWidget: (context, url, error) {
           if (kDebugMode) {
             debugPrint('Error loading community avatar for $name: $error');
@@ -114,9 +110,8 @@ class CommunityAvatar extends StatelessWidget {
         fit: BoxFit.cover,
         fadeInDuration: Duration.zero,
         fadeOutDuration: Duration.zero,
-        placeholder: (context, url) => showLoadingIndicator
-            ? _buildLoading()
-            : fallback,
+        placeholder: (context, url) =>
+            showLoadingIndicator ? _buildLoading() : fallback,
         errorWidget: (context, url, error) {
           if (kDebugMode) {
             debugPrint('Error loading community avatar for $name: $error');
@@ -141,7 +136,8 @@ class CommunityAvatar extends StatelessWidget {
         border: fallbackBorder,
       ),
       child: Center(
-        child: fallbackIcon ??
+        child:
+            fallbackIcon ??
             Text(
               name.isNotEmpty ? name[0].toUpperCase() : '?',
               style: TextStyle(

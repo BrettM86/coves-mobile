@@ -1,0 +1,27 @@
+# Drives integration_test/native_cropper_test.dart; start this flow first.
+# The integration test opens the real native screens and verifies output.
+# iOS 26 uses checkmark/cancel icons in the bottom native toolbar.
+appId: social.coves
+tags:
+  - standalone
+---
+- extendedWaitUntil:
+    visible: "Crop Image"
+    timeout: 90000
+- tapOn:
+    point: "87%,95%"
+- extendedWaitUntil:
+    visible: "Crop Banner"
+    timeout: 15000
+- tapOn:
+    point: "87%,95%"
+- extendedWaitUntil:
+    visible: "Crop Image"
+    timeout: 15000
+- tapOn:
+    point: "13%,95%"
+- extendedWaitUntil:
+    visible: "Crop Banner"
+    timeout: 15000
+- tapOn:
+    point: "13%,95%"

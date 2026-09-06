@@ -12,10 +12,9 @@ import 'auth_provider.dart';
 /// Automatically clears state when user signs out.
 class CommunitySubscriptionProvider with ChangeNotifier {
   CommunitySubscriptionProvider({
-    required AuthProvider authProvider,
-    required CovesApiService apiService,
-  }) : _authProvider = authProvider,
-       _apiService = apiService {
+    required this._authProvider,
+    required this._apiService,
+  }) {
     // Listen to auth state changes and clear subscriptions on sign-out
     _authProvider.addListener(_onAuthChanged);
   }

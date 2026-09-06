@@ -162,10 +162,7 @@ void main() {
 
       await tapCreate(tester);
 
-      expect(
-        find.text('Name must be 63 characters or less'),
-        findsOneWidget,
-      );
+      expect(find.text('Name must be 63 characters or less'), findsOneWidget);
       verifyNever(
         mockApiService.createCommunity(
           name: anyNamed('name'),

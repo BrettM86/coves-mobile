@@ -44,9 +44,8 @@ void main() {
     // vote button renders in the un-liked state.
     when(mockAuthProvider.isAuthenticated).thenReturn(false);
     when(mockVoteProvider.isLiked(any)).thenReturn(false);
-    when(mockVoteProvider.getAdjustedScore(any, any)).thenAnswer(
-      (invocation) => invocation.positionalArguments[1] as int,
-    );
+    when(mockVoteProvider.getAdjustedScore(any, any))
+        .thenAnswer((invocation) => invocation.positionalArguments[1] as int);
 
     commentsProvider = CommentsProvider(
       mockAuthProvider,
@@ -68,15 +67,17 @@ void main() {
   void stubGetComments(
     CommentsResponse Function(String? parentRkey) responder,
   ) {
-    when(mockApiService.getComments(
-      postUri: anyNamed('postUri'),
-      sort: anyNamed('sort'),
-      timeframe: anyNamed('timeframe'),
-      depth: anyNamed('depth'),
-      limit: anyNamed('limit'),
-      cursor: anyNamed('cursor'),
-      parentRkey: anyNamed('parentRkey'),
-    )).thenAnswer(
+    when(
+      mockApiService.getComments(
+        postUri: anyNamed('postUri'),
+        sort: anyNamed('sort'),
+        timeframe: anyNamed('timeframe'),
+        depth: anyNamed('depth'),
+        limit: anyNamed('limit'),
+        cursor: anyNamed('cursor'),
+        parentRkey: anyNamed('parentRkey'),
+      ),
+    ).thenAnswer(
       (invocation) async =>
           responder(invocation.namedArguments[#parentRkey] as String?),
     );
@@ -138,7 +139,7 @@ void main() {
     required ThreadViewComment thread,
     List<ThreadViewComment> ancestors = const [],
     Future<void> Function(String, List<RichTextFacet>, ThreadViewComment)?
-        onReply,
+    onReply,
   }) {
     return MultiProvider(
       providers: [
@@ -189,10 +190,9 @@ void main() {
       final ancestor2 = createThread(rkey: 'a2', content: 'Second ancestor');
       final anchor = createThread(rkey: 'anchor', content: 'Anchor comment');
 
-      await tester.pumpWidget(createTestWidget(
-        thread: anchor,
-        ancestors: [ancestor1, ancestor2],
-      ));
+      await tester.pumpWidget(
+        createTestWidget(thread: anchor, ancestors: [ancestor1, ancestor2]),
+      );
       await tester.pumpAndSettle();
       await scrollBackToTop(tester);
 
@@ -239,10 +239,9 @@ void main() {
       final ancestor = createThread(rkey: 'a1', content: 'Ancestor content');
       final anchor = createThread(rkey: 'anchor', content: 'Anchor content');
 
-      await tester.pumpWidget(createTestWidget(
-        thread: anchor,
-        ancestors: [ancestor],
-      ));
+      await tester.pumpWidget(
+        createTestWidget(thread: anchor, ancestors: [ancestor]),
+      );
       await tester.pumpAndSettle();
       await scrollBackToTop(tester);
 
@@ -264,10 +263,9 @@ void main() {
       final ancestor = createThread(rkey: 'a1', content: 'Ancestor');
       final anchor = createThread(rkey: 'anchor', content: 'Anchor');
 
-      await tester.pumpWidget(createTestWidget(
-        thread: anchor,
-        ancestors: [ancestor],
-      ));
+      await tester.pumpWidget(
+        createTestWidget(thread: anchor, ancestors: [ancestor]),
+      );
       await tester.pumpAndSettle();
       await scrollBackToTop(tester);
 
@@ -284,8 +282,9 @@ void main() {
   });
 
   group('FocusedThreadScreen hydration', () {
-    testWidgets('hydrates the anchor subtree on entry (deep replies render)',
-        (tester) async {
+    testWidgets('hydrates the anchor subtree on entry (deep replies render)', (
+      tester,
+    ) async {
       // Snapshot truncated by the original fetch depth: only one shallow
       // reply. The server has a deeper tree behind it.
       final snapshot = createThread(
@@ -320,8 +319,9 @@ void main() {
       expect(find.text('Deep hydrated reply'), findsOneWidget);
     });
 
-    testWidgets('hydration failure keeps the snapshot visible (non-fatal)',
-        (tester) async {
+    testWidgets('hydration failure keeps the snapshot visible (non-fatal)', (
+      tester,
+    ) async {
       final snapshot = createThread(
         rkey: 'anchor',
         content: 'Anchor comment',
@@ -341,43 +341,49 @@ void main() {
     });
 
     testWidgets(
-        'hydration failure with an empty snapshot shows a retryable error, '
-        'and retry recovers', (tester) async {
-      final snapshot = createThread(rkey: 'anchor', content: 'Anchor comment');
+      'hydration failure with an empty snapshot shows a retryable error, '
+      'and retry recovers',
+      (tester) async {
+        final snapshot = createThread(
+          rkey: 'anchor',
+          content: 'Anchor comment',
+        );
 
-      var shouldFail = true;
-      stubGetComments((_) {
-        if (shouldFail) {
-          throw ApiException('boom');
-        }
-        return response([
-          createThread(
-            rkey: 'anchor',
-            content: 'Anchor comment',
-            replies: [createThread(rkey: 'r1', content: 'Recovered reply')],
-          ),
-        ]);
-      });
+        var shouldFail = true;
+        stubGetComments((_) {
+          if (shouldFail) {
+            throw ApiException('boom');
+          }
+          return response([
+            createThread(
+              rkey: 'anchor',
+              content: 'Anchor comment',
+              replies: [createThread(rkey: 'r1', content: 'Recovered reply')],
+            ),
+          ]);
+        });
 
-      await tester.pumpWidget(createTestWidget(thread: snapshot));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(createTestWidget(thread: snapshot));
+        await tester.pumpAndSettle();
 
-      // Unknown state must not claim "No replies yet" - show retryable error
-      expect(find.byType(InlineError), findsOneWidget);
-      expect(find.text('No replies yet'), findsNothing);
+        // Unknown state must not claim "No replies yet" - show retryable error
+        expect(find.byType(InlineError), findsOneWidget);
+        expect(find.text('No replies yet'), findsNothing);
 
-      shouldFail = false;
-      await tester.tap(find.text('Retry'));
-      await tester.pumpAndSettle();
+        shouldFail = false;
+        await tester.tap(find.text('Retry'));
+        await tester.pumpAndSettle();
 
-      expect(find.byType(InlineError), findsNothing);
-      expect(find.text('Recovered reply'), findsOneWidget);
-    });
+        expect(find.byType(InlineError), findsNothing);
+        expect(find.text('Recovered reply'), findsOneWidget);
+      },
+    );
   });
 
   group('FocusedThreadScreen load more', () {
-    testWidgets('nested load-more renders newly fetched grandchild',
-        (tester) async {
+    testWidgets('nested load-more renders newly fetched grandchild', (
+      tester,
+    ) async {
       final snapshot = createThread(
         rkey: 'anchor',
         content: 'Anchor comment',
@@ -407,9 +413,7 @@ void main() {
           createThread(
             rkey: 'r1',
             content: 'Child reply',
-            replies: [
-              createThread(rkey: 'r1a', content: 'Grandchild reply'),
-            ],
+            replies: [createThread(rkey: 'r1a', content: 'Grandchild reply')],
           ),
         ]);
       });
@@ -426,8 +430,7 @@ void main() {
       expect(find.text('Grandchild reply'), findsOneWidget);
     });
 
-    testWidgets(
-        'anchor with more direct replies shows a load-more affordance '
+    testWidgets('anchor with more direct replies shows a load-more affordance '
         'that fetches the next page', (tester) async {
       final snapshot = createThread(
         rkey: 'anchor',
@@ -441,18 +444,13 @@ void main() {
         anchorFetches++;
         if (anchorFetches == 1) {
           // Hydration: first page of the anchor's direct replies
-          return response(
-            [
-              createThread(
-                rkey: 'anchor',
-                content: 'Anchor comment',
-                replies: [
-                  createThread(rkey: 'r1', content: 'First page reply'),
-                ],
-              ),
-            ],
-            cursor: 'page-2',
-          );
+          return response([
+            createThread(
+              rkey: 'anchor',
+              content: 'Anchor comment',
+              replies: [createThread(rkey: 'r1', content: 'First page reply')],
+            ),
+          ], cursor: 'page-2');
         }
         return response([
           createThread(
@@ -484,8 +482,9 @@ void main() {
   });
 
   group('FocusedThreadScreen delete', () {
-    testWidgets('deleting a reply refetches the subtree and removes it',
-        (tester) async {
+    testWidgets('deleting a reply refetches the subtree and removes it', (
+      tester,
+    ) async {
       // The delete flow awaits HapticFeedback; without a handler the
       // platform channel raises MissingPluginException in tests.
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(

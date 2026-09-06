@@ -51,8 +51,8 @@ void main() {
         ),
         GoRoute(
           path: '/login',
-          builder:
-              (context, state) => const Scaffold(body: Text('Login screen')),
+          builder: (context, state) =>
+              const Scaffold(body: Text('Login screen')),
         ),
       ],
     );

@@ -105,12 +105,11 @@ class PostActionBar extends StatelessWidget {
             // Vote button with animated heart icon
             Semantics(
               button: true,
-              label:
-                  isVoted
-                      ? 'Unlike post, ${post.post.stats.score} '
-                          '${post.post.stats.score == 1 ? "like" : "likes"}'
-                      : 'Like post, ${post.post.stats.score} '
-                          '${post.post.stats.score == 1 ? "like" : "likes"}',
+              label: isVoted
+                  ? 'Unlike post, ${post.post.stats.score} '
+                        '${post.post.stats.score == 1 ? "like" : "likes"}'
+                  : 'Like post, ${post.post.stats.score} '
+                        '${post.post.stats.score == 1 ? "like" : "likes"}',
               child: GestureDetector(
                 onTap: onVoteTap,
                 child: Row(
@@ -126,10 +125,9 @@ class PostActionBar extends StatelessWidget {
                     Text(
                       DisplayUtils.formatCount(post.post.stats.score),
                       style: TextStyle(
-                        color:
-                            isVoted
-                                ? AppColors.voteLiked
-                                : AppColors.textPrimary.withValues(alpha: 0.7),
+                        color: isVoted
+                            ? AppColors.voteLiked
+                            : AppColors.textPrimary.withValues(alpha: 0.7),
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                       ),

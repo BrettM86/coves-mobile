@@ -19,10 +19,7 @@ import '../constants/app_colors.dart';
 /// )
 /// ```
 class StatusBarOverlay extends StatelessWidget {
-  const StatusBarOverlay({
-    this.color = AppColors.background,
-    super.key,
-  });
+  const StatusBarOverlay({this.color = AppColors.background, super.key});
 
   /// The color to fill the status bar area with
   final Color color;

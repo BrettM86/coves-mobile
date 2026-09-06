@@ -53,11 +53,7 @@ class CovesApiService {
     // Add retry interceptor FIRST for transient network errors
     // (connection timeouts, mobile network flakiness)
     _dio.interceptors.add(
-      RetryInterceptor(
-        dio: _dio,
-        maxRetries: 2,
-        serviceName: 'CovesApiService',
-      ),
+      RetryInterceptor(dio: _dio, serviceName: 'CovesApiService'),
     );
 
     // Add shared auth interceptor (bearer token + 401 refresh/retry)
@@ -161,11 +157,11 @@ class CovesApiService {
       send: () => _dio.get(
         path,
         queryParameters: {
-          if (community != null) 'community': community,
+          'community': ?community,
           'sort': sort,
           'limit': limit,
-          if (timeframe != null) 'timeframe': timeframe,
-          if (cursor != null) 'cursor': cursor,
+          'timeframe': ?timeframe,
+          'cursor': ?cursor,
         },
       ),
       parse: (data) => TimelineResponse.fromJson(_asJsonMap(data)),
@@ -286,8 +282,8 @@ class CovesApiService {
           'limit': limit,
           if (parentRkey != null && parentRkey.isNotEmpty)
             'parentRkey': parentRkey,
-          if (timeframe != null) 'timeframe': timeframe,
-          if (cursor != null) 'cursor': cursor,
+          'timeframe': ?timeframe,
+          'cursor': ?cursor,
         },
       ),
       parse: (data) => CommentsResponse.fromJson(_asJsonMap(data)),
@@ -344,14 +340,11 @@ class CovesApiService {
             // Degrade a single malformed entry to notFound instead of failing
             // the whole batch. Read the uri defensively; fall back to the
             // corresponding input URI (server guarantees order).
-            final fallbackUri =
-                (item is Map && item['uri'] is String)
-                    ? item['uri'] as String
-                    : (i < uris.length ? uris[i] : '');
+            final fallbackUri = (item is Map && item['uri'] is String)
+                ? item['uri'] as String
+                : (i < uris.length ? uris[i] : '');
             if (kDebugMode) {
-              debugPrint(
-                '⚠️ Failed to parse post entry $i ($fallbackUri): $e',
-              );
+              debugPrint('⚠️ Failed to parse post entry $i ($fallbackUri): $e');
             }
             results.add(PostGetNotFound(fallbackUri));
           }
@@ -401,7 +394,7 @@ class CovesApiService {
         queryParameters: {
           'limit': limit,
           'sort': sort,
-          if (cursor != null) 'cursor': cursor,
+          'cursor': ?cursor,
           if (subscribed ?? false) 'subscribed': 'true',
         },
       ),
@@ -454,8 +447,8 @@ class CovesApiService {
         '/xrpc/social.coves.community.post.create',
         data: {
           'community': community,
-          if (title != null) 'title': title,
-          if (content != null) 'content': content,
+          'title': ?title,
+          'content': ?content,
           if (facets != null && facets.isNotEmpty)
             'facets': facets.map((f) => f.toJson()).toList(),
           if (embed != null) 'embed': embed.toJson(),
@@ -580,9 +573,9 @@ class CovesApiService {
         queryParameters: {
           'actor': actor,
           'limit': limit,
-          if (filter != null) 'filter': filter,
-          if (community != null) 'community': community,
-          if (cursor != null) 'cursor': cursor,
+          'filter': ?filter,
+          'community': ?community,
+          'cursor': ?cursor,
         },
       ),
       parse: (data) => TimelineResponse.fromJson(_asJsonMap(data)),
@@ -616,8 +609,8 @@ class CovesApiService {
         queryParameters: {
           'actor': actor,
           'limit': limit,
-          if (community != null) 'community': community,
-          if (cursor != null) 'cursor': cursor,
+          'community': ?community,
+          'cursor': ?cursor,
         },
       ),
       parse: (data) => ActorCommentsResponse.fromJson(_asJsonMap(data)),
@@ -670,36 +663,35 @@ class CovesApiService {
 
   /// Block a user by DID. Returns the block record URI.
   Future<String> blockUser({required String actor}) => _performBlock(
-        did: actor,
-        didLabel: 'user',
-        endpoint: '/xrpc/social.coves.actor.blockUser',
-        dataKey: 'subject',
-      );
+    did: actor,
+    didLabel: 'user',
+    endpoint: '/xrpc/social.coves.actor.blockUser',
+    dataKey: 'subject',
+  );
 
   /// Unblock a user by DID.
   Future<void> unblockUser({required String actor}) => _performUnblock(
-        did: actor,
-        didLabel: 'user',
-        endpoint: '/xrpc/social.coves.actor.unblockUser',
-        dataKey: 'subject',
-      );
+    did: actor,
+    didLabel: 'user',
+    endpoint: '/xrpc/social.coves.actor.unblockUser',
+    dataKey: 'subject',
+  );
 
   /// Block a community by DID. Returns the block record URI.
   Future<String> blockCommunity({required String community}) => _performBlock(
-        did: community,
-        didLabel: 'community',
-        endpoint: '/xrpc/social.coves.community.blockCommunity',
-        dataKey: 'community',
-      );
+    did: community,
+    didLabel: 'community',
+    endpoint: '/xrpc/social.coves.community.blockCommunity',
+    dataKey: 'community',
+  );
 
   /// Unblock a community by DID.
-  Future<void> unblockCommunity({required String community}) =>
-      _performUnblock(
-        did: community,
-        didLabel: 'community',
-        endpoint: '/xrpc/social.coves.community.unblockCommunity',
-        dataKey: 'community',
-      );
+  Future<void> unblockCommunity({required String community}) => _performUnblock(
+    did: community,
+    didLabel: 'community',
+    endpoint: '/xrpc/social.coves.community.unblockCommunity',
+    dataKey: 'community',
+  );
 
   /// Shared helper for block operations that return a record URI.
   Future<String> _performBlock({
@@ -852,8 +844,8 @@ class CovesApiService {
       send: () => _dio.post(
         '/xrpc/social.coves.actor.updateProfile',
         data: {
-          if (displayName != null) 'displayName': displayName,
-          if (bio != null) 'bio': bio,
+          'displayName': ?displayName,
+          'bio': ?bio,
           if (avatarBytes != null) ...{
             'avatarBlob': base64Encode(avatarBytes),
             'avatarMimeType': avatarMimeType,

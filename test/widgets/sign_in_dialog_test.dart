@@ -39,12 +39,11 @@ void main() {
             body: Builder(
               builder: (context) {
                 return ElevatedButton(
-                  onPressed:
-                      () => SignInDialog.show(
-                        context,
-                        title: 'Custom Title',
-                        message: 'Custom message here',
-                      ),
+                  onPressed: () => SignInDialog.show(
+                    context,
+                    title: 'Custom Title',
+                    message: 'Custom message here',
+                  ),
                   child: const Text('Show Dialog'),
                 );
               },

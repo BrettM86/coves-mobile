@@ -33,12 +33,7 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        wrap(
-          const Favicon(
-            'https://example.com/a',
-            domain: 'evil.com&sz=999',
-          ),
-        ),
+        wrap(const Favicon('https://example.com/a', domain: 'evil.com&sz=999')),
       );
 
       final url = imageUrlOf(tester);
@@ -62,9 +57,7 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        wrap(
-          const Favicon('https://example.com/a', domain: 'bad domain/#?'),
-        ),
+        wrap(const Favicon('https://example.com/a', domain: 'bad domain/#?')),
       );
 
       final url = imageUrlOf(tester);

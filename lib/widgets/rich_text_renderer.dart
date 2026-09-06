@@ -233,8 +233,11 @@ class _RichTextRendererState extends State<RichTextRenderer> {
         ..add(byteEnd);
     }
 
-    final charIndexAt =
-        _charIndexForByteOffsets(bytes, offsets.toList(), text.length);
+    final charIndexAt = _charIndexForByteOffsets(
+      bytes,
+      offsets.toList(),
+      text.length,
+    );
 
     final resolved = <_ResolvedFacet>[];
     for (final facet in widget.facets!) {
@@ -243,8 +246,10 @@ class _RichTextRendererState extends State<RichTextRenderer> {
 
       if (byteStart < 0 || byteEnd <= byteStart) {
         if (kDebugMode) {
-          debugPrint('RichTextRenderer: Skipping facet with invalid byte '
-              'range [$byteStart, $byteEnd)');
+          debugPrint(
+            'RichTextRenderer: Skipping facet with invalid byte '
+            'range [$byteStart, $byteEnd)',
+          );
         }
         continue;
       }
@@ -253,8 +258,10 @@ class _RichTextRendererState extends State<RichTextRenderer> {
       // and is dropped, not clamped to the text end.
       if (byteEnd > bytes.length) {
         if (kDebugMode) {
-          debugPrint('RichTextRenderer: Skipping facet with byte range '
-              '[$byteStart, $byteEnd) past text byte length ${bytes.length}');
+          debugPrint(
+            'RichTextRenderer: Skipping facet with byte range '
+            '[$byteStart, $byteEnd) past text byte length ${bytes.length}',
+          );
         }
         continue;
       }
@@ -268,9 +275,11 @@ class _RichTextRendererState extends State<RichTextRenderer> {
           charStart >= text.length ||
           charEnd <= charStart) {
         if (kDebugMode) {
-          debugPrint('RichTextRenderer: Skipping facet with out-of-bounds '
-              'char indices [$charStart, $charEnd) for text length '
-              '${text.length}');
+          debugPrint(
+            'RichTextRenderer: Skipping facet with out-of-bounds '
+            'char indices [$charStart, $charEnd) for text length '
+            '${text.length}',
+          );
         }
         continue;
       }
@@ -314,10 +323,10 @@ class _RichTextRendererState extends State<RichTextRenderer> {
       final seqLen = lead < 0x80
           ? 1
           : lead < 0xE0
-              ? 2
-              : lead < 0xF0
-                  ? 3
-                  : 4;
+          ? 2
+          : lead < 0xF0
+          ? 3
+          : 4;
       final next = byteIndex + seqLen;
 
       // Offsets inside the sequence would split a code point: unresolvable
@@ -360,8 +369,9 @@ class _RichTextRendererState extends State<RichTextRenderer> {
         rangeStart++;
       }
 
-      final start =
-          rangeStart == 0 ? 0 : text.lastIndexOf('\n', rangeStart - 1) + 1;
+      final start = rangeStart == 0
+          ? 0
+          : text.lastIndexOf('\n', rangeStart - 1) + 1;
 
       // A sloppy writer may include the trailing newline; back off before
       // extending forward so we don't swallow the next line.
@@ -406,8 +416,10 @@ class _RichTextRendererState extends State<RichTextRenderer> {
       if (block.start < pos || block.end > rangeEnd) {
         // Overlaps already-rendered content (or leaks out of this range)
         if (kDebugMode) {
-          debugPrint('RichTextRenderer: Skipping overlapping block facet at '
-              'char index ${block.start}');
+          debugPrint(
+            'RichTextRenderer: Skipping overlapping block facet at '
+            'char index ${block.start}',
+          );
         }
         i++;
         continue;
@@ -415,7 +427,13 @@ class _RichTextRendererState extends State<RichTextRenderer> {
 
       if (block.start > pos) {
         _addParagraph(
-            context, widgets, pos, block.start, inlineFacets, baseStyle);
+          context,
+          widgets,
+          pos,
+          block.start,
+          inlineFacets,
+          baseStyle,
+        );
       }
 
       final feature = block.feature;
@@ -430,8 +448,10 @@ class _RichTextRendererState extends State<RichTextRenderer> {
             inner.add(blocks[j]);
           } else if (kDebugMode) {
             // Straddles the quote boundary: dropped, same as other overlaps
-            debugPrint('RichTextRenderer: Skipping overlapping block facet '
-                'at char index ${blocks[j].start}');
+            debugPrint(
+              'RichTextRenderer: Skipping overlapping block facet '
+              'at char index ${blocks[j].start}',
+            );
           }
           j++;
         }
@@ -446,8 +466,13 @@ class _RichTextRendererState extends State<RichTextRenderer> {
         i++;
       } else {
         widgets.add(
-          _codeBlockWidget(context, block, feature as CodeBlockFacetFeature,
-              inlineFacets, baseStyle),
+          _codeBlockWidget(
+            context,
+            block,
+            feature as CodeBlockFacetFeature,
+            inlineFacets,
+            baseStyle,
+          ),
         );
         i++;
       }
@@ -506,8 +531,9 @@ class _RichTextRendererState extends State<RichTextRenderer> {
     TextStyle? baseStyle,
   ) {
     final level = (block.feature as BlockquoteFacetFeature).level;
-    final quoteStyle = (baseStyle ?? const TextStyle())
-        .merge(const TextStyle(color: AppColors.textSecondary));
+    final quoteStyle = (baseStyle ?? const TextStyle()).merge(
+      const TextStyle(color: AppColors.textSecondary),
+    );
 
     final children = _blockWidgets(
       context,
@@ -602,10 +628,9 @@ class _RichTextRendererState extends State<RichTextRenderer> {
               padding: const EdgeInsets.only(bottom: 6),
               child: Text(
                 language,
-                style: _monospace(const TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 11,
-                )),
+                style: _monospace(
+                  const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                ),
               ),
             ),
           SingleChildScrollView(
@@ -636,10 +661,12 @@ class _RichTextRendererState extends State<RichTextRenderer> {
   ) {
     final text = widget.text;
     final spoilers = inlineFacets
-        .where((rf) =>
-            rf.charStart < block.end &&
-            rf.charEnd > block.start &&
-            rf.facet.features.any((f) => f is SpoilerFacetFeature))
+        .where(
+          (rf) =>
+              rf.charStart < block.end &&
+              rf.charEnd > block.start &&
+              rf.facet.features.any((f) => f is SpoilerFacetFeature),
+        )
         .toList();
 
     if (spoilers.isEmpty) {
@@ -664,37 +691,42 @@ class _RichTextRendererState extends State<RichTextRenderer> {
       final revealed = _revealedSpoilers.contains(key);
       final tapRecognizer = TapGestureRecognizer()
         ..onTap = () => setState(() {
-              if (!_revealedSpoilers.remove(key)) {
-                _revealedSpoilers.add(key);
-              }
-            });
+          if (!_revealedSpoilers.remove(key)) {
+            _revealedSpoilers.add(key);
+          }
+        });
       _recognizers.add(tapRecognizer);
 
       if (revealed) {
-        spans.add(TextSpan(
-          text: text.substring(segStart, segEnd),
-          style: TextStyle(
-            backgroundColor:
-                AppColors.backgroundTertiary.withValues(alpha: 0.5),
+        spans.add(
+          TextSpan(
+            text: text.substring(segStart, segEnd),
+            style: TextStyle(
+              backgroundColor: AppColors.backgroundTertiary.withValues(
+                alpha: 0.5,
+              ),
+            ),
+            recognizer: tapRecognizer,
           ),
-          recognizer: tapRecognizer,
-        ));
+        );
       } else {
         final reason = rf.facet.features
             .whereType<SpoilerFacetFeature>()
             .first
             .reason;
-        spans.add(TextSpan(
-          text: text.substring(segStart, segEnd),
-          style: const TextStyle(
-            color: Colors.transparent,
-            backgroundColor: AppColors.backgroundTertiary,
+        spans.add(
+          TextSpan(
+            text: text.substring(segStart, segEnd),
+            style: const TextStyle(
+              color: Colors.transparent,
+              backgroundColor: AppColors.backgroundTertiary,
+            ),
+            recognizer: tapRecognizer,
+            semanticsLabel: reason != null
+                ? 'Spoiler: $reason. Tap to reveal.'
+                : 'Spoiler. Tap to reveal.',
           ),
-          recognizer: tapRecognizer,
-          semanticsLabel: reason != null
-              ? 'Spoiler: $reason. Tap to reveal.'
-              : 'Spoiler. Tap to reveal.',
-        ));
+        );
       }
 
       pos = segEnd;
@@ -807,9 +839,8 @@ class _RichTextRendererState extends State<RichTextRenderer> {
           case StrikethroughFacetFeature():
             decorations.add(TextDecoration.lineThrough);
           case CodeFacetFeature():
-            style = _monospace(style).copyWith(
-              backgroundColor: AppColors.backgroundTertiary,
-            );
+            style = _monospace(style)
+                .copyWith(backgroundColor: AppColors.backgroundTertiary);
           case LinkFacetFeature(uri: final uri):
             if (uri.isNotEmpty) {
               if (widget.linkStyle != null) {
@@ -834,8 +865,10 @@ class _RichTextRendererState extends State<RichTextRenderer> {
             // "../login" would otherwise normalize into another route).
             // Invalid DIDs render styled but not tappable.
             if (_didPattern.hasMatch(did)) {
-              final mentionText =
-                  widget.text.substring(rf.charStart, rf.charEnd);
+              final mentionText = widget.text.substring(
+                rf.charStart,
+                rf.charEnd,
+              );
               onTap ??= () => _openMention(context, did, mentionText);
             }
           case SpoilerFacetFeature():
@@ -858,9 +891,8 @@ class _RichTextRendererState extends State<RichTextRenderer> {
             }
           case CodeBlockFacetFeature():
             if (approximateBlocks) {
-              style = _monospace(style).copyWith(
-                backgroundColor: AppColors.backgroundTertiary,
-              );
+              style = _monospace(style)
+                  .copyWith(backgroundColor: AppColors.backgroundTertiary);
             }
           case UnknownFacetFeature():
             break; // Open union: unknown features render as plain text
@@ -928,8 +960,9 @@ class _RichTextRendererState extends State<RichTextRenderer> {
   /// mentions would open as profiles) — the facet itself carries no
   /// user-vs-community discriminator to check against.
   void _openMention(BuildContext context, String did, String mentionText) {
-    final route =
-        mentionText.startsWith('!') ? '/community/$did' : '/profile/$did';
+    final route = mentionText.startsWith('!')
+        ? '/community/$did'
+        : '/profile/$did';
     context.push(route);
   }
 }

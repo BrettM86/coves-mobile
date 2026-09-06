@@ -172,10 +172,7 @@ void main() {
         'state untouched', (tester) async {
       stubListCommunities([buildCommunity()]);
 
-      final subscriptions = await pumpDiscovery(
-        tester,
-        seededSubscribed: true,
-      );
+      final subscriptions = await pumpDiscovery(tester, seededSubscribed: true);
 
       expect(subscriptions.isSubscribed(communityDid), true);
     });
@@ -185,10 +182,7 @@ void main() {
     ) async {
       stubListCommunities([buildCommunity(viewer: CommunityViewerState())]);
 
-      final subscriptions = await pumpDiscovery(
-        tester,
-        seededSubscribed: true,
-      );
+      final subscriptions = await pumpDiscovery(tester, seededSubscribed: true);
 
       // DIVERGENCE: the single-community site (C11c) skips this same input.
       expect(subscriptions.isSubscribed(communityDid), false);
@@ -212,9 +206,8 @@ void main() {
 
   group('community feed screen hydration', () {
     void stubCommunity(CommunityView community) {
-      when(
-        mockApiService.getCommunity(community: anyNamed('community')),
-      ).thenAnswer((_) async => community);
+      when(mockApiService.getCommunity(community: anyNamed('community')))
+          .thenAnswer((_) async => community);
     }
 
     void stubFeed(List<FeedViewPost> feed) {
@@ -368,9 +361,7 @@ void main() {
     testWidgets('C3 the community feed page skips a post whose community '
         'viewer says nothing about subscribed', (tester) async {
       stubCommunity(buildCommunity());
-      stubFeed([
-        buildFeedPost(communityViewer: CommunityRefViewerState()),
-      ]);
+      stubFeed([buildFeedPost(communityViewer: CommunityRefViewerState())]);
 
       final auth = _FakeAuthProvider(authenticated: true);
       final votes = buildVoteProvider(auth);

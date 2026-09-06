@@ -37,11 +37,7 @@ class CommunitiesScreen extends StatelessWidget {
         automaticallyImplyLeading: false,
         title: const Row(
           children: [
-            Icon(
-              Icons.workspaces_rounded,
-              size: 22,
-              color: AppColors.coral,
-            ),
+            Icon(Icons.workspaces_rounded, size: 22, color: AppColors.coral),
             SizedBox(width: 10),
             Text(
               'Communities',

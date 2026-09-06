@@ -37,39 +37,47 @@ void main() {
     // DioException → ApiException mapping is covered by
     // api_exceptions_test.dart — this test just seals the delegation.
     group('createVote error mapping', () {
-      test('surfaces a 500 as ServerException via the canonical mapper',
-          () async {
-        final dio = Dio(BaseOptions(baseUrl: 'https://api.test.coves.social'));
-        final dioAdapter = DioAdapter(dio: dio);
-        final service = VoteService(
-          sessionGetter: () async => const CovesSession(
-            token: 'test-token',
-            did: 'did:plc:test',
-            sessionId: 'session-1',
-          ),
-          didGetter: () => 'did:plc:test',
-          dio: dio,
-        );
+      test(
+        'surfaces a 500 as ServerException via the canonical mapper',
+        () async {
+          final dio = Dio(
+            BaseOptions(baseUrl: 'https://api.test.coves.social'),
+          );
+          final dioAdapter = DioAdapter(dio: dio);
+          final service = VoteService(
+            sessionGetter: () async => const CovesSession(
+              token: 'test-token',
+              did: 'did:plc:test',
+              sessionId: 'session-1',
+            ),
+            didGetter: () => 'did:plc:test',
+            dio: dio,
+          );
 
-        dioAdapter.onPost(
-          '/xrpc/social.coves.feed.vote.create',
-          (server) => server.reply(500, {'message': 'boom'}),
-          data: {
-            'subject': {'uri': 'at://did:plc:test/post/1', 'cid': 'cid1'},
-            'direction': 'up',
-          },
-        );
+          dioAdapter.onPost(
+            '/xrpc/social.coves.feed.vote.create',
+            (server) => server.reply(500, {'message': 'boom'}),
+            data: {
+              'subject': {'uri': 'at://did:plc:test/post/1', 'cid': 'cid1'},
+              'direction': 'up',
+            },
+          );
 
-        await expectLater(
-          service.createVote(
-            postUri: 'at://did:plc:test/post/1',
-            postCid: 'cid1',
-          ),
-          throwsA(
-            isA<ServerException>().having((e) => e.message, 'message', 'boom'),
-          ),
-        );
-      });
+          await expectLater(
+            service.createVote(
+              postUri: 'at://did:plc:test/post/1',
+              postCid: 'cid1',
+            ),
+            throwsA(
+              isA<ServerException>().having(
+                (e) => e.message,
+                'message',
+                'boom',
+              ),
+            ),
+          );
+        },
+      );
     });
   });
 }

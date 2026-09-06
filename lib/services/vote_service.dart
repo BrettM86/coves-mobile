@@ -30,12 +30,11 @@ import 'retry_interceptor.dart';
 class VoteService {
   VoteService({
     Future<CovesSession?> Function()? sessionGetter,
-    String? Function()? didGetter,
+    this._didGetter,
     Future<bool> Function()? tokenRefresher,
     Future<void> Function()? signOutHandler,
     Dio? dio,
-  }) : _sessionGetter = sessionGetter,
-       _didGetter = didGetter {
+  }) : _sessionGetter = sessionGetter {
     _dio =
         dio ??
         Dio(
@@ -51,11 +50,7 @@ class VoteService {
     // Add retry interceptor FIRST for transient network errors
     // (connection timeouts, mobile network flakiness)
     _dio.interceptors.add(
-      RetryInterceptor(
-        dio: _dio,
-        maxRetries: 2,
-        serviceName: 'VoteService',
-      ),
+      RetryInterceptor(dio: _dio, serviceName: 'VoteService'),
     );
 
     // Add shared 401 retry interceptor

@@ -5,8 +5,10 @@ void main() {
   // Note: Full widget tests for CommunityPickerScreen require mocking the API
   // service and proper timer management. The core business logic is thoroughly
   // tested in the unit test groups below (search filtering, count formatting,
-  // description building). Widget integration tests would need a mock API service
-  // to avoid real network calls and pending timer issues from the search debounce.
+  // description building). Widget integration tests would need a mock API
+  // service
+  // to avoid real network calls and pending timer issues from the search
+  // debounce.
 
   group('CommunityPickerScreen Search Filtering', () {
     test('client-side filtering should match name', () {
@@ -16,7 +18,7 @@ void main() {
         CommunityView(did: 'did:3', name: 'music'),
       ];
 
-      final query = 'prog';
+      const query = 'prog';
 
       final filtered = communities.where((community) {
         final name = community.name.toLowerCase();
@@ -38,7 +40,7 @@ void main() {
         CommunityView(did: 'did:3', name: 'music', displayName: 'Music'),
       ];
 
-      final query = 'discussion';
+      const query = 'discussion';
 
       final filtered = communities.where((community) {
         final name = community.name.toLowerCase();
@@ -70,7 +72,7 @@ void main() {
         ),
       ];
 
-      final query = 'software';
+      const query = 'software';
 
       final filtered = communities.where((community) {
         final name = community.name.toLowerCase();
@@ -90,7 +92,7 @@ void main() {
         CommunityView(did: 'did:3', name: 'music'),
       ];
 
-      final query = 'PROG';
+      const query = 'PROG';
 
       final filtered = communities.where((community) {
         final name = community.name.toLowerCase();
@@ -108,7 +110,7 @@ void main() {
         CommunityView(did: 'did:3', name: 'music'),
       ];
 
-      final query = '';
+      const query = '';
 
       List<CommunityView> filtered;
       if (query.isEmpty) {
@@ -130,7 +132,7 @@ void main() {
         CommunityView(did: 'did:3', name: 'music'),
       ];
 
-      final query = 'xyz123';
+      const query = 'xyz123';
 
       final filtered = communities.where((community) {
         final name = community.name.toLowerCase();
@@ -186,7 +188,6 @@ void main() {
   group('CommunityPickerScreen Description Building', () {
     test('should build description with member count only', () {
       const memberCount = 1000;
-      const subscriberCount = 0;
 
       String formatCount(int count) {
         if (count >= 1000) {

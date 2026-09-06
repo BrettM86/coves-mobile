@@ -13,10 +13,11 @@ void main() {
     late CovesApiService apiService;
 
     // Track token refresh and sign-out calls
-    int tokenRefreshCallCount = 0;
-    int signOutCallCount = 0;
-    String currentToken = 'initial-token';
-    bool shouldRefreshSucceed = true;
+    var tokenRefreshCallCount = 0;
+    var signOutCallCount = 0;
+    var currentToken = 'initial-token';
+    var shouldRefreshSucceed = true;
+    var shouldRefreshThrow = false;
 
     // Mock token getter
     Future<String?> mockTokenGetter() async {
@@ -26,6 +27,9 @@ void main() {
     // Mock token refresher
     Future<bool> mockTokenRefresher() async {
       tokenRefreshCallCount++;
+      if (shouldRefreshThrow) {
+        throw StateError('Token refresh unavailable');
+      }
       if (shouldRefreshSucceed) {
         // Simulate successful refresh by updating the token
         currentToken = 'refreshed-token';
@@ -48,6 +52,7 @@ void main() {
       signOutCallCount = 0;
       currentToken = 'initial-token';
       shouldRefreshSucceed = true;
+      shouldRefreshThrow = false;
 
       apiService = CovesApiService(
         dio: dio,
@@ -61,13 +66,13 @@ void main() {
       apiService.dispose();
     });
 
-    test('should call token refresher on 401 response but only retry once', () async {
+    test('refreshes on 401 and retries only once', () async {
       // This test verifies the interceptor detects 401, calls the refresher,
-      // and only retries ONCE to prevent infinite loops (even if retry returns 401).
+      // and only retries once, even when that retry also returns 401.
 
       const postUri = 'at://did:plc:test/social.coves.post.record/123';
 
-      // Mock will always return 401 (simulates scenario where even refresh doesn't help)
+      // Always return 401 to simulate refresh not fixing the request.
       dioAdapter.onGet(
         '/xrpc/social.coves.community.comment.getComments',
         (server) => server.reply(401, {
@@ -83,13 +88,10 @@ void main() {
       );
 
       // Make the request and expect it to fail (mock keeps returning 401)
-      expect(
-        () => apiService.getComments(postUri: postUri),
+      await expectLater(
+        apiService.getComments(postUri: postUri),
         throwsA(isA<Exception>()),
       );
-
-      // Wait for async operations
-      await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify token refresh was called exactly once (proves interceptor works)
       expect(tokenRefreshCallCount, 1);
@@ -97,7 +99,7 @@ void main() {
       // Verify token was updated by refresher
       expect(currentToken, 'refreshed-token');
 
-      // Verify user was signed out after retry failed (proves retry limit works)
+      // A failed retry signs the user out once.
       expect(signOutCallCount, 1);
     });
 
@@ -128,13 +130,10 @@ void main() {
       );
 
       // Make the request and expect it to fail
-      expect(
-        () => apiService.getComments(postUri: postUri),
+      await expectLater(
+        apiService.getComments(postUri: postUri),
         throwsA(isA<Exception>()),
       );
-
-      // Wait for async operations to complete
-      await Future.delayed(const Duration(milliseconds: 100));
 
       // Verify token refresh was attempted
       expect(tokenRefreshCallCount, 1);
@@ -150,12 +149,11 @@ void main() {
     // refresh-failure scenario above without driving that path.
 
     test('should NOT sign out when token refresh throws exception', () async {
-      final throwingDio = Dio(
-        BaseOptions(baseUrl: 'https://api.test.coves.social'),
-      );
-      final throwingAdapter = DioAdapter(dio: throwingDio);
+      const postUri = 'at://did:plc:test/social.coves.post.record/123';
+      shouldRefreshThrow = true;
       var requestCount = 0;
-      throwingDio.interceptors.add(
+      dio.interceptors.insert(
+        0,
         InterceptorsWrapper(
           onRequest: (options, handler) {
             requestCount++;
@@ -163,20 +161,12 @@ void main() {
           },
         ),
       );
-      final throwingApiService = CovesApiService(
-        dio: throwingDio,
-        tokenGetter: mockTokenGetter,
-        tokenRefresher: () async {
-          tokenRefreshCallCount++;
-          throw Exception('Refresh connection failed');
-        },
-        signOutHandler: mockSignOutHandler,
-      );
-      addTearDown(throwingApiService.dispose);
-      const postUri = 'at://did:plc:test/social.coves.post.record/123';
-      throwingAdapter.onGet(
+      dioAdapter.onGet(
         '/xrpc/social.coves.community.comment.getComments',
-        (server) => server.reply(401, {'error': 'Unauthorized'}),
+        (server) => server.reply(401, {
+          'error': 'Unauthorized',
+          'message': 'Token expired',
+        }),
         queryParameters: {
           'post': postUri,
           'sort': 'hot',
@@ -186,10 +176,15 @@ void main() {
       );
 
       await expectLater(
-        throwingApiService
-            .getComments(postUri: postUri)
-            .timeout(const Duration(seconds: 5)),
-        throwsA(isA<AuthenticationException>()),
+        apiService.getComments(postUri: postUri),
+        throwsA(
+          isA<AuthenticationException>().having(
+            (error) =>
+                (error.originalError as DioException).response?.statusCode,
+            'original response status',
+            401,
+          ),
+        ),
       );
 
       expect(requestCount, 1);
@@ -201,9 +196,14 @@ void main() {
     test(
       'should handle 401 gracefully when no refresher is provided',
       () async {
-        // Create API service without refresh capability
+        // Use a separate client so the setUp service's refresh interceptor
+        // cannot run on the service that intentionally has no refresher.
+        final dioWithoutRefresh = Dio(
+          BaseOptions(baseUrl: 'https://api.test.coves.social'),
+        );
+        final adapterWithoutRefresh = DioAdapter(dio: dioWithoutRefresh);
         final apiServiceNoRefresh = CovesApiService(
-          dio: dio,
+          dio: dioWithoutRefresh,
           tokenGetter: mockTokenGetter,
           // No tokenRefresher provided
           // No signOutHandler provided
@@ -212,7 +212,7 @@ void main() {
         const postUri = 'at://did:plc:test/social.coves.post.record/123';
 
         // Request returns 401
-        dioAdapter.onGet(
+        adapterWithoutRefresh.onGet(
           '/xrpc/social.coves.community.comment.getComments',
           (server) => server.reply(401, {
             'error': 'Unauthorized',
@@ -227,8 +227,8 @@ void main() {
         );
 
         // Make the request and expect it to fail with AuthenticationException
-        expect(
-          () => apiServiceNoRefresh.getComments(postUri: postUri),
+        await expectLater(
+          apiServiceNoRefresh.getComments(postUri: postUri),
           throwsA(isA<Exception>()),
         );
 
@@ -241,8 +241,6 @@ void main() {
         apiServiceNoRefresh.dispose();
       },
     );
-
-    // Skipped: http_mock_adapter cannot handle stateful request/response cycles
 
     test('should handle non-401 errors normally without refresh', () async {
       const postUri = 'at://did:plc:test/social.coves.post.record/123';
@@ -263,8 +261,8 @@ void main() {
       );
 
       // Make the request and expect it to fail
-      expect(
-        () => apiService.getComments(postUri: postUri),
+      await expectLater(
+        apiService.getComments(postUri: postUri),
         throwsA(isA<Exception>()),
       );
 

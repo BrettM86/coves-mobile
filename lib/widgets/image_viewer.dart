@@ -39,12 +39,10 @@ class ImageViewer extends StatefulWidget {
         // fits a lightbox.
         transitionDuration: const Duration(milliseconds: 150),
         reverseTransitionDuration: const Duration(milliseconds: 150),
-        pageBuilder:
-            (context, animation, secondaryAnimation) =>
-                ImageViewer(images: images, initialIndex: index),
-        transitionsBuilder:
-            (context, animation, secondaryAnimation, child) =>
-                FadeTransition(opacity: animation, child: child),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            ImageViewer(images: images, initialIndex: index),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+            FadeTransition(opacity: animation, child: child),
       ),
     );
   }
@@ -125,20 +123,15 @@ class _ImageViewerState extends State<ImageViewer> {
       // Show the thumb while the fullsize downloads. It is almost always
       // already in the cache from the feed or the post body, so the viewer
       // opens on the picture instead of on a black screen.
-      placeholder:
-          (context, url) => CachedNetworkImage(
-            imageUrl: image.thumb,
-            fit: BoxFit.contain,
-            fadeInDuration: Duration.zero,
-            fadeOutDuration: Duration.zero,
-            errorWidget: (context, url, error) => const SizedBox.shrink(),
-          ),
-      errorWidget:
-          (context, url, error) => const Icon(
-            Icons.broken_image,
-            color: AppColors.textMuted,
-            size: 48,
-          ),
+      placeholder: (context, url) => CachedNetworkImage(
+        imageUrl: image.thumb,
+        fit: BoxFit.contain,
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
+        errorWidget: (context, url, error) => const SizedBox.shrink(),
+      ),
+      errorWidget: (context, url, error) =>
+          const Icon(Icons.broken_image, color: AppColors.textMuted, size: 48),
     );
 
     if (alt != null && alt.isNotEmpty) {
@@ -180,20 +173,18 @@ class _ImageViewerState extends State<ImageViewer> {
               onVerticalDragEnd: _zoomed ? null : _onVerticalDragEnd,
               onVerticalDragCancel: _zoomed ? null : _snapBack,
               child: AnimatedContainer(
-                duration:
-                    _isDragging
-                        ? Duration.zero
-                        : const Duration(milliseconds: 200),
+                duration: _isDragging
+                    ? Duration.zero
+                    : const Duration(milliseconds: 200),
                 curve: Curves.easeOut,
                 transform: Matrix4.translationValues(0, _dragOffsetY, 0),
                 child: PageView.builder(
                   controller: _pageController,
                   // A zoomed page owns horizontal drags; freeze paging so a
                   // pan at the picture's edge doesn't yank to the next image.
-                  physics:
-                      _zoomed
-                          ? const NeverScrollableScrollPhysics()
-                          : const PageScrollPhysics(),
+                  physics: _zoomed
+                      ? const NeverScrollableScrollPhysics()
+                      : const PageScrollPhysics(),
                   itemCount: widget.images.length,
                   onPageChanged: (index) {
                     setState(() => _index = index);

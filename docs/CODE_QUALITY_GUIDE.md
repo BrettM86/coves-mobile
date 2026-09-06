@@ -200,14 +200,11 @@ Automate quality checks before every commit using `lefthook`.
 
 ### Setup
 ```bash
-# Install lefthook
-brew install lefthook  # macOS
-# or
-curl -1sLf 'https://dl.cloudsmith.io/public/evilmartians/lefthook/setup.deb.sh' | sudo -E bash
-sudo apt install lefthook  # Linux
+# Install the pinned tools after completing docs/TOOLCHAIN.md
+mise install --locked
 
 # Initialize
-lefthook install
+mise exec -- lefthook install
 ```
 
 ### Configuration

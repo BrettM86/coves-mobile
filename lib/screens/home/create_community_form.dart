@@ -64,10 +64,10 @@ class _CreateCommunityFormState extends State<CreateCommunityForm> {
   /// The controllers this State currently has [_onTextChanged] attached to,
   /// in the order the add/remove helpers walk them.
   List<TextEditingController> get _controllers => [
-        _nameController,
-        _displayNameController,
-        _descriptionController,
-      ];
+    _nameController,
+    _displayNameController,
+    _descriptionController,
+  ];
 
   bool get _isFormValid {
     return _nameController.text.trim().isNotEmpty &&
@@ -241,8 +241,7 @@ class _CreateCommunityFormState extends State<CreateCommunityForm> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed:
-                  _isFormValid && !widget.isSubmitting ? _submit : null,
+              onPressed: _isFormValid && !widget.isSubmitting ? _submit : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,

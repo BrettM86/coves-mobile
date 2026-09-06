@@ -275,12 +275,9 @@ class _CommentComposerState extends State<CommentComposer> {
                       height: 32,
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(
-                        color:
-                            (_hasText && !_isSubmitting)
-                                ? AppColors.primary
-                                : AppColors.textSecondary.withValues(
-                                  alpha: 0.3,
-                                ),
+                        color: (_hasText && !_isSubmitting)
+                            ? AppColors.primary
+                            : AppColors.textSecondary.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(

@@ -96,10 +96,8 @@ abstract final class ErrorMessage {
   );
 
   /// Error message for feed loading
-  static String loadFeed(Object error) => getErrorMessage(
-    error,
-    fallback: 'Could not load feed. Pull to refresh.',
-  );
+  static String loadFeed(Object error) =>
+      getErrorMessage(error, fallback: 'Could not load feed. Pull to refresh.');
 
   /// Error message for profile operations
   static String profile(Object error) => getErrorMessage(
@@ -126,10 +124,8 @@ abstract final class ErrorMessage {
   );
 
   /// Error message for save/bookmark operations
-  static String save(Object error) => getErrorMessage(
-    error,
-    fallback: 'Could not save. Please try again.',
-  );
+  static String save(Object error) =>
+      getErrorMessage(error, fallback: 'Could not save. Please try again.');
 
   /// Error message for community operations
   static String community(Object error) => getErrorMessage(

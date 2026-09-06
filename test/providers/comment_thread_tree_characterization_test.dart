@@ -124,9 +124,7 @@ void main() {
         limit: anyNamed('limit'),
         cursor: anyNamed('cursor'),
       ),
-    ).thenAnswer(
-      (_) async => CommentsResponse(post: {}, comments: comments),
-    );
+    ).thenAnswer((_) async => CommentsResponse(post: {}, comments: comments));
   }
 
   setUp(() {
@@ -135,9 +133,8 @@ void main() {
     subtreeQueues = <String, List<Future<CommentsResponse>>>{};
 
     when(mockAuthProvider.isAuthenticated).thenReturn(true);
-    when(
-      mockAuthProvider.getAccessToken(),
-    ).thenAnswer((_) async => 'test-token');
+    when(mockAuthProvider.getAccessToken())
+        .thenAnswer((_) async => 'test-token');
 
     // One stub for every subtree fetch; the rkey selects the response.
     when(
@@ -270,8 +267,10 @@ void main() {
         replies: const [],
         cursor: 'child-cursor',
       );
-      expect(provider.comments.single.replies!.single.repliesCursor,
-          'child-cursor');
+      expect(
+        provider.comments.single.replies!.single.repliesCursor,
+        'child-cursor',
+      );
 
       enqueueSubtree(
         rootUri,
@@ -692,94 +691,101 @@ void main() {
       expect(provider.comments.single.replies, isNull);
     });
 
-    test('the request cursor is captured before the fetch while the '
-        'existing node is looked up after it, so the two can disagree',
-        () async {
-      stubInitialTree([
-        node(rootUri, replies: [node(childUri, hasMore: true)]),
-      ]);
-      await provider.loadComments(refresh: true);
+    test(
+      'the request cursor is captured before the fetch while the '
+      'existing node is looked up after it, so the two can disagree',
+      () async {
+        stubInitialTree([
+          node(rootUri, replies: [node(childUri, hasMore: true)]),
+        ]);
+        await provider.loadComments(refresh: true);
 
-      await seedRepliesCursor(
-        childUri,
-        replies: [node(replyAUri)],
-        cursor: 'child-cursor',
-      );
-
-      // Start a cursor page for the child, then strand it mid-flight.
-      final gate = Completer<CommentsResponse>();
-      enqueueSubtreeFuture(childUri, gate.future);
-      final pending = provider.loadMoreReplies(childUri);
-
-      // The ancestor refetch delivers a complete listing without the child,
-      // so the child is dropped from the tree while its page is in flight.
-      enqueueSubtree(
-        rootUri,
-        CommentsResponse(
-          post: {},
-          comments: [
-            node(rootUri, replies: [node(siblingUri)]),
-          ],
-        ),
-      );
-      await provider.loadMoreReplies(rootUri);
-      expect(repliesOf(provider.comments.single), [siblingUri]);
-
-      gate.complete(
-        CommentsResponse(
-          post: {},
-          comments: [
-            node(childUri, replies: [node(replyBUri)]),
-          ],
-        ),
-      );
-      final result = await pending;
-
-      // The cursor WAS sent, so the request believed it was paginating...
-      verify(
-        mockApiService.getComments(
-          postUri: anyNamed('postUri'),
-          sort: anyNamed('sort'),
-          timeframe: anyNamed('timeframe'),
-          depth: anyNamed('depth'),
-          limit: anyNamed('limit'),
+        await seedRepliesCursor(
+          childUri,
+          replies: [node(replyAUri)],
           cursor: 'child-cursor',
-          parentRkey: argThat(equals('child'), named: 'parentRkey'),
-        ),
-      ).called(1);
+        );
 
-      // ...but by the time the response landed the node was gone, so the
-      // first-page branch ran: reply A was NOT appended.
-      expect(repliesOf(result), [replyBUri]);
-      expect(provider.comments.single.replies!.single.comment.uri, siblingUri);
-    });
+        // Start a cursor page for the child, then strand it mid-flight.
+        final gate = Completer<CommentsResponse>();
+        enqueueSubtreeFuture(childUri, gate.future);
+        final pending = provider.loadMoreReplies(childUri);
 
-    test('a subtree whose tree was refreshed mid-flight is discarded whole',
-        () async {
-      stubInitialTree([
-        node(rootUri, replies: [node(childUri, hasMore: true)]),
-      ]);
-      await provider.loadComments(refresh: true);
+        // The ancestor refetch delivers a complete listing without the child,
+        // so the child is dropped from the tree while its page is in flight.
+        enqueueSubtree(
+          rootUri,
+          CommentsResponse(
+            post: {},
+            comments: [
+              node(rootUri, replies: [node(siblingUri)]),
+            ],
+          ),
+        );
+        await provider.loadMoreReplies(rootUri);
+        expect(repliesOf(provider.comments.single), [siblingUri]);
 
-      final gate = Completer<CommentsResponse>();
-      enqueueSubtreeFuture(childUri, gate.future);
-      final pending = provider.loadMoreReplies(childUri);
+        gate.complete(
+          CommentsResponse(
+            post: {},
+            comments: [
+              node(childUri, replies: [node(replyBUri)]),
+            ],
+          ),
+        );
+        final result = await pending;
 
-      await provider.refreshComments();
+        // The cursor WAS sent, so the request believed it was paginating...
+        verify(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            cursor: 'child-cursor',
+            parentRkey: argThat(equals('child'), named: 'parentRkey'),
+          ),
+        ).called(1);
 
-      gate.complete(
-        CommentsResponse(
-          post: {},
-          comments: [
-            node(childUri, replies: [node(replyAUri)]),
-          ],
-        ),
-      );
+        // ...but by the time the response landed the node was gone, so the
+        // first-page branch ran: reply A was NOT appended.
+        expect(repliesOf(result), [replyBUri]);
+        expect(
+          provider.comments.single.replies!.single.comment.uri,
+          siblingUri,
+        );
+      },
+    );
 
-      expect(await pending, isNull);
-      // No state, no error, no merge: the tree is the refreshed one.
-      expect(provider.comments.single.replies!.single.replies, isNull);
-    });
+    test(
+      'a subtree whose tree was refreshed mid-flight is discarded whole',
+      () async {
+        stubInitialTree([
+          node(rootUri, replies: [node(childUri, hasMore: true)]),
+        ]);
+        await provider.loadComments(refresh: true);
+
+        final gate = Completer<CommentsResponse>();
+        enqueueSubtreeFuture(childUri, gate.future);
+        final pending = provider.loadMoreReplies(childUri);
+
+        await provider.refreshComments();
+
+        gate.complete(
+          CommentsResponse(
+            post: {},
+            comments: [
+              node(childUri, replies: [node(replyAUri)]),
+            ],
+          ),
+        );
+
+        expect(await pending, isNull);
+        // No state, no error, no merge: the tree is the refreshed one.
+        expect(provider.comments.single.replies!.single.replies, isNull);
+      },
+    );
   });
 
   group('tree membership drives the create-comment verification path', () {
@@ -814,10 +820,8 @@ void main() {
           contentFacets: anyNamed('contentFacets'),
         ),
       ).thenAnswer(
-        (_) async => const CreateCommentResponse(
-          uri: newCommentUri,
-          cid: 'cid-created',
-        ),
+        (_) async =>
+            const CreateCommentResponse(uri: newCommentUri, cid: 'cid-created'),
       );
 
       creatingProvider = CommentsProvider(

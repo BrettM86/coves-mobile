@@ -78,12 +78,16 @@ class _AnimatedHeartIconState extends State<AnimatedHeartIcon>
       ),
     );
 
-    _circleOpacityAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0, end: 0.8), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: 0.8, end: 0), weight: 50),
-    ]).animate(
-      CurvedAnimation(parent: _controller, curve: const Interval(0.15, 0.4)),
-    );
+    _circleOpacityAnimation =
+        TweenSequence<double>([
+          TweenSequenceItem(tween: Tween(begin: 0, end: 0.8), weight: 50),
+          TweenSequenceItem(tween: Tween(begin: 0.8, end: 0), weight: 50),
+        ]).animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.15, 0.4),
+          ),
+        );
 
     // Phase 3 (25-55%): Heart grows from small in center
     _heartGrowAnimation = Tween<double>(begin: 0.2, end: 1.3).animate(
@@ -101,12 +105,16 @@ class _AnimatedHeartIconState extends State<AnimatedHeartIcon>
       ),
     );
 
-    _particleOpacityAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0, end: 1), weight: 30),
-      TweenSequenceItem(tween: Tween(begin: 1, end: 0), weight: 70),
-    ]).animate(
-      CurvedAnimation(parent: _controller, curve: const Interval(0.55, 0.75)),
-    );
+    _particleOpacityAnimation =
+        TweenSequence<double>([
+          TweenSequenceItem(tween: Tween(begin: 0, end: 1), weight: 30),
+          TweenSequenceItem(tween: Tween(begin: 1, end: 0), weight: 70),
+        ]).animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.55, 0.75),
+          ),
+        );
 
     // Phase 5 (65-100%): Heart settles to 1x
     _heartPopAnimation = Tween<double>(begin: 1.3, end: 1).animate(
@@ -220,10 +228,9 @@ class _AnimatedHeartIconState extends State<AnimatedHeartIcon>
                       size: Size(widget.size, widget.size),
                       painter: LucideIconPainter(
                         paths: LucidePaths.heart,
-                        color:
-                            widget.isLiked
-                                ? effectiveLikedColor
-                                : effectiveColor,
+                        color: widget.isLiked
+                            ? effectiveLikedColor
+                            : effectiveColor,
                         filled: widget.isLiked,
                       ),
                     ),

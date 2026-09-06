@@ -37,7 +37,7 @@ import 'user_avatar.dart';
 /// ## Deleted Comments
 ///
 /// When the comment's `isDeleted` flag is true, the card displays a
-/// placeholder based on [deletionReason]: `[removed by moderator]` or
+/// placeholder based on `deletionReason`: `[removed by moderator]` or
 /// `[deleted by user]`. The vote button and actions are hidden.
 /// Author information is hidden for deleted comments to preserve privacy.
 ///
@@ -115,26 +115,24 @@ class _CommentCardState extends State<CommentCard> {
 
     return Semantics(
       button: true,
-      hint:
-          onLongPress != null
-              ? (isCollapsed
-                  ? 'Double tap and hold to expand thread'
-                  : 'Double tap and hold to collapse thread')
-              : null,
+      hint: onLongPress != null
+          ? (isCollapsed
+                ? 'Double tap and hold to expand thread'
+                : 'Double tap and hold to collapse thread')
+          : null,
       child: GestureDetector(
-        onLongPress:
-            onLongPress != null
-                ? () async {
-                  try {
-                    await HapticFeedback.mediumImpact();
-                  } on PlatformException catch (e) {
-                    if (kDebugMode) {
-                      debugPrint('Haptics not supported: $e');
-                    }
+        onLongPress: onLongPress != null
+            ? () async {
+                try {
+                  await HapticFeedback.mediumImpact();
+                } on PlatformException catch (e) {
+                  if (kDebugMode) {
+                    debugPrint('Haptics not supported: $e');
                   }
-                  onLongPress!();
                 }
-                : null,
+                onLongPress!();
+              }
+            : null,
         child: InkWell(
           onTap: onTap != null
               ? () async {
@@ -150,10 +148,9 @@ class _CommentCardState extends State<CommentCard> {
               : null,
           child: Container(
             decoration: BoxDecoration(
-              color:
-                  widget.isHighlighted
-                      ? AppColors.primary.withValues(alpha: 0.08)
-                      : AppColors.background,
+              color: widget.isHighlighted
+                  ? AppColors.primary.withValues(alpha: 0.08)
+                  : AppColors.background,
             ),
             child: Stack(
               children: [
@@ -240,8 +237,9 @@ class _CommentCardState extends State<CommentCard> {
                                           style: TextStyle(
                                             color: AppColors.textPrimary
                                                 .withValues(
-                                                  alpha:
-                                                      isCollapsed ? 0.7 : 0.5,
+                                                  alpha: isCollapsed
+                                                      ? 0.7
+                                                      : 0.5,
                                                 ),
                                             fontSize: 13,
                                             fontWeight: FontWeight.w500,
@@ -275,7 +273,8 @@ class _CommentCardState extends State<CommentCard> {
                           ],
                         ),
 
-                        // Only show content and actions when expanded (skip for deleted)
+                        // Only show content and actions when expanded (skip
+                        // for deleted)
                         if (!isCollapsed && !comment.isTombstoned) ...[
                           const SizedBox(height: 8),
 
@@ -357,7 +356,9 @@ class _CommentCardState extends State<CommentCard> {
         authorHandle: author.handle,
       );
     } else if (action == 'report') {
-      if (!context.mounted) return;
+      if (!context.mounted) {
+        return;
+      }
       final messenger = ScaffoldMessenger.of(context);
 
       // Show report dialog
@@ -367,17 +368,22 @@ class _CommentCardState extends State<CommentCard> {
         contentType: 'comment',
       );
 
-      if (reported == true && context.mounted) {
+      if ((reported ?? false) && context.mounted) {
         messenger.showSnackBar(
           const SnackBar(
-            content: Text('Report submitted. Thank you for helping keep our community safe.'),
+            content: Text(
+              'Report submitted. Thank you for helping keep our '
+              'community safe.',
+            ),
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } else if (action == 'delete') {
       // Prevent multiple taps - set flag immediately before dialog
-      if (_isDeleting) return;
+      if (_isDeleting) {
+        return;
+      }
       setState(() => _isDeleting = true);
 
       // Only proceed if onDelete callback is available
@@ -395,7 +401,8 @@ class _CommentCardState extends State<CommentCard> {
         builder: (context) => AlertDialog(
           title: const Text('Delete Comment'),
           content: const Text(
-            'Are you sure you want to delete this comment? This cannot be undone.',
+            'Are you sure you want to delete this comment? This '
+            'cannot be undone.',
           ),
           actions: [
             TextButton(
@@ -412,7 +419,9 @@ class _CommentCardState extends State<CommentCard> {
       );
 
       if (confirmed != true || !context.mounted) {
-        if (mounted) setState(() => _isDeleting = false);
+        if (mounted) {
+          setState(() => _isDeleting = false);
+        }
         return;
       }
 
@@ -424,7 +433,9 @@ class _CommentCardState extends State<CommentCard> {
         }
       }
 
-      if (!context.mounted) return;
+      if (!context.mounted) {
+        return;
+      }
       final messenger = ScaffoldMessenger.of(context);
 
       try {
@@ -459,7 +470,9 @@ class _CommentCardState extends State<CommentCard> {
         if (context.mounted) {
           messenger.showSnackBar(
             const SnackBar(
-              content: Text('Comment not found. It may have already been deleted.'),
+              content: Text(
+                'Comment not found. It may have already been deleted.',
+              ),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -531,9 +544,7 @@ class _CommentCardState extends State<CommentCard> {
               AppColors.backgroundSecondary,
             ),
             shape: WidgetStatePropertyAll(
-              RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
           menuChildren: [
@@ -551,10 +562,7 @@ class _CommentCardState extends State<CommentCard> {
             if (!isCommentAuthor)
               MenuItemButton(
                 onPressed: () => _handleMenuAction(context, 'report'),
-                leadingIcon: const Icon(
-                  Icons.flag_outlined,
-                  size: 20,
-                ),
+                leadingIcon: const Icon(Icons.flag_outlined, size: 20),
                 child: const Text('Report comment'),
               ),
             // Delete option (only for comment author)
@@ -615,12 +623,11 @@ class _CommentCardState extends State<CommentCard> {
             const Spacer(),
             Semantics(
               button: true,
-              label:
-                  isLiked
-                      ? 'Unlike comment, $adjustedScore '
-                          '${adjustedScore == 1 ? "like" : "likes"}'
-                      : 'Like comment, $adjustedScore '
-                          '${adjustedScore == 1 ? "like" : "likes"}',
+              label: isLiked
+                  ? 'Unlike comment, $adjustedScore '
+                        '${adjustedScore == 1 ? "like" : "likes"}'
+                  : 'Like comment, $adjustedScore '
+                        '${adjustedScore == 1 ? "like" : "likes"}',
               child: InkWell(
                 onTap: () async {
                   // Check authentication
@@ -706,10 +713,9 @@ class _CommentDepthPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..strokeWidth = 2.0
-          ..style = PaintingStyle.stroke;
+    final paint = Paint()
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
 
     // Draw vertical line for each depth level with different colors
     for (var i = 0; i < depth; i++) {

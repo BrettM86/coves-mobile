@@ -29,20 +29,17 @@ void main() {
       );
     });
 
-    test(
-      'should preserve non-sensitive parameters (DID, handle, session_id)',
-      () {
-        const testUrl =
-            'social.coves:/callback?token=sealed_token_abc123&did=did:plc:test123&session_id=sess-456&handle=alice.bsky.social';
+    test('preserves DID, handle, and session_id parameters', () {
+      const testUrl =
+          'social.coves:/callback?token=sealed_token_abc123&did=did:plc:test123&session_id=sess-456&handle=alice.bsky.social';
 
-        final redacted = CovesAuthService.redactSensitiveParams(testUrl);
+      final redacted = CovesAuthService.redactSensitiveParams(testUrl);
 
-        expect(redacted, contains('did=did:plc:test123'));
-        expect(redacted, contains('session_id=sess-456'));
-        expect(redacted, contains('handle=alice.bsky.social'));
-        expect(redacted, isNot(contains('sealed_token_abc123')));
-      },
-    );
+      expect(redacted, contains('did=did:plc:test123'));
+      expect(redacted, contains('session_id=sess-456'));
+      expect(redacted, contains('handle=alice.bsky.social'));
+      expect(redacted, isNot(contains('sealed_token_abc123')));
+    });
 
     test('should handle token as first parameter', () {
       const testUrl =

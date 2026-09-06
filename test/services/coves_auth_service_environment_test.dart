@@ -29,15 +29,14 @@ void main() {
     );
   });
 
-  tearDown(() {
-    CovesAuthService.resetInstance();
-  });
+  tearDown(CovesAuthService.resetInstance);
 
   group('CovesAuthService - Environment Isolation', () {
     test('should use environment-specific storage keys', () {
       // This test documents the expected storage key format
       // The actual environment is determined at compile time via --dart-define
-      // In tests without specific environment configuration, it defaults to production
+      // In tests without specific environment configuration, it defaults to
+      // production
       final currentEnv = EnvironmentConfig.current.environment.name;
       final expectedKey = 'coves_session_$currentEnv';
 
@@ -70,9 +69,8 @@ void main() {
       );
 
       // Mock storage read for the environment-specific key
-      when(
-        mockStorage.read(key: storageKey),
-      ).thenAnswer((_) async => session.toJsonString());
+      when(mockStorage.read(key: storageKey))
+          .thenAnswer((_) async => session.toJsonString());
 
       // Act - Restore session
       final result = await authService.restoreSession();
@@ -101,9 +99,8 @@ void main() {
         handle: 'alice.bsky.social',
       );
 
-      when(
-        mockStorage.read(key: storageKey),
-      ).thenAnswer((_) async => session.toJsonString());
+      when(mockStorage.read(key: storageKey))
+          .thenAnswer((_) async => session.toJsonString());
       await authService.restoreSession();
 
       // Mock successful refresh
@@ -121,17 +118,15 @@ void main() {
         ),
       );
 
-      when(
-        mockStorage.write(key: storageKey, value: anyNamed('value')),
-      ).thenAnswer((_) async => {});
+      when(mockStorage.write(key: storageKey, value: anyNamed('value')))
+          .thenAnswer((_) async => {});
 
       // Act - Refresh token (which saves the updated session)
       await authService.refreshToken();
 
       // Assert - Verify environment-specific key was used for saving
-      verify(
-        mockStorage.write(key: storageKey, value: anyNamed('value')),
-      ).called(1);
+      verify(mockStorage.write(key: storageKey, value: anyNamed('value')))
+          .called(1);
 
       // Verify the generic key was never used
       verifyNever(
@@ -151,20 +146,18 @@ void main() {
         sessionId: 'session-123',
       );
 
-      when(
-        mockStorage.read(key: storageKey),
-      ).thenAnswer((_) async => session.toJsonString());
+      when(mockStorage.read(key: storageKey))
+          .thenAnswer((_) async => session.toJsonString());
       await authService.restoreSession();
 
       // Mock logout
-      when(
-        mockDio.post<void>('/oauth/logout', options: anyNamed('options')),
-      ).thenAnswer(
-        (_) async => Response(
-          requestOptions: RequestOptions(path: '/oauth/logout'),
-          statusCode: 200,
-        ),
-      );
+      when(mockDio.post<void>('/oauth/logout', options: anyNamed('options')))
+          .thenAnswer(
+            (_) async => Response(
+              requestOptions: RequestOptions(path: '/oauth/logout'),
+              statusCode: 200,
+            ),
+          );
 
       when(mockStorage.delete(key: storageKey)).thenAnswer((_) async => {});
 

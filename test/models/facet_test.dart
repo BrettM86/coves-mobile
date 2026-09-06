@@ -63,19 +63,21 @@ void main() {
       );
     });
 
-    test('fromJson throws FormatException on invalid byte range (end < start)',
-        () {
-      expect(
-        () => ByteSlice.fromJson({'byteStart': 10, 'byteEnd': 5}),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('Invalid byte range'),
+    test(
+      'fromJson throws FormatException on invalid byte range (end < start)',
+      () {
+        expect(
+          () => ByteSlice.fromJson({'byteStart': 10, 'byteEnd': 5}),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains('Invalid byte range'),
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
 
     test('fromJson throws FormatException on negative byteStart', () {
       expect(
@@ -205,19 +207,13 @@ void main() {
     });
 
     test('degrades link with empty uri to UnknownFacetFeature', () {
-      final json = {
-        r'$type': 'social.coves.richtext.facet#link',
-        'uri': '',
-      };
+      final json = {r'$type': 'social.coves.richtext.facet#link', 'uri': ''};
 
       expect(FacetFeature.fromJson(json), isA<UnknownFacetFeature>());
     });
 
     test('degrades link with non-string uri to UnknownFacetFeature', () {
-      final json = {
-        r'$type': 'social.coves.richtext.facet#link',
-        'uri': 123,
-      };
+      final json = {r'$type': 'social.coves.richtext.facet#link', 'uri': 123};
 
       expect(FacetFeature.fromJson(json), isA<UnknownFacetFeature>());
     });
@@ -242,15 +238,11 @@ void main() {
 
     test('parses simple formatting features', () {
       expect(
-        FacetFeature.fromJson({
-          r'$type': 'social.coves.richtext.facet#bold',
-        }),
+        FacetFeature.fromJson({r'$type': 'social.coves.richtext.facet#bold'}),
         isA<BoldFacetFeature>(),
       );
       expect(
-        FacetFeature.fromJson({
-          r'$type': 'social.coves.richtext.facet#italic',
-        }),
+        FacetFeature.fromJson({r'$type': 'social.coves.richtext.facet#italic'}),
         isA<ItalicFacetFeature>(),
       );
       expect(
@@ -260,9 +252,7 @@ void main() {
         isA<StrikethroughFacetFeature>(),
       );
       expect(
-        FacetFeature.fromJson({
-          r'$type': 'social.coves.richtext.facet#code',
-        }),
+        FacetFeature.fromJson({r'$type': 'social.coves.richtext.facet#code'}),
         isA<CodeFacetFeature>(),
       );
     });
@@ -375,10 +365,7 @@ void main() {
     test('returns the first block-level feature', () {
       const facet = RichTextFacet(
         index: ByteSlice(byteStart: 0, byteEnd: 5),
-        features: [
-          BoldFacetFeature(),
-          HeadingFacetFeature(level: 2),
-        ],
+        features: [BoldFacetFeature(), HeadingFacetFeature(level: 2)],
       );
 
       expect(facet.blockFeature, const HeadingFacetFeature(level: 2));
@@ -485,29 +472,31 @@ void main() {
       expect(facets.first.features.first, const ItalicFacetFeature());
     });
 
-    test('drops a facet whose features is a non-list without nuking siblings',
-        () {
-      final record = {
-        'facets': [
-          {
-            'index': {'byteStart': 0, 'byteEnd': 5},
-            'features': 'not-a-list',
-          },
-          {
-            'index': {'byteStart': 10, 'byteEnd': 15},
-            'features': [
-              {r'$type': 'social.coves.richtext.facet#bold'},
-            ],
-          },
-        ],
-      };
+    test(
+      'drops a facet whose features is a non-list without nuking siblings',
+      () {
+        final record = {
+          'facets': [
+            {
+              'index': {'byteStart': 0, 'byteEnd': 5},
+              'features': 'not-a-list',
+            },
+            {
+              'index': {'byteStart': 10, 'byteEnd': 15},
+              'features': [
+                {r'$type': 'social.coves.richtext.facet#bold'},
+              ],
+            },
+          ],
+        };
 
-      final facets = parseFacetsFromRecord(record);
+        final facets = parseFacetsFromRecord(record);
 
-      expect(facets, isNotNull);
-      expect(facets!.length, 1);
-      expect(facets.first.index, const ByteSlice(byteStart: 10, byteEnd: 15));
-    });
+        expect(facets, isNotNull);
+        expect(facets!.length, 1);
+        expect(facets.first.index, const ByteSlice(byteStart: 10, byteEnd: 15));
+      },
+    );
   });
 
   group('LinkFacetFeature', () {
@@ -579,9 +568,9 @@ void main() {
     });
 
     test(r'type property returns $type from data', () {
-      const feature = UnknownFacetFeature(data: {
-        r'$type': 'custom.feature#type',
-      });
+      const feature = UnknownFacetFeature(
+        data: {r'$type': 'custom.feature#type'},
+      );
 
       expect(feature.type, 'custom.feature#type');
     });
@@ -599,28 +588,24 @@ void main() {
     });
 
     test('equality works with same data', () {
-      const feature1 = UnknownFacetFeature(data: {
-        r'$type': 'test',
-        'value': 123,
-      });
-      const feature2 = UnknownFacetFeature(data: {
-        r'$type': 'test',
-        'value': 123,
-      });
-      const feature3 = UnknownFacetFeature(data: {
-        r'$type': 'test',
-        'value': 456,
-      });
+      const feature1 = UnknownFacetFeature(
+        data: {r'$type': 'test', 'value': 123},
+      );
+      const feature2 = UnknownFacetFeature(
+        data: {r'$type': 'test', 'value': 123},
+      );
+      const feature3 = UnknownFacetFeature(
+        data: {r'$type': 'test', 'value': 456},
+      );
 
       expect(feature1, equals(feature2));
       expect(feature1, isNot(equals(feature3)));
     });
 
     test('hashCode is stable and equal instances hash equally', () {
-      const feature = UnknownFacetFeature(data: {
-        r'$type': 'test',
-        'value': 123,
-      });
+      const feature = UnknownFacetFeature(
+        data: {r'$type': 'test', 'value': 123},
+      );
 
       // Stable across calls (the old entries-based hash returned a
       // different value per invocation)
@@ -638,9 +623,9 @@ void main() {
     });
 
     test('toString format', () {
-      const feature = UnknownFacetFeature(data: {
-        r'$type': 'social.coves.richtext.facet#future',
-      });
+      const feature = UnknownFacetFeature(
+        data: {r'$type': 'social.coves.richtext.facet#future'},
+      );
 
       expect(
         feature.toString(),
@@ -677,7 +662,10 @@ void main() {
       expect(facet.index.byteEnd, 25);
       expect(facet.features.length, 1);
       expect(facet.features[0], isA<LinkFacetFeature>());
-      expect((facet.features[0] as LinkFacetFeature).uri, 'https://example.com');
+      expect(
+        (facet.features[0] as LinkFacetFeature).uri,
+        'https://example.com',
+      );
     });
 
     test('fromJson parses multiple features', () {
@@ -726,10 +714,7 @@ void main() {
     });
 
     test('fromJson throws on invalid index type', () {
-      final json = {
-        'index': 'invalid',
-        'features': [],
-      };
+      final json = {'index': 'invalid', 'features': []};
 
       expect(
         () => RichTextFacet.fromJson(json),
@@ -787,7 +772,10 @@ void main() {
 
       expect(json['index'], {'byteStart': 10, 'byteEnd': 30});
       expect(json['features'], [
-        {r'$type': 'social.coves.richtext.facet#link', 'uri': 'https://test.org'},
+        {
+          r'$type': 'social.coves.richtext.facet#link',
+          'uri': 'https://test.org',
+        },
       ]);
     });
 

@@ -10,11 +10,7 @@ import 'auth_provider.dart';
 /// Tracks local vote state keyed by post URI for instant feedback.
 /// Automatically clears state when user signs out.
 class VoteProvider with ChangeNotifier {
-  VoteProvider({
-    required VoteService voteService,
-    required AuthProvider authProvider,
-  }) : _voteService = voteService,
-       _authProvider = authProvider {
+  VoteProvider({required this._voteService, required this._authProvider}) {
     // Listen to auth state changes and clear votes on sign-out
     _authProvider.addListener(_onAuthChanged);
   }
@@ -350,8 +346,9 @@ class VoteProvider with ChangeNotifier {
     String? serverVoteUri,
   }) {
     final local = _votes[postUri];
-    final localDirection =
-        (local == null || local.deleted) ? null : local.direction;
+    final localDirection = (local == null || local.deleted)
+        ? null
+        : local.direction;
 
     if (localDirection != serverVoteDirection) {
       return;
@@ -419,7 +416,9 @@ class VoteState {
   /// AT-URI format: at://did:plc:xyz/social.coves.feed.vote/3kby...
   /// Returns the last segment (rkey) or null if URI is null/invalid.
   static String? extractRkeyFromUri(String? uri) {
-    if (uri == null) return null;
+    if (uri == null) {
+      return null;
+    }
     final parts = uri.split('/');
     return parts.isNotEmpty ? parts.last : null;
   }

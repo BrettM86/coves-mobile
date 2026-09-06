@@ -39,77 +39,62 @@ class MockCovesAuthService extends _i1.Mock implements _i3.CovesAuthService {
   }
 
   @override
-  bool get isAuthenticated =>
-      (super.noSuchMethod(
-            Invocation.getter(#isAuthenticated),
-            returnValue: false,
-          )
-          as bool);
+  bool get isAuthenticated => (super.noSuchMethod(
+    Invocation.getter(#isAuthenticated),
+    returnValue: false,
+  ) as bool);
 
   @override
-  _i4.Future<void> initialize() =>
-      (super.noSuchMethod(
-            Invocation.method(#initialize, []),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
-          )
-          as _i4.Future<void>);
+  _i4.Future<void> initialize() => (super.noSuchMethod(
+    Invocation.method(#initialize, []),
+    returnValue: _i4.Future<void>.value(),
+    returnValueForMissingStub: _i4.Future<void>.value(),
+  ) as _i4.Future<void>);
 
   @override
-  _i4.Future<_i2.CovesSession> signIn(String? handle) =>
-      (super.noSuchMethod(
-            Invocation.method(#signIn, [handle]),
-            returnValue: _i4.Future<_i2.CovesSession>.value(
-              _FakeCovesSession_0(this, Invocation.method(#signIn, [handle])),
-            ),
-          )
-          as _i4.Future<_i2.CovesSession>);
+  _i4.Future<_i2.CovesSession> signIn(String? handle) => (super.noSuchMethod(
+    Invocation.method(#signIn, [handle]),
+    returnValue: _i4.Future<_i2.CovesSession>.value(
+      _FakeCovesSession_0(this, Invocation.method(#signIn, [handle])),
+    ),
+  ) as _i4.Future<_i2.CovesSession>);
 
   @override
-  _i4.Future<_i2.CovesSession?> restoreSession() =>
-      (super.noSuchMethod(
-            Invocation.method(#restoreSession, []),
-            returnValue: _i4.Future<_i2.CovesSession?>.value(),
-          )
-          as _i4.Future<_i2.CovesSession?>);
+  _i4.Future<_i2.CovesSession?> restoreSession() => (super.noSuchMethod(
+    Invocation.method(#restoreSession, []),
+    returnValue: _i4.Future<_i2.CovesSession?>.value(),
+  ) as _i4.Future<_i2.CovesSession?>);
 
   @override
-  _i4.Future<_i2.CovesSession> refreshToken() =>
-      (super.noSuchMethod(
-            Invocation.method(#refreshToken, []),
-            returnValue: _i4.Future<_i2.CovesSession>.value(
-              _FakeCovesSession_0(this, Invocation.method(#refreshToken, [])),
-            ),
-          )
-          as _i4.Future<_i2.CovesSession>);
+  _i4.Future<_i2.CovesSession> refreshToken() => (super.noSuchMethod(
+    Invocation.method(#refreshToken, []),
+    returnValue: _i4.Future<_i2.CovesSession>.value(
+      _FakeCovesSession_0(this, Invocation.method(#refreshToken, [])),
+    ),
+  ) as _i4.Future<_i2.CovesSession>);
 
   @override
   _i4.Future<_i3.SessionValidationResult> validateSession() =>
       (super.noSuchMethod(
-            Invocation.method(#validateSession, []),
-            returnValue: _i4.Future<_i3.SessionValidationResult>.value(
-              _i3.SessionValidationResult.valid,
-            ),
-          )
-          as _i4.Future<_i3.SessionValidationResult>);
+        Invocation.method(#validateSession, []),
+        returnValue: _i4.Future<_i3.SessionValidationResult>.value(
+          _i3.SessionValidationResult.valid,
+        ),
+      ) as _i4.Future<_i3.SessionValidationResult>);
 
   @override
-  _i4.Future<void> signOut() =>
-      (super.noSuchMethod(
-            Invocation.method(#signOut, []),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
-          )
-          as _i4.Future<void>);
+  _i4.Future<void> signOut() => (super.noSuchMethod(
+    Invocation.method(#signOut, []),
+    returnValue: _i4.Future<void>.value(),
+    returnValueForMissingStub: _i4.Future<void>.value(),
+  ) as _i4.Future<void>);
 
   @override
-  String validateAndNormalizeHandle(String? handle) =>
-      (super.noSuchMethod(
-            Invocation.method(#validateAndNormalizeHandle, [handle]),
-            returnValue: _i5.dummyValue<String>(
-              this,
-              Invocation.method(#validateAndNormalizeHandle, [handle]),
-            ),
-          )
-          as String);
+  String validateAndNormalizeHandle(String? handle) => (super.noSuchMethod(
+    Invocation.method(#validateAndNormalizeHandle, [handle]),
+    returnValue: _i5.dummyValue<String>(
+      this,
+      Invocation.method(#validateAndNormalizeHandle, [handle]),
+    ),
+  ) as String);
 }

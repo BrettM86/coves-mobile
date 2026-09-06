@@ -27,11 +27,10 @@ class CommunityHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = community.displayName ?? community.name;
     final accentColor = DisplayUtils.getFallbackColor(community.name);
-    final subscriberLabel =
-        community.subscriberCount != null
-            ? '${DisplayUtils.formatCount(community.subscriberCount!)}'
-                ' subscribers'
-            : null;
+    final subscriberLabel = community.subscriberCount != null
+        ? '${DisplayUtils.formatCount(community.subscriberCount!)}'
+              ' subscribers'
+        : null;
 
     return Semantics(
       label: '$name${subscriberLabel != null ? ", $subscriberLabel" : ""}',

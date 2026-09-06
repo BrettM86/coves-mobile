@@ -1,0 +1,8 @@
+[tools]
+flutter = "3.47.2"
+ruby = "4.0.1"
+"github:mobile-dev-inc/maestro" = { version = "cli-2.10.0", asset_pattern = "maestro.zip" }
+lefthook = "2.1.12"
+
+[env]
+_.path = ["{{config_root}}/bin"]

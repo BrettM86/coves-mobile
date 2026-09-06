@@ -147,7 +147,6 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
     String? cursor,
   ) async {
     final response = await _apiService.listCommunities(
-      limit: 50,
       cursor: cursor,
       sort: widget.sort,
       subscribed: widget.subscribed,
@@ -333,10 +332,7 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
               child: Text(
                 "That's every community",
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: AppColors.textMuted, fontSize: 14),
               ),
             ),
             itemBuilder: (context, community, index) => CommunityListTile(

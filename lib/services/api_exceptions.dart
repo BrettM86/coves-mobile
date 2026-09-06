@@ -31,10 +31,9 @@ class ApiException implements Exception {
   /// type: 401 → [AuthenticationException], 404 → [NotFoundException],
   /// 5xx → [ServerException], anything else → [ApiException].
   ///
-  /// Without a response, the Dio error type picks the type: timeouts and
-  /// connection failures → [NetworkException], DNS resolution failures →
-  /// [FederationException] (the PDS may be unreachable), cancelled
-  /// requests → a plain [ApiException].
+  /// Without a response, transport timeouts and connection failures become
+  /// [NetworkException]; DNS failures become [FederationException]. Cancelled
+  /// requests and response-processing timeouts become plain [ApiException]s.
   factory ApiException.fromDioError(DioException error) {
     final response = error.response;
     final statusCode = response?.statusCode;
@@ -84,8 +83,13 @@ class ApiException implements Exception {
       );
     }
 
-    // Network-level errors (no response from server)
+    // Transport and response-processing errors without an HTTP status.
     switch (error.type) {
+      case DioExceptionType.transformTimeout:
+        return ApiException(
+          'Timed out processing server response',
+          originalError: error,
+        );
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:

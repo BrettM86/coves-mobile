@@ -1,35 +1,16 @@
 PODS:
   - Flutter (1.0.0)
-  - flutter_web_auth_2 (3.0.0):
-    - Flutter
-  - image_cropper (0.0.4):
-    - Flutter
-    - TOCropViewController (~> 2.7.4)
-  - TOCropViewController (2.7.4)
 
 DEPENDENCIES:
   - Flutter (from `Flutter`)
-  - flutter_web_auth_2 (from `.symlinks/plugins/flutter_web_auth_2/ios`)
-  - image_cropper (from `.symlinks/plugins/image_cropper/ios`)
-
-SPEC REPOS:
-  trunk:
-    - TOCropViewController
 
 EXTERNAL SOURCES:
   Flutter:
     :path: Flutter
-  flutter_web_auth_2:
-    :path: ".symlinks/plugins/flutter_web_auth_2/ios"
-  image_cropper:
-    :path: ".symlinks/plugins/image_cropper/ios"
 
 SPEC CHECKSUMS:
   Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
-  flutter_web_auth_2: 5c8d9dcd7848b5a9efb086d24e7a9adcae979c80
-  image_cropper: 5f162dcf988100dc1513f9c6b7eb42cd6fbf9156
-  TOCropViewController: 80b8985ad794298fb69d3341de183f33d1853654
 
 PODFILE CHECKSUM: ce46961bc07797ada34b7d4cb42af901ddc4ec33
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.17.0

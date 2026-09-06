@@ -66,7 +66,7 @@ void main() {
     test('does not clamp the fallback into the bounds', () {
       // The fallback is a deliberate display choice, not record data; it is
       // returned as given so a caller can pick a shape outside its own rails.
-      expect(clampMediaRatio(null, min: 1, max: 1.2, fallback: 16 / 9), 16 / 9);
+      expect(clampMediaRatio(null, min: 1, max: 1.2), 16 / 9);
     });
   });
 

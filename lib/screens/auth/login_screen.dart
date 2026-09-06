@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -53,10 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
         backgroundColor: AppColors.backgroundSecondary,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(
-            color: AppColors.border,
-            width: 1,
-          ),
+          side: const BorderSide(color: AppColors.border),
         ),
         title: const Text(
           'What is a handle?',
@@ -71,7 +70,8 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Your handle is your unique identifier on the AT Protocol network.',
+              'Your handle is your unique identifier on the AT '
+              'Protocol network.',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 15,
@@ -90,11 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(
-                    Icons.alternate_email,
-                    color: AppColors.teal,
-                    size: 20,
-                  ),
+                  Icon(Icons.alternate_email, color: AppColors.teal, size: 20),
                   SizedBox(width: 10),
                   Text(
                     'alice.bsky.social',
@@ -109,7 +105,8 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(height: 16),
             const Text(
-              'If you don\'t have one yet, you can create an account at bsky.app.',
+              'If you don\'t have one yet, you can create an account '
+              'at bsky.app.',
               style: TextStyle(
                 color: AppColors.textMuted,
                 fontSize: 13,
@@ -127,10 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             child: const Text(
               'Got it',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
-              ),
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
             ),
           ),
         ],
@@ -208,8 +202,7 @@ class _LoginScreenState extends State<LoginScreen> {
         errorCategory = 'network';
       } else if (errorString.contains('404') ||
           errorString.contains('not found')) {
-        userMessage =
-            'Handle not found. Please verify your handle is correct.';
+        userMessage = 'Handle not found. Please verify your handle is correct.';
         errorCategory = 'not_found';
       } else if (errorString.contains('401') ||
           errorString.contains('403') ||
@@ -221,17 +214,20 @@ class _LoginScreenState extends State<LoginScreen> {
         errorCategory = 'unexpected';
       }
 
-      Sentry.captureException(
-        e,
-        stackTrace: stackTrace,
-        withScope: (scope) {
-          scope.setTag('error_category', errorCategory);
-          scope.setTag('screen', 'login');
-          scope.setTag('action', 'sign_in');
-          scope.setContexts('sign_in', {
-            'handle_provided': _handleController.text.isNotEmpty,
-          });
-        },
+      unawaited(
+        Sentry.captureException(
+          e,
+          stackTrace: stackTrace,
+          withScope: (scope) {
+            scope
+              ..setTag('error_category', errorCategory)
+              ..setTag('screen', 'login')
+              ..setTag('action', 'sign_in')
+              ..setContexts('sign_in', {
+                'handle_provided': _handleController.text.isNotEmpty,
+              });
+          },
+        ),
       );
 
       if (mounted) {
@@ -327,8 +323,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               // Sign in button
                               Center(
                                 child: PrimaryButton(
-                                  title:
-                                      _isLoading ? 'Signing in...' : 'Sign in',
+                                  title: _isLoading
+                                      ? 'Signing in...'
+                                      : 'Sign in',
                                   onPressed: _isLoading ? () {} : _handleSignIn,
                                   disabled: _isLoading,
                                 ),
@@ -435,8 +432,9 @@ class _LoginScreenState extends State<LoginScreen> {
               error,
               stackTrace: stackTrace,
               withScope: (scope) {
-                scope.setTag('asset', 'providers_stack.svg');
-                scope.setTag('screen', 'login');
+                scope
+                  ..setTag('asset', 'providers_stack.svg')
+                  ..setTag('screen', 'login');
               },
             );
             return const Text(
@@ -481,7 +479,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     BoxShadow(
                       color: AppColors.coral.withValues(alpha: 0.2),
                       blurRadius: 12,
-                      spreadRadius: 0,
                     ),
                   ]
                 : null,
@@ -509,43 +506,25 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(
-                  color: AppColors.border,
-                  width: 2,
-                ),
+                borderSide: const BorderSide(color: AppColors.border, width: 2),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(
-                  color: AppColors.border,
-                  width: 2,
-                ),
+                borderSide: const BorderSide(color: AppColors.border, width: 2),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(
-                  color: AppColors.coral,
-                  width: 2,
-                ),
+                borderSide: const BorderSide(color: AppColors.coral, width: 2),
               ),
               errorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(
-                  color: AppColors.error,
-                  width: 2,
-                ),
+                borderSide: const BorderSide(color: AppColors.error, width: 2),
               ),
               focusedErrorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(
-                  color: AppColors.error,
-                  width: 2,
-                ),
+                borderSide: const BorderSide(color: AppColors.error, width: 2),
               ),
-              errorStyle: const TextStyle(
-                color: AppColors.error,
-                fontSize: 12,
-              ),
+              errorStyle: const TextStyle(color: AppColors.error, fontSize: 12),
               prefixIcon: Padding(
                 padding: const EdgeInsets.only(left: 20, right: 4),
                 child: Text(
@@ -584,21 +563,16 @@ class _LoginScreenState extends State<LoginScreen> {
       decoration: BoxDecoration(
         color: AppColors.teal.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.teal.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: AppColors.teal.withValues(alpha: 0.2)),
       ),
       child: const Row(
         children: [
-          Icon(
-            Icons.security_rounded,
-            color: AppColors.teal,
-            size: 20,
-          ),
+          Icon(Icons.security_rounded, color: AppColors.teal, size: 20),
           SizedBox(width: 12),
           Expanded(
             child: Text(
-              'You\'ll be redirected to authorize securely with your atproto provider.',
+              'You\'ll be redirected to authorize securely with your '
+              'atproto provider.',
               style: TextStyle(
                 fontSize: 13,
                 color: AppColors.textSecondary,

@@ -76,10 +76,9 @@ class AppTypography {
       for (final entry in const {
         displayFamily: 'assets/fonts/OFL-Shrikhand.txt',
       }.entries) {
-        yield LicenseEntryWithLineBreaks(
-          [entry.key],
-          await rootBundle.loadString(entry.value),
-        );
+        yield LicenseEntryWithLineBreaks([
+          entry.key,
+        ], await rootBundle.loadString(entry.value));
       }
     });
   }
@@ -102,13 +101,12 @@ class AppTypography {
   ///   text color and which `.apply` leaves untouched when passed null. Over
   ///   a light base, underlines and strikethrough would still come out
   ///   near-black even with the colors above corrected.
-  static TextTheme get textTheme =>
-      ThemeData.dark().textTheme.apply(
-        // Redundant while [fontFamily] is null, and deliberately kept: this
-        // is the wiring that makes the token load-bearing. See [fontFamily].
-        // ignore: avoid_redundant_argument_values
-        fontFamily: fontFamily,
-        bodyColor: AppColors.textPrimary,
-        displayColor: AppColors.textPrimary,
-      );
+  static TextTheme get textTheme => ThemeData.dark().textTheme.apply(
+    // Redundant while [fontFamily] is null, and deliberately kept: this
+    // is the wiring that makes the token load-bearing. See [fontFamily].
+    // ignore: avoid_redundant_argument_values
+    fontFamily: fontFamily,
+    bodyColor: AppColors.textPrimary,
+    displayColor: AppColors.textPrimary,
+  );
 }

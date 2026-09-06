@@ -67,18 +67,14 @@ void main() {
       routes: [
         GoRoute(
           path: '/',
-          builder:
-              (context, state) => Scaffold(
-                body: PostCard(
-                  post: post,
-                  disableNavigation: disableNavigation,
-                ),
-              ),
+          builder: (context, state) => Scaffold(
+            body: PostCard(post: post, disableNavigation: disableNavigation),
+          ),
         ),
         GoRoute(
           path: '/post/:uri',
-          builder:
-              (context, state) => const Scaffold(body: Text(_detailMarker)),
+          builder: (context, state) =>
+              const Scaffold(body: Text(_detailMarker)),
         ),
       ],
     );
@@ -132,9 +128,9 @@ void main() {
     return PostEmbed.fromJson({
       r'$type': 'social.coves.embed.video#view',
       'video': video,
-      if (thumbnail != null) 'thumbnail': thumbnail,
-      if (alt != null) 'alt': alt,
-      if (duration != null) 'duration': duration,
+      'thumbnail': ?thumbnail,
+      'alt': ?alt,
+      'duration': ?duration,
     });
   }
 
@@ -474,7 +470,7 @@ void main() {
 
       expect(
         tester.getSemantics(find.bySemanticsLabel('View full image')),
-        containsSemantics(isButton: true, label: 'View full image'),
+        isSemantics(isButton: true, label: 'View full image'),
       );
       handle.dispose();
     });
@@ -497,7 +493,7 @@ void main() {
 
       expect(
         tester.getSemantics(find.bySemanticsLabel('View full image')),
-        containsSemantics(isButton: true, label: 'View full image'),
+        isSemantics(isButton: true, label: 'View full image'),
       );
       handle.dispose();
     });
@@ -557,7 +553,7 @@ void main() {
 
       expect(
         tester.getSemantics(find.bySemanticsLabel('View full image')),
-        containsSemantics(isButton: true, label: 'View full image'),
+        isSemantics(isButton: true, label: 'View full image'),
       );
       handle.dispose();
     });
@@ -599,7 +595,7 @@ void main() {
       expect(find.byKey(_durationBadgeKey), findsOneWidget);
       expect(
         tester.getSemantics(find.bySemanticsLabel('Play video')),
-        containsSemantics(isButton: true, label: 'Play video'),
+        isSemantics(isButton: true, label: 'Play video'),
       );
       handle.dispose();
     });
@@ -711,8 +707,9 @@ void main() {
       // under flutter_test. Inspecting the pushed route instead asserts the
       // same contract without building the page.
 
-      final videoRoutes =
-          observer.pushed.whereType<MaterialPageRoute<void>>().toList();
+      final videoRoutes = observer.pushed
+          .whereType<MaterialPageRoute<void>>()
+          .toList();
       expect(
         videoRoutes,
         hasLength(1),
@@ -737,8 +734,9 @@ void main() {
 
       await tester.tap(find.byKey(_videoKey));
 
-      final videoRoutes =
-          observer.pushed.whereType<MaterialPageRoute<void>>().toList();
+      final videoRoutes = observer.pushed
+          .whereType<MaterialPageRoute<void>>()
+          .toList();
       expect(
         videoRoutes,
         hasLength(1),
@@ -803,8 +801,9 @@ void main() {
       final titleBottom = tester.getBottomLeft(find.text('Test Post Title')).dy;
       final mediaTop = tester.getTopLeft(find.byKey(_imagesKey)).dy;
       final mediaBottom = tester.getBottomLeft(find.byKey(_imagesKey)).dy;
-      final textTop =
-          tester.getTopLeft(find.text('Body text below the media')).dy;
+      final textTop = tester
+          .getTopLeft(find.text('Body text below the media'))
+          .dy;
 
       expect(
         mediaTop - titleBottom,

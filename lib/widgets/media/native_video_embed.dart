@@ -52,28 +52,23 @@ class NativeVideoEmbed extends StatelessWidget {
 
     Widget surface = AspectRatio(
       aspectRatio: aspectRatio,
-      child:
-          thumbnail == null
-              ? MediaFill(iconColor: fill.iconColor, iconSize: fill.iconSize)
-              : CachedNetworkImage(
-                imageUrl: thumbnail,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                // Disable fade animation to prevent scroll jitter
-                fadeInDuration: Duration.zero,
-                fadeOutDuration: Duration.zero,
-                placeholder:
-                    (context, url) => MediaFill(
-                      iconColor: fill.iconColor,
-                      iconSize: fill.iconSize,
-                    ),
-                errorWidget:
-                    (context, url, error) => MediaFill(
-                      icon: Icons.broken_image,
-                      iconColor: fill.iconColor,
-                      iconSize: fill.iconSize,
-                    ),
+      child: thumbnail == null
+          ? MediaFill(iconColor: fill.iconColor, iconSize: fill.iconSize)
+          : CachedNetworkImage(
+              imageUrl: thumbnail,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              // Disable fade animation to prevent scroll jitter
+              fadeInDuration: Duration.zero,
+              fadeOutDuration: Duration.zero,
+              placeholder: (context, url) =>
+                  MediaFill(iconColor: fill.iconColor, iconSize: fill.iconSize),
+              errorWidget: (context, url, error) => MediaFill(
+                icon: Icons.broken_image,
+                iconColor: fill.iconColor,
+                iconSize: fill.iconSize,
               ),
+            ),
     );
 
     if (alt != null && alt.isNotEmpty) {

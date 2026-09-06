@@ -48,11 +48,7 @@ class CommentService {
     // Add retry interceptor FIRST for transient network errors
     // (connection timeouts, mobile network flakiness)
     _dio.interceptors.add(
-      RetryInterceptor(
-        dio: _dio,
-        maxRetries: 2,
-        serviceName: 'CommentService',
-      ),
+      RetryInterceptor(dio: _dio, serviceName: 'CommentService'),
     );
 
     // Add shared 401 retry interceptor

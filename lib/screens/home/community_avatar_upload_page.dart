@@ -66,7 +66,8 @@ class CommunityAvatarUploadPage extends StatefulWidget {
   final Future<bool> Function({
     required CommunityView community,
     required PickedImage image,
-  }) onUploadAvatar;
+  })
+  onUploadAvatar;
 
   /// Seam for the platform image pick + crop, which is otherwise reachable
   /// only through statics with no injection point. Defaults to the real

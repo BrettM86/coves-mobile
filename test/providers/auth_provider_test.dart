@@ -48,12 +48,10 @@ void main() {
         );
 
         when(mockAuthService.initialize()).thenAnswer((_) async => {});
-        when(
-          mockAuthService.restoreSession(),
-        ).thenAnswer((_) async => mockSession);
-        when(
-          mockAuthService.validateSession(),
-        ).thenAnswer((_) async => SessionValidationResult.valid);
+        when(mockAuthService.restoreSession())
+            .thenAnswer((_) async => mockSession);
+        when(mockAuthService.validateSession())
+            .thenAnswer((_) async => SessionValidationResult.valid);
 
         await authProvider.initialize();
 
@@ -87,15 +85,13 @@ void main() {
 
       setUp(() {
         when(mockAuthService.initialize()).thenAnswer((_) async => {});
-        when(
-          mockAuthService.restoreSession(),
-        ).thenAnswer((_) async => mockSession);
+        when(mockAuthService.restoreSession())
+            .thenAnswer((_) async => mockSession);
       });
 
       test('should stay signed in when the session validates', () async {
-        when(
-          mockAuthService.validateSession(),
-        ).thenAnswer((_) async => SessionValidationResult.valid);
+        when(mockAuthService.validateSession())
+            .thenAnswer((_) async => SessionValidationResult.valid);
 
         await authProvider.initialize();
         await pumpEventQueue();
@@ -108,9 +104,8 @@ void main() {
       test(
         'should keep the session when validation is indeterminate (offline)',
         () async {
-          when(
-            mockAuthService.validateSession(),
-          ).thenAnswer((_) async => SessionValidationResult.indeterminate);
+          when(mockAuthService.validateSession())
+              .thenAnswer((_) async => SessionValidationResult.indeterminate);
 
           await authProvider.initialize();
           await pumpEventQueue();
@@ -122,66 +117,54 @@ void main() {
         },
       );
 
-      test(
-        'should refresh and stay signed in when the backend rejects the '
-        'token but refresh succeeds',
-        () async {
-          const refreshedSession = CovesSession(
-            token: 'refreshed_sealed_token',
-            did: 'did:plc:test123',
-            sessionId: 'session123',
-            handle: 'test.user',
-          );
+      test('should refresh and stay signed in when the backend rejects the '
+          'token but refresh succeeds', () async {
+        const refreshedSession = CovesSession(
+          token: 'refreshed_sealed_token',
+          did: 'did:plc:test123',
+          sessionId: 'session123',
+          handle: 'test.user',
+        );
 
-          when(
-            mockAuthService.validateSession(),
-          ).thenAnswer((_) async => SessionValidationResult.invalid);
-          when(
-            mockAuthService.refreshToken(),
-          ).thenAnswer((_) async => refreshedSession);
+        when(mockAuthService.validateSession())
+            .thenAnswer((_) async => SessionValidationResult.invalid);
+        when(mockAuthService.refreshToken())
+            .thenAnswer((_) async => refreshedSession);
 
-          await authProvider.initialize();
-          await pumpEventQueue();
+        await authProvider.initialize();
+        await pumpEventQueue();
 
-          expect(authProvider.isAuthenticated, true);
-          expect(authProvider.session?.token, 'refreshed_sealed_token');
-          verify(mockAuthService.refreshToken()).called(1);
-        },
-      );
+        expect(authProvider.isAuthenticated, true);
+        expect(authProvider.session?.token, 'refreshed_sealed_token');
+        verify(mockAuthService.refreshToken()).called(1);
+      });
 
-      test(
-        'should sign out when the backend definitively rejects the token '
-        'and the refresh 401s (dead session)',
-        () async {
-          when(
-            mockAuthService.validateSession(),
-          ).thenAnswer((_) async => SessionValidationResult.invalid);
-          when(
-            mockAuthService.refreshToken(),
-          ).thenThrow(const SessionExpiredException());
-          when(mockAuthService.signOut()).thenAnswer((_) async => {});
+      test('should sign out when the backend definitively rejects the token '
+          'and the refresh 401s (dead session)', () async {
+        when(mockAuthService.validateSession())
+            .thenAnswer((_) async => SessionValidationResult.invalid);
+        when(mockAuthService.refreshToken())
+            .thenThrow(const SessionExpiredException());
+        when(mockAuthService.signOut()).thenAnswer((_) async => {});
 
-          await authProvider.initialize();
-          await pumpEventQueue();
+        await authProvider.initialize();
+        await pumpEventQueue();
 
-          // Dead session is cleared: listeners rebuild into signed-out UI
-          // instead of silently degrading to anonymous browsing.
-          expect(authProvider.isAuthenticated, false);
-          expect(authProvider.session, isNull);
-          verifyNever(mockAuthService.signOut());
-        },
-      );
+        // Dead session is cleared: listeners rebuild into signed-out UI
+        // instead of silently degrading to anonymous browsing.
+        expect(authProvider.isAuthenticated, false);
+        expect(authProvider.session, isNull);
+        verifyNever(mockAuthService.signOut());
+      });
 
       test(
         'should keep the session when the refresh fails transiently after '
         'an invalid verdict (backend blip must not destroy a live session)',
         () async {
-          when(
-            mockAuthService.validateSession(),
-          ).thenAnswer((_) async => SessionValidationResult.invalid);
-          when(
-            mockAuthService.refreshToken(),
-          ).thenThrow(Exception('Token refresh failed: 503'));
+          when(mockAuthService.validateSession())
+              .thenAnswer((_) async => SessionValidationResult.invalid);
+          when(mockAuthService.refreshToken())
+              .thenThrow(Exception('Token refresh failed: 503'));
 
           await authProvider.initialize();
           await pumpEventQueue();
@@ -194,51 +177,45 @@ void main() {
         },
       );
 
-      test(
-        'should not touch a NEW session when a stale invalid verdict '
-        'resolves after sign-out + re-login',
-        () async {
-          const newSession = CovesSession(
-            token: 'new_account_token',
-            did: 'did:plc:other456',
-            sessionId: 'session456',
-            handle: 'other.user',
-          );
+      test('should not touch a NEW session when a stale invalid verdict '
+          'resolves after sign-out + re-login', () async {
+        const newSession = CovesSession(
+          token: 'new_account_token',
+          did: 'did:plc:other456',
+          sessionId: 'session456',
+          handle: 'other.user',
+        );
 
-          final validationGate = Completer<SessionValidationResult>();
-          when(
-            mockAuthService.validateSession(),
-          ).thenAnswer((_) => validationGate.future);
-          when(mockAuthService.signOut()).thenAnswer((_) async => {});
-          when(
-            mockAuthService.signIn('other.user'),
-          ).thenAnswer((_) async => newSession);
+        final validationGate = Completer<SessionValidationResult>();
+        when(mockAuthService.validateSession())
+            .thenAnswer((_) => validationGate.future);
+        when(mockAuthService.signOut()).thenAnswer((_) async => {});
+        when(mockAuthService.signIn('other.user'))
+            .thenAnswer((_) async => newSession);
 
-          await authProvider.initialize();
+        await authProvider.initialize();
 
-          // User signs out and into a different account while the old
-          // session's probe is still in flight.
-          await authProvider.signOut();
-          await authProvider.signIn('other.user');
-          clearInteractions(mockAuthService);
+        // User signs out and into a different account while the old
+        // session's probe is still in flight.
+        await authProvider.signOut();
+        await authProvider.signIn('other.user');
+        clearInteractions(mockAuthService);
 
-          validationGate.complete(SessionValidationResult.invalid);
-          await pumpEventQueue();
+        validationGate.complete(SessionValidationResult.invalid);
+        await pumpEventQueue();
 
-          // The stale verdict must not refresh or sign out the new session.
-          expect(authProvider.isAuthenticated, true);
-          expect(authProvider.session?.token, 'new_account_token');
-          verifyNever(mockAuthService.refreshToken());
-          verifyNever(mockAuthService.signOut());
-        },
-      );
+        // The stale verdict must not refresh or sign out the new session.
+        expect(authProvider.isAuthenticated, true);
+        expect(authProvider.session?.token, 'new_account_token');
+        verifyNever(mockAuthService.refreshToken());
+        verifyNever(mockAuthService.signOut());
+      });
 
       test(
         'should keep the session when the probe throws unexpectedly',
         () async {
-          when(
-            mockAuthService.validateSession(),
-          ).thenThrow(Exception('unexpected'));
+          when(mockAuthService.validateSession())
+              .thenThrow(Exception('unexpected'));
 
           await authProvider.initialize();
           await pumpEventQueue();
@@ -255,9 +232,8 @@ void main() {
         'should ignore a stale invalid verdict after the user signed out',
         () async {
           final validationGate = Completer<SessionValidationResult>();
-          when(
-            mockAuthService.validateSession(),
-          ).thenAnswer((_) => validationGate.future);
+          when(mockAuthService.validateSession())
+              .thenAnswer((_) => validationGate.future);
           when(mockAuthService.signOut()).thenAnswer((_) async => {});
 
           await authProvider.initialize();
@@ -286,9 +262,8 @@ void main() {
           handle: 'alice.bsky.social',
         );
 
-        when(
-          mockAuthService.signIn('alice.bsky.social'),
-        ).thenAnswer((_) async => mockSession);
+        when(mockAuthService.signIn('alice.bsky.social'))
+            .thenAnswer((_) async => mockSession);
 
         await authProvider.signIn('alice.bsky.social');
 
@@ -307,9 +282,8 @@ void main() {
       test(
         'should rethrow SignInCancelledException without setting error state',
         () async {
-          when(
-            mockAuthService.signIn('alice.bsky.social'),
-          ).thenThrow(const SignInCancelledException());
+          when(mockAuthService.signIn('alice.bsky.social'))
+              .thenThrow(const SignInCancelledException());
 
           // Record the error value at every notification: no notification
           // should ever carry an error state for a user cancel.
@@ -331,9 +305,8 @@ void main() {
       );
 
       test('should handle sign in errors', () async {
-        when(
-          mockAuthService.signIn('invalid.handle'),
-        ).thenThrow(Exception('Sign in failed'));
+        when(mockAuthService.signIn('invalid.handle'))
+            .thenThrow(Exception('Sign in failed'));
 
         expect(
           () => authProvider.signIn('invalid.handle'),
@@ -354,9 +327,8 @@ void main() {
           sessionId: 'session123',
           handle: 'alice.bsky.social',
         );
-        when(
-          mockAuthService.signIn('alice.bsky.social'),
-        ).thenAnswer((_) async => mockSession);
+        when(mockAuthService.signIn('alice.bsky.social'))
+            .thenAnswer((_) async => mockSession);
 
         await authProvider.signIn('alice.bsky.social');
         expect(authProvider.isAuthenticated, true);
@@ -376,40 +348,39 @@ void main() {
         Exception('Revocation failed'),
         StateError('Plugin failed'),
       ]) {
-        test('retains state and allows retry after ${failure.runtimeType}',
-            () async {
-          // Sign in first
-          const mockSession = CovesSession(
-            token: 'mock_sealed_token',
-            did: 'did:plc:test123',
-            sessionId: 'session123',
-            handle: 'alice.bsky.social',
-          );
-          when(
-            mockAuthService.signIn('alice.bsky.social'),
-          ).thenAnswer((_) async => mockSession);
+        test(
+          'retains state and allows retry after ${failure.runtimeType}',
+          () async {
+            // Sign in first
+            const mockSession = CovesSession(
+              token: 'mock_sealed_token',
+              did: 'did:plc:test123',
+              sessionId: 'session123',
+              handle: 'alice.bsky.social',
+            );
+            when(mockAuthService.signIn('alice.bsky.social'))
+                .thenAnswer((_) async => mockSession);
 
-          await authProvider.signIn('alice.bsky.social');
+            await authProvider.signIn('alice.bsky.social');
 
-          // Sign out with error
-          when(
-            mockAuthService.signOut(),
-          ).thenThrow(failure);
+            // Sign out with error
+            when(mockAuthService.signOut()).thenThrow(failure);
 
-          await authProvider.signOut();
+            await authProvider.signOut();
 
-          expect(authProvider.isAuthenticated, true);
-          expect(authProvider.session, mockSession);
-          expect(authProvider.error, "Couldn't sign out. Please try again.");
-          expect(authProvider.isLoading, false);
+            expect(authProvider.isAuthenticated, true);
+            expect(authProvider.session, mockSession);
+            expect(authProvider.error, "Couldn't sign out. Please try again.");
+            expect(authProvider.isLoading, false);
 
-          when(mockAuthService.signOut()).thenAnswer((_) async {});
-          await authProvider.signOut();
-          expect(authProvider.isAuthenticated, false);
-          expect(authProvider.session, isNull);
-          expect(authProvider.error, isNull);
-          expect(authProvider.isLoading, false);
-        });
+            when(mockAuthService.signOut()).thenAnswer((_) async {});
+            await authProvider.signOut();
+            expect(authProvider.isAuthenticated, false);
+            expect(authProvider.session, isNull);
+            expect(authProvider.error, isNull);
+            expect(authProvider.isLoading, false);
+          },
+        );
       }
     });
 
@@ -426,9 +397,8 @@ void main() {
           sessionId: 'session123',
         );
 
-        when(
-          mockAuthService.signIn('alice.bsky.social'),
-        ).thenAnswer((_) async => mockSession);
+        when(mockAuthService.signIn('alice.bsky.social'))
+            .thenAnswer((_) async => mockSession);
 
         await authProvider.signIn('alice.bsky.social');
 
@@ -455,12 +425,10 @@ void main() {
           sessionId: 'session123',
         );
 
-        when(
-          mockAuthService.signIn('alice.bsky.social'),
-        ).thenAnswer((_) async => mockSession);
-        when(
-          mockAuthService.refreshToken(),
-        ).thenAnswer((_) async => refreshedSession);
+        when(mockAuthService.signIn('alice.bsky.social'))
+            .thenAnswer((_) async => mockSession);
+        when(mockAuthService.refreshToken())
+            .thenAnswer((_) async => refreshedSession);
 
         await authProvider.signIn('alice.bsky.social');
         final result = await authProvider.refreshToken();
@@ -469,32 +437,27 @@ void main() {
         expect(authProvider.session?.token, 'new_sealed_token');
       });
 
-      test(
-        'should sign out when refresh is definitively rejected '
-        '(SessionExpiredException)',
-        () async {
-          const mockSession = CovesSession(
-            token: 'mock_sealed_token',
-            did: 'did:plc:test123',
-            sessionId: 'session123',
-          );
+      test('should sign out when refresh is definitively rejected '
+          '(SessionExpiredException)', () async {
+        const mockSession = CovesSession(
+          token: 'mock_sealed_token',
+          did: 'did:plc:test123',
+          sessionId: 'session123',
+        );
 
-          when(
-            mockAuthService.signIn('alice.bsky.social'),
-          ).thenAnswer((_) async => mockSession);
-          when(
-            mockAuthService.refreshToken(),
-          ).thenThrow(const SessionExpiredException());
-          when(mockAuthService.signOut()).thenAnswer((_) async => {});
+        when(mockAuthService.signIn('alice.bsky.social'))
+            .thenAnswer((_) async => mockSession);
+        when(mockAuthService.refreshToken())
+            .thenThrow(const SessionExpiredException());
+        when(mockAuthService.signOut()).thenAnswer((_) async => {});
 
-          await authProvider.signIn('alice.bsky.social');
-          final result = await authProvider.refreshToken();
+        await authProvider.signIn('alice.bsky.social');
+        final result = await authProvider.refreshToken();
 
-          expect(result, false);
-          expect(authProvider.isAuthenticated, false);
-          verifyNever(mockAuthService.signOut());
-        },
-      );
+        expect(result, false);
+        expect(authProvider.isAuthenticated, false);
+        verifyNever(mockAuthService.signOut());
+      });
 
       test('should keep the session when refresh fails transiently', () async {
         const mockSession = CovesSession(
@@ -503,12 +466,10 @@ void main() {
           sessionId: 'session123',
         );
 
-        when(
-          mockAuthService.signIn('alice.bsky.social'),
-        ).thenAnswer((_) async => mockSession);
-        when(
-          mockAuthService.refreshToken(),
-        ).thenThrow(Exception('Refresh failed: network error'));
+        when(mockAuthService.signIn('alice.bsky.social'))
+            .thenAnswer((_) async => mockSession);
+        when(mockAuthService.refreshToken())
+            .thenThrow(Exception('Refresh failed: network error'));
 
         await authProvider.signIn('alice.bsky.social');
         final result = await authProvider.refreshToken();
@@ -533,9 +494,8 @@ void main() {
           did: 'did:plc:test123',
           sessionId: 'session123',
         );
-        when(
-          mockAuthService.signIn('alice.bsky.social'),
-        ).thenAnswer((_) async => mockSession);
+        when(mockAuthService.signIn('alice.bsky.social'))
+            .thenAnswer((_) async => mockSession);
 
         await authProvider.signIn('alice.bsky.social');
 

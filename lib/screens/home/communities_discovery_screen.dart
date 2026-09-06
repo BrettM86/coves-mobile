@@ -23,7 +23,8 @@ import 'communities_see_all_screen.dart';
 /// Communities discovery screen with sectioned layout.
 ///
 /// Shows three sections with differentiated visual treatments:
-/// - "Your Communities" (authenticated only) — horizontal chip row for quick access
+/// - "Your Communities" (authenticated only) — horizontal chip row for
+/// quick access
 /// - "Popular" — horizontal scrolling hero cards
 /// - "Recently Created" — list tiles with join buttons
 ///
@@ -95,7 +96,9 @@ class _CommunitiesDiscoveryScreenState
   String? get _firstError => _subscribedError ?? _popularError ?? _newError;
 
   Future<void> _loadAllSections() async {
-    if (_hasLoaded && !_hasAnyError) return;
+    if (_hasLoaded && !_hasAnyError) {
+      return;
+    }
 
     final authProvider = context.read<AuthProvider>();
     final isAuthenticated = authProvider.isAuthenticated;
@@ -106,7 +109,9 @@ class _CommunitiesDiscoveryScreenState
       _newError = null;
       _isLoadingPopular = true;
       _isLoadingNew = true;
-      if (isAuthenticated) _isLoadingSubscribed = true;
+      if (isAuthenticated) {
+        _isLoadingSubscribed = true;
+      }
     });
 
     // Fire all requests in parallel
@@ -128,13 +133,15 @@ class _CommunitiesDiscoveryScreenState
   }
 
   /// Generic section loader that handles the common pattern of:
-  /// fetching communities, updating state on success, and setting error on failure.
+  /// fetching communities, updating state on success, and setting error on
+  /// failure.
   Future<void> _loadSection({
     required int limit,
     String sort = 'popular',
     bool? subscribed,
     required void Function(List<CommunityView> communities) onSuccess,
-    required void Function(bool isLoading, String? error) onStateChange,
+    required void Function({required bool isLoading, String? error})
+    onStateChange,
     required String fallbackError,
   }) async {
     try {
@@ -146,11 +153,11 @@ class _CommunitiesDiscoveryScreenState
 
       if (mounted) {
         onSuccess(response.communities);
-        onStateChange(false, null);
+        onStateChange(isLoading: false);
       }
     } on ApiException catch (e) {
       if (mounted) {
-        onStateChange(false, e.message);
+        onStateChange(isLoading: false, error: e.message);
       }
     } on Exception catch (e, stackTrace) {
       if (kDebugMode) {
@@ -158,7 +165,7 @@ class _CommunitiesDiscoveryScreenState
       }
       await Sentry.captureException(e, stackTrace: stackTrace);
       if (mounted) {
-        onStateChange(false, fallbackError);
+        onStateChange(isLoading: false, error: fallbackError);
       }
     }
   }
@@ -182,7 +189,7 @@ class _CommunitiesDiscoveryScreenState
         hydrator.hydrateCommunityListSubscriptions(communities);
         _subscribedCommunities = communities;
       },
-      onStateChange: (isLoading, error) {
+      onStateChange: ({required isLoading, error}) {
         setState(() {
           _isLoadingSubscribed = isLoading;
           _subscribedError = error;
@@ -195,11 +202,10 @@ class _CommunitiesDiscoveryScreenState
   Future<void> _loadPopular() async {
     await _loadSection(
       limit: 8,
-      sort: 'popular',
       onSuccess: (communities) {
         _popularCommunities = communities;
       },
-      onStateChange: (isLoading, error) {
+      onStateChange: ({required isLoading, error}) {
         setState(() {
           _isLoadingPopular = isLoading;
           _popularError = error;
@@ -216,7 +222,7 @@ class _CommunitiesDiscoveryScreenState
       onSuccess: (communities) {
         _newCommunities = communities;
       },
-      onStateChange: (isLoading, error) {
+      onStateChange: ({required isLoading, error}) {
         setState(() {
           _isLoadingNew = isLoading;
           _newError = error;
@@ -231,7 +237,9 @@ class _CommunitiesDiscoveryScreenState
   void _onSearchChanged() {
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 300), () {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       final query = _searchController.text.trim().toLowerCase();
 
       if (query.isEmpty) {
@@ -292,9 +300,9 @@ class _CommunitiesDiscoveryScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Could not load all communities. Search results may be incomplete.',
+              'Could not load all communities. Search results may be '
+              'incomplete.',
             ),
-            duration: Duration(seconds: 4),
           ),
         );
       }
@@ -334,12 +342,11 @@ class _CommunitiesDiscoveryScreenState
     Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder:
-            (_) => CommunitiesSeeAllScreen(
-              title: title,
-              sort: sort,
-              subscribed: subscribed,
-            ),
+        builder: (_) => CommunitiesSeeAllScreen(
+          title: title,
+          sort: sort,
+          subscribed: subscribed,
+        ),
       ),
     );
   }
@@ -517,18 +524,17 @@ class _CommunitiesDiscoveryScreenState
             color: AppColors.textMuted.withValues(alpha: 0.8),
             size: 22,
           ),
-          suffixIcon:
-              _searchQuery.isNotEmpty
-                  ? IconButton(
-                    tooltip: 'Clear search',
-                    icon: Icon(
-                      Icons.clear_rounded,
-                      color: AppColors.textMuted.withValues(alpha: 0.8),
-                      size: 20,
-                    ),
-                    onPressed: _searchController.clear,
-                  )
-                  : null,
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  tooltip: 'Clear search',
+                  icon: Icon(
+                    Icons.clear_rounded,
+                    color: AppColors.textMuted.withValues(alpha: 0.8),
+                    size: 20,
+                  ),
+                  onPressed: _searchController.clear,
+                )
+              : null,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
             vertical: 12,
@@ -592,7 +598,8 @@ class _CommunitiesDiscoveryScreenState
           child: Row(
             children: [
               Text(
-                '${_searchResults.length} result${_searchResults.length == 1 ? '' : 's'}',
+                '${_searchResults.length} '
+                '${_searchResults.length == 1 ? 'result' : 'results'}',
                 style: const TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 13,
@@ -682,14 +689,13 @@ class _CommunitiesDiscoveryScreenState
           title: 'Your Communities',
           icon: Icons.bookmark_rounded,
           iconColor: AppColors.coral,
-          onSeeAll:
-              _subscribedCommunities.isNotEmpty
-                  ? () => _onSeeAll(
-                    title: 'Your Communities',
-                    sort: 'popular',
-                    subscribed: true,
-                  )
-                  : null,
+          onSeeAll: _subscribedCommunities.isNotEmpty
+              ? () => _onSeeAll(
+                  title: 'Your Communities',
+                  sort: 'popular',
+                  subscribed: true,
+                )
+              : null,
         ),
         if (_isLoadingSubscribed)
           _buildSectionLoading()
@@ -787,11 +793,9 @@ class _CommunitiesDiscoveryScreenState
           title: 'Popular',
           icon: Icons.local_fire_department_rounded,
           iconColor: AppColors.teal,
-          onSeeAll:
-              _popularCommunities.isNotEmpty
-                  ? () =>
-                      _onSeeAll(title: 'Popular Communities', sort: 'popular')
-                  : null,
+          onSeeAll: _popularCommunities.isNotEmpty
+              ? () => _onSeeAll(title: 'Popular Communities', sort: 'popular')
+              : null,
         ),
         if (_isLoadingPopular)
           _buildSectionLoading(verticalPadding: 40)
@@ -832,10 +836,9 @@ class _CommunitiesDiscoveryScreenState
           title: 'Recently Created',
           icon: Icons.auto_awesome_rounded,
           iconColor: AppColors.coralLight,
-          onSeeAll:
-              _newCommunities.isNotEmpty
-                  ? () => _onSeeAll(title: 'New Communities', sort: 'new')
-                  : null,
+          onSeeAll: _newCommunities.isNotEmpty
+              ? () => _onSeeAll(title: 'New Communities', sort: 'new')
+              : null,
         ),
         if (_isLoadingNew)
           _buildSectionLoading()

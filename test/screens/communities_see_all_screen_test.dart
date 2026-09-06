@@ -98,7 +98,9 @@ void main() {
   testWidgets('it stops once the server stops handing back a cursor', (
     tester,
   ) async {
-    final requests = stubPages(<Object>[pageOf(<String>['a'])]);
+    final requests = stubPages(<Object>[
+      pageOf(<String>['a']),
+    ]);
 
     await pumpScreen(tester);
 

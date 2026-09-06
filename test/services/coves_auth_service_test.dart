@@ -30,9 +30,7 @@ void main() {
     );
   });
 
-  tearDown(() {
-    CovesAuthService.resetInstance();
-  });
+  tearDown(CovesAuthService.resetInstance);
 
   group('CovesAuthService', () {
     group('signIn()', () {
@@ -50,23 +48,32 @@ void main() {
         },
       );
 
-      test('should throw appropriate error when user cancels sign-in', () async {
-        // Note: FlutterWebAuth2.authenticate is not easily mockable as it's a static method
-        // This test documents expected behavior when authentication is cancelled
-        // In practice, flutter_web_auth_2 throws PlatformException(code: 'CANCELED')
-        // on every platform; signIn catches that typed signal (scoped to the
-        // authenticate call only) and throws SignInCancelledException
+      test(
+        'should throw appropriate error when user cancels sign-in',
+        () async {
+          // Note: FlutterWebAuth2.authenticate is not easily mockable as
+          // it's a static method
+          // This test documents expected behavior when authentication is
+          // cancelled
+          // In practice, flutter_web_auth_2 throws PlatformException(code:
+          // 'CANCELED')
+          // on every platform; signIn catches that typed signal (scoped to the
+          // authenticate call only) and throws SignInCancelledException
 
-        // This test would require integration testing or a wrapper around FlutterWebAuth2
-        // Skipping for now as it requires more complex mocking infrastructure
-      });
+          // This test would require integration testing or a wrapper around
+          // FlutterWebAuth2
+          // Skipping for now as it requires more complex mocking infrastructure
+        },
+      );
 
       test(
         'should throw Exception when network error occurs during OAuth',
         () async {
-          // Note: Similar to above, FlutterWebAuth2 static methods are difficult to mock
+          // Note: Similar to above, FlutterWebAuth2 static methods are
+          // difficult to mock
           // This test documents expected behavior
-          // The actual implementation catches exceptions and rethrows with context
+          // The actual implementation catches exceptions and rethrows with
+          // context
         },
       );
 
@@ -89,9 +96,8 @@ void main() {
         );
         final jsonString = session.toJsonString();
 
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => jsonString);
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => jsonString);
 
         // Act
         final result = await authService.restoreSession();
@@ -120,9 +126,8 @@ void main() {
       test('should handle corrupted storage data gracefully', () async {
         // Arrange
         const corruptedJson = 'not-valid-json{]';
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => corruptedJson);
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => corruptedJson);
         when(mockStorage.delete(key: storageKey)).thenAnswer((_) async => {});
 
         // Act
@@ -140,9 +145,8 @@ void main() {
           // Arrange
           const invalidJson =
               '{"token": "test"}'; // Missing required fields (did, session_id)
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => invalidJson);
+          when(mockStorage.read(key: storageKey))
+              .thenAnswer((_) async => invalidJson);
           when(mockStorage.delete(key: storageKey)).thenAnswer((_) async => {});
 
           // Act
@@ -158,9 +162,8 @@ void main() {
 
       test('should handle storage read errors gracefully', () async {
         // Arrange
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenThrow(Exception('Storage error'));
+        when(mockStorage.read(key: storageKey))
+            .thenThrow(Exception('Storage error'));
         when(mockStorage.delete(key: storageKey)).thenAnswer((_) async => {});
 
         // Act
@@ -241,9 +244,8 @@ void main() {
             sessionId: 'session-123',
             handle: 'alice.bsky.social',
           );
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => initialSession.toJsonString());
+          when(mockStorage.read(key: storageKey))
+              .thenAnswer((_) async => initialSession.toJsonString());
           await authService.restoreSession();
 
           // Mock successful refresh response
@@ -264,9 +266,8 @@ void main() {
             ),
           );
 
-          when(
-            mockStorage.write(key: storageKey, value: anyNamed('value')),
-          ).thenAnswer((_) async => {});
+          when(mockStorage.write(key: storageKey, value: anyNamed('value')))
+              .thenAnswer((_) async => {});
 
           // Act
           final result = await authService.refreshToken();
@@ -282,9 +283,8 @@ void main() {
               data: anyNamed('data'),
             ),
           ).called(1);
-          verify(
-            mockStorage.write(key: storageKey, value: anyNamed('value')),
-          ).called(1);
+          verify(mockStorage.write(key: storageKey, value: anyNamed('value')))
+              .called(1);
         },
       );
 
@@ -297,9 +297,8 @@ void main() {
             did: 'did:plc:test123',
             sessionId: 'session-123',
           );
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => session.toJsonString());
+          when(mockStorage.read(key: storageKey))
+              .thenAnswer((_) async => session.toJsonString());
           await authService.restoreSession();
 
           // Mock 401 response
@@ -342,62 +341,57 @@ void main() {
         },
       );
 
-      test(
-        'should discard the refresh result when the session changes while '
-        'the request is in flight (sign-out/re-login race)',
-        () async {
-          const sessionA = CovesSession(
-            token: 'token-a',
-            did: 'did:plc:test123',
-            sessionId: 'session-a',
-          );
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => sessionA.toJsonString());
-          await authService.restoreSession();
+      test('should discard the refresh result when the session changes while '
+          'the request is in flight (sign-out/re-login race)', () async {
+        const sessionA = CovesSession(
+          token: 'token-a',
+          did: 'did:plc:test123',
+          sessionId: 'session-a',
+        );
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => sessionA.toJsonString());
+        await authService.restoreSession();
 
-          final gate = Completer<Response<Map<String, dynamic>>>();
-          when(
-            mockDio.post<Map<String, dynamic>>(
-              '/oauth/refresh',
-              data: anyNamed('data'),
-            ),
-          ).thenAnswer((_) => gate.future);
+        final gate = Completer<Response<Map<String, dynamic>>>();
+        when(
+          mockDio.post<Map<String, dynamic>>(
+            '/oauth/refresh',
+            data: anyNamed('data'),
+          ),
+        ).thenAnswer((_) => gate.future);
 
-          final pending = authService.refreshToken();
+        final pending = authService.refreshToken();
 
-          // Re-login replaces the session while the refresh is in flight.
-          const sessionB = CovesSession(
-            token: 'token-b',
-            did: 'did:plc:other456',
-            sessionId: 'session-b',
-          );
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => sessionB.toJsonString());
-          await authService.restoreSession();
+        // Re-login replaces the session while the refresh is in flight.
+        const sessionB = CovesSession(
+          token: 'token-b',
+          did: 'did:plc:other456',
+          sessionId: 'session-b',
+        );
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => sessionB.toJsonString());
+        await authService.restoreSession();
 
-          gate.complete(
-            Response(
-              requestOptions: RequestOptions(path: '/oauth/refresh'),
-              statusCode: 200,
-              data: {'sealed_token': 'refreshed-token-a'},
-            ),
-          );
+        gate.complete(
+          Response(
+            requestOptions: RequestOptions(path: '/oauth/refresh'),
+            statusCode: 200,
+            data: {'sealed_token': 'refreshed-token-a'},
+          ),
+        );
 
-          await expectLater(
-            pending,
-            throwsA(isA<SessionRefreshDiscardedException>()),
-          );
+        await expectLater(
+          pending,
+          throwsA(isA<SessionRefreshDiscardedException>()),
+        );
 
-          // The stale refreshed token must never be persisted - committing
-          // it would resurrect the session the race winner replaced.
-          verifyNever(
-            mockStorage.write(key: storageKey, value: anyNamed('value')),
-          );
-          expect(authService.session?.token, 'token-b');
-        },
-      );
+        // The stale refreshed token must never be persisted - committing
+        // it would resurrect the session the race winner replaced.
+        verifyNever(
+          mockStorage.write(key: storageKey, value: anyNamed('value')),
+        );
+        expect(authService.session?.token, 'token-b');
+      });
 
       test(
         'should discard a refresh 401 when the session changes while the '
@@ -408,9 +402,8 @@ void main() {
             did: 'did:plc:test123',
             sessionId: 'session-a',
           );
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => sessionA.toJsonString());
+          when(mockStorage.read(key: storageKey))
+              .thenAnswer((_) async => sessionA.toJsonString());
           await authService.restoreSession();
 
           final gate = Completer<Response<Map<String, dynamic>>>();
@@ -429,9 +422,8 @@ void main() {
             did: 'did:plc:other456',
             sessionId: 'session-b',
           );
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => sessionB.toJsonString());
+          when(mockStorage.read(key: storageKey))
+              .thenAnswer((_) async => sessionB.toJsonString());
           await authService.restoreSession();
 
           // The stale session's refresh comes back 401. Classifying it as
@@ -463,9 +455,8 @@ void main() {
           did: 'did:plc:test123',
           sessionId: 'session-123',
         );
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => session.toJsonString());
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => session.toJsonString());
         await authService.restoreSession();
 
         // Mock network error
@@ -504,9 +495,8 @@ void main() {
             did: 'did:plc:test123',
             sessionId: 'session-123',
           );
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => session.toJsonString());
+          when(mockStorage.read(key: storageKey))
+              .thenAnswer((_) async => session.toJsonString());
           await authService.restoreSession();
 
           // Mock response without sealed_token
@@ -546,9 +536,8 @@ void main() {
             did: 'did:plc:test123',
             sessionId: 'session-123',
           );
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => session.toJsonString());
+          when(mockStorage.read(key: storageKey))
+              .thenAnswer((_) async => session.toJsonString());
           await authService.restoreSession();
 
           // Mock response with empty sealed_token
@@ -592,9 +581,8 @@ void main() {
       );
 
       Future<void> restoreTestSession() async {
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => session.toJsonString());
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => session.toJsonString());
         await authService.restoreSession();
       }
 
@@ -603,10 +591,7 @@ void main() {
 
         expect(result, SessionValidationResult.indeterminate);
         verifyNever(
-          mockDio.get<Map<String, dynamic>>(
-            any,
-            options: anyNamed('options'),
-          ),
+          mockDio.get<Map<String, dynamic>>(any, options: anyNamed('options')),
         );
       });
 
@@ -764,72 +749,64 @@ void main() {
         },
       );
 
-      test(
-        'should wait for an in-flight refresh so sign-out always wins '
-        '(no session resurrection)',
-        () async {
-          const session = CovesSession(
-            token: 'test-token',
-            did: 'did:plc:test123',
-            sessionId: 'session-123',
-          );
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => session.toJsonString());
-          await authService.restoreSession();
+      test('should wait for an in-flight refresh so sign-out always wins '
+          '(no session resurrection)', () async {
+        const session = CovesSession(
+          token: 'test-token',
+          did: 'did:plc:test123',
+          sessionId: 'session-123',
+        );
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => session.toJsonString());
+        await authService.restoreSession();
 
-          final gate = Completer<Response<Map<String, dynamic>>>();
-          when(
-            mockDio.post<Map<String, dynamic>>(
-              '/oauth/refresh',
-              data: anyNamed('data'),
-            ),
-          ).thenAnswer((_) => gate.future);
-          when(
-            mockStorage.write(key: storageKey, value: anyNamed('value')),
-          ).thenAnswer((_) async => {});
-          when(
-            mockDio.post<void>('/oauth/logout', options: anyNamed('options')),
-          ).thenAnswer(
-            (_) async => Response(
-              requestOptions: RequestOptions(path: '/oauth/logout'),
-              statusCode: 200,
-            ),
-          );
-          when(
-            mockStorage.delete(key: storageKey),
-          ).thenAnswer((_) async => {});
+        final gate = Completer<Response<Map<String, dynamic>>>();
+        when(
+          mockDio.post<Map<String, dynamic>>(
+            '/oauth/refresh',
+            data: anyNamed('data'),
+          ),
+        ).thenAnswer((_) => gate.future);
+        when(mockStorage.write(key: storageKey, value: anyNamed('value')))
+            .thenAnswer((_) async => {});
+        when(mockDio.post<void>('/oauth/logout', options: anyNamed('options')))
+            .thenAnswer(
+              (_) async => Response(
+                requestOptions: RequestOptions(path: '/oauth/logout'),
+                statusCode: 200,
+              ),
+            );
+        when(mockStorage.delete(key: storageKey)).thenAnswer((_) async => {});
 
-          final refreshPending = authService.refreshToken();
-          final signOutPending = authService.signOut();
+        final refreshPending = authService.refreshToken();
+        final signOutPending = authService.signOut();
 
-          // Sign-out is parked behind the in-flight refresh: nothing may be
-          // cleared yet, and nothing has been resurrected.
-          await pumpEventQueue();
-          verifyNever(mockStorage.delete(key: storageKey));
+        // Sign-out is parked behind the in-flight refresh: nothing may be
+        // cleared yet, and nothing has been resurrected.
+        await pumpEventQueue();
+        verifyNever(mockStorage.delete(key: storageKey));
 
-          gate.complete(
-            Response(
-              requestOptions: RequestOptions(path: '/oauth/refresh'),
-              statusCode: 200,
-              data: {'sealed_token': 'refreshed-token'},
-            ),
-          );
+        gate.complete(
+          Response(
+            requestOptions: RequestOptions(path: '/oauth/refresh'),
+            statusCode: 200,
+            data: {'sealed_token': 'refreshed-token'},
+          ),
+        );
 
-          await refreshPending;
-          await signOutPending;
+        await refreshPending;
+        await signOutPending;
 
-          // The refresh save landed BEFORE the sign-out delete, so storage
-          // ends empty - a refresh resolving after sign-out can never write
-          // a live token back.
-          verifyInOrder([
-            mockStorage.write(key: storageKey, value: anyNamed('value')),
-            mockStorage.delete(key: storageKey),
-          ]);
-          expect(authService.session, isNull);
-          expect(authService.isAuthenticated, isFalse);
-        },
-      );
+        // The refresh save landed BEFORE the sign-out delete, so storage
+        // ends empty - a refresh resolving after sign-out can never write
+        // a live token back.
+        verifyInOrder([
+          mockStorage.write(key: storageKey, value: anyNamed('value')),
+          mockStorage.delete(key: storageKey),
+        ]);
+        expect(authService.session, isNull);
+        expect(authService.isAuthenticated, isFalse);
+      });
 
       test(
         'should clear session and storage on successful server-side logout',
@@ -840,9 +817,8 @@ void main() {
             did: 'did:plc:test123',
             sessionId: 'session-123',
           );
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => session.toJsonString());
+          when(mockStorage.read(key: storageKey))
+              .thenAnswer((_) async => session.toJsonString());
           await authService.restoreSession();
 
           // Mock successful logout
@@ -880,9 +856,8 @@ void main() {
               sessionId: 'session-123',
             );
             var storedSession = session.toJsonString();
-            when(
-              mockStorage.read(key: storageKey),
-            ).thenAnswer((_) async => storedSession);
+            when(mockStorage.read(key: storageKey))
+                .thenAnswer((_) async => storedSession);
             when(mockStorage.delete(key: storageKey)).thenAnswer((_) async {
               storedSession = '';
             });
@@ -898,17 +873,12 @@ void main() {
               ).thenThrow(
                 DioException(
                   requestOptions: request,
-                  type:
-                      failure == 'network'
-                          ? DioExceptionType.connectionError
-                          : DioExceptionType.badResponse,
-                  response:
-                      failure == '503'
-                          ? Response<void>(
-                            requestOptions: request,
-                            statusCode: 503,
-                          )
-                          : null,
+                  type: failure == 'network'
+                      ? DioExceptionType.connectionError
+                      : DioExceptionType.badResponse,
+                  response: failure == '503'
+                      ? Response<void>(requestOptions: request, statusCode: 503)
+                      : null,
                 ),
               );
             } else {
@@ -942,13 +912,12 @@ void main() {
             expect(authService.isAuthenticated, isFalse);
             expect(storedSession, isEmpty);
             verify(mockStorage.delete(key: storageKey)).called(1);
-            final options =
-                verify(
-                  mockDio.post<void>(
-                    '/oauth/logout',
-                    options: captureAnyNamed('options'),
-                  ),
-                ).captured;
+            final options = verify(
+              mockDio.post<void>(
+                '/oauth/logout',
+                options: captureAnyNamed('options'),
+              ),
+            ).captured;
             expect(options, hasLength(2));
             for (final option in options.cast<Options>()) {
               expect(option.headers?['Authorization'], 'Bearer test-token');
@@ -980,23 +949,20 @@ void main() {
           did: 'did:plc:test123',
           sessionId: 'session-123',
         );
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => session.toJsonString());
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => session.toJsonString());
         await authService.restoreSession();
 
-        when(
-          mockDio.post<void>('/oauth/logout', options: anyNamed('options')),
-        ).thenAnswer(
-          (_) async => Response(
-            requestOptions: RequestOptions(path: '/oauth/logout'),
-            statusCode: 200,
-          ),
-        );
+        when(mockDio.post<void>('/oauth/logout', options: anyNamed('options')))
+            .thenAnswer(
+              (_) async => Response(
+                requestOptions: RequestOptions(path: '/oauth/logout'),
+                statusCode: 200,
+              ),
+            );
 
-        when(
-          mockStorage.delete(key: storageKey),
-        ).thenThrow(Exception('Storage error'));
+        when(mockStorage.delete(key: storageKey))
+            .thenThrow(Exception('Storage error'));
 
         // Act & Assert - Should not throw
         expect(() => authService.signOut(), throwsA(isA<Exception>()));
@@ -1014,9 +980,8 @@ void main() {
           did: 'did:plc:test123',
           sessionId: 'session-123',
         );
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => session.toJsonString());
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => session.toJsonString());
         await authService.restoreSession();
 
         // Act
@@ -1041,19 +1006,17 @@ void main() {
           did: 'did:plc:test123',
           sessionId: 'session-123',
         );
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => session.toJsonString());
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => session.toJsonString());
         await authService.restoreSession();
 
-        when(
-          mockDio.post<void>('/oauth/logout', options: anyNamed('options')),
-        ).thenAnswer(
-          (_) async => Response(
-            requestOptions: RequestOptions(path: '/oauth/logout'),
-            statusCode: 200,
-          ),
-        );
+        when(mockDio.post<void>('/oauth/logout', options: anyNamed('options')))
+            .thenAnswer(
+              (_) async => Response(
+                requestOptions: RequestOptions(path: '/oauth/logout'),
+                statusCode: 200,
+              ),
+            );
         when(mockStorage.delete(key: storageKey)).thenAnswer((_) async => {});
 
         // Act
@@ -1078,9 +1041,8 @@ void main() {
           did: 'did:plc:test123',
           sessionId: 'session-123',
         );
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => session.toJsonString());
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => session.toJsonString());
         await authService.restoreSession();
 
         // Assert
@@ -1094,19 +1056,17 @@ void main() {
           did: 'did:plc:test123',
           sessionId: 'session-123',
         );
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => session.toJsonString());
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => session.toJsonString());
         await authService.restoreSession();
 
-        when(
-          mockDio.post<void>('/oauth/logout', options: anyNamed('options')),
-        ).thenAnswer(
-          (_) async => Response(
-            requestOptions: RequestOptions(path: '/oauth/logout'),
-            statusCode: 200,
-          ),
-        );
+        when(mockDio.post<void>('/oauth/logout', options: anyNamed('options')))
+            .thenAnswer(
+              (_) async => Response(
+                requestOptions: RequestOptions(path: '/oauth/logout'),
+                statusCode: 200,
+              ),
+            );
         when(mockStorage.delete(key: storageKey)).thenAnswer((_) async => {});
 
         // Act
@@ -1125,14 +1085,14 @@ void main() {
           did: 'did:plc:test123',
           sessionId: 'session-123',
         );
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => session.toJsonString());
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => session.toJsonString());
 
         // Act
         await authService.restoreSession();
 
-        // Assert - Accessing session property should not read from storage again
+        // Assert - Accessing session property should not read from storage
+        // again
         expect(authService.session?.token, 'test-token');
         expect(authService.session?.did, 'did:plc:test123');
         verify(mockStorage.read(key: storageKey)).called(1);
@@ -1145,9 +1105,8 @@ void main() {
           did: 'did:plc:test123',
           sessionId: 'session-123',
         );
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => initialSession.toJsonString());
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => initialSession.toJsonString());
         await authService.restoreSession();
 
         const newToken = 'new-token';
@@ -1166,9 +1125,8 @@ void main() {
             },
           ),
         );
-        when(
-          mockStorage.write(key: storageKey, value: anyNamed('value')),
-        ).thenAnswer((_) async => {});
+        when(mockStorage.write(key: storageKey, value: anyNamed('value')))
+            .thenAnswer((_) async => {});
 
         // Act
         await authService.refreshToken();
@@ -1190,9 +1148,8 @@ void main() {
             sessionId: 'session-123',
             handle: 'alice.bsky.social',
           );
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => initialSession.toJsonString());
+          when(mockStorage.read(key: storageKey))
+              .thenAnswer((_) async => initialSession.toJsonString());
           await authService.restoreSession();
 
           const newToken = 'new-refreshed-token';
@@ -1215,9 +1172,8 @@ void main() {
             );
           });
 
-          when(
-            mockStorage.write(key: storageKey, value: anyNamed('value')),
-          ).thenAnswer((_) async => {});
+          when(mockStorage.write(key: storageKey, value: anyNamed('value')))
+              .thenAnswer((_) async => {});
 
           // Act - Launch 3 concurrent refresh calls
           final results = await Future.wait([
@@ -1241,9 +1197,8 @@ void main() {
           ).called(1);
 
           // Verify only one storage write was made
-          verify(
-            mockStorage.write(key: storageKey, value: anyNamed('value')),
-          ).called(1);
+          verify(mockStorage.write(key: storageKey, value: anyNamed('value')))
+              .called(1);
         },
       );
 
@@ -1254,9 +1209,8 @@ void main() {
           did: 'did:plc:test123',
           sessionId: 'session-123',
         );
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => session.toJsonString());
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => session.toJsonString());
         await authService.restoreSession();
 
         // Mock 401 response with delay
@@ -1290,7 +1244,7 @@ void main() {
           try {
             await future;
             fail('Expected exception to be thrown');
-          } catch (e) {
+          } on Object catch (e) {
             expect(e, isA<Exception>());
             expect(e.toString(), contains('Session expired'));
             errorCount++;
@@ -1315,9 +1269,8 @@ void main() {
           did: 'did:plc:test123',
           sessionId: 'session-123',
         );
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => initialSession.toJsonString());
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => initialSession.toJsonString());
         await authService.restoreSession();
 
         const newToken1 = 'new-token-1';
@@ -1340,9 +1293,8 @@ void main() {
           ),
         );
 
-        when(
-          mockStorage.write(key: storageKey, value: anyNamed('value')),
-        ).thenAnswer((_) async => {});
+        when(mockStorage.write(key: storageKey, value: anyNamed('value')))
+            .thenAnswer((_) async => {});
 
         // Act - First refresh
         final result1 = await authService.refreshToken();
@@ -1389,9 +1341,8 @@ void main() {
           did: 'did:plc:test123',
           sessionId: 'session-123',
         );
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => initialSession.toJsonString());
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => initialSession.toJsonString());
         await authService.restoreSession();
 
         // Mock first refresh to fail
@@ -1413,7 +1364,7 @@ void main() {
         try {
           await authService.refreshToken();
           fail('Expected exception to be thrown');
-        } catch (e) {
+        } on Object catch (e) {
           caughtError = e;
         }
 
@@ -1440,9 +1391,8 @@ void main() {
           ),
         );
 
-        when(
-          mockStorage.write(key: storageKey, value: anyNamed('value')),
-        ).thenAnswer((_) async => {});
+        when(mockStorage.write(key: storageKey, value: anyNamed('value')))
+            .thenAnswer((_) async => {});
 
         // Act - Second refresh (should be allowed and succeed)
         final result = await authService.refreshToken();
@@ -1459,70 +1409,65 @@ void main() {
         ).called(2);
       });
 
-      test(
-        'should handle concurrent calls where one arrives after refresh completes',
-        () async {
-          // Arrange - First restore a session
-          const initialSession = CovesSession(
-            token: 'old-token',
-            did: 'did:plc:test123',
-            sessionId: 'session-123',
+      test('handles a concurrent call after refresh completes', () async {
+        // Arrange - First restore a session
+        const initialSession = CovesSession(
+          token: 'old-token',
+          did: 'did:plc:test123',
+          sessionId: 'session-123',
+        );
+        when(mockStorage.read(key: storageKey))
+            .thenAnswer((_) async => initialSession.toJsonString());
+        await authService.restoreSession();
+
+        const newToken1 = 'new-token-1';
+        const newToken2 = 'new-token-2';
+
+        var callCount = 0;
+
+        // Mock refresh with different responses
+        when(
+          mockDio.post<Map<String, dynamic>>(
+            '/oauth/refresh',
+            data: anyNamed('data'),
+          ),
+        ).thenAnswer((_) async {
+          callCount++;
+          await Future.delayed(const Duration(milliseconds: 50));
+          return Response(
+            requestOptions: RequestOptions(path: '/oauth/refresh'),
+            statusCode: 200,
+            data: {
+              'sealed_token': callCount == 1 ? newToken1 : newToken2,
+              'access_token': 'some-access-token',
+            },
           );
-          when(
-            mockStorage.read(key: storageKey),
-          ).thenAnswer((_) async => initialSession.toJsonString());
-          await authService.restoreSession();
+        });
 
-          const newToken1 = 'new-token-1';
-          const newToken2 = 'new-token-2';
+        when(mockStorage.write(key: storageKey, value: anyNamed('value')))
+            .thenAnswer((_) async => {});
 
-          var callCount = 0;
+        // Act - Start first refresh
+        final future1 = authService.refreshToken();
 
-          // Mock refresh with different responses
-          when(
-            mockDio.post<Map<String, dynamic>>(
-              '/oauth/refresh',
-              data: anyNamed('data'),
-            ),
-          ).thenAnswer((_) async {
-            callCount++;
-            await Future.delayed(const Duration(milliseconds: 50));
-            return Response(
-              requestOptions: RequestOptions(path: '/oauth/refresh'),
-              statusCode: 200,
-              data: {
-                'sealed_token': callCount == 1 ? newToken1 : newToken2,
-                'access_token': 'some-access-token',
-              },
-            );
-          });
+        // Wait for it to complete
+        final result1 = await future1;
 
-          when(
-            mockStorage.write(key: storageKey, value: anyNamed('value')),
-          ).thenAnswer((_) async => {});
+        // Start second refresh after first completes
+        final result2 = await authService.refreshToken();
 
-          // Act - Start first refresh
-          final future1 = authService.refreshToken();
+        // Assert
+        expect(result1.token, newToken1);
+        expect(result2.token, newToken2);
 
-          // Wait for it to complete
-          final result1 = await future1;
-
-          // Start second refresh after first completes
-          final result2 = await authService.refreshToken();
-
-          // Assert
-          expect(result1.token, newToken1);
-          expect(result2.token, newToken2);
-
-          // Verify two separate API calls were made
-          verify(
-            mockDio.post<Map<String, dynamic>>(
-              '/oauth/refresh',
-              data: anyNamed('data'),
-            ),
-          ).called(2);
-        },
-      );
+        // Verify two separate API calls were made
+        verify(
+          mockDio.post<Map<String, dynamic>>(
+            '/oauth/refresh',
+            data: anyNamed('data'),
+          ),
+        ).called(2);
+      });
     });
   });
 }

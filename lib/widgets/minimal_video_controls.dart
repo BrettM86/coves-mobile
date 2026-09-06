@@ -34,10 +34,10 @@ class _MinimalVideoControlsState extends State<MinimalVideoControls> {
 
   void _updateSlider() {
     if (!_isUserDragging && mounted) {
-      final position =
-          widget.controller.value.position.inMilliseconds.toDouble();
-      final duration =
-          widget.controller.value.duration.inMilliseconds.toDouble();
+      final position = widget.controller.value.position.inMilliseconds
+          .toDouble();
+      final duration = widget.controller.value.duration.inMilliseconds
+          .toDouble();
 
       if (duration > 0) {
         setState(() {

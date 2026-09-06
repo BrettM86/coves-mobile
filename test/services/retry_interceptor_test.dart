@@ -14,7 +14,6 @@ void main() {
       dio = Dio();
       interceptor = RetryInterceptor(
         dio: dio,
-        maxRetries: 2,
         initialDelay: const Duration(milliseconds: 1), // Fast for tests
         serviceName: 'TestService',
       );
@@ -56,29 +55,61 @@ void main() {
     });
 
     group('retry decision logic', () {
-      // Helper: Run onError and return the retryCount (null if no retry attempted)
-      // Uses runZonedGuarded to properly catch the async exception from handler.next()
+      // Helper: Run onError and return the retryCount (null if no retry
+      // attempted)
+      // Uses runZonedGuarded to properly catch the async exception from
+      // handler.next()
       Future<int?> getRetryCount(DioException error) async {
         final completer = Completer<int?>();
 
-        runZonedGuarded(
-          () async {
-            final handler = ErrorInterceptorHandler();
-            await interceptor.onError(error, handler);
-            // If we get here without exception, return the retryCount
-            completer.complete(error.requestOptions.extra['retryCount'] as int?);
-          },
-          (e, stack) {
-            // Exception thrown (expected from handler.next())
-            // Complete with the retryCount that was set before the exception
-            if (!completer.isCompleted) {
-              completer
-                  .complete(error.requestOptions.extra['retryCount'] as int?);
-            }
-          },
+        unawaited(
+          runZonedGuarded(
+            () async {
+              final handler = ErrorInterceptorHandler();
+              await interceptor.onError(error, handler);
+              // If we get here without exception, return the retryCount
+              completer.complete(
+                error.requestOptions.extra['retryCount'] as int?,
+              );
+            },
+            (e, stack) {
+              // Exception thrown (expected from handler.next())
+              // Complete with the retryCount that was set before the exception
+              if (!completer.isCompleted) {
+                completer.complete(
+                  error.requestOptions.extra['retryCount'] as int?,
+                );
+              }
+            },
+          ),
         );
 
         return completer.future;
+      }
+
+      for (final method in [
+        'GET',
+        'HEAD',
+        'OPTIONS',
+        'POST',
+        'PUT',
+        'PATCH',
+        'DELETE',
+      ]) {
+        test('does not retry $method on transformTimeout', () async {
+          final error = DioException.transformTimeout(
+            timeout: const Duration(seconds: 5),
+            requestOptions: RequestOptions(path: '/test', method: method),
+          );
+
+          final retryCount = await getRetryCount(error);
+
+          expect(
+            retryCount,
+            isNull,
+            reason: 'Response processing timeouts are not transport failures',
+          );
+        });
       }
 
       test('should NOT retry POST requests with receiveTimeout', () async {
@@ -86,8 +117,10 @@ void main() {
         // the server may have already processed the request.
         final error = DioException(
           type: DioExceptionType.receiveTimeout,
-          requestOptions:
-              RequestOptions(path: '/create-comment', method: 'POST'),
+          requestOptions: RequestOptions(
+            path: '/create-comment',
+            method: 'POST',
+          ),
         );
 
         final retryCount = await getRetryCount(error);
@@ -204,31 +237,28 @@ void main() {
         mockDio.interceptors.add(
           RetryInterceptor(
             dio: mockDio,
-            maxRetries: 2,
             initialDelay: const Duration(milliseconds: 1),
             serviceName: 'TestService',
           ),
         );
 
-        dioAdapter.onPost(
-          '/create-comment',
-          (server) {
-            callCount++;
-            server.throws(
-              0,
-              DioException(
-                type: DioExceptionType.receiveTimeout,
-                requestOptions:
-                    RequestOptions(path: '/create-comment', method: 'POST'),
+        dioAdapter.onPost('/create-comment', (server) {
+          callCount++;
+          server.throws(
+            0,
+            DioException(
+              type: DioExceptionType.receiveTimeout,
+              requestOptions: RequestOptions(
+                path: '/create-comment',
+                method: 'POST',
               ),
-            );
-          },
-          data: Matchers.any,
-        );
+            ),
+          );
+        }, data: Matchers.any);
 
         try {
           await mockDio.post('/create-comment', data: {'text': 'hello'});
-        } catch (e) {
+        } on Object catch (e) {
           expect(e, isA<DioException>());
         }
 

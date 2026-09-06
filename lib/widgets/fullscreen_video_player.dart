@@ -206,10 +206,9 @@ class _FullscreenVideoPlayerState extends State<FullscreenVideoPlayer>
           children: [
             // Video player - fills entire screen and moves with drag
             AnimatedContainer(
-              duration:
-                  _isDragging
-                      ? Duration.zero
-                      : const Duration(milliseconds: 200),
+              duration: _isDragging
+                  ? Duration.zero
+                  : const Duration(milliseconds: 200),
               curve: Curves.easeOut,
               transform: Matrix4.translationValues(
                 _dragOffsetX,

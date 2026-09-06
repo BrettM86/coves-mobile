@@ -150,19 +150,25 @@ void main() {
       expect(button.onPressed, isNull);
     });
 
-    testWidgets('should enable Post button when title is entered and community selected', (tester) async {
-      await tester.pumpWidget(createTestWidget());
-      await tester.pumpAndSettle();
+    testWidgets(
+      'should enable Post button when title is entered and community selected',
+      (tester) async {
+        await tester.pumpWidget(createTestWidget());
+        await tester.pumpAndSettle();
 
-      // Enter a title
-      await tester.enterText(find.widgetWithText(TextField, 'Title'), 'Test Post');
-      await tester.pumpAndSettle();
+        // Enter a title
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Title'),
+          'Test Post',
+        );
+        await tester.pumpAndSettle();
 
-      // Post button should still be disabled (no community selected)
-      final postButton = find.widgetWithText(TextButton, 'Post');
-      final button = tester.widget<TextButton>(postButton);
-      expect(button.onPressed, isNull);
-    });
+        // Post button should still be disabled (no community selected)
+        final postButton = find.widgetWithText(TextButton, 'Post');
+        final button = tester.widget<TextButton>(postButton);
+        expect(button.onPressed, isNull);
+      },
+    );
 
     testWidgets('should toggle NSFW switch', (tester) async {
       await tester.pumpWidget(createTestWidget());
@@ -173,7 +179,7 @@ void main() {
       expect(switchWidget, findsOneWidget);
 
       // Initially should be off
-      Switch switchBefore = tester.widget<Switch>(switchWidget);
+      final switchBefore = tester.widget<Switch>(switchWidget);
       expect(switchBefore.value, false);
 
       // Scroll to make switch visible, then tap
@@ -183,12 +189,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // Should be on now
-      Switch switchAfter = tester.widget<Switch>(switchWidget);
+      final switchAfter = tester.widget<Switch>(switchWidget);
       expect(switchAfter.value, true);
     });
 
-    testWidgets(
-        'should not show a thumbnail field when URL is entered '
+    testWidgets('should not show a thumbnail field when URL is entered '
         '(thumb removed from ExternalEmbedInput in 746df36)', (tester) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
@@ -216,8 +221,10 @@ void main() {
       expect(find.byIcon(Icons.close), findsOneWidget);
     });
 
-    testWidgets('should call onNavigateToFeed when close button is tapped', (tester) async {
-      bool callbackCalled = false;
+    testWidgets('should call onNavigateToFeed when close button is tapped', (
+      tester,
+    ) async {
+      var callbackCalled = false;
 
       await tester.pumpWidget(
         createTestWidget(onNavigateToFeed: () => callbackCalled = true),
@@ -247,9 +254,7 @@ void main() {
     ) async {
       final dirtyLog = <bool>[];
 
-      await tester.pumpWidget(
-        createTestWidget(onDirtyChanged: dirtyLog.add),
-      );
+      await tester.pumpWidget(createTestWidget(onDirtyChanged: dirtyLog.add));
       await tester.pumpAndSettle();
 
       // Untouched form never reports dirty
@@ -269,9 +274,7 @@ void main() {
     testWidgets('whitespace-only input never reports dirty', (tester) async {
       final dirtyLog = <bool>[];
 
-      await tester.pumpWidget(
-        createTestWidget(onDirtyChanged: dirtyLog.add),
-      );
+      await tester.pumpWidget(createTestWidget(onDirtyChanged: dirtyLog.add));
       await tester.pumpAndSettle();
 
       // Dirty is trimmed-text-only: whitespace is not a draft worth
@@ -305,7 +308,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // Find the body TextField
-      final bodyField = find.widgetWithText(TextField, 'What are your thoughts?');
+      final bodyField = find.widgetWithText(
+        TextField,
+        'What are your thoughts?',
+      );
       final textField = tester.widget<TextField>(bodyField);
 
       // Should have maxLength set to 10000 (kContentMaxLength)
@@ -337,7 +343,9 @@ void main() {
       );
     }
 
-    testWidgets('form is invalid with no community and no content', (tester) async {
+    testWidgets('form is invalid with no community and no content', (
+      tester,
+    ) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 
@@ -346,7 +354,9 @@ void main() {
       expect(button.onPressed, isNull);
     });
 
-    testWidgets('form is invalid with content but no community', (tester) async {
+    testWidgets('form is invalid with content but no community', (
+      tester,
+    ) async {
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
 

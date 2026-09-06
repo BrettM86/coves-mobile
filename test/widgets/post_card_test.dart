@@ -32,8 +32,8 @@ void main() {
         ),
         GoRoute(
           path: '/post/:uri',
-          builder:
-              (context, state) => const Scaffold(body: Text('DETAIL SCREEN')),
+          builder: (context, state) =>
+              const Scaffold(body: Text('DETAIL SCREEN')),
         ),
       ],
     );

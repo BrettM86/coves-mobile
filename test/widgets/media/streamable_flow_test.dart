@@ -77,10 +77,10 @@ StreamableService mockedStreamable({
       videoUrl == null
           ? <String, dynamic>{}
           : <String, dynamic>{
-            'files': <String, dynamic>{
-              'mp4': <String, dynamic>{'url': videoUrl},
+              'files': <String, dynamic>{
+                'mp4': <String, dynamic>{'url': videoUrl},
+              },
             },
-          },
       delay: delay,
     ),
   );
@@ -328,11 +328,7 @@ void main() {
 
       expect(
         tester.getSemantics(find.bySemanticsLabel('Play video')),
-        containsSemantics(
-          isButton: true,
-          hasEnabledState: true,
-          isEnabled: false,
-        ),
+        isSemantics(isButton: true, hasEnabledState: true, isEnabled: false),
         reason: 'a tap handler that is null must not advertise as actionable',
       );
 
@@ -384,11 +380,7 @@ void main() {
 
       expect(
         tester.getSemantics(find.bySemanticsLabel('Play video')),
-        containsSemantics(
-          isButton: true,
-          hasEnabledState: true,
-          isEnabled: false,
-        ),
+        isSemantics(isButton: true, hasEnabledState: true, isEnabled: false),
         reason:
             'the detail view drops its tap handler while loading but still '
             'advertises an enabled button',

@@ -2,6 +2,7 @@ import 'dart:async' show Completer, Timer, unawaited;
 
 import 'package:characters/characters.dart';
 import 'package:flutter/foundation.dart';
+
 import '../models/comment.dart';
 import '../models/comment_thread_tree.dart';
 import '../models/post.dart';
@@ -20,7 +21,8 @@ import 'vote_provider.dart';
 /// and draft text preservation.
 ///
 /// IMPORTANT: Provider instances are managed by CommentsProviderCache which
-/// handles LRU eviction and sign-out cleanup. Do not create directly in widgets.
+/// handles LRU eviction and sign-out cleanup. Do not create directly in
+/// widgets.
 ///
 /// IMPORTANT: Accepts an AuthProvider so viewer-state hydration can tell
 /// signed-in from signed-out. Fresh access tokens for the requests
@@ -28,18 +30,14 @@ import 'vote_provider.dart';
 class CommentsProvider with ChangeNotifier {
   CommentsProvider(
     AuthProvider authProvider, {
-    required String postUri,
-    required String postCid,
-    required CovesApiService apiService,
+    required this._postUri,
+    required this._postCid,
+    required this._apiService,
     VoteProvider? voteProvider,
-    CommentService? commentService,
+    this._commentService,
     List<Duration>? indexingRetryDelays,
     ViewerStateHydrator? hydrator,
-  }) : _postUri = postUri,
-       _postCid = postCid,
-       _apiService = apiService,
-       _voteProvider = voteProvider,
-       _commentService = commentService,
+  }) : _voteProvider = voteProvider,
        _hydrator =
            hydrator ??
            ViewerStateHydrator(
@@ -109,11 +107,13 @@ class CommentsProvider with ChangeNotifier {
   // caller receives the real result instead of null.
   final Map<String, Future<ThreadViewComment?>> _loadingMoreReplies = {};
 
-  // Scroll position state (replaces ScrollStateService for this post)
-  double _scrollPosition = 0;
+  /// Saved scroll offset. Passive state; updates do not notify listeners.
+  double scrollPosition = 0;
 
-  // Draft reply text - stored per-parent-URI (null key = top-level reply to post)
-  // This allows users to have separate drafts for different comments within the same post
+  // Draft reply text - stored per-parent-URI (null key = top-level reply to
+  // post)
+  // This allows users to have separate drafts for different comments within
+  // the same post
   final Map<String?, String> _drafts = {};
 
   // Staleness tracking for background refresh
@@ -133,7 +133,9 @@ class CommentsProvider with ChangeNotifier {
   bool _isDisposed = false;
 
   void _safeNotifyListeners() {
-    if (_isDisposed) return;
+    if (_isDisposed) {
+      return;
+    }
     notifyListeners();
   }
 
@@ -154,7 +156,6 @@ class CommentsProvider with ChangeNotifier {
   /// (for spinner state in the UI).
   Set<String> get loadingMoreReplies =>
       Set.unmodifiable(_loadingMoreReplies.keys);
-  double get scrollPosition => _scrollPosition;
   DateTime? get lastRefreshTime => _lastRefreshTime;
 
   /// Get draft text for a specific parent URI
@@ -174,12 +175,6 @@ class CommentsProvider with ChangeNotifier {
       return true;
     }
     return DateTime.now().difference(_lastRefreshTime!) > stalenessThreshold;
-  }
-
-  /// Save scroll position (called on every scroll event)
-  void saveScrollPosition(double position) {
-    _scrollPosition = position;
-    // No notifyListeners - this is passive state save
   }
 
   /// Save draft reply text
@@ -260,7 +255,8 @@ class CommentsProvider with ChangeNotifier {
   /// Load comments for this provider's post
   ///
   /// Parameters:
-  /// - [refresh]: Whether to refresh from the beginning (true) or paginate (false)
+  /// - [refresh]: Whether to refresh from the beginning (true) or paginate
+  /// (false)
   /// - [quiet]: When refreshing, don't flip [isLoading] (no full-list loading
   ///   flicker). Used for background retries while waiting for the AppView to
   ///   index a newly created comment.
@@ -305,7 +301,9 @@ class CommentsProvider with ChangeNotifier {
         cursor: refresh ? null : _cursor,
       );
 
-      if (_isDisposed) return;
+      if (_isDisposed) {
+        return;
+      }
 
       // Only update state after successful fetch
       if (refresh) {
@@ -338,27 +336,30 @@ class CommentsProvider with ChangeNotifier {
         startTimeUpdates();
       }
     } on Exception catch (e) {
-      if (_isDisposed) return;
+      if (_isDisposed) {
+        return;
+      }
       _error = e.toString();
       if (kDebugMode) {
         debugPrint('❌ Failed to fetch comments: $e');
       }
     } finally {
-      if (_isDisposed) return;
-      _isLoading = false;
-      _isLoadingMore = false;
-      _isQuietLoading = false;
-      _safeNotifyListeners();
+      if (!_isDisposed) {
+        _isLoading = false;
+        _isLoadingMore = false;
+        _isQuietLoading = false;
+        _safeNotifyListeners();
 
-      // If a refresh was scheduled during this load, execute it now
-      if (_pendingRefresh) {
-        if (kDebugMode) {
-          debugPrint('🔄 Executing pending refresh');
+        // If a refresh was scheduled during this load, execute it now
+        if (_pendingRefresh) {
+          if (kDebugMode) {
+            debugPrint('🔄 Executing pending refresh');
+          }
+          _pendingRefresh = false;
+          // Schedule refresh without awaiting to avoid blocking
+          // This is intentional - we want the refresh to happen asynchronously
+          unawaited(loadComments(refresh: true));
         }
-        _pendingRefresh = false;
-        // Schedule refresh without awaiting to avoid blocking
-        // This is intentional - we want the refresh to happen asynchronously
-        unawaited(loadComments(refresh: true));
       }
     }
   }
@@ -577,7 +578,9 @@ class CommentsProvider with ChangeNotifier {
       await loadComments(refresh: true);
       return true;
     } on Exception catch (e) {
-      if (_isDisposed) return false;
+      if (_isDisposed) {
+        return false;
+      }
       // Revert to previous sort option on failure
       _sort = previousSort;
       _safeNotifyListeners();

@@ -22,9 +22,7 @@ void main() {
     );
   });
 
-  tearDown(() {
-    CovesAuthService.resetInstance();
-  });
+  tearDown(CovesAuthService.resetInstance);
 
   group('Handle Validation', () {
     group('Valid inputs', () {
@@ -477,7 +475,8 @@ void main() {
       });
 
       test('should accept DID with underscores in identifier', () {
-        // Underscores are allowed in the DID pattern (part of [a-zA-Z0-9._:%-]+)
+        // Underscores are allowed in the DID pattern (part of
+        // [a-zA-Z0-9._:%-]+)
         final result = authService.validateAndNormalizeHandle(
           'did:plc:abc_123',
         );

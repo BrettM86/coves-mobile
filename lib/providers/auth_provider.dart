@@ -86,7 +86,7 @@ class AuthProvider with ChangeNotifier {
           print('No stored session found - user not logged in');
         }
       }
-    } catch (e) {
+    } on Object catch (e) {
       // Catch all errors to prevent app crashes during initialization
       _error = e.toString();
       if (kDebugMode) {
@@ -171,8 +171,7 @@ class AuthProvider with ChangeNotifier {
       // This is the outermost guard of a fire-and-forget startup task: no
       // throwable may escape, or it becomes an unhandled async error (a
       // sign-out race can surface Error types like StateError here).
-      // ignore: avoid_catches_without_on_clauses
-    } catch (e) {
+    } on Object catch (e) {
       if (kDebugMode) {
         print('Session validation error (ignored): $e');
       }
@@ -220,7 +219,7 @@ class AuthProvider with ChangeNotifier {
       // Cancel is not an error: don't record _error or flip auth state.
       // The finally block still clears _isLoading.
       rethrow;
-    } catch (e) {
+    } on Object catch (e) {
       _error = e.toString();
       _isAuthenticated = false;
       _session = null;

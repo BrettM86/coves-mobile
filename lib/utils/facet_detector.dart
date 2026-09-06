@@ -76,13 +76,8 @@ class FacetDetector {
       // Create the facet
       facets.add(
         RichTextFacet(
-          index: ByteSlice(
-            byteStart: byteStart,
-            byteEnd: byteEnd,
-          ),
-          features: [
-            LinkFacetFeature(uri: normalizedUrl),
-          ],
+          index: ByteSlice(byteStart: byteStart, byteEnd: byteEnd),
+          features: [LinkFacetFeature(uri: normalizedUrl)],
         ),
       );
     }
@@ -99,7 +94,8 @@ class FacetDetector {
   /// Example:
   /// - Text: "Hello 👋 world"
   /// - Character index of "world": 9
-  /// - Byte index of "world": 11 (6 bytes for "Hello " + 4 byte emoji + 1 space)
+  /// - Byte index of "world": 11 (6 bytes for "Hello " + 4 byte emoji + 1
+  /// space)
   static int charIndexToByteIndex(String text, int charIndex) {
     if (charIndex < 0) {
       return 0;
@@ -186,5 +182,4 @@ class FacetDetector {
     // Add https:// as default protocol
     return 'https://$trimmed';
   }
-
 }

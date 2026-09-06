@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 import '../constants/app_colors.dart';
 import '../models/post.dart';
@@ -160,7 +161,7 @@ class _FeedPageState extends State<FeedPage>
                       Text(
                         widget.isAuthenticated
                             ? 'Subscribe to communities to see '
-                                'posts in your feed'
+                                  'posts in your feed'
                             : 'Check back later for new posts',
                         style: const TextStyle(
                           fontSize: 14,
@@ -186,59 +187,58 @@ class _FeedPageState extends State<FeedPage>
       onRefresh: widget.onRefresh,
       color: AppColors.primary,
       child: ListView.custom(
+        scrollCacheExtent: const ScrollCacheExtent.pixels(5000),
         controller: widget.scrollController,
         // Default platform physics (matches Thunder)
         // Android: ClampingScrollPhysics, iOS: BouncingScrollPhysics
         physics: const AlwaysScrollableScrollPhysics(),
-        // Pre-render items 5000px in each direction (10000px total cache).
-        // Builds items before they're visible, reducing layout shift jitter
-        // from lazy height calculation.
-        cacheExtent: 5000,
         // Add top padding so content isn't hidden behind transparent header
         padding: const EdgeInsets.only(top: 44),
         childrenDelegate: SliverChildBuilderDelegate(
           (context, index) {
-          // Footer: loading indicator, error message, or end of feed
-          // Use consistent key so Flutter can track this item across rebuilds
-          if (index == widget.posts.length) {
-            return KeyedSubtree(
-              key: const ValueKey('feed_footer'),
-              child: _buildFooter(),
-            );
-          }
+            // Footer: loading indicator, error message, or end of feed
+            // Use consistent key so Flutter can track this item across rebuilds
+            if (index == widget.posts.length) {
+              return KeyedSubtree(
+                key: const ValueKey('feed_footer'),
+                child: _buildFooter(),
+              );
+            }
 
-          final post = widget.posts[index];
+            final post = widget.posts[index];
+            final authorName =
+                post.post.author.displayName ?? post.post.author.handle;
 
-          // RepaintBoundary isolates each post card to prevent unnecessary
-          // repaints of other items during scrolling.
-          // ValueKey on RepaintBoundary ensures Flutter correctly identifies
-          // and reuses the entire isolated subtree during list updates,
-          // preserving both identity and paint optimization.
-          final postCard = RepaintBoundary(
-            key: ValueKey(post.post.uri),
-            child: Semantics(
-              label:
-                  'Feed post in ${post.post.community.name} by '
-                  '${post.post.author.displayName ?? post.post.author.handle}. '
-                  '${post.post.title ?? ""}',
-              button: true,
-              child: PostCard(post: post, currentTime: widget.currentTime),
-            ),
-          );
-
-          // Constrain width on tablets for better readability
-          if (ResponsiveUtils.isTablet(context)) {
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: ResponsiveUtils.maxContentWidth,
-                ),
-                child: postCard,
+            // RepaintBoundary isolates each post card to prevent unnecessary
+            // repaints of other items during scrolling.
+            // ValueKey on RepaintBoundary ensures Flutter correctly identifies
+            // and reuses the entire isolated subtree during list updates,
+            // preserving both identity and paint optimization.
+            final postCard = RepaintBoundary(
+              key: ValueKey(post.post.uri),
+              child: Semantics(
+                label:
+                    'Feed post in ${post.post.community.name} by '
+                    '$authorName. '
+                    '${post.post.title ?? ""}',
+                button: true,
+                child: PostCard(post: post, currentTime: widget.currentTime),
               ),
             );
-          }
 
-          return postCard;
+            // Constrain width on tablets for better readability
+            if (ResponsiveUtils.isTablet(context)) {
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: ResponsiveUtils.maxContentWidth,
+                  ),
+                  child: postCard,
+                ),
+              );
+            }
+
+            return postCard;
           },
           childCount: widget.posts.length + (_shouldShowFooter ? 1 : 0),
           // findChildIndexCallback enables Flutter to track items by key
@@ -288,11 +288,7 @@ class _FeedPageState extends State<FeedPage>
         ),
         child: Column(
           children: [
-            const Icon(
-              Icons.error_outline,
-              color: AppColors.primary,
-              size: 32,
-            ),
+            const Icon(Icons.error_outline, color: AppColors.primary, size: 32),
             const SizedBox(height: 8),
             Text(
               _getUserFriendlyError(widget.error!),
@@ -305,9 +301,7 @@ class _FeedPageState extends State<FeedPage>
             const SizedBox(height: 12),
             TextButton(
               onPressed: widget.onClearErrorAndLoadMore,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.primary,
-              ),
+              style: TextButton.styleFrom(foregroundColor: AppColors.primary),
               child: const Text('Retry'),
             ),
           ],

@@ -56,9 +56,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _displayNameController = TextEditingController(
       text: widget.profile.displayName ?? '',
     );
-    _bioController = TextEditingController(
-      text: widget.profile.bio ?? '',
-    );
+    _bioController = TextEditingController(text: widget.profile.bio ?? '');
   }
 
   @override
@@ -81,14 +79,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _pickAvatar() async {
     final source = await ImageSourcePicker.show(context);
-    if (source == null) return;
+    if (source == null) {
+      return;
+    }
 
     try {
-      final picked = await ImageCropUtils.pickAndCropImage(
-        source: source,
-        constraints: ImageConstraints.avatar,
-        cropConfig: CropConfig.avatar,
-      );
+      final picked = await ImageCropUtils.pickAndCropImage(source: source);
       if (picked != null && mounted) {
         setState(() {
           _selectedAvatar = picked;
@@ -117,7 +113,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _pickBanner() async {
     final source = await ImageSourcePicker.show(context);
-    if (source == null) return;
+    if (source == null) {
+      return;
+    }
 
     try {
       final picked = await ImageCropUtils.pickAndCropImage(
@@ -152,7 +150,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
-    if (_isSaving || !_hasChanges) return;
+    if (_isSaving || !_hasChanges) {
+      return;
+    }
 
     setState(() {
       _isSaving = true;
@@ -166,8 +166,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final bio = _bioController.text.trim();
 
       // Only send text fields if they changed
-      final sendDisplayName =
-          displayName != (widget.profile.displayName ?? '');
+      final sendDisplayName = displayName != (widget.profile.displayName ?? '');
       final sendBio = bio != (widget.profile.bio ?? '');
 
       await profileProvider.updateProfile(
@@ -180,7 +179,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
 
       // Check mounted after async gap
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -191,7 +192,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       Navigator.pop(context);
     } on ApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -199,8 +202,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           backgroundColor: Colors.red.shade700,
         ),
       );
-    } catch (e) {
-      if (!mounted) return;
+    } on Object catch (e) {
+      if (!mounted) {
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -302,21 +307,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             height: 150,
             width: double.infinity,
             child: _selectedBanner != null
-                ? Image.file(
-                    _selectedBanner!.file,
-                    fit: BoxFit.cover,
-                  )
+                ? Image.file(_selectedBanner!.file, fit: BoxFit.cover)
                 : (widget.profile.banner != null &&
-                        widget.profile.banner!.isNotEmpty)
-                    ? CachedNetworkImage(
-                        imageUrl: widget.profile.banner!,
-                        fit: BoxFit.cover,
-                        fadeInDuration: Duration.zero,
-                        fadeOutDuration: Duration.zero,
-                        errorWidget: (context, url, error) =>
-                            _buildDefaultBanner(),
-                      )
-                    : _buildDefaultBanner(),
+                      widget.profile.banner!.isNotEmpty)
+                ? CachedNetworkImage(
+                    imageUrl: widget.profile.banner!,
+                    fit: BoxFit.cover,
+                    fadeInDuration: Duration.zero,
+                    fadeOutDuration: Duration.zero,
+                    errorWidget: (context, url, error) => _buildDefaultBanner(),
+                  )
+                : _buildDefaultBanner(),
           ),
           // Overlay with edit indicator
           Positioned.fill(
@@ -326,11 +327,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.camera_alt,
-                      color: Colors.white,
-                      size: 32,
-                    ),
+                    Icon(Icons.camera_alt, color: Colors.white, size: 32),
                     SizedBox(height: 4),
                     Text(
                       'Change Banner',

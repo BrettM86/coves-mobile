@@ -118,10 +118,9 @@ class ThreadViewComment {
       comment: comment ?? this.comment,
       replies: replies ?? this.replies,
       hasMore: hasMore ?? this.hasMore,
-      repliesCursor:
-          repliesCursor == _sentinel
-              ? this.repliesCursor
-              : repliesCursor as String?,
+      repliesCursor: repliesCursor == _sentinel
+          ? this.repliesCursor
+          : repliesCursor as String?,
     );
   }
 
@@ -174,10 +173,7 @@ class ThreadViewComment {
 /// This matches the backend's `social.coves.community.comment` record type.
 /// When a comment is deleted, this record will be null in CommentView.
 class CommentRecord {
-  const CommentRecord({
-    required this.content,
-    this.facets,
-  });
+  const CommentRecord({required this.content, this.facets});
 
   factory CommentRecord.fromJson(Map<String, dynamic> json) {
     return CommentRecord(
@@ -249,22 +245,17 @@ class CommentView {
       indexedAt: indexedAt,
       // Author is absent for deleted comments (backend omits the key
       // entirely to avoid leaking the author's DID).
-      author:
-          json['author'] != null
-              ? AuthorView.fromJson(json['author'] as Map<String, dynamic>)
-              : null,
+      author: json['author'] != null
+          ? AuthorView.fromJson(json['author'] as Map<String, dynamic>)
+          : null,
       post: CommentRef.fromJson(json['post'] as Map<String, dynamic>),
-      parent:
-          json['parent'] != null
-              ? CommentRef.fromJson(json['parent'] as Map<String, dynamic>)
-              : null,
+      parent: json['parent'] != null
+          ? CommentRef.fromJson(json['parent'] as Map<String, dynamic>)
+          : null,
       stats: CommentStats.fromJson(json['stats'] as Map<String, dynamic>),
-      viewer:
-          json['viewer'] != null
-              ? CommentViewerState.fromJson(
-                json['viewer'] as Map<String, dynamic>,
-              )
-              : null,
+      viewer: json['viewer'] != null
+          ? CommentViewerState.fromJson(json['viewer'] as Map<String, dynamic>)
+          : null,
       embed: json['embed'] as Map<String, dynamic>?,
     );
   }
@@ -446,10 +437,9 @@ class CommentsState {
       isLoading: isLoading ?? this.isLoading,
       isLoadingMore: isLoadingMore ?? this.isLoadingMore,
       error: error == _sentinel ? this.error : error as String?,
-      loadMoreError:
-          loadMoreError == _sentinel
-              ? this.loadMoreError
-              : loadMoreError as String?,
+      loadMoreError: loadMoreError == _sentinel
+          ? this.loadMoreError
+          : loadMoreError as String?,
     );
   }
 }

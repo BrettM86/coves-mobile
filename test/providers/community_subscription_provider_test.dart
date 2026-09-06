@@ -12,8 +12,7 @@ import '../test_helpers/test_mocks.dart';
 /// Fake AuthProvider with controllable auth state and real ChangeNotifier
 /// behavior (the provider under test listens for sign-out).
 class FakeAuthProvider extends AuthProvider {
-  FakeAuthProvider({bool isAuthenticated = true})
-    : _isAuthenticated = isAuthenticated;
+  FakeAuthProvider({this._isAuthenticated = true});
 
   bool _isAuthenticated;
 
@@ -85,87 +84,95 @@ void main() {
       );
     });
 
-    test('toggle-then-refetch: user toggle beats a stale server seed',
-        () async {
-      await provider.toggleSubscription(communityDid: did);
-      expect(provider.isSubscribed(did), isTrue);
+    test(
+      'toggle-then-refetch: user toggle beats a stale server seed',
+      () async {
+        await provider.toggleSubscription(communityDid: did);
+        expect(provider.isSubscribed(did), isTrue);
 
-      // A refetch racing the firehose reports the pre-toggle state
-      provider.setInitialSubscriptionState(
-        communityDid: did,
-        isSubscribed: false,
-      );
+        // A refetch racing the firehose reports the pre-toggle state
+        provider.setInitialSubscriptionState(
+          communityDid: did,
+          isSubscribed: false,
+        );
 
-      expect(provider.isSubscribed(did), isTrue);
-    });
+        expect(provider.isSubscribed(did), isTrue);
+      },
+    );
 
-    test('spinner settles: pending clears and notifies on completion',
-        () async {
-      final completer = Completer<String>();
-      when(
-        mockApiService.subscribeToCommunity(community: anyNamed('community')),
-      ).thenAnswer((_) => completer.future);
+    test(
+      'spinner settles: pending clears and notifies on completion',
+      () async {
+        final completer = Completer<String>();
+        when(
+          mockApiService.subscribeToCommunity(community: anyNamed('community')),
+        ).thenAnswer((_) => completer.future);
 
-      final future = provider.toggleSubscription(communityDid: did);
+        final future = provider.toggleSubscription(communityDid: did);
 
-      expect(provider.isPending(did), isTrue);
-      final notificationsMidFlight = notifyCount;
+        expect(provider.isPending(did), isTrue);
+        final notificationsMidFlight = notifyCount;
 
-      completer.complete('at://$did/social.coves.subscription/1');
-      await future;
+        completer.complete('at://$did/social.coves.subscription/1');
+        await future;
 
-      expect(provider.isPending(did), isFalse);
-      expect(
-        notifyCount,
-        greaterThan(notificationsMidFlight),
-        reason: 'completion must notify so pending spinners are rebuilt',
-      );
-    });
+        expect(provider.isPending(did), isFalse);
+        expect(
+          notifyCount,
+          greaterThan(notificationsMidFlight),
+          reason: 'completion must notify so pending spinners are rebuilt',
+        );
+      },
+    );
 
-    test('rollback: failed toggle reverts, notifies, and unblocks seeds',
-        () async {
-      when(
-        mockApiService.subscribeToCommunity(community: anyNamed('community')),
-      ).thenThrow(ApiException('Server error', statusCode: 500));
+    test(
+      'rollback: failed toggle reverts, notifies, and unblocks seeds',
+      () async {
+        when(
+          mockApiService.subscribeToCommunity(community: anyNamed('community')),
+        ).thenThrow(ApiException('Server error', statusCode: 500));
 
-      await expectLater(
-        provider.toggleSubscription(communityDid: did),
-        throwsA(isA<ApiException>()),
-      );
+        await expectLater(
+          provider.toggleSubscription(communityDid: did),
+          throwsA(isA<ApiException>()),
+        );
 
-      expect(provider.isSubscribed(did), isFalse);
-      expect(notifyCount, greaterThan(0));
+        expect(provider.isSubscribed(did), isFalse);
+        expect(notifyCount, greaterThan(0));
 
-      // The failed toggle must not stay authoritative: a later server
-      // seed applies again (pins the _userToggled rollback fix)
-      provider.setInitialSubscriptionState(
-        communityDid: did,
-        isSubscribed: true,
-      );
-      expect(provider.isSubscribed(did), isTrue);
-    });
+        // The failed toggle must not stay authoritative: a later server
+        // seed applies again (pins the _userToggled rollback fix)
+        provider.setInitialSubscriptionState(
+          communityDid: did,
+          isSubscribed: true,
+        );
+        expect(provider.isSubscribed(did), isTrue);
+      },
+    );
 
-    test('seed during in-flight toggle does not clobber optimistic state',
-        () async {
-      final completer = Completer<String>();
-      when(
-        mockApiService.subscribeToCommunity(community: anyNamed('community')),
-      ).thenAnswer((_) => completer.future);
+    test(
+      'seed during in-flight toggle does not clobber optimistic state',
+      () async {
+        final completer = Completer<String>();
+        when(
+          mockApiService.subscribeToCommunity(community: anyNamed('community')),
+        ).thenAnswer((_) => completer.future);
 
-      final future = provider.toggleSubscription(communityDid: did);
-      expect(provider.isSubscribed(did), isTrue);
+        final future = provider.toggleSubscription(communityDid: did);
+        expect(provider.isSubscribed(did), isTrue);
 
-      provider.setInitialSubscriptionState(
-        communityDid: did,
-        isSubscribed: false,
-      );
-      expect(provider.isSubscribed(did), isTrue);
+        provider.setInitialSubscriptionState(
+          communityDid: did,
+          isSubscribed: false,
+        );
+        expect(provider.isSubscribed(did), isTrue);
 
-      completer.complete('at://$did/social.coves.subscription/1');
-      await future;
+        completer.complete('at://$did/social.coves.subscription/1');
+        await future;
 
-      expect(provider.isSubscribed(did), isTrue);
-    });
+        expect(provider.isSubscribed(did), isTrue);
+      },
+    );
 
     test('seed freshness: non-toggled seeds stay refreshable', () {
       provider.setInitialSubscriptionState(
@@ -181,21 +188,23 @@ void main() {
       expect(provider.isSubscribed(did), isTrue);
     });
 
-    test('sign-out lifecycle: clears toggle authority so seeds apply again',
-        () async {
-      await provider.toggleSubscription(communityDid: did);
-      expect(provider.isSubscribed(did), isTrue);
+    test(
+      'sign-out lifecycle: clears toggle authority so seeds apply again',
+      () async {
+        await provider.toggleSubscription(communityDid: did);
+        expect(provider.isSubscribed(did), isTrue);
 
-      authProvider.setAuthenticated(value: false);
-      expect(provider.isSubscribed(did), isFalse);
+        authProvider.setAuthenticated(value: false);
+        expect(provider.isSubscribed(did), isFalse);
 
-      // Toggle authority was cleared: a fresh seed applies
-      provider.setInitialSubscriptionState(
-        communityDid: did,
-        isSubscribed: true,
-      );
-      expect(provider.isSubscribed(did), isTrue);
-    });
+        // Toggle authority was cleared: a fresh seed applies
+        provider.setInitialSubscriptionState(
+          communityDid: did,
+          isSubscribed: true,
+        );
+        expect(provider.isSubscribed(did), isTrue);
+      },
+    );
 
     test('loadSubscribedCommunities respects user-toggled state', () async {
       // User is subscribed to both communities server-side

@@ -25,7 +25,6 @@ void main() {
   // legacy AppColors.primary are distinguishable.
   const authorHandle = 'commenter.test';
 
-
   late MockAuthProvider mockAuthProvider;
   late MockVoteProvider mockVoteProvider;
   late MockCovesApiService mockApiService;
@@ -42,9 +41,8 @@ void main() {
 
     when(mockAuthProvider.isAuthenticated).thenReturn(false);
     when(mockVoteProvider.isLiked(any)).thenReturn(false);
-    when(mockVoteProvider.getAdjustedScore(any, any)).thenAnswer(
-      (invocation) => invocation.positionalArguments[1] as int,
-    );
+    when(mockVoteProvider.getAdjustedScore(any, any))
+        .thenAnswer((invocation) => invocation.positionalArguments[1] as int);
   });
 
   CommentView createComment({

@@ -111,9 +111,7 @@ class InlineLoading extends StatelessWidget {
   Widget build(BuildContext context) {
     return const SizedBox(
       height: kInlineLoadingHeight,
-      child: Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
-      ),
+      child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
     );
   }
 }

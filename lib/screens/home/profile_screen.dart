@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
 import '../../constants/app_colors.dart';
 import '../../models/comment.dart';
 import '../../models/post.dart';
@@ -130,8 +131,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // Lazy load comments when first switching to Comments tab
     if (index == 1 && !_commentsLoadedOnce) {
       _commentsLoadedOnce = true;
-      final profileProvider = context.read<UserProfileProvider>();
-      profileProvider.loadComments(refresh: true);
+      context.read<UserProfileProvider>().loadComments(refresh: true);
     }
   }
 
@@ -151,7 +151,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await profileProvider.loadProfile(actor);
 
     // Check mounted after async gap (CLAUDE.md requirement)
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     // Only seed block state / load posts if the profile loaded successfully
     // (no error) — a failed load can leave a stale cached profile whose
@@ -257,7 +259,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await authProvider.signOut();
 
     // Check mounted after async gap
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
     if (authProvider.isAuthenticated) {
@@ -314,7 +318,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         body: FullScreenError(
           title: 'Failed to load profile',
           message: profileProvider.profileError!,
-          onRetry: () => profileProvider.retryProfile(),
+          onRetry: profileProvider.retryProfile,
           secondaryActionLabel: isOwnProfile ? 'Sign Out' : null,
           onSecondaryAction: isOwnProfile ? _handleSignOut : null,
           secondaryActionDestructive: true,
@@ -354,39 +358,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
               expandedHeight: expandedHeight,
               pinned: true,
               stretch: true,
-              leading:
-                  widget.actor != null
-                      ? IconButton(
-                        icon: const BackIcon(),
-                        onPressed: () => context.pop(),
-                      )
-                      : null,
+              leading: widget.actor != null
+                  ? IconButton(
+                      icon: const BackIcon(),
+                      onPressed: () => context.pop(),
+                    )
+                  : null,
               automaticallyImplyLeading: widget.actor != null,
-              actions:
-                  profileProvider.isOwnProfile
-                      ? [
-                        if (profileProvider.profile != null)
-                          IconButton(
-                            icon: const LucideGlyph(LucidePaths.pencil),
-                            onPressed:
-                                () => _navigateToEditProfile(
-                                  context,
-                                  profileProvider.profile!,
-                                ),
-                            tooltip: 'Edit Profile',
-                          ),
-                        const ShareButton(
-                          useIconButton: true,
-                          color: AppColors.textPrimary,
-                          tooltip: 'Share Profile',
-                        ),
+              actions: profileProvider.isOwnProfile
+                  ? [
+                      if (profileProvider.profile != null)
                         IconButton(
-                          icon: const Icon(Icons.menu),
-                          onPressed: () => _showMenuSheet(context),
-                          tooltip: 'Menu',
+                          icon: const LucideGlyph(LucidePaths.pencil),
+                          onPressed: () => _navigateToEditProfile(
+                            context,
+                            profileProvider.profile!,
+                          ),
+                          tooltip: 'Edit Profile',
                         ),
-                      ]
-                      : null,
+                      const ShareButton(
+                        useIconButton: true,
+                        color: AppColors.textPrimary,
+                        tooltip: 'Share Profile',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.menu),
+                        onPressed: () => _showMenuSheet(context),
+                        tooltip: 'Menu',
+                      ),
+                    ]
+                  : null,
               flexibleSpace: LayoutBuilder(
                 builder: (context, constraints) {
                   // Calculate collapse progress (0 = expanded, 1 = collapsed).
@@ -477,13 +478,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: AppColors.background,
       foregroundColor: AppColors.textPrimary,
       title: Text(title ?? 'Profile'),
-      leading:
-          widget.actor != null
-              ? IconButton(
-                icon: const BackIcon(),
-                onPressed: () => context.pop(),
-              )
-              : null,
+      leading: widget.actor != null
+          ? IconButton(icon: const BackIcon(), onPressed: () => context.pop())
+          : null,
       automaticallyImplyLeading: widget.actor != null,
     );
   }
@@ -774,22 +771,21 @@ class _TabItem extends StatelessWidget {
                 Icon(
                   icon,
                   size: 16,
-                  color:
-                      isSelected
-                          ? AppColors.textPrimary
-                          : AppColors.textSecondary,
+                  color: isSelected
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   label,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight:
-                        isSelected ? FontWeight.bold : FontWeight.normal,
-                    color:
-                        isSelected
-                            ? AppColors.textPrimary
-                            : AppColors.textSecondary,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: isSelected
+                        ? AppColors.textPrimary
+                        : AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -852,7 +848,6 @@ class _ProfileCommentCard extends StatelessWidget {
 
     return CommentCard(
       comment: comment,
-      depth: 0,
       onTap: () {
         // Open the parent post's thread, scrolled to and highlighting this
         // comment. The post is cold-loaded by URI (no FeedViewPost here).

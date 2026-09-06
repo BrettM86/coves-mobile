@@ -52,9 +52,41 @@ flutter run --flavor dev --dart-define=ENVIRONMENT=local
 #  rebuild or use `flutter run --machine` if needed)
 ```
 
+### Native dependency checks
+
+`integration_test/session_refresh_persistence_test.dart` uses a signed-in local
+app and the real backend to verify explicit refresh and native token persistence.
+Build the ordinary app with the pubspec build number before signing in; Flutter
+may uninstall an app when a test APK has an older version code. Pass
+`--no-uninstall` to integration tests so their cleanup preserves app storage.
+This check does not simulate natural token expiration or replace restart tests.
+
+For native cropper save/cancel and output dimensions, start the matching
+`.maestro/native_cropper_android.yaml` or `.maestro/native_cropper_ios.yaml` flow
+first, then run `flutter test integration_test/native_cropper_test.dart` on the
+same device. Use `--flavor dev --dart-define=ENVIRONMENT=local --no-uninstall` on
+Android; omit the flavor on iOS. Starting Maestro first keeps Android's platform
+accessibility state stable across Flutter's test baseline. The flows are tagged
+`standalone` because they require the integration-test entry point. Afterward,
+rebuild/install the ordinary app to restore its UI entry point.
+
+For iOS OAuth browser interactions, target `com.apple.SafariViewService` while
+the authentication sheet is open, then return to `social.coves` for app checks.
+Do not include passwords or callback URLs in automation logs.
+
+A blank local PDS login page in both Safari and the auth sheet can come from
+`Content-Security-Policy: upgrade-insecure-requests`: Safari upgrades localhost
+assets to HTTPS, while the development PDS serves HTTP. The AppView/Vite proxy
+on 8080 does not fix PDS responses on 3001. Use trusted development HTTPS or a
+development configuration that supports HTTP consistently. Removing the CSP
+directive alone is insufficient: Safari also rejects the PDS's secure-only CSRF
+and device cookies over HTTP. Prefer trusted local HTTPS; preserve CSRF and
+device binding. Do not loosen production transport or cookie policy.
+
 ### 4. Driving the UI — Maestro first, adb as fallback
 
-**Primary: Maestro** (installed via Homebrew; needs Android Studio's JDK):
+**Primary: Maestro** (pinned by mise; see [toolchain setup](TOOLCHAIN.md)):
+Activate mise before running these commands. Maestro needs Android Studio's JDK:
 ```bash
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 export PATH="$JAVA_HOME/bin:$PATH"

@@ -33,10 +33,7 @@ FeedViewPost buildPost(String id) {
       cid: 'cid-$id',
       rkey: id,
       author: AuthorView(did: profileDid, handle: 'me.test'),
-      community: CommunityRef(
-        did: 'did:plc:community',
-        name: 'test-community',
-      ),
+      community: CommunityRef(did: 'did:plc:community', name: 'test-community'),
       createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
       indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
       record: PostRecord(title: 'Post $id', content: 'body'),
@@ -83,9 +80,9 @@ void main() {
       commentService: mockCommentService,
     );
 
-    when(mockApiService.getProfile(actor: anyNamed('actor'))).thenAnswer(
-      (_) async => UserProfile(did: profileDid, handle: 'me.test'),
-    );
+    when(
+      mockApiService.getProfile(actor: anyNamed('actor')),
+    ).thenAnswer((_) async => UserProfile(did: profileDid, handle: 'me.test'));
 
     await provider.loadProfile(profileDid);
   });
@@ -136,39 +133,43 @@ void main() {
   }
 
   group('posts pagination', () {
-    test('a load-more failure does not populate the first-page error',
-        () async {
-      stubPosts(<Object>[
-        TimelineResponse(feed: <FeedViewPost>[buildPost('a')], cursor: 'c1'),
-        NetworkException('page 2 exploded'),
-      ]);
+    test(
+      'a load-more failure does not populate the first-page error',
+      () async {
+        stubPosts(<Object>[
+          TimelineResponse(feed: <FeedViewPost>[buildPost('a')], cursor: 'c1'),
+          NetworkException('page 2 exploded'),
+        ]);
 
-      await provider.loadPosts(refresh: true);
-      expect(provider.postsState.error, isNull);
+        await provider.loadPosts(refresh: true);
+        expect(provider.postsState.error, isNull);
 
-      await provider.loadMorePosts();
+        await provider.loadMorePosts();
 
-      // The full-screen error channel must stay clean: only the first page
-      // failing is a full-screen condition.
-      expect(provider.postsState.error, isNull);
-    });
+        // The full-screen error channel must stay clean: only the first page
+        // failing is a full-screen condition.
+        expect(provider.postsState.error, isNull);
+      },
+    );
 
-    test('a load-more failure keeps the loaded posts, cursor and hasMore',
-        () async {
-      stubPosts(<Object>[
-        TimelineResponse(feed: <FeedViewPost>[buildPost('a')], cursor: 'c1'),
-        NetworkException('page 2 exploded'),
-      ]);
+    test(
+      'a load-more failure keeps the loaded posts, cursor and hasMore',
+      () async {
+        stubPosts(<Object>[
+          TimelineResponse(feed: <FeedViewPost>[buildPost('a')], cursor: 'c1'),
+          NetworkException('page 2 exploded'),
+        ]);
 
-      await provider.loadPosts(refresh: true);
-      await provider.loadMorePosts();
+        await provider.loadPosts(refresh: true);
+        await provider.loadMorePosts();
 
-      expect(provider.postsState.posts, hasLength(1));
-      expect(provider.postsState.cursor, 'c1');
-      expect(provider.postsState.hasMore, isTrue);
-      expect(provider.postsState.isLoadingMore, isFalse);
-      expect(provider.postsState.isLoading, isFalse);
-    });
+        expect(provider.postsState.posts, hasLength(1));
+        expect(provider.postsState.cursor, 'c1');
+        expect(provider.postsState.hasMore, isTrue);
+        expect(provider.postsState.isLoadingMore, isFalse);
+        expect(provider.postsState.isLoading, isFalse);
+      },
+    );
 
     // SPEC CHANGE (multi-model review, FIX 6): plain loadMorePosts() no
     // longer resumes after a failure — the scroll trigger keeps calling it
@@ -247,19 +248,20 @@ void main() {
       );
     });
 
-    test('a first-page failure still populates the full-screen error',
-        () async {
-      stubPosts(<Object>[NetworkException('first page exploded')]);
+    test(
+      'a first-page failure still populates the full-screen error',
+      () async {
+        stubPosts(<Object>[NetworkException('first page exploded')]);
 
-      await provider.loadPosts(refresh: true);
+        await provider.loadPosts(refresh: true);
 
-      expect(provider.postsState.error, isNotNull);
-      expect(provider.postsState.posts, isEmpty);
-      expect(provider.postsState.isLoading, isFalse);
-    });
+        expect(provider.postsState.error, isNotNull);
+        expect(provider.postsState.posts, isEmpty);
+        expect(provider.postsState.isLoading, isFalse);
+      },
+    );
 
-    test('a refresh after a load-more failure leaves no stale error',
-        () async {
+    test('a refresh after a load-more failure leaves no stale error', () async {
       stubPosts(<Object>[
         TimelineResponse(feed: <FeedViewPost>[buildPost('a')], cursor: 'c1'),
         NetworkException('page 2 exploded'),
@@ -396,9 +398,8 @@ void main() {
           cursor: 'c1',
         ),
       ]);
-      when(
-        mockCommentService.deleteComment(uri: anyNamed('uri')),
-      ).thenAnswer((_) async {});
+      when(mockCommentService.deleteComment(uri: anyNamed('uri')))
+          .thenAnswer((_) async {});
 
       await provider.loadComments(refresh: true);
 
@@ -407,10 +408,9 @@ void main() {
 
       await provider.deleteComment(commentUri: buildComment('a').uri);
 
-      expect(
-        provider.commentsState.comments.map((c) => c.uri),
-        <String>[buildComment('b').uri],
-      );
+      expect(provider.commentsState.comments.map((c) => c.uri), <String>[
+        buildComment('b').uri,
+      ]);
       expect(notifications, greaterThanOrEqualTo(1));
       // Page boundaries on the server did not move.
       expect(provider.commentsState.cursor, 'c1');
@@ -424,9 +424,8 @@ void main() {
           cursor: 'c1',
         ),
       ]);
-      when(
-        mockCommentService.deleteComment(uri: anyNamed('uri')),
-      ).thenThrow(ApiException('forbidden'));
+      when(mockCommentService.deleteComment(uri: anyNamed('uri')))
+          .thenThrow(ApiException('forbidden'));
 
       await provider.loadComments(refresh: true);
 
@@ -461,26 +460,27 @@ void main() {
   });
 
   group('comments pagination', () {
-    test('a load-more failure does not populate the first-page error',
-        () async {
-      stubComments(<Object>[
-        ActorCommentsResponse(
-          comments: <CommentView>[buildComment('a')],
-          cursor: 'c1',
-        ),
-        NetworkException('page 2 exploded'),
-      ]);
+    test(
+      'a load-more failure does not populate the first-page error',
+      () async {
+        stubComments(<Object>[
+          ActorCommentsResponse(
+            comments: <CommentView>[buildComment('a')],
+            cursor: 'c1',
+          ),
+          NetworkException('page 2 exploded'),
+        ]);
 
-      await provider.loadComments(refresh: true);
-      expect(provider.commentsState.error, isNull);
+        await provider.loadComments(refresh: true);
+        expect(provider.commentsState.error, isNull);
 
-      await provider.loadMoreComments();
+        await provider.loadMoreComments();
 
-      expect(provider.commentsState.error, isNull);
-    });
+        expect(provider.commentsState.error, isNull);
+      },
+    );
 
-    test('a load-more failure keeps the loaded comments and cursor',
-        () async {
+    test('a load-more failure keeps the loaded comments and cursor', () async {
       stubComments(<Object>[
         ActorCommentsResponse(
           comments: <CommentView>[buildComment('a')],

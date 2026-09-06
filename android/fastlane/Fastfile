@@ -42,14 +42,6 @@ platform :android do
     codes = {}
     PLAY_TRACKS.each do |track|
       codes[track] = google_play_track_version_codes(track: track)
-    rescue StandardError => e
-      # A track that has never had a release fails inside fastlane (2.231.1)
-      # with `undefined method 'flat_map' for nil` instead of returning [].
-      # Treat that as empty, but surface anything else (auth, network) loudly.
-      # If a newer fastlane returns [] or changes the message, drop this.
-      raise unless e.message.include?("flat_map")
-      UI.important("#{track}: no releases on this track")
-      codes[track] = []
     end
     highest = codes.values.flatten.max
     codes.each { |track, list| UI.message("#{track.ljust(10)} #{list.inspect}") }

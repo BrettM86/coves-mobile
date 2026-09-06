@@ -21,10 +21,11 @@ void main() {
       indexedAt: DateTime(2025),
       // Backend omits author entirely for deleted comments to avoid
       // leaking the author's identity.
-      author:
-          isDeleted ? null : AuthorView(did: 'did:plc:author', handle: handle),
+      author: isDeleted
+          ? null
+          : AuthorView(did: 'did:plc:author', handle: handle),
       post: CommentRef(uri: 'at://did:plc:test/post/123', cid: 'post-cid'),
-      stats: CommentStats(upvotes: 5, downvotes: 1, score: 4),
+      stats: const CommentStats(upvotes: 5, downvotes: 1, score: 4),
     );
   }
 

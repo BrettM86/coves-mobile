@@ -360,10 +360,7 @@ void main() {
 
         // Simulate refresh where server returns viewer.vote = null
         // (user removed vote on another device)
-        voteProvider.applyServerVoteState(
-          postUri: testPostUri,
-          voteDirection: null,
-        );
+        voteProvider.applyServerVoteState(postUri: testPostUri);
 
         // Vote should be cleared
         expect(voteProvider.isLiked(testPostUri), false);
@@ -791,32 +788,29 @@ void main() {
         );
       }
 
-      test(
-        'should clear stale adjustment when server confirms the like '
-        '(double-count bug)',
-        () async {
-          stubCreateVote();
+      test('should clear stale adjustment when server confirms the like '
+          '(double-count bug)', () async {
+        stubCreateVote();
 
-          // Like: server score 0 + optimistic adjustment = 1.
-          await voteProvider.toggleVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
-          );
-          expect(voteProvider.getAdjustedScore(testPostUri, 0), 1);
+        // Like: server score 0 + optimistic adjustment = 1.
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+        );
+        expect(voteProvider.getAdjustedScore(testPostUri, 0), 1);
 
-          // Focused-thread hydration re-delivers the node with fresh stats:
-          // server score is now 1 (includes the vote) and viewer confirms it.
-          voteProvider.applyServerVoteState(
-            postUri: testPostUri,
-            voteDirection: 'up',
-            voteUri: testVoteUri,
-          );
+        // Focused-thread hydration re-delivers the node with fresh stats:
+        // server score is now 1 (includes the vote) and viewer confirms it.
+        voteProvider.applyServerVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+          voteUri: testVoteUri,
+        );
 
-          // Without reconciliation this showed 2 (1 + stale adjustment).
-          expect(voteProvider.getAdjustedScore(testPostUri, 1), 1);
-          expect(voteProvider.isLiked(testPostUri), true);
-        },
-      );
+        // Without reconciliation this showed 2 (1 + stale adjustment).
+        expect(voteProvider.getAdjustedScore(testPostUri, 1), 1);
+        expect(voteProvider.isLiked(testPostUri), true);
+      });
 
       test(
         'should keep optimistic state when server has not indexed the vote',
@@ -837,38 +831,35 @@ void main() {
         },
       );
 
-      test(
-        'should keep the unlike when the server still reports the old vote '
-        '(delete not yet indexed)',
-        () async {
-          // Liked at load time (server counted it, no adjustment).
-          voteProvider.applyServerVoteState(
-            postUri: testPostUri,
-            voteDirection: 'up',
-            voteUri: testVoteUri,
-          );
+      test('should keep the unlike when the server still reports the old vote '
+          '(delete not yet indexed)', () async {
+        // Liked at load time (server counted it, no adjustment).
+        voteProvider.applyServerVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+          voteUri: testVoteUri,
+        );
 
-          stubCreateVote(deleted: true);
+        stubCreateVote(deleted: true);
 
-          // Unlike: adjustment -1 against the old server score of 1.
-          await voteProvider.toggleVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
-          );
+        // Unlike: adjustment -1 against the old server score of 1.
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+        );
 
-          // Snapshot predates the unlike: server still says 'up', score 1.
-          voteProvider.applyServerVoteState(
-            postUri: testPostUri,
-            voteDirection: 'up',
-            voteUri: testVoteUri,
-          );
+        // Snapshot predates the unlike: server still says 'up', score 1.
+        voteProvider.applyServerVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+          voteUri: testVoteUri,
+        );
 
-          // Mismatch (local unliked vs server 'up') - the unlike must be
-          // kept, not resurrected, and the -1 adjustment preserved.
-          expect(voteProvider.isLiked(testPostUri), false);
-          expect(voteProvider.getAdjustedScore(testPostUri, 1), 0);
-        },
-      );
+        // Mismatch (local unliked vs server 'up') - the unlike must be
+        // kept, not resurrected, and the -1 adjustment preserved.
+        expect(voteProvider.isLiked(testPostUri), false);
+        expect(voteProvider.getAdjustedScore(testPostUri, 1), 0);
+      });
 
       test('should reconcile a downvote the same as an upvote', () async {
         stubCreateVote();
@@ -902,33 +893,30 @@ void main() {
         expect(voteProvider.getVoteState(testPostUri)?.direction, 'down');
       });
 
-      test(
-        'should clear adjustment when server confirms an unlike',
-        () async {
-          // Liked at load time (server already counted it, no adjustment).
-          voteProvider.applyServerVoteState(
-            postUri: testPostUri,
-            voteDirection: 'up',
-            voteUri: testVoteUri,
-          );
+      test('should clear adjustment when server confirms an unlike', () async {
+        // Liked at load time (server already counted it, no adjustment).
+        voteProvider.applyServerVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+          voteUri: testVoteUri,
+        );
 
-          stubCreateVote(deleted: true);
+        stubCreateVote(deleted: true);
 
-          // Unlike: adjustment -1 on the old server score of 1.
-          await voteProvider.toggleVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
-          );
-          expect(voteProvider.getAdjustedScore(testPostUri, 1), 0);
+        // Unlike: adjustment -1 on the old server score of 1.
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+        );
+        expect(voteProvider.getAdjustedScore(testPostUri, 1), 0);
 
-          // Fresh stats: server processed the unlike (score 0, no viewer
-          // vote) - matches local effective state, so reconcile clears.
-          voteProvider.applyServerVoteState(postUri: testPostUri);
+        // Fresh stats: server processed the unlike (score 0, no viewer
+        // vote) - matches local effective state, so reconcile clears.
+        voteProvider.applyServerVoteState(postUri: testPostUri);
 
-          expect(voteProvider.getAdjustedScore(testPostUri, 0), 0);
-          expect(voteProvider.isLiked(testPostUri), false);
-        },
-      );
+        expect(voteProvider.getAdjustedScore(testPostUri, 0), 0);
+        expect(voteProvider.isLiked(testPostUri), false);
+      });
 
       test('should do nothing while a vote request is in flight', () async {
         final completer = Completer<VoteResponse>();
@@ -1248,132 +1236,117 @@ void main() {
         },
       );
 
-      test(
-        'a failed re-vote must not let a stale snapshot resurrect the '
-        'removed vote',
-        () async {
-          // Like then unlike, neither indexed yet: the adjustment key ends
-          // at value 0, and that key is the only thing routing snapshots
-          // into reconciliation for this URI.
-          stubCreateVote();
-          await voteProvider.toggleVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
-          );
-          stubCreateVote(deleted: true);
-          await voteProvider.toggleVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
-          );
-          expect(voteProvider.isLiked(testPostUri), false);
+      test('a failed re-vote must not let a stale snapshot resurrect the '
+          'removed vote', () async {
+        // Like then unlike, neither indexed yet: the adjustment key ends
+        // at value 0, and that key is the only thing routing snapshots
+        // into reconciliation for this URI.
+        stubCreateVote();
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+        );
+        stubCreateVote(deleted: true);
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+        );
+        expect(voteProvider.isLiked(testPostUri), false);
 
-          // A re-vote fails at the API layer; the rollback must restore
-          // the zero-value key, not drop it.
-          when(
-            mockVoteService.createVote(
-              postUri: anyNamed('postUri'),
-              postCid: anyNamed('postCid'),
-              direction: anyNamed('direction'),
-            ),
-          ).thenThrow(ApiException('server rejected the vote'));
-          await expectLater(
-            voteProvider.toggleVote(
-              postUri: testPostUri,
-              postCid: testPostCid,
-            ),
-            throwsA(isA<ApiException>()),
-          );
-          expect(voteProvider.isLiked(testPostUri), false);
+        // A re-vote fails at the API layer; the rollback must restore
+        // the zero-value key, not drop it.
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+          ),
+        ).thenThrow(ApiException('server rejected the vote'));
+        await expectLater(
+          voteProvider.toggleVote(postUri: testPostUri, postCid: testPostCid),
+          throwsA(isA<ApiException>()),
+        );
+        expect(voteProvider.isLiked(testPostUri), false);
 
-          // A stale snapshot that predates the unlike must reconcile
-          // (mismatch - unlike kept), NOT be adopted: adoption would light
-          // the heart for a vote the user removed.
-          voteProvider.applyServerVoteState(
+        // A stale snapshot that predates the unlike must reconcile
+        // (mismatch - unlike kept), NOT be adopted: adoption would light
+        // the heart for a vote the user removed.
+        voteProvider.applyServerVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+          voteUri: testVoteUri,
+        );
+        expect(voteProvider.isLiked(testPostUri), false);
+        expect(voteProvider.getAdjustedScore(testPostUri, 0), 0);
+      });
+
+      test('rolls back the optimistic update when the service throws a '
+          'non-ApiException error', () async {
+        // A TypeError/StateError from a malformed response must not
+        // strand the optimistic vote: the leftover adjustment key would
+        // route every future snapshot into reconciliation for the whole
+        // session.
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+          ),
+        ).thenThrow(StateError('malformed response'));
+
+        await expectLater(
+          voteProvider.toggleVote(postUri: testPostUri, postCid: testPostCid),
+          throwsA(isA<StateError>()),
+        );
+
+        expect(voteProvider.isLiked(testPostUri), false);
+        expect(voteProvider.getAdjustedScore(testPostUri, 5), 5);
+
+        // Proof the rollback removed the adjustment key: a fresh
+        // snapshot is adopted verbatim (a leftover key would reconcile
+        // the mismatch and keep the heart off).
+        voteProvider.applyServerVoteState(
+          postUri: testPostUri,
+          voteDirection: 'up',
+          voteUri: testVoteUri,
+        );
+        expect(voteProvider.isLiked(testPostUri), true);
+      });
+
+      test('clears a direction-switch adjustment once the server reports the '
+          'new direction', () async {
+        // Server-confirmed downvote, no adjustment outstanding.
+        voteProvider.applyServerVoteState(
+          postUri: testPostUri,
+          voteDirection: 'down',
+          voteUri: testVoteUri,
+        );
+
+        // Switch to an upvote: adjustment +2 (remove down, add up).
+        stubCreateVote();
+        await voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+        );
+        expect(voteProvider.isLiked(testPostUri), true);
+        expect(voteProvider.getAdjustedScore(testPostUri, -1), 1);
+
+        // Caught-up snapshot: the server score already reflects the
+        // switch, so the +2 must clear (and notify - the displayed
+        // score changes).
+        var notifications = 0;
+        voteProvider
+          ..addListener(() => notifications++)
+          ..applyServerVoteState(
             postUri: testPostUri,
             voteDirection: 'up',
             voteUri: testVoteUri,
           );
-          expect(voteProvider.isLiked(testPostUri), false);
-          expect(voteProvider.getAdjustedScore(testPostUri, 0), 0);
-        },
-      );
 
-      test(
-        'rolls back the optimistic update when the service throws a '
-        'non-ApiException error',
-        () async {
-          // A TypeError/StateError from a malformed response must not
-          // strand the optimistic vote: the leftover adjustment key would
-          // route every future snapshot into reconciliation for the whole
-          // session.
-          when(
-            mockVoteService.createVote(
-              postUri: anyNamed('postUri'),
-              postCid: anyNamed('postCid'),
-              direction: anyNamed('direction'),
-            ),
-          ).thenThrow(StateError('malformed response'));
-
-          await expectLater(
-            voteProvider.toggleVote(
-              postUri: testPostUri,
-              postCid: testPostCid,
-            ),
-            throwsA(isA<StateError>()),
-          );
-
-          expect(voteProvider.isLiked(testPostUri), false);
-          expect(voteProvider.getAdjustedScore(testPostUri, 5), 5);
-
-          // Proof the rollback removed the adjustment key: a fresh
-          // snapshot is adopted verbatim (a leftover key would reconcile
-          // the mismatch and keep the heart off).
-          voteProvider.applyServerVoteState(
-            postUri: testPostUri,
-            voteDirection: 'up',
-            voteUri: testVoteUri,
-          );
-          expect(voteProvider.isLiked(testPostUri), true);
-        },
-      );
-
-      test(
-        'clears a direction-switch adjustment once the server reports the '
-        'new direction',
-        () async {
-          // Server-confirmed downvote, no adjustment outstanding.
-          voteProvider.applyServerVoteState(
-            postUri: testPostUri,
-            voteDirection: 'down',
-            voteUri: testVoteUri,
-          );
-
-          // Switch to an upvote: adjustment +2 (remove down, add up).
-          stubCreateVote();
-          await voteProvider.toggleVote(
-            postUri: testPostUri,
-            postCid: testPostCid,
-          );
-          expect(voteProvider.isLiked(testPostUri), true);
-          expect(voteProvider.getAdjustedScore(testPostUri, -1), 1);
-
-          // Caught-up snapshot: the server score already reflects the
-          // switch, so the +2 must clear (and notify - the displayed
-          // score changes).
-          var notifications = 0;
-          voteProvider
-            ..addListener(() => notifications++)
-            ..applyServerVoteState(
-              postUri: testPostUri,
-              voteDirection: 'up',
-              voteUri: testVoteUri,
-            );
-
-          expect(voteProvider.isLiked(testPostUri), true);
-          expect(voteProvider.getAdjustedScore(testPostUri, 1), 1);
-          expect(notifications, 1);
-        },
-      );
+        expect(voteProvider.isLiked(testPostUri), true);
+        expect(voteProvider.getAdjustedScore(testPostUri, 1), 1);
+        expect(notifications, 1);
+      });
     });
 
     group('Auth state listener', () {

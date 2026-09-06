@@ -27,7 +27,8 @@ void main() {
       dio.interceptors.add(
         createAuthInterceptor(
           tokenGetter: () async => 'token-1',
-          tokenRefresher: refresher ??
+          tokenRefresher:
+              refresher ??
               () async {
                 refreshCount++;
                 return false;
@@ -41,8 +42,7 @@ void main() {
       );
     }
 
-    test(
-        '401 from the refresh endpoint signs out without attempting '
+    test('401 from the refresh endpoint signs out without attempting '
         'a refresh (no infinite loop)', () async {
       addInterceptor();
       dioAdapter.onPost(
@@ -59,8 +59,7 @@ void main() {
       expect(signOutCount, 1);
     });
 
-    test(
-        'an Error thrown by the refresher propagates the original 401 '
+    test('an Error thrown by the refresher propagates the original 401 '
         'without signing out', () async {
       // The interceptor catches Object so a TypeError/StateError from the
       // auth provider cannot escape the async onError handler (which would

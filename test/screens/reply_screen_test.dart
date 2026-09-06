@@ -41,9 +41,8 @@ void main() {
     // Signed-out rendering keeps CommentCard simple (no action menus)
     when(mockAuthProvider.isAuthenticated).thenReturn(false);
     when(mockVoteProvider.isLiked(any)).thenReturn(false);
-    when(
-      mockVoteProvider.getAdjustedScore(any, any),
-    ).thenAnswer((invocation) => invocation.positionalArguments[1] as int);
+    when(mockVoteProvider.getAdjustedScore(any, any))
+        .thenAnswer((invocation) => invocation.positionalArguments[1] as int);
 
     // Real CommentsProvider over mocks: drafts are pure local state, so no
     // API stubbing is needed (ReplyScreen never triggers loadComments)
@@ -118,12 +117,11 @@ void main() {
     unawaited(
       navigatorKey.currentState!.push(
         MaterialPageRoute<void>(
-          builder:
-              (_) => ReplyScreen(
-                comment: comment,
-                commentsProvider: commentsProvider,
-                onSubmit: onSubmit ?? (content, facets) async {},
-              ),
+          builder: (_) => ReplyScreen(
+            comment: comment,
+            commentsProvider: commentsProvider,
+            onSubmit: onSubmit ?? (content, facets) async {},
+          ),
         ),
       ),
     );

@@ -35,10 +35,7 @@ void main() {
 
       dio = Dio(BaseOptions(baseUrl: 'https://api.test.coves.social'));
       dioAdapter = DioAdapter(dio: dio);
-      apiService = CovesApiService(
-        dio: dio,
-        tokenGetter: () async => token,
-      );
+      apiService = CovesApiService(dio: dio, tokenGetter: () async => token);
     });
 
     tearDown(() {

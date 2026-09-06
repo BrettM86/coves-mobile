@@ -38,10 +38,11 @@ class MediaFill extends StatelessWidget {
   Widget build(BuildContext context) {
     return ColoredBox(
       color: AppColors.backgroundSecondary,
-      child:
-          icon == null
-              ? null
-              : Center(child: Icon(icon, color: iconColor, size: iconSize)),
+      child: icon == null
+          ? null
+          : Center(
+              child: Icon(icon, color: iconColor, size: iconSize),
+            ),
     );
   }
 }

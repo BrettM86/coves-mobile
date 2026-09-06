@@ -2,6 +2,11 @@
 
 A new Flutter project.
 
+## Toolchain
+
+Use the versions in [mise.toml](mise.toml) and [Gemfile.lock](Gemfile.lock).
+See [toolchain setup](docs/TOOLCHAIN.md) before building or running tests.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.

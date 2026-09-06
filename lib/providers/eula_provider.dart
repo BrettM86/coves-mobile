@@ -27,9 +27,13 @@ class EulaProvider with ChangeNotifier {
       if (kDebugMode) {
         print('Failed to check EULA acceptance: $e\n$stackTrace');
       }
-      await Sentry.captureException(e, stackTrace: stackTrace, withScope: (scope) {
-        scope.setTag('phase', 'eula_initialization');
-      });
+      await Sentry.captureException(
+        e,
+        stackTrace: stackTrace,
+        withScope: (scope) {
+          scope.setTag('phase', 'eula_initialization');
+        },
+      );
       // Fail closed - require acceptance if we can't read state
       _hasAccepted = false;
     } finally {
@@ -48,9 +52,13 @@ class EulaProvider with ChangeNotifier {
       if (kDebugMode) {
         print('Failed to accept EULA: $e\n$stackTrace');
       }
-      await Sentry.captureException(e, stackTrace: stackTrace, withScope: (scope) {
-        scope.setTag('phase', 'eula_acceptance');
-      });
+      await Sentry.captureException(
+        e,
+        stackTrace: stackTrace,
+        withScope: (scope) {
+          scope.setTag('phase', 'eula_acceptance');
+        },
+      );
       _error = 'Failed to save EULA acceptance. Please try again.';
     } finally {
       notifyListeners();

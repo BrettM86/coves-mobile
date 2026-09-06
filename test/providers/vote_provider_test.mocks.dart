@@ -43,25 +43,23 @@ class MockVoteService extends _i1.Mock implements _i2.VoteService {
     required String? postUri,
     required String? postCid,
     String? direction = 'up',
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#createVote, [], {
-              #postUri: postUri,
-              #postCid: postCid,
-              #direction: direction,
-            }),
-            returnValue: _i3.Future<_i2.VoteResponse>.value(
-              _FakeVoteResponse_0(
-                this,
-                Invocation.method(#createVote, [], {
-                  #postUri: postUri,
-                  #postCid: postCid,
-                  #direction: direction,
-                }),
-              ),
-            ),
-          )
-          as _i3.Future<_i2.VoteResponse>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#createVote, [], {
+      #postUri: postUri,
+      #postCid: postCid,
+      #direction: direction,
+    }),
+    returnValue: _i3.Future<_i2.VoteResponse>.value(
+      _FakeVoteResponse_0(
+        this,
+        Invocation.method(#createVote, [], {
+          #postUri: postUri,
+          #postCid: postCid,
+          #direction: direction,
+        }),
+      ),
+    ),
+  ) as _i3.Future<_i2.VoteResponse>);
 }
 
 /// A class which mocks [AuthProvider].
@@ -73,12 +71,10 @@ class MockAuthProvider extends _i1.Mock implements _i4.AuthProvider {
   }
 
   @override
-  bool get isAuthenticated =>
-      (super.noSuchMethod(
-            Invocation.getter(#isAuthenticated),
-            returnValue: false,
-          )
-          as bool);
+  bool get isAuthenticated => (super.noSuchMethod(
+    Invocation.getter(#isAuthenticated),
+    returnValue: false,
+  ) as bool);
 
   @override
   bool get isLoading =>
@@ -91,47 +87,37 @@ class MockAuthProvider extends _i1.Mock implements _i4.AuthProvider {
           as bool);
 
   @override
-  _i3.Future<String?> getAccessToken() =>
-      (super.noSuchMethod(
-            Invocation.method(#getAccessToken, []),
-            returnValue: _i3.Future<String?>.value(),
-          )
-          as _i3.Future<String?>);
+  _i3.Future<String?> getAccessToken() => (super.noSuchMethod(
+    Invocation.method(#getAccessToken, []),
+    returnValue: _i3.Future<String?>.value(),
+  ) as _i3.Future<String?>);
 
   @override
-  _i3.Future<void> initialize() =>
-      (super.noSuchMethod(
-            Invocation.method(#initialize, []),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
-          )
-          as _i3.Future<void>);
+  _i3.Future<void> initialize() => (super.noSuchMethod(
+    Invocation.method(#initialize, []),
+    returnValue: _i3.Future<void>.value(),
+    returnValueForMissingStub: _i3.Future<void>.value(),
+  ) as _i3.Future<void>);
 
   @override
-  _i3.Future<void> signIn(String? handle) =>
-      (super.noSuchMethod(
-            Invocation.method(#signIn, [handle]),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
-          )
-          as _i3.Future<void>);
+  _i3.Future<void> signIn(String? handle) => (super.noSuchMethod(
+    Invocation.method(#signIn, [handle]),
+    returnValue: _i3.Future<void>.value(),
+    returnValueForMissingStub: _i3.Future<void>.value(),
+  ) as _i3.Future<void>);
 
   @override
-  _i3.Future<void> signOut() =>
-      (super.noSuchMethod(
-            Invocation.method(#signOut, []),
-            returnValue: _i3.Future<void>.value(),
-            returnValueForMissingStub: _i3.Future<void>.value(),
-          )
-          as _i3.Future<void>);
+  _i3.Future<void> signOut() => (super.noSuchMethod(
+    Invocation.method(#signOut, []),
+    returnValue: _i3.Future<void>.value(),
+    returnValueForMissingStub: _i3.Future<void>.value(),
+  ) as _i3.Future<void>);
 
   @override
-  _i3.Future<bool> refreshToken() =>
-      (super.noSuchMethod(
-            Invocation.method(#refreshToken, []),
-            returnValue: _i3.Future<bool>.value(false),
-          )
-          as _i3.Future<bool>);
+  _i3.Future<bool> refreshToken() => (super.noSuchMethod(
+    Invocation.method(#refreshToken, []),
+    returnValue: _i3.Future<bool>.value(false),
+  ) as _i3.Future<bool>);
 
   @override
   void clearError() => super.noSuchMethod(

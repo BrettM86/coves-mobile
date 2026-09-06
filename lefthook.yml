@@ -1,11 +1,7 @@
 # Lefthook configuration for Coves Flutter app
 #
-# Install on PopOS/Ubuntu/Debian:
-#   curl -1sLf 'https://dl.cloudsmith.io/public/evilmartians/lefthook/setup.deb.sh' | sudo -E bash
-#   sudo apt install lefthook
-#
-# Setup (after install):
-#   lefthook install
+# Install pinned tools using docs/TOOLCHAIN.md, then:
+#   mise exec -- lefthook install
 #
 # This will auto-format and analyze code before commits!
 

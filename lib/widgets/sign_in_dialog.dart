@@ -24,11 +24,10 @@ class SignInDialog extends StatelessWidget {
   }) {
     return showDialog<bool>(
       context: context,
-      builder:
-          (context) => SignInDialog(
-            title: title ?? 'Sign in required',
-            message: message ?? 'You need to sign in to interact with posts.',
-          ),
+      builder: (context) => SignInDialog(
+        title: title ?? 'Sign in required',
+        message: message ?? 'You need to sign in to interact with posts.',
+      ),
     );
   }
 

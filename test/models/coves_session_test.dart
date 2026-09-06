@@ -169,14 +169,14 @@ void main() {
 
     test('should handle complex token values', () {
       final uri = Uri.parse(
-        'social.coves:/callback?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U&did=did:plc:test123&session_id=sess456',
+        'social.coves:/callback?token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature_123-ABC&did=did:plc:test123&session_id=sess456',
       );
 
       final session = CovesSession.fromCallbackUri(uri);
 
       expect(
         session.token,
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U',
+        'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature_123-ABC',
       );
     });
   });
@@ -551,7 +551,7 @@ void main() {
       );
 
       const newToken =
-          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+          'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature_123-ABC';
       final updated = original.copyWithToken(newToken);
 
       expect(updated.token, newToken);
@@ -638,7 +638,8 @@ void main() {
 
       expect(
         stringRep,
-        'CovesSession(did: did:plc:test123, handle: test.user, sessionId: sess456)',
+        'CovesSession(did: did:plc:test123, handle: test.user, '
+        'sessionId: sess456)',
       );
     });
   });

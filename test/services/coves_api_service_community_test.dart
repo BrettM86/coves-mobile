@@ -50,10 +50,7 @@ void main() {
       dioAdapter.onGet(
         '/xrpc/social.coves.community.list',
         (server) => server.reply(200, mockResponse),
-        queryParameters: {
-          'limit': 50,
-          'sort': 'popular',
-        },
+        queryParameters: {'limit': 50, 'sort': 'popular'},
       );
 
       final response = await apiService.listCommunities();
@@ -67,18 +64,12 @@ void main() {
     });
 
     test('should handle empty communities response', () async {
-      final mockResponse = {
-        'communities': [],
-        'cursor': null,
-      };
+      final mockResponse = {'communities': [], 'cursor': null};
 
       dioAdapter.onGet(
         '/xrpc/social.coves.community.list',
         (server) => server.reply(200, mockResponse),
-        queryParameters: {
-          'limit': 50,
-          'sort': 'popular',
-        },
+        queryParameters: {'limit': 50, 'sort': 'popular'},
       );
 
       final response = await apiService.listCommunities();
@@ -88,18 +79,12 @@ void main() {
     });
 
     test('should handle null communities array', () async {
-      final mockResponse = {
-        'communities': null,
-        'cursor': null,
-      };
+      final mockResponse = {'communities': null, 'cursor': null};
 
       dioAdapter.onGet(
         '/xrpc/social.coves.community.list',
         (server) => server.reply(200, mockResponse),
-        queryParameters: {
-          'limit': 50,
-          'sort': 'popular',
-        },
+        queryParameters: {'limit': 50, 'sort': 'popular'},
       );
 
       final response = await apiService.listCommunities();
@@ -108,18 +93,12 @@ void main() {
     });
 
     test('should fetch communities with custom limit', () async {
-      final mockResponse = {
-        'communities': [],
-        'cursor': null,
-      };
+      final mockResponse = {'communities': [], 'cursor': null};
 
       dioAdapter.onGet(
         '/xrpc/social.coves.community.list',
         (server) => server.reply(200, mockResponse),
-        queryParameters: {
-          'limit': 25,
-          'sort': 'popular',
-        },
+        queryParameters: {'limit': 25, 'sort': 'popular'},
       );
 
       final response = await apiService.listCommunities(limit: 25);
@@ -132,10 +111,7 @@ void main() {
 
       final mockResponse = {
         'communities': [
-          {
-            'did': 'did:plc:community3',
-            'name': 'paginated-community',
-          },
+          {'did': 'did:plc:community3', 'name': 'paginated-community'},
         ],
         'cursor': 'next-cursor-456',
       };
@@ -143,11 +119,7 @@ void main() {
       dioAdapter.onGet(
         '/xrpc/social.coves.community.list',
         (server) => server.reply(200, mockResponse),
-        queryParameters: {
-          'limit': 50,
-          'sort': 'popular',
-          'cursor': cursor,
-        },
+        queryParameters: {'limit': 50, 'sort': 'popular', 'cursor': cursor},
       );
 
       final response = await apiService.listCommunities(cursor: cursor);
@@ -157,18 +129,12 @@ void main() {
     });
 
     test('should fetch communities with custom sort', () async {
-      final mockResponse = {
-        'communities': [],
-        'cursor': null,
-      };
+      final mockResponse = {'communities': [], 'cursor': null};
 
       dioAdapter.onGet(
         '/xrpc/social.coves.community.list',
         (server) => server.reply(200, mockResponse),
-        queryParameters: {
-          'limit': 50,
-          'sort': 'new',
-        },
+        queryParameters: {'limit': 50, 'sort': 'new'},
       );
 
       final response = await apiService.listCommunities(sort: 'new');
@@ -183,10 +149,7 @@ void main() {
           'error': 'Unauthorized',
           'message': 'Invalid token',
         }),
-        queryParameters: {
-          'limit': 50,
-          'sort': 'popular',
-        },
+        queryParameters: {'limit': 50, 'sort': 'popular'},
       );
 
       expect(
@@ -202,10 +165,7 @@ void main() {
           'error': 'InternalServerError',
           'message': 'Database error',
         }),
-        queryParameters: {
-          'limit': 50,
-          'sort': 'popular',
-        },
+        queryParameters: {'limit': 50, 'sort': 'popular'},
       );
 
       expect(
@@ -219,10 +179,7 @@ void main() {
       // retries re-hit this mock (and keep failing with the same error type).
       final requestOptions = RequestOptions(
         path: '/xrpc/social.coves.community.list',
-        queryParameters: {
-          'limit': 50,
-          'sort': 'popular',
-        },
+        queryParameters: {'limit': 50, 'sort': 'popular'},
       );
 
       dioAdapter.onGet(
@@ -234,10 +191,7 @@ void main() {
             requestOptions: requestOptions,
           ),
         ),
-        queryParameters: {
-          'limit': 50,
-          'sort': 'popular',
-        },
+        queryParameters: {'limit': 50, 'sort': 'popular'},
       );
 
       // Assert retry exhaustion actually happened so fixture drift can't
@@ -326,10 +280,7 @@ void main() {
       dioAdapter.onPost(
         '/xrpc/social.coves.community.post.create',
         (server) => server.reply(200, mockResponse),
-        data: {
-          'community': 'did:plc:community1',
-          'title': 'Just a title',
-        },
+        data: {'community': 'did:plc:community1', 'title': 'Just a title'},
       );
 
       final response = await apiService.createPost(
@@ -374,10 +325,7 @@ void main() {
           'error': 'Unauthorized',
           'message': 'Authentication required',
         }),
-        data: {
-          'community': 'did:plc:community1',
-          'title': 'Test',
-        },
+        data: {'community': 'did:plc:community1', 'title': 'Test'},
       );
 
       expect(
@@ -396,10 +344,7 @@ void main() {
           'error': 'NotFound',
           'message': 'Community not found',
         }),
-        data: {
-          'community': 'did:plc:nonexistent',
-          'title': 'Test',
-        },
+        data: {'community': 'did:plc:nonexistent', 'title': 'Test'},
       );
 
       expect(
@@ -440,10 +385,7 @@ void main() {
           'error': 'InternalServerError',
           'message': 'Database error',
         }),
-        data: {
-          'community': 'did:plc:community1',
-          'title': 'Test',
-        },
+        data: {'community': 'did:plc:community1', 'title': 'Test'},
       );
 
       expect(
@@ -461,10 +403,7 @@ void main() {
       final requestOptions = RequestOptions(
         path: '/xrpc/social.coves.community.post.create',
         method: 'POST',
-        data: {
-          'community': 'did:plc:community1',
-          'title': 'Test',
-        },
+        data: {'community': 'did:plc:community1', 'title': 'Test'},
       );
 
       dioAdapter.onPost(
@@ -476,10 +415,7 @@ void main() {
             requestOptions: requestOptions,
           ),
         ),
-        data: {
-          'community': 'did:plc:community1',
-          'title': 'Test',
-        },
+        data: {'community': 'did:plc:community1', 'title': 'Test'},
       );
 
       // Assert retry exhaustion actually happened so fixture drift can't

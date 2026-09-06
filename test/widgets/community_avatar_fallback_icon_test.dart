@@ -15,8 +15,9 @@ import 'package:flutter_test/flutter_test.dart';
 /// Green phase adds the parameter. Keeping it isolated lets the
 /// characterization suite next door still run.
 void main() {
-  Widget wrap(Widget child) =>
-      MaterialApp(home: Scaffold(body: Center(child: child)));
+  Widget wrap(Widget child) => MaterialApp(
+    home: Scaffold(body: Center(child: child)),
+  );
 
   group('CommunityAvatar fallbackIcon', () {
     testWidgets('renders the icon instead of the name initial', (tester) async {
@@ -47,10 +48,12 @@ void main() {
 
       expect(
         tester.getSize(
-          find.ancestor(
-            of: find.byIcon(Icons.workspaces_outlined),
-            matching: find.byType(DecoratedBox),
-          ).first,
+          find
+              .ancestor(
+                of: find.byIcon(Icons.workspaces_outlined),
+                matching: find.byType(DecoratedBox),
+              )
+              .first,
         ),
         const Size(100, 100),
       );

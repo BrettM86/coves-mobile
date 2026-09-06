@@ -1,18 +1,15 @@
 # Shared helper for the android/ and ios/ Fastfiles.
 #
-# fastlane runs under its own Ruby and exports GEM_HOME, GEM_PATH, RUBYOPT and
-# the BUNDLE_* family to everything it spawns. The Homebrew `pod` shim resolves
-# its gems through those same variables, so a `flutter build` launched from a
-# fastlane lane inherits fastlane's gem paths and CocoaPods fails to load --
-# Flutter reports it as "CocoaPods is installed but broken" and skips
-# `pod install`, which then breaks the iOS archive.
-#
-# Stripping the Ruby/Bundler variables for the child process makes `flutter`
-# behave exactly as it does in a plain shell.
+# fastlane exports GEM_*, RUBY*, and BUNDLE* variables to child processes.
+# Clear them before Flutter runs the project's bin/pod: that binstub must
+# derive BUNDLE_GEMFILE and load its own locked CocoaPods dependencies rather
+# than inherit fastlane's Ruby bootstrap settings. Keep bin/ on PATH so Flutter
+# cannot fall back to a globally installed CocoaPods executable.
 
 require "fileutils"
 require "json"
 require "tmpdir"
+require "rbconfig"
 
 # Passing nil as a value to Kernel#system removes the variable from the child
 # environment rather than setting it to an empty string.
@@ -74,7 +71,10 @@ def flutter(project_root, *args)
     # Required from a Fastfile, so `UI` is not in scope here the way it is
     # inside a lane -- reach for the fully qualified constant.
     FastlaneCore::UI.command("flutter #{args.join(' ')}")
-    ok = system(CLEAN_RUBY_ENV, "flutter", *args)
+    environment = CLEAN_RUBY_ENV.merge(
+      "PATH" => [File.join(project_root, "bin"), File.dirname(RbConfig.ruby), ENV["PATH"]].compact.join(File::PATH_SEPARATOR)
+    )
+    ok = system(environment, "flutter", *args)
     FastlaneCore::UI.user_error!("`flutter #{args.join(' ')}` failed") unless ok
   end
 end

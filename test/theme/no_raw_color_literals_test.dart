@@ -132,7 +132,8 @@ const h = Color(
 /* outer /* nested */ const stillComment = Color(0xFF00FF00); */
 const url = 'https://example.com'; // not Color(0xFF00FF00)
 ''',
-      'hatched.dart': '''
+      'hatched.dart':
+          '''
 const sameLine = Color(0xFF00FF00); // ignore: $_hatch
 const afterSameLine = Color(0xFF00FF00);
 // ignore: $_hatch

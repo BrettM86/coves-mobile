@@ -91,8 +91,9 @@ class LandingScreen extends StatelessWidget {
                 error,
                 stackTrace: stackTrace,
                 withScope: (scope) {
-                  scope.setTag('asset', 'lil_dude.svg');
-                  scope.setTag('screen', 'landing');
+                  scope
+                    ..setTag('asset', 'lil_dude.svg')
+                    ..setTag('screen', 'landing');
                 },
               ),
             );
@@ -124,8 +125,9 @@ class LandingScreen extends StatelessWidget {
                 error,
                 stackTrace: stackTrace,
                 withScope: (scope) {
-                  scope.setTag('asset', 'coves_logo_text.svg');
-                  scope.setTag('screen', 'landing');
+                  scope
+                    ..setTag('asset', 'coves_logo_text.svg')
+                    ..setTag('screen', 'landing');
                 },
               ),
             );
@@ -167,8 +169,9 @@ class LandingScreen extends StatelessWidget {
                     error,
                     stackTrace: stackTrace,
                     withScope: (scope) {
-                      scope.setTag('asset', 'providers_landing.svg');
-                      scope.setTag('screen', 'landing');
+                      scope
+                        ..setTag('asset', 'providers_landing.svg')
+                        ..setTag('screen', 'landing');
                     },
                   ),
                 );
@@ -204,9 +207,7 @@ class LandingScreen extends StatelessWidget {
         const SizedBox(height: 14),
 
         // Sign in with Bluesky button
-        BlueskySignInButton(
-          onPressed: () => context.push('/login'),
-        ),
+        BlueskySignInButton(onPressed: () => context.push('/login')),
 
         const SizedBox(height: 14),
 
@@ -248,11 +249,7 @@ class LandingScreen extends StatelessWidget {
             child: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.explore_outlined,
-                  size: 18,
-                  color: AppColors.teal,
-                ),
+                Icon(Icons.explore_outlined, size: 18, color: AppColors.teal),
                 SizedBox(width: 8),
                 Text(
                   'Explore communities',

@@ -61,10 +61,9 @@ class PlayChip extends StatelessWidget {
       width: 64,
       height: 64,
       decoration: BoxDecoration(color: _background, shape: BoxShape.circle),
-      child:
-          loading
-              ? _spinner
-              : Icon(_glyph, color: _foreground, size: _glyphSize),
+      child: loading
+          ? _spinner
+          : Icon(_glyph, color: _foreground, size: _glyphSize),
     );
   }
 }

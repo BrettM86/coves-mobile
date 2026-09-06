@@ -1,0 +1,22 @@
+# Drives integration_test/native_cropper_test.dart; start this flow first.
+# The integration test opens the real native screens and verifies output.
+appId: social.coves.dev
+tags:
+  - standalone
+---
+- extendedWaitUntil:
+    visible: "Crop Image"
+    timeout: 90000
+- tapOn: "Crop"
+- extendedWaitUntil:
+    visible: "Crop Banner"
+    timeout: 15000
+- tapOn: "Crop"
+- extendedWaitUntil:
+    visible: "Crop Image"
+    timeout: 15000
+- back
+- extendedWaitUntil:
+    visible: "Crop Banner"
+    timeout: 15000
+- back

@@ -89,9 +89,7 @@ void main() {
       });
 
       test('blocks a scheme that merely starts with http', () async {
-        final result = await UrlLauncher.launchExternalUrl(
-          'httpx://evil.com',
-        );
+        final result = await UrlLauncher.launchExternalUrl('httpx://evil.com');
         expect(result, false);
         expect(mockPlatform.launchedUrls, isEmpty);
       });

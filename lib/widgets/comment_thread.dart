@@ -96,11 +96,11 @@ class CommentThread extends StatelessWidget {
     // Check if we've hit max depth - stop threading here
     final atMaxDepth = depth >= maxDepth;
 
-    // Use API's replyCount for accurate count at max depth (includes unloaded replies)
-    final replyCount =
-        (hasReplies && atMaxDepth && !isCollapsed)
-            ? thread.comment.stats.replyCount
-            : 0;
+    // Use API's replyCount for accurate count at max depth (includes
+    // unloaded replies)
+    final replyCount = (hasReplies && atMaxDepth && !isCollapsed)
+        ? thread.comment.stats.replyCount
+        : 0;
 
     // Build updated ancestors list including current thread
     final childAncestors = [...ancestors, thread];
@@ -110,36 +110,34 @@ class CommentThread extends StatelessWidget {
 
     // Only build replies widget when NOT collapsed and NOT at max depth
     // When at max depth, we show "Read more replies" link instead
-    final repliesWidget =
-        hasReplies && !isCollapsed && !atMaxDepth
-            ? Column(
-              key: const ValueKey('replies'),
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children:
-                  thread.replies!.map((reply) {
-                    return CommentThread(
-                      // Keyed by URI: CommentCard is stateful, so merges
-                      // that reorder siblings must not re-associate state
-                      // by index.
-                      key: ValueKey(reply.comment.uri),
-                      thread: reply,
-                      depth: depth + 1,
-                      maxDepth: maxDepth,
-                      currentTime: currentTime,
-                      onLoadMoreReplies: onLoadMoreReplies,
-                      loadingMoreReplies: loadingMoreReplies,
-                      onCommentTap: onCommentTap,
-                      collapsedComments: collapsedComments,
-                      onCollapseToggle: onCollapseToggle,
-                      onContinueThread: onContinueThread,
-                      ancestors: childAncestors,
-                      onDelete: onDelete,
-                      focusedCommentUri: focusedCommentUri,
-                      focusedCommentKey: focusedCommentKey,
-                    );
-                  }).toList(),
-            )
-            : null;
+    final repliesWidget = hasReplies && !isCollapsed && !atMaxDepth
+        ? Column(
+            key: const ValueKey('replies'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: thread.replies!.map((reply) {
+              return CommentThread(
+                // Keyed by URI: CommentCard is stateful, so merges
+                // that reorder siblings must not re-associate state
+                // by index.
+                key: ValueKey(reply.comment.uri),
+                thread: reply,
+                depth: depth + 1,
+                maxDepth: maxDepth,
+                currentTime: currentTime,
+                onLoadMoreReplies: onLoadMoreReplies,
+                loadingMoreReplies: loadingMoreReplies,
+                onCommentTap: onCommentTap,
+                collapsedComments: collapsedComments,
+                onCollapseToggle: onCollapseToggle,
+                onContinueThread: onContinueThread,
+                ancestors: childAncestors,
+                onDelete: onDelete,
+                focusedCommentUri: focusedCommentUri,
+                focusedCommentKey: focusedCommentKey,
+              );
+            }).toList(),
+          )
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,10 +150,9 @@ class CommentThread extends StatelessWidget {
             depth: depth,
             currentTime: currentTime,
             onTap: onCommentTap != null ? () => onCommentTap!(thread) : null,
-            onLongPress:
-                onCollapseToggle != null
-                    ? () => onCollapseToggle!(thread.comment.uri)
-                    : null,
+            onLongPress: onCollapseToggle != null
+                ? () => onCollapseToggle!(thread.comment.uri)
+                : null,
             isCollapsed: isCollapsed,
             collapsedCount: collapsedCount,
             onDelete: onDelete,
@@ -175,43 +172,38 @@ class CommentThread extends StatelessWidget {
               final isExpanding = child.key == const ValueKey('replies');
 
               // Different fade curves for expand vs collapse
-              final fadeCurve =
-                  isExpanding
-                      ? const Interval(0, 0.7, curve: Curves.easeOut)
-                      : const Interval(0, 0.5, curve: Curves.easeIn);
+              final fadeCurve = isExpanding
+                  ? const Interval(0, 0.7, curve: Curves.easeOut)
+                  : const Interval(0, 0.5, curve: Curves.easeIn);
 
               // Slide down from parent on expand, slide up on collapse
-              final slideOffset =
-                  isExpanding
-                      ? Tween<Offset>(
-                        begin: const Offset(0, -0.15),
-                        end: Offset.zero,
-                      ).animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: const Interval(
-                            0.2,
-                            1,
-                            curve: Curves.easeOutCubic,
-                          ),
+              final slideOffset = isExpanding
+                  ? Tween<Offset>(
+                      begin: const Offset(0, -0.15),
+                      end: Offset.zero,
+                    ).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: const Interval(
+                          0.2,
+                          1,
+                          curve: Curves.easeOutCubic,
                         ),
-                      )
-                      : Tween<Offset>(
-                        begin: Offset.zero,
-                        end: const Offset(0, -0.05),
-                      ).animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeIn,
-                        ),
-                      );
+                      ),
+                    )
+                  : Tween<Offset>(
+                      begin: Offset.zero,
+                      end: const Offset(0, -0.05),
+                    ).animate(
+                      CurvedAnimation(parent: animation, curve: Curves.easeIn),
+                    );
 
               return FadeTransition(
                 opacity: CurvedAnimation(parent: animation, curve: fadeCurve),
                 child: ClipRect(
                   child: SizeTransition(
                     sizeFactor: animation,
-                    axisAlignment: -1,
+                    alignment: Alignment.topCenter,
                     child: SlideTransition(position: slideOffset, child: child),
                   ),
                 ),
@@ -221,18 +213,12 @@ class CommentThread extends StatelessWidget {
               // Stack children during transition - ClipRect prevents
               // overflow artifacts on deeply nested threads
               return ClipRect(
-                child: Stack(
-                  children: [
-                    ...previousChildren,
-                    if (currentChild != null) currentChild,
-                  ],
-                ),
+                child: Stack(children: [...previousChildren, ?currentChild]),
               );
             },
-            child:
-                isCollapsed
-                    ? const SizedBox.shrink(key: ValueKey('collapsed'))
-                    : repliesWidget,
+            child: isCollapsed
+                ? const SizedBox.shrink(key: ValueKey('collapsed'))
+                : repliesWidget,
           ),
 
         // Show "Read more replies" link at max depth when there are replies
@@ -313,7 +299,6 @@ class CommentThread extends StatelessWidget {
       ),
     );
   }
-
 }
 
 /// "Load more replies" button shared by [CommentThread] (nested levels)
@@ -392,10 +377,9 @@ class _ContinueThreadPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..strokeWidth = 2.0
-          ..style = PaintingStyle.stroke;
+    final paint = Paint()
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
 
     // Draw vertical line for each depth level with different colors
     for (var i = 0; i < depth; i++) {

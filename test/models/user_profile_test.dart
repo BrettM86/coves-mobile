@@ -37,9 +37,7 @@ void main() {
     });
 
     test('bio is null when neither key present', () {
-      final profile = UserProfile.fromJson(const {
-        'did': 'did:plc:abc123',
-      });
+      final profile = UserProfile.fromJson(const {'did': 'did:plc:abc123'});
 
       expect(profile.bio, isNull);
     });

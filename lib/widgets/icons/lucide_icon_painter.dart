@@ -23,17 +23,15 @@ class LucideIconPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     canvas.scale(size.width / _viewBox, size.height / _viewBox);
 
-    final stroke =
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = _strokeWidth
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round;
-    final fill =
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.fill;
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final fill = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
 
     for (final d in paths) {
       final path = lucidePath(d);

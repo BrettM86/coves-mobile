@@ -13,14 +13,14 @@ void main() {
     late VoteService voteService;
 
     // Track token refresh and sign-out calls
-    int tokenRefreshCallCount = 0;
-    int signOutCallCount = 0;
-    CovesSession currentSession = const CovesSession(
+    var tokenRefreshCallCount = 0;
+    var signOutCallCount = 0;
+    var currentSession = const CovesSession(
       token: 'initial-token',
       did: 'did:plc:test123',
       sessionId: 'session123',
     );
-    bool shouldRefreshSucceed = true;
+    var shouldRefreshSucceed = true;
 
     // Mock session getter
     Future<CovesSession?> mockSessionGetter() async {
@@ -75,14 +75,15 @@ void main() {
       );
     });
 
-    test('should call token refresher on 401 response and retry once', () async {
+    test('refreshes a token on 401 and retries once', () async {
       // This test verifies the interceptor detects 401, calls the refresher,
       // and only retries ONCE to prevent infinite loops.
 
       const postUri = 'at://did:plc:test/social.coves.post.record/123';
       const postCid = 'bafy123';
 
-      // Mock will always return 401 (simulates scenario where even refresh doesn't help)
+      // Mock will always return 401 (simulates scenario where even refresh
+      // doesn't help)
       dioAdapter.onPost(
         '/xrpc/social.coves.feed.vote.create',
         (server) => server.reply(401, {
@@ -97,11 +98,7 @@ void main() {
 
       // Make the request and expect it to fail (mock keeps returning 401)
       expect(
-        () => voteService.createVote(
-          postUri: postUri,
-          postCid: postCid,
-          direction: 'up',
-        ),
+        () => voteService.createVote(postUri: postUri, postCid: postCid),
         throwsA(isA<Exception>()),
       );
 
@@ -114,7 +111,8 @@ void main() {
       // Verify token was updated by refresher
       expect(currentSession.token, 'refreshed-token');
 
-      // Verify user was signed out after retry failed (proves retry limit works)
+      // Verify user was signed out after retry failed (proves retry limit
+      // works)
       expect(signOutCallCount, 1);
     });
 
@@ -145,11 +143,7 @@ void main() {
 
       // Make the request and expect it to fail
       expect(
-        () => voteService.createVote(
-          postUri: postUri,
-          postCid: postCid,
-          direction: 'up',
-        ),
+        () => voteService.createVote(postUri: postUri, postCid: postCid),
         throwsA(isA<Exception>()),
       );
 
@@ -203,7 +197,6 @@ void main() {
           () => voteServiceNoRefresh.createVote(
             postUri: postUri,
             postCid: postCid,
-            direction: 'up',
           ),
           throwsA(isA<Exception>()),
         );
@@ -238,11 +231,7 @@ void main() {
 
       // Make the request and expect it to fail
       expect(
-        () => voteService.createVote(
-          postUri: postUri,
-          postCid: postCid,
-          direction: 'up',
-        ),
+        () => voteService.createVote(postUri: postUri, postCid: postCid),
         throwsA(isA<Exception>()),
       );
 
@@ -256,7 +245,8 @@ void main() {
       expect(signOutCallCount, 0);
     });
 
-    // Note: delete method was removed - backend handles toggle via create endpoint
+    // Note: delete method was removed - backend handles toggle via create
+    // endpoint
 
     test('should throw ApiException when session is null', () async {
       // Create service that returns null session
@@ -273,18 +263,16 @@ void main() {
 
       // Make the request and expect it to fail before even calling the API
       expect(
-        () => voteServiceNoSession.createVote(
-          postUri: postUri,
-          postCid: postCid,
-          direction: 'up',
-        ),
+        () =>
+            voteServiceNoSession.createVote(postUri: postUri, postCid: postCid),
         throwsA(isA<Exception>()),
       );
 
       // Wait for async operations
       await Future.delayed(const Duration(milliseconds: 100));
 
-      // Token refresh should NOT be attempted (request never made it to the API)
+      // Token refresh should NOT be attempted (request never made it to the
+      // API)
       expect(tokenRefreshCallCount, 0);
       expect(signOutCallCount, 0);
     });
@@ -307,11 +295,7 @@ void main() {
       );
 
       // Make first request
-      await voteService.createVote(
-        postUri: postUri,
-        postCid: postCid,
-        direction: 'up',
-      );
+      await voteService.createVote(postUri: postUri, postCid: postCid);
 
       // Update session (simulate token rotation)
       currentSession = const CovesSession(
@@ -335,11 +319,7 @@ void main() {
       );
 
       // Make second request
-      await voteService.createVote(
-        postUri: postUri2,
-        postCid: postCid,
-        direction: 'up',
-      );
+      await voteService.createVote(postUri: postUri2, postCid: postCid);
 
       // Verify no refresh was needed (tokens were valid)
       expect(tokenRefreshCallCount, 0);

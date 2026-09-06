@@ -83,9 +83,8 @@ void main() {
 
       when(mockAuthProvider.isAuthenticated).thenReturn(true);
       when(mockAuthProvider.did).thenReturn('did:plc:viewer');
-      when(
-        mockAuthProvider.getAccessToken(),
-      ).thenAnswer((_) async => 'test-token');
+      when(mockAuthProvider.getAccessToken())
+          .thenAnswer((_) async => 'test-token');
 
       fakeVoteService = _FakeVoteService(
         response: const VoteResponse(
@@ -132,7 +131,10 @@ void main() {
     test('a duplicated post on the next page must not clobber an optimistic '
         'vote', () async {
       stubDiscoverPages([
-        TimelineResponse(feed: [buildFeedPost(uri: postUri)], cursor: 'page-2'),
+        TimelineResponse(
+          feed: [buildFeedPost(uri: postUri)],
+          cursor: 'page-2',
+        ),
         // Cursor drift re-delivers the same post, still unvoted and with
         // the pre-vote score.
         TimelineResponse(
@@ -167,13 +169,19 @@ void main() {
 
       stubDiscoverPages([
         TimelineResponse(
-          feed: [buildFeedPost(uri: postUri), buildFeedPost(uri: otherUri)],
+          feed: [
+            buildFeedPost(uri: postUri),
+            buildFeedPost(uri: otherUri),
+          ],
           cursor: 'page-2',
         ),
         // The hot-sort cursor moved under us: page 2 starts with the post
         // that closed page 1.
         TimelineResponse(
-          feed: [buildFeedPost(uri: otherUri), buildFeedPost(uri: thirdUri)],
+          feed: [
+            buildFeedPost(uri: otherUri),
+            buildFeedPost(uri: thirdUri),
+          ],
         ),
       ]);
 

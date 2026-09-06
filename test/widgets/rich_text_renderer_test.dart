@@ -64,7 +64,10 @@ Widget _wrapInMaterialApp(Widget child) {
 Widget _wrapInRouterApp(Widget child) {
   final router = GoRouter(
     routes: [
-      GoRoute(path: '/', builder: (context, state) => Scaffold(body: child)),
+      GoRoute(
+        path: '/',
+        builder: (context, state) => Scaffold(body: child),
+      ),
       GoRoute(
         path: '/profile/:actor',
         builder: (context, state) =>
@@ -98,7 +101,8 @@ bool _hasLeftBar(Widget w) =>
 /// Due to Flutter's text rendering, there may be an extra nesting level
 List<InlineSpan> _getContentSpans(RichText richText) {
   final textSpan = richText.text as TextSpan;
-  // If textSpan has children and the first child is also a TextSpan with children,
+  // If textSpan has children and the first child is also a TextSpan with
+  // children,
   // we're looking at a nested structure
   if (textSpan.children != null && textSpan.children!.isNotEmpty) {
     final firstChild = textSpan.children![0];
@@ -237,7 +241,8 @@ void main() {
       final richText = tester.widget<RichText>(richTextFinder);
       final spans = _getContentSpans(richText);
 
-      // Should have 5 spans: "Visit ", "google.com", " and ", "apple.com", " today"
+      // Should have 5 spans: "Visit ", "google.com", " and ", "apple.com",
+      // " today"
       expect(spans.length, 5);
 
       // Verify first link
@@ -422,9 +427,11 @@ void main() {
       // "Check ", "htt", "ps://exam" (both facets), "ple.com", " out"
       expect(spans.length, 5);
 
-      final linkText = [spans[1], spans[2], spans[3]]
-          .map((s) => (s as TextSpan).text)
-          .join();
+      final linkText = [
+        spans[1],
+        spans[2],
+        spans[3],
+      ].map((s) => (s as TextSpan).text).join();
       expect(linkText, 'https://example.com');
 
       // Every link run is styled and tappable
@@ -748,7 +755,8 @@ void main() {
   group('RichTextRenderer - Widget Properties', () {
     testWidgets('maxLines is applied', (tester) async {
       const text =
-          'A very long text that should be limited to one line when maxLines is set';
+          'A very long text that should be limited to one line '
+          'when maxLines is set';
       const linkText = 'A ver';
 
       await tester.pumpWidget(
@@ -982,7 +990,8 @@ void main() {
       // There should be spans since we have valid byte indices
       expect(spans, isNotEmpty);
 
-      // If there are 3 children (before, facet, after), check the facet has no recognizer
+      // If there are 3 children (before, facet, after), check the facet has
+      // no recognizer
       if (spans.length >= 2) {
         final facetSpan = spans[1] as TextSpan;
         expect(facetSpan.recognizer, isNull);
@@ -1307,9 +1316,7 @@ void main() {
   });
 
   group('RichTextRenderer - Block Facets', () {
-    testWidgets('heading renders as its own scaled, bold line', (
-      tester,
-    ) async {
+    testWidgets('heading renders as its own scaled, bold line', (tester) async {
       const text = 'Big Title\nBody text follows';
 
       await tester.pumpWidget(
@@ -1342,9 +1349,7 @@ void main() {
       expect(find.textContaining('Body text follows'), findsOneWidget);
     });
 
-    testWidgets('mid-line heading range extends to whole line', (
-      tester,
-    ) async {
+    testWidgets('mid-line heading range extends to whole line', (tester) async {
       const text = 'Big Title\nBody';
 
       await tester.pumpWidget(
@@ -1363,15 +1368,14 @@ void main() {
         ),
       );
 
-      final richTexts =
-          tester.widgetList<RichText>(find.byType(RichText)).toList();
+      final richTexts = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .toList();
       expect(richTexts.length, 2);
       expect(richTexts.first.text.toPlainText(), 'Big Title');
     });
 
-    testWidgets('blockquote renders with a left bar per level', (
-      tester,
-    ) async {
+    testWidgets('blockquote renders with a left bar per level', (tester) async {
       const text = 'quoted wisdom\nmy reply';
 
       await tester.pumpWidget(
@@ -1531,8 +1535,9 @@ void main() {
         ),
       );
 
-      final richTexts =
-          tester.widgetList<RichText>(find.byType(RichText)).toList();
+      final richTexts = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .toList();
       expect(richTexts.length, 2);
 
       final headingSpans = _getContentSpans(richTexts.first);
@@ -1585,9 +1590,7 @@ void main() {
       expect(richText.overflow, TextOverflow.ellipsis);
 
       final spans = _getContentSpans(richText);
-      final byText = {
-        for (final s in spans.whereType<TextSpan>()) s.text: s,
-      };
+      final byText = {for (final s in spans.whereType<TextSpan>()) s.text: s};
 
       expect(byText['Big Title']?.style?.fontWeight, FontWeight.w700);
       expect(byText['quoted line']?.style?.fontStyle, FontStyle.italic);
@@ -1626,35 +1629,41 @@ void main() {
       expect(find.text('profile:did:plc:abc'), findsOneWidget);
     });
 
-    testWidgets('tapping a community mention navigates to the community route',
-        (tester) async {
-      const text = 'join !books.coves.social today';
+    testWidgets(
+      'tapping a community mention navigates to the community route',
+      (tester) async {
+        const text = 'join !books.coves.social today';
 
-      await tester.pumpWidget(
-        _wrapInRouterApp(
-          RichTextRenderer(
-            text: text,
-            facets: [
-              _facetOver(
-                fullText: text,
-                span: '!books.coves.social',
-                features: const [MentionFacetFeature(did: 'did:plc:books123')],
-              ),
-            ],
+        await tester.pumpWidget(
+          _wrapInRouterApp(
+            RichTextRenderer(
+              text: text,
+              facets: [
+                _facetOver(
+                  fullText: text,
+                  span: '!books.coves.social',
+                  features: const [
+                    MentionFacetFeature(did: 'did:plc:books123'),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-      );
+        );
 
-      final richText = tester.widget<RichText>(find.byType(RichText));
-      final mention =
-          _spanWithText(_getContentSpans(richText), '!books.coves.social');
-      expect(mention.recognizer, isA<TapGestureRecognizer>());
+        final richText = tester.widget<RichText>(find.byType(RichText));
+        final mention = _spanWithText(
+          _getContentSpans(richText),
+          '!books.coves.social',
+        );
+        expect(mention.recognizer, isA<TapGestureRecognizer>());
 
-      (mention.recognizer! as TapGestureRecognizer).onTap?.call();
-      await tester.pumpAndSettle();
+        (mention.recognizer! as TapGestureRecognizer).onTap?.call();
+        await tester.pumpAndSettle();
 
-      expect(find.text('community:did:plc:books123'), findsOneWidget);
-    });
+        expect(find.text('community:did:plc:books123'), findsOneWidget);
+      },
+    );
 
     testWidgets('mention with malicious non-DID value is not tappable', (
       tester,
@@ -1690,17 +1699,17 @@ void main() {
     const text = '🎉 intro\nBig 👋 Title\ncode 🚀 here\nend';
 
     List<RichTextFacet> facets() => [
-          _facetOver(
-            fullText: text,
-            span: 'Big 👋 Title',
-            features: const [HeadingFacetFeature(level: 2)],
-          ),
-          _facetOver(
-            fullText: text,
-            span: 'code 🚀 here',
-            features: const [CodeBlockFacetFeature()],
-          ),
-        ];
+      _facetOver(
+        fullText: text,
+        span: 'Big 👋 Title',
+        features: const [HeadingFacetFeature(level: 2)],
+      ),
+      _facetOver(
+        fullText: text,
+        span: 'code 🚀 here',
+        features: const [CodeBlockFacetFeature()],
+      ),
+    ];
 
     testWidgets('emoji before block ranges keeps block boundaries aligned', (
       tester,
@@ -1709,8 +1718,9 @@ void main() {
         _wrapInMaterialApp(RichTextRenderer(text: text, facets: facets())),
       );
 
-      final richTexts =
-          tester.widgetList<RichText>(find.byType(RichText)).toList();
+      final richTexts = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .toList();
       final plainTexts = richTexts.map((rt) => rt.text.toPlainText()).toList();
 
       // The heading line renders exactly, not shifted by multi-byte emoji
@@ -1741,10 +1751,10 @@ void main() {
       // Single RichText so maxLines applies
       expect(find.byType(RichText), findsOneWidget);
 
-      final spans =
-          _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
-      final runTexts =
-          spans.whereType<TextSpan>().map((s) => s.text).toList();
+      final spans = _getContentSpans(
+        tester.widget<RichText>(find.byType(RichText)),
+      );
+      final runTexts = spans.whereType<TextSpan>().map((s) => s.text).toList();
 
       // No text lost or shifted by emoji byte offsets
       expect(runTexts.join(), text);
@@ -1964,8 +1974,9 @@ void main() {
         ),
       );
 
-      var spans =
-          _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
+      var spans = _getContentSpans(
+        tester.widget<RichText>(find.byType(RichText)),
+      );
       var span = _spanWithText(spans, 'the trailer');
 
       // Hidden: redacted, labelled for screen readers
@@ -1977,8 +1988,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(mockPlatform.launchedUrls, isEmpty);
 
-      spans =
-          _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
+      spans = _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
       span = _spanWithText(spans, 'the trailer');
       expect(span.style?.color, isNot(Colors.transparent));
       expect(span.semanticsLabel, isNull);
@@ -1986,7 +1996,10 @@ void main() {
       // Tap while revealed: launches the link
       (span.recognizer! as TapGestureRecognizer).onTap?.call();
       await tester.pumpAndSettle();
-      expect(mockPlatform.launchedUrls, contains('https://example.com/trailer'));
+      expect(
+        mockPlatform.launchedUrls,
+        contains('https://example.com/trailer'),
+      );
     });
 
     testWidgets('spoiler reason appears in the semantics label', (
@@ -2009,8 +2022,9 @@ void main() {
         ),
       );
 
-      final spans =
-          _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
+      final spans = _getContentSpans(
+        tester.widget<RichText>(find.byType(RichText)),
+      );
       final span = _spanWithText(spans, 'Bob');
       expect(span.semanticsLabel, contains('ending'));
     });
@@ -2021,12 +2035,12 @@ void main() {
       const text = 'the killer is Bob obviously';
 
       List<RichTextFacet> spoilerFacets() => [
-            _facetOver(
-              fullText: text,
-              span: 'Bob',
-              features: const [SpoilerFacetFeature()],
-            ),
-          ];
+        _facetOver(
+          fullText: text,
+          span: 'Bob',
+          features: const [SpoilerFacetFeature()],
+        ),
+      ];
 
       await tester.pumpWidget(
         _wrapInMaterialApp(
@@ -2034,14 +2048,14 @@ void main() {
         ),
       );
 
-      var spans =
-          _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
+      var spans = _getContentSpans(
+        tester.widget<RichText>(find.byType(RichText)),
+      );
       var span = _spanWithText(spans, 'Bob');
       (span.recognizer! as TapGestureRecognizer).onTap?.call();
       await tester.pump();
 
-      spans =
-          _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
+      spans = _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
       span = _spanWithText(spans, 'Bob');
       expect(span.style?.color, isNot(Colors.transparent));
 
@@ -2062,8 +2076,7 @@ void main() {
         ),
       );
 
-      spans =
-          _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
+      spans = _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
       span = _spanWithText(spans, 'Bob');
       expect(span.style?.color, Colors.transparent);
     });
@@ -2074,12 +2087,12 @@ void main() {
       const text = 'the killer is Bob obviously';
 
       List<RichTextFacet> spoilerFacets() => [
-            _facetOver(
-              fullText: text,
-              span: 'Bob',
-              features: const [SpoilerFacetFeature()],
-            ),
-          ];
+        _facetOver(
+          fullText: text,
+          span: 'Bob',
+          features: const [SpoilerFacetFeature()],
+        ),
+      ];
 
       await tester.pumpWidget(
         _wrapInMaterialApp(
@@ -2087,8 +2100,9 @@ void main() {
         ),
       );
 
-      var spans =
-          _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
+      var spans = _getContentSpans(
+        tester.widget<RichText>(find.byType(RichText)),
+      );
       var span = _spanWithText(spans, 'Bob');
       (span.recognizer! as TapGestureRecognizer).onTap?.call();
       await tester.pump();
@@ -2100,8 +2114,7 @@ void main() {
         ),
       );
 
-      spans =
-          _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
+      spans = _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
       span = _spanWithText(spans, 'Bob');
       expect(span.style?.color, isNot(Colors.transparent));
     });

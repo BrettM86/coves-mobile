@@ -39,16 +39,10 @@ void main() {
     // `canvas.drawPath` with a Paint carrying the resolved color, which the
     // `paints` matcher can read straight off the recorded display list.
     await pumpUnderAppTheme(tester, const ReplyIcon());
-    expect(
-      find.byType(ReplyIcon),
-      paints..path(color: AppColors.textPrimary),
-    );
+    expect(find.byType(ReplyIcon), paints..path(color: AppColors.textPrimary));
 
     await pumpUnderAppTheme(tester, const ShareIcon());
-    expect(
-      find.byType(ShareIcon),
-      paints..path(color: AppColors.textPrimary),
-    );
+    expect(find.byType(ShareIcon), paints..path(color: AppColors.textPrimary));
 
     await pumpUnderAppTheme(tester, const AnimatedHeartIcon(isLiked: false));
     expect(

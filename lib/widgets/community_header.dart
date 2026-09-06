@@ -14,10 +14,7 @@ import 'community_avatar.dart';
 /// - Community name, handle, and description
 /// - Stats row showing subscriber/member counts
 class CommunityHeader extends StatelessWidget {
-  const CommunityHeader({
-    required this.community,
-    super.key,
-  });
+  const CommunityHeader({required this.community, super.key});
 
   final CommunityView? community;
 
@@ -62,9 +59,7 @@ class CommunityHeader extends StatelessWidget {
                   AppColors.background.withValues(alpha: isIOS ? 0.6 : 0.3),
                   AppColors.background,
                 ],
-                stops: isIOS
-                    ? const [0.0, 0.25, 0.55]
-                    : const [0.0, 0.5, 1.0],
+                stops: isIOS ? const [0.0, 0.25, 0.55] : const [0.0, 0.5, 1.0],
               ),
             ),
           ),
@@ -172,10 +167,7 @@ class CommunityHeader extends StatelessWidget {
             height: avatarSize,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(
-                color: AppColors.background,
-                width: 3,
-              ),
+              border: Border.all(color: AppColors.background, width: 3),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.3),
@@ -237,19 +229,12 @@ class CommunityHeader extends StatelessWidget {
       runSpacing: 8,
       children: [
         if (community?.subscriberCount != null)
-          _StatItem(
-            label: 'Subscribers',
-            value: community!.subscriberCount!,
-          ),
+          _StatItem(label: 'Subscribers', value: community!.subscriberCount!),
         if (community?.memberCount != null)
-          _StatItem(
-            label: 'Members',
-            value: community!.memberCount!,
-          ),
+          _StatItem(label: 'Members', value: community!.memberCount!),
       ],
     );
   }
-
 }
 
 /// Paints a subtle geometric pattern on community banners for differentiation.
@@ -294,10 +279,7 @@ class _BannerPatternPainter extends CustomPainter {
 
 /// Stats item showing label and value (matches profile pattern)
 class _StatItem extends StatelessWidget {
-  const _StatItem({
-    required this.label,
-    required this.value,
-  });
+  const _StatItem({required this.label, required this.value});
 
   final String label;
   final int value;
@@ -329,4 +311,3 @@ class _StatItem extends StatelessWidget {
     );
   }
 }
-

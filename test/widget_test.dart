@@ -53,11 +53,10 @@ void main() {
             dispose: (_, service) => service.dispose(),
           ),
           ChangeNotifierProvider(
-            create:
-                (context) => MultiFeedProvider(
-                  authProvider,
-                  apiService: context.read<CovesApiService>(),
-                ),
+            create: (context) => MultiFeedProvider(
+              authProvider,
+              apiService: context.read<CovesApiService>(),
+            ),
           ),
         ],
         child: const CovesApp(),

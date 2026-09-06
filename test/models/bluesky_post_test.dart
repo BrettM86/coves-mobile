@@ -24,7 +24,8 @@ void main() {
         'uri': uri,
         'cid': cid,
         'createdAt': createdAt,
-        'author': author ??
+        'author':
+            author ??
             {
               'did': 'did:plc:testuser123',
               'handle': 'testuser.bsky.social',
@@ -38,8 +39,8 @@ void main() {
         'hasMedia': hasMedia,
         'mediaCount': mediaCount,
         'unavailable': unavailable,
-        if (message != null) 'message': message,
-        if (quotedPost != null) 'quotedPost': quotedPost,
+        'message': ?message,
+        'quotedPost': ?quotedPost,
       };
     }
 
@@ -50,7 +51,7 @@ void main() {
 
         expect(result.uri, 'at://did:plc:abc123/app.bsky.feed.post/xyz789');
         expect(result.cid, 'bafyreiabc123');
-        expect(result.createdAt, DateTime.utc(2025, 1, 15, 12, 30, 0, 0));
+        expect(result.createdAt, DateTime.utc(2025, 1, 15, 12, 30));
         expect(result.author.did, 'did:plc:testuser123');
         expect(result.author.handle, 'testuser.bsky.social');
         expect(result.author.displayName, 'Test User');
@@ -134,8 +135,7 @@ void main() {
 
     group('missing required fields', () {
       test('throws FormatException when uri is missing', () {
-        final json = validPostJson();
-        json.remove('uri');
+        final json = validPostJson()..remove('uri');
 
         expect(
           () => BlueskyPostResult.fromJson(json),
@@ -150,8 +150,7 @@ void main() {
       });
 
       test('throws FormatException when cid is missing', () {
-        final json = validPostJson();
-        json.remove('cid');
+        final json = validPostJson()..remove('cid');
 
         expect(
           () => BlueskyPostResult.fromJson(json),
@@ -166,8 +165,7 @@ void main() {
       });
 
       test('throws FormatException when createdAt is missing', () {
-        final json = validPostJson();
-        json.remove('createdAt');
+        final json = validPostJson()..remove('createdAt');
 
         expect(
           () => BlueskyPostResult.fromJson(json),
@@ -182,8 +180,7 @@ void main() {
       });
 
       test('throws FormatException when author is missing', () {
-        final json = validPostJson();
-        json.remove('author');
+        final json = validPostJson()..remove('author');
 
         expect(
           () => BlueskyPostResult.fromJson(json),
@@ -198,8 +195,7 @@ void main() {
       });
 
       test('throws FormatException when text is missing', () {
-        final json = validPostJson();
-        json.remove('text');
+        final json = validPostJson()..remove('text');
 
         expect(
           () => BlueskyPostResult.fromJson(json),
@@ -214,8 +210,7 @@ void main() {
       });
 
       test('throws FormatException when replyCount is missing', () {
-        final json = validPostJson();
-        json.remove('replyCount');
+        final json = validPostJson()..remove('replyCount');
 
         expect(
           () => BlueskyPostResult.fromJson(json),
@@ -230,8 +225,7 @@ void main() {
       });
 
       test('throws FormatException when repostCount is missing', () {
-        final json = validPostJson();
-        json.remove('repostCount');
+        final json = validPostJson()..remove('repostCount');
 
         expect(
           () => BlueskyPostResult.fromJson(json),
@@ -246,8 +240,7 @@ void main() {
       });
 
       test('throws FormatException when likeCount is missing', () {
-        final json = validPostJson();
-        json.remove('likeCount');
+        final json = validPostJson()..remove('likeCount');
 
         expect(
           () => BlueskyPostResult.fromJson(json),
@@ -262,8 +255,7 @@ void main() {
       });
 
       test('throws FormatException when hasMedia is missing', () {
-        final json = validPostJson();
-        json.remove('hasMedia');
+        final json = validPostJson()..remove('hasMedia');
 
         expect(
           () => BlueskyPostResult.fromJson(json),
@@ -278,8 +270,7 @@ void main() {
       });
 
       test('throws FormatException when mediaCount is missing', () {
-        final json = validPostJson();
-        json.remove('mediaCount');
+        final json = validPostJson()..remove('mediaCount');
 
         expect(
           () => BlueskyPostResult.fromJson(json),
@@ -294,8 +285,7 @@ void main() {
       });
 
       test('throws FormatException when unavailable is missing', () {
-        final json = validPostJson();
-        json.remove('unavailable');
+        final json = validPostJson()..remove('unavailable');
 
         expect(
           () => BlueskyPostResult.fromJson(json),
@@ -575,10 +565,7 @@ void main() {
           'uri': 'at://did:plc:xyz/app.bsky.feed.post/abc',
           'cid': 'bafyrei123',
           'createdAt': '2025-01-15T12:00:00Z',
-          'author': {
-            'did': 'did:plc:xyz',
-            'handle': 'test.bsky.social',
-          },
+          'author': {'did': 'did:plc:xyz', 'handle': 'test.bsky.social'},
           'text': 'Resolved post text',
           'replyCount': 0,
           'repostCount': 0,
@@ -689,7 +676,8 @@ void main() {
 
     test('handles AT-URI with complex DID', () {
       final post = createPost(handle: 'bob.bsky.social');
-      const atUri = 'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3k5qmrblv5c2a';
+      const atUri =
+          'at://did:plc:z72i7hdynmk6r22z27h6tvur/app.bsky.feed.post/3k5qmrblv5c2a';
 
       final url = BlueskyPostEmbed.getPostWebUrl(post, atUri);
 
@@ -828,10 +816,7 @@ void main() {
       });
 
       test('throws FormatException when uri is missing', () {
-        final json = {
-          'title': 'Some Title',
-          'description': 'Some description',
-        };
+        final json = {'title': 'Some Title', 'description': 'Some description'};
 
         expect(
           () => BlueskyExternalEmbed.fromJson(json),
@@ -868,9 +853,7 @@ void main() {
       });
 
       test('removes www prefix', () {
-        final embed = BlueskyExternalEmbed(
-          uri: 'https://www.example.com/page',
-        );
+        final embed = BlueskyExternalEmbed(uri: 'https://www.example.com/page');
 
         expect(embed.domain, 'example.com');
       });
@@ -904,9 +887,7 @@ void main() {
   });
 
   group('BlueskyPostResult with embed', () {
-    Map<String, dynamic> validPostJsonWithEmbed({
-      Map<String, dynamic>? embed,
-    }) {
+    Map<String, dynamic> validPostJsonWithEmbed({Map<String, dynamic>? embed}) {
       return {
         'uri': 'at://did:plc:abc123/app.bsky.feed.post/xyz789',
         'cid': 'bafyreiabc123',
@@ -924,7 +905,7 @@ void main() {
         'hasMedia': false,
         'mediaCount': 0,
         'unavailable': false,
-        if (embed != null) 'embed': embed,
+        'embed': ?embed,
       };
     }
 

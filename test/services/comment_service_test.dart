@@ -33,7 +33,7 @@ void main() {
 
       setUp(() {
         mockDio = MockDio();
-        testSession = CovesSession(
+        testSession = const CovesSession(
           token: 'test-token',
           did: 'did:plc:test',
           sessionId: 'test-session-id',
@@ -59,7 +59,7 @@ void main() {
           ),
         ).thenAnswer(
           (_) async => Response(
-            requestOptions: RequestOptions(path: ''),
+            requestOptions: RequestOptions(),
             statusCode: 200,
             data: {
               'uri': 'at://did:plc:test/social.coves.community.comment/abc123',
@@ -130,7 +130,7 @@ void main() {
           ),
         ).thenThrow(
           DioException(
-            requestOptions: RequestOptions(path: ''),
+            requestOptions: RequestOptions(),
             type: DioExceptionType.connectionError,
             message: 'Connection failed',
           ),
@@ -156,10 +156,10 @@ void main() {
           ),
         ).thenThrow(
           DioException(
-            requestOptions: RequestOptions(path: ''),
+            requestOptions: RequestOptions(),
             type: DioExceptionType.badResponse,
             response: Response(
-              requestOptions: RequestOptions(path: ''),
+              requestOptions: RequestOptions(),
               statusCode: 401,
               data: {'error': 'Unauthorized'},
             ),
@@ -186,10 +186,10 @@ void main() {
           ),
         ).thenThrow(
           DioException(
-            requestOptions: RequestOptions(path: ''),
+            requestOptions: RequestOptions(),
             type: DioExceptionType.badResponse,
             response: Response(
-              requestOptions: RequestOptions(path: ''),
+              requestOptions: RequestOptions(),
               statusCode: 404,
               data: {'message': 'Post not found'},
             ),
@@ -205,8 +205,11 @@ void main() {
             content: 'Test comment',
           ),
           throwsA(
-            isA<NotFoundException>()
-                .having((e) => e.message, 'message', 'Post not found'),
+            isA<NotFoundException>().having(
+              (e) => e.message,
+              'message',
+              'Post not found',
+            ),
           ),
         );
       });
@@ -220,11 +223,8 @@ void main() {
               data: anyNamed('data'),
             ),
           ).thenAnswer(
-            (_) async => Response(
-              requestOptions: RequestOptions(path: ''),
-              statusCode: 200,
-              data: null,
-            ),
+            (_) async =>
+                Response(requestOptions: RequestOptions(), statusCode: 200),
           );
 
           expect(
@@ -256,7 +256,7 @@ void main() {
             ),
           ).thenAnswer(
             (_) async => Response(
-              requestOptions: RequestOptions(path: ''),
+              requestOptions: RequestOptions(),
               statusCode: 200,
               data: {'cid': 'bafy123'},
             ),
@@ -291,7 +291,7 @@ void main() {
             ),
           ).thenAnswer(
             (_) async => Response(
-              requestOptions: RequestOptions(path: ''),
+              requestOptions: RequestOptions(),
               statusCode: 200,
               data: {'uri': '', 'cid': 'bafy123'},
             ),
@@ -324,10 +324,10 @@ void main() {
           ),
         ).thenThrow(
           DioException(
-            requestOptions: RequestOptions(path: ''),
+            requestOptions: RequestOptions(),
             type: DioExceptionType.badResponse,
             response: Response(
-              requestOptions: RequestOptions(path: ''),
+              requestOptions: RequestOptions(),
               statusCode: 500,
               data: {'error': 'Internal server error'},
             ),
@@ -355,7 +355,7 @@ void main() {
           ),
         ).thenAnswer(
           (_) async => Response(
-            requestOptions: RequestOptions(path: ''),
+            requestOptions: RequestOptions(),
             statusCode: 200,
             data: {
               'uri': 'at://did:plc:test/social.coves.community.comment/reply1',
@@ -406,7 +406,7 @@ void main() {
         mockDio = MockDio();
         when(mockDio.interceptors).thenReturn(Interceptors());
         commentService = CommentService(
-          sessionGetter: () async => CovesSession(
+          sessionGetter: () async => const CovesSession(
             token: 'test-token',
             did: 'did:plc:test',
             sessionId: 'test-session-id',
@@ -419,14 +419,14 @@ void main() {
       });
 
       DioException statusError(int statusCode) => DioException(
-            requestOptions: RequestOptions(path: ''),
-            type: DioExceptionType.badResponse,
-            response: Response(
-              requestOptions: RequestOptions(path: ''),
-              statusCode: statusCode,
-              data: {'error': 'Forbidden'},
-            ),
-          );
+        requestOptions: RequestOptions(),
+        type: DioExceptionType.badResponse,
+        response: Response(
+          requestOptions: RequestOptions(),
+          statusCode: statusCode,
+          data: {'error': 'Forbidden'},
+        ),
+      );
 
       test('403 keeps the friendly not-your-comment copy', () async {
         when(

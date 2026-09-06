@@ -110,9 +110,7 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('shows not-found state when post does not exist', (
-    tester,
-  ) async {
+  testWidgets('shows not-found state when post does not exist', (tester) async {
     await pumpLoader(
       tester,
       fetchPost: (_) async => const PostGetNotFound(testUri),
@@ -176,8 +174,7 @@ void main() {
   ) async {
     const coldVoteUri = 'at://did:plc:me/social.coves.feed.vote/cold1';
 
-    final fakeAuthProvider = FakeAuthProvider()
-      ..setAuthenticated(value: true);
+    final fakeAuthProvider = FakeAuthProvider()..setAuthenticated(value: true);
     final voteProvider = VoteProvider(
       voteService: VoteService(
         sessionGetter: () async => null,
@@ -223,14 +220,11 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('shows blocked-author message for blocked posts', (
-    tester,
-  ) async {
+  testWidgets('shows blocked-author message for blocked posts', (tester) async {
     await pumpLoader(
       tester,
-      fetchPost:
-          (_) async =>
-              const PostGetBlocked(uri: testUri, blockedBy: BlockedBy.author),
+      fetchPost: (_) async =>
+          const PostGetBlocked(uri: testUri, blockedBy: BlockedBy.author),
     );
     await tester.pumpAndSettle();
 
@@ -246,11 +240,8 @@ void main() {
   ) async {
     await pumpLoader(
       tester,
-      fetchPost:
-          (_) async => const PostGetBlocked(
-            uri: testUri,
-            blockedBy: BlockedBy.moderator,
-          ),
+      fetchPost: (_) async =>
+          const PostGetBlocked(uri: testUri, blockedBy: BlockedBy.moderator),
     );
     await tester.pumpAndSettle();
 
@@ -263,16 +254,17 @@ void main() {
   ) async {
     await pumpLoader(
       tester,
-      fetchPost:
-          (_) async =>
-              const PostGetBlocked(uri: testUri, blockedBy: BlockedBy.unknown),
+      fetchPost: (_) async =>
+          const PostGetBlocked(uri: testUri, blockedBy: BlockedBy.unknown),
     );
     await tester.pumpAndSettle();
 
     expectScreenTitle('Post Unavailable');
     expect(
-      find.text("This post is unavailable because it's from a blocked "
-          'source.'),
+      find.text(
+        "This post is unavailable because it's from a blocked "
+        'source.',
+      ),
       findsOneWidget,
     );
   });
@@ -314,8 +306,8 @@ void main() {
     // than collapsing to not-found (which only 400 should)
     await pumpLoader(
       tester,
-      fetchPost:
-          (_) async => throw ServerException('Server error', statusCode: 500),
+      fetchPost: (_) async =>
+          throw ServerException('Server error', statusCode: 500),
     );
     await tester.pumpAndSettle();
 
@@ -348,8 +340,8 @@ void main() {
     // can never succeed, so the loader must not offer a retry
     await pumpLoader(
       tester,
-      fetchPost:
-          (_) async => throw ApiException('Invalid URI', statusCode: 400),
+      fetchPost: (_) async =>
+          throw ApiException('Invalid URI', statusCode: 400),
     );
     await tester.pumpAndSettle();
 

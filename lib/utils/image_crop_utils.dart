@@ -19,9 +19,9 @@ class CropConfig {
     this.lockAspectRatio = true,
     this.compressQuality = 90,
   }) : assert(
-          compressQuality >= 0 && compressQuality <= 100,
-          'compressQuality must be between 0 and 100',
-        );
+         compressQuality >= 0 && compressQuality <= 100,
+         'compressQuality must be between 0 and 100',
+       );
 
   /// Title shown in the cropper UI
   final String title;
@@ -68,12 +68,14 @@ class CropConfig {
 
 /// Utility for cropping images using native platform croppers.
 ///
-/// Uses [image_cropper] which provides native UI on both iOS (TOCropViewController)
+/// Uses `image_cropper` which provides native UI on both iOS
+/// (TOCropViewController)
 /// and Android (uCrop) for a polished, platform-consistent experience.
 abstract final class ImageCropUtils {
   /// Crops an image file using the native platform cropper.
   ///
-  /// Returns a [CroppedFile] containing the cropped image, or null if cancelled.
+  /// Returns a [CroppedFile] containing the cropped image, or null if
+  /// cancelled.
   ///
   /// [sourcePath] - Path to the source image file
   /// [config] - Optional crop configuration (defaults to avatar)
@@ -114,7 +116,6 @@ abstract final class ImageCropUtils {
             aspectRatioLockEnabled: config.lockAspectRatio,
             resetAspectRatioEnabled: !config.lockAspectRatio,
             aspectRatioPickerButtonHidden: config.lockAspectRatio,
-            rotateButtonsHidden: false,
             rotateClockwiseButtonHidden: true,
           ),
         ],
@@ -176,10 +177,7 @@ abstract final class ImageCropUtils {
     );
 
     if (croppedFile == null) {
-      developer.log(
-        'Image cropping cancelled by user',
-        name: 'ImageCropUtils',
-      );
+      developer.log('Image cropping cancelled by user', name: 'ImageCropUtils');
       return null;
     }
 
@@ -203,7 +201,8 @@ abstract final class ImageCropUtils {
       throw ImageValidationException(
         'Cropped image is too large '
         '(${(croppedBytes.length / 1024 / 1024).toStringAsFixed(1)} MB). '
-        'Maximum size is ${(constraints.maxSizeBytes / 1024 / 1024).toStringAsFixed(1)} MB.',
+        'Maximum size is '
+        '${(constraints.maxSizeBytes / 1024 / 1024).toStringAsFixed(1)} MB.',
       );
     }
 

@@ -51,10 +51,7 @@ void main() {
       cid: 'test-cid',
       rkey: 'abc123',
       author: AuthorView(did: 'did:plc:author', handle: 'test.user'),
-      community: CommunityRef(
-        did: 'did:plc:community',
-        name: 'test-community',
-      ),
+      community: CommunityRef(did: 'did:plc:community', name: 'test-community'),
       createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
       indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
       record: const PostRecord(content: 'Test body', title: 'Cold Loaded'),

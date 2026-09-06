@@ -73,19 +73,23 @@ class CovesAuthService {
     return _instance!;
   }
 
-  CovesAuthService._internal({Dio? dio, FlutterSecureStorage? storage})
+  CovesAuthService._internal({this._dio, FlutterSecureStorage? storage})
     : _storage =
           storage ??
           const FlutterSecureStorage(
-            // v10 defaults: AES-GCM custom-cipher storage. Tokens written by
-            // <=9.x (EncryptedSharedPreferences) are migrated on first access
-            // via migrateOnAlgorithmChange (default true).
-            aOptions: AndroidOptions(),
             iOptions: IOSOptions(
               accessibility: KeychainAccessibility.first_unlock,
             ),
-          ),
-      _dio = dio;
+          );
+
+  /// Create a new instance for testing with injected dependencies
+  @visibleForTesting
+  factory CovesAuthService.createTestInstance({
+    required Dio dio,
+    required FlutterSecureStorage storage,
+  }) {
+    return CovesAuthService._internal(dio: dio, storage: storage);
+  }
 
   static CovesAuthService? _instance;
 
@@ -95,20 +99,12 @@ class CovesAuthService {
     _instance = null;
   }
 
-  /// Create a new instance for testing with injected dependencies
-  @visibleForTesting
-  static CovesAuthService createTestInstance({
-    required Dio dio,
-    required FlutterSecureStorage storage,
-  }) {
-    return CovesAuthService._internal(dio: dio, storage: storage);
-  }
-
   // Secure storage for session data
   final FlutterSecureStorage _storage;
 
   // Storage key is namespaced per environment to prevent token reuse across dev/prod
-  // This ensures switching between builds doesn't send prod tokens to dev servers
+  // This ensures switching between builds doesn't send prod tokens to dev
+  // servers
   String get _storageKey =>
       'coves_session_${EnvironmentConfig.current.environment.name}';
 
@@ -146,11 +142,7 @@ class CovesAuthService {
       // Add retry interceptor for transient network errors
       // Critical for token refresh - don't sign out user on transient failure
       dio.interceptors.add(
-        RetryInterceptor(
-          dio: dio,
-          maxRetries: 2,
-          serviceName: 'CovesAuthService',
-        ),
+        RetryInterceptor(dio: dio, serviceName: 'CovesAuthService'),
       );
       _dio = dio;
     }
@@ -352,7 +344,7 @@ class CovesAuthService {
       _session = session;
 
       return session;
-    } catch (e) {
+    } on Object catch (e) {
       // Catch all errors including:
       // - FormatException/TypeError from malformed JSON (data corruption)
       // - PlatformException from secure storage access failures
@@ -420,7 +412,8 @@ class CovesAuthService {
       }
 
       // Build request body per backend API contract
-      // Backend expects: {"did": "...", "session_id": "...", "sealed_token": "..."}
+      // Backend expects: {"did": "...", "session_id": "...",
+      // "sealed_token": "..."}
       final requestBody = {
         'did': sessionAtStart.did,
         'session_id': sessionAtStart.sessionId,
@@ -484,8 +477,7 @@ class CovesAuthService {
         try {
           await _clearSession();
           // Plugin errors must not strand callers awaiting the shared refresh.
-          // ignore: avoid_catches_without_on_clauses
-        } catch (_) {
+        } on Object {
           if (kDebugMode) {
             print('Failed to remove expired session from secure storage');
           }
@@ -500,7 +492,7 @@ class CovesAuthService {
       _refreshCompleter!.completeError(error);
       // Return the future to rethrow the error (don't throw directly)
       return _refreshCompleter!.future;
-    } catch (e) {
+    } on Object catch (e) {
       // Catch any other errors and propagate them to all waiters
       _refreshCompleter!.completeError(e);
       // Return the future to rethrow the error (don't rethrow directly)
@@ -595,8 +587,7 @@ class CovesAuthService {
       _session = null;
       completer.complete();
       // All waiters must finish even if a plugin throws an Error.
-      // ignore: avoid_catches_without_on_clauses
-    } catch (error, stackTrace) {
+    } on Object catch (error, stackTrace) {
       completer.completeError(error, stackTrace);
     } finally {
       _signOutCompleter = null;
@@ -673,7 +664,8 @@ class CovesAuthService {
   String _validateDid(String did) {
     // DID format: did:method:identifier
     // method: lowercase alphanumeric
-    // identifier: method-specific, but generally alphanumeric with some special chars
+    // identifier: method-specific, but generally alphanumeric with some
+    // special chars
     final didPattern = RegExp(r'^did:[a-z0-9]+:[a-zA-Z0-9._:%-]+$');
 
     if (!didPattern.hasMatch(did)) {
@@ -700,7 +692,8 @@ class CovesAuthService {
     // Handle must contain at least one period (domain format)
     if (!handle.contains('.')) {
       throw ArgumentError(
-        'Invalid handle format. Handles must be in domain format (e.g., alice.bsky.social)',
+        'Invalid handle format. Handles must be in domain '
+        'format (e.g., alice.bsky.social)',
       );
     }
 
@@ -712,14 +705,15 @@ class CovesAuthService {
 
     if (!handlePattern.hasMatch(handle)) {
       throw ArgumentError(
-        'Invalid handle format. Handles can only contain letters, numbers, hyphens, '
+        'Invalid handle format. Handles can only contain '
+        'letters, numbers, hyphens, '
         'and periods. Each segment must start and end with a letter or number.',
       );
     }
 
     // Validate each segment (part between periods)
     final segments = handle.split('.');
-    for (int i = 0; i < segments.length; i++) {
+    for (var i = 0; i < segments.length; i++) {
       final segment = segments[i];
       if (segment.isEmpty) {
         throw ArgumentError('Handle cannot have empty segments');
@@ -732,11 +726,14 @@ class CovesAuthService {
         );
       }
 
-      // TLD (last segment) cannot start with a digit (to avoid confusion with IP addresses)
-      // Per atProto spec: numeric segments are allowed in all positions except the TLD
+      // TLD (last segment) cannot start with a digit (to avoid confusion
+      // with IP addresses)
+      // Per atProto spec: numeric segments are allowed in all positions
+      // except the TLD
       if (i == segments.length - 1 && RegExp(r'^\d').hasMatch(segment)) {
         throw ArgumentError(
-          'Handle TLD (final segment) cannot start with a digit (got: "$segment")',
+          'Handle TLD (final segment) cannot start with a digit '
+          '(got: "$segment")',
         );
       }
     }
@@ -766,7 +763,7 @@ class CovesAuthService {
 
   /// Redact sensitive parameters from URLs for safe logging
   ///
-  /// Replaces token values with [REDACTED] to prevent leaking
+  /// Replaces token values with `[REDACTED]` to prevent leaking
   /// sealed tokens in debug logs.
   ///
   /// Non-sensitive params like DID, handle, and session_id are preserved

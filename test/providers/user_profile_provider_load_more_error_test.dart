@@ -30,10 +30,7 @@ FeedViewPost _post(String id) {
       cid: 'cid-$id',
       rkey: id,
       author: AuthorView(did: _profileDid, handle: 'me.test'),
-      community: CommunityRef(
-        did: 'did:plc:community',
-        name: 'test-community',
-      ),
+      community: CommunityRef(did: 'did:plc:community', name: 'test-community'),
       createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
       indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
       record: PostRecord(title: 'Post $id', content: 'body'),
@@ -64,9 +61,9 @@ void main() {
       commentService: mockCommentService,
     );
 
-    when(mockApiService.getProfile(actor: anyNamed('actor'))).thenAnswer(
-      (_) async => UserProfile(did: _profileDid, handle: 'me.test'),
-    );
+    when(
+      mockApiService.getProfile(actor: anyNamed('actor')),
+    ).thenAnswer((_) async => UserProfile(did: _profileDid, handle: 'me.test'));
 
     await provider.loadProfile(_profileDid);
   });

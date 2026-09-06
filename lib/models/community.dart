@@ -154,9 +154,7 @@ class CreatePostRequest {
   });
 
   Map<String, dynamic> toJson() {
-    final json = <String, dynamic>{
-      'community': community,
-    };
+    final json = <String, dynamic>{'community': community};
 
     if (title != null) {
       json['title'] = title;
@@ -245,16 +243,10 @@ class ExternalEmbedInput {
     );
   }
 
-  const ExternalEmbedInput._({
-    required this.uri,
-    this.title,
-    this.description,
-  });
+  const ExternalEmbedInput._({required this.uri, this.title, this.description});
 
   Map<String, dynamic> toJson() {
-    final external = <String, dynamic>{
-      'uri': uri,
-    };
+    final external = <String, dynamic>{'uri': uri};
 
     if (title != null) {
       external['title'] = title;
@@ -264,10 +256,7 @@ class ExternalEmbedInput {
     }
 
     // Return proper embed structure expected by backend
-    return {
-      r'$type': EmbedTypes.external,
-      'external': external,
-    };
+    return {r'$type': EmbedTypes.external, 'external': external};
   }
 
   /// URL of the external link
@@ -301,9 +290,7 @@ class SelfLabels {
   const SelfLabels({required this.values});
 
   Map<String, dynamic> toJson() {
-    return {
-      'values': values.map((label) => label.toJson()).toList(),
-    };
+    return {'values': values.map((label) => label.toJson()).toList()};
   }
 
   /// List of self-applied labels
@@ -315,9 +302,7 @@ class SelfLabel {
   const SelfLabel({required this.val});
 
   Map<String, dynamic> toJson() {
-    return {
-      'val': val,
-    };
+    return {'val': val};
   }
 
   /// Label value (e.g., "nsfw", "spoiler")

@@ -81,8 +81,12 @@ class FeedScreenState extends State<FeedScreen> {
   /// Detect when the page settles and sync state.
   /// This avoids jank from onPageChanged firing during the animation.
   void _onPageControllerUpdate() {
-    if (!mounted) return;
-    if (!_pageController.hasClients) return;
+    if (!mounted) {
+      return;
+    }
+    if (!_pageController.hasClients) {
+      return;
+    }
 
     // Clamp page value to valid range (iOS bounce physics can over-scroll)
     final page = (_pageController.page ?? 0.0).clamp(0.0, 1.0);
@@ -127,10 +131,9 @@ class FeedScreenState extends State<FeedScreen> {
 
     // Preload the other feed if authenticated
     if (isAuthenticated) {
-      final otherFeed =
-          provider.currentFeedType == FeedType.discover
-              ? FeedType.forYou
-              : FeedType.discover;
+      final otherFeed = provider.currentFeedType == FeedType.discover
+          ? FeedType.forYou
+          : FeedType.discover;
       provider.loadFeed(otherFeed, refresh: true);
     }
   }
@@ -279,8 +282,9 @@ class FeedScreenState extends State<FeedScreen> {
       animation: _pageController,
       builder: (context, child) {
         // Get current page position (0.0 to 1.0) for smooth animation
-        final pageValue =
-            _pageController.hasClients ? (_pageController.page ?? 0.0) : 0.0;
+        final pageValue = _pageController.hasClients
+            ? (_pageController.page ?? 0.0)
+            : 0.0;
 
         return _FeedTabsWithSlidingUnderline(
           pageValue: pageValue,
@@ -310,12 +314,11 @@ class FeedScreenState extends State<FeedScreen> {
             Text(
               label,
               style: TextStyle(
-                color:
-                    isActive
-                        ? AppColors.textPrimary
-                        : AppColors.textSecondary.withValues(
-                          alpha: _kInactiveTabOpacity,
-                        ),
+                color: isActive
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary.withValues(
+                        alpha: _kInactiveTabOpacity,
+                      ),
                 fontSize: 16,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
               ),
@@ -396,7 +399,8 @@ class FeedScreenState extends State<FeedScreen> {
     // ClampingScrollPhysics on Android).
     // Note: We don't use onPageChanged here because it fires during the
     // animation and causes jank. Instead, we sync state when the page
-    // settles (detected in _onPageControllerUpdate via the controller listener).
+    // settles (detected in _onPageControllerUpdate via the controller
+    // listener).
     return PageView(
       controller: _pageController,
       children: [
@@ -426,11 +430,9 @@ class FeedScreenState extends State<FeedScreen> {
           scrollController: _getOrCreateScrollController(feedType),
           onRefresh: () => provider.loadFeed(feedType, refresh: true),
           onRetry: () => provider.retry(feedType),
-          onClearErrorAndLoadMore:
-              () =>
-                  provider
-                    ..clearError(feedType)
-                    ..loadMore(feedType),
+          onClearErrorAndLoadMore: () => provider
+            ..clearError(feedType)
+            ..loadMore(feedType),
           isAuthenticated: isAuthenticated,
           currentTime: provider.currentTime,
         );

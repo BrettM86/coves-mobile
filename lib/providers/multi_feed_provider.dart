@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+
 import '../models/feed_state.dart';
 import '../models/post.dart';
 import '../services/coves_api_service.dart';
@@ -28,18 +29,18 @@ enum FeedType {
 class MultiFeedProvider with ChangeNotifier {
   MultiFeedProvider(
     AuthProvider authProvider, {
-    required CovesApiService apiService,
+    required this._apiService,
     VoteProvider? voteProvider,
     CommunitySubscriptionProvider? subscriptionProvider,
     ViewerStateHydrator? hydrator,
-  })  : _authProvider = authProvider,
-        _apiService = apiService,
-        _hydrator = hydrator ??
-            ViewerStateHydrator(
-              authProvider: authProvider,
-              voteProvider: voteProvider,
-              subscriptionProvider: subscriptionProvider,
-            ) {
+  }) : _authProvider = authProvider,
+       _hydrator =
+           hydrator ??
+           ViewerStateHydrator(
+             authProvider: authProvider,
+             voteProvider: voteProvider,
+             subscriptionProvider: subscriptionProvider,
+           ) {
     // Track initial auth state
     _wasAuthenticated = _authProvider.isAuthenticated;
 
@@ -271,9 +272,7 @@ class MultiFeedProvider with ChangeNotifier {
       // an un-deduped append would render a second PostCard (and trip the
       // duplicate-key assertion in debug builds). Mirrors
       // CursorPaginationController's `idOf` guard.
-      final existing = refresh
-          ? const <FeedViewPost>[]
-          : currentState.posts;
+      final existing = refresh ? const <FeedViewPost>[] : currentState.posts;
       final newPosts = [
         ...existing,
         ..._withoutDuplicates(response.feed, existing),
@@ -288,8 +287,9 @@ class MultiFeedProvider with ChangeNotifier {
         error: null,
         isLoading: false,
         isLoadingMore: false,
-        lastRefreshTime:
-            refresh ? DateTime.now() : currentState.lastRefreshTime,
+        lastRefreshTime: refresh
+            ? DateTime.now()
+            : currentState.lastRefreshTime,
       );
 
       if (kDebugMode) {
@@ -377,12 +377,11 @@ class MultiFeedProvider with ChangeNotifier {
     return _fetchFeed(
       type: type,
       refresh: refresh,
-      fetcher:
-          () => _apiService.getTimeline(
-            sort: _sort,
-            timeframe: _timeframe,
-            cursor: refresh ? null : currentState.cursor,
-          ),
+      fetcher: () => _apiService.getTimeline(
+        sort: _sort,
+        timeframe: _timeframe,
+        cursor: refresh ? null : currentState.cursor,
+      ),
       feedName: 'Timeline',
     );
   }
@@ -397,12 +396,11 @@ class MultiFeedProvider with ChangeNotifier {
     return _fetchFeed(
       type: type,
       refresh: refresh,
-      fetcher:
-          () => _apiService.getDiscover(
-            sort: _sort,
-            timeframe: _timeframe,
-            cursor: refresh ? null : currentState.cursor,
-          ),
+      fetcher: () => _apiService.getDiscover(
+        sort: _sort,
+        timeframe: _timeframe,
+        cursor: refresh ? null : currentState.cursor,
+      ),
       feedName: 'Discover',
     );
   }

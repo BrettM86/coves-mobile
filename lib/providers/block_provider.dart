@@ -11,11 +11,7 @@ import 'auth_provider.dart';
 /// Tracks local block state keyed by DID for instant feedback.
 /// Automatically clears state when user signs out.
 class BlockProvider with ChangeNotifier {
-  BlockProvider({
-    required CovesApiService apiService,
-    required AuthProvider authProvider,
-  }) : _apiService = apiService,
-       _authProvider = authProvider {
+  BlockProvider({required this._apiService, required this._authProvider}) {
     _authProvider.addListener(_onAuthChanged);
   }
 
@@ -74,13 +70,13 @@ class BlockProvider with ChangeNotifier {
   /// Returns true if now blocked, false if now unblocked.
   /// Throws ApiException if the request fails.
   Future<bool> toggleUserBlock({required String userDid}) => _toggleBlock(
-        did: userDid,
-        blocks: _userBlocks,
-        pending: _pendingUserBlocks,
-        toggled: _toggledUserBlocks,
-        blockFn: () => _apiService.blockUser(actor: userDid),
-        unblockFn: () => _apiService.unblockUser(actor: userDid),
-      );
+    did: userDid,
+    blocks: _userBlocks,
+    pending: _pendingUserBlocks,
+    toggled: _toggledUserBlocks,
+    blockFn: () => _apiService.blockUser(actor: userDid),
+    unblockFn: () => _apiService.unblockUser(actor: userDid),
+  );
 
   /// Toggle community block (block/unblock)
   ///
@@ -93,8 +89,7 @@ class BlockProvider with ChangeNotifier {
         pending: _pendingCommunityBlocks,
         toggled: _toggledCommunityBlocks,
         blockFn: () => _apiService.blockCommunity(community: communityDid),
-        unblockFn: () =>
-            _apiService.unblockCommunity(community: communityDid),
+        unblockFn: () => _apiService.unblockCommunity(community: communityDid),
       );
 
   /// Generic toggle block with optimistic updates and rollback.
@@ -150,10 +145,7 @@ class BlockProvider with ChangeNotifier {
         toggled.remove(did);
       }
       await Sentry.captureException(e, stackTrace: stackTrace);
-      throw ApiException(
-        'Unexpected error: ${e.toString()}',
-        statusCode: 500,
-      );
+      throw ApiException('Unexpected error: ${e.toString()}', statusCode: 500);
     } finally {
       pending.remove(did);
       notifyListeners();
@@ -166,24 +158,24 @@ class BlockProvider with ChangeNotifier {
     required String userDid,
     required bool isBlocked,
   }) => _setInitialBlockState(
-        did: userDid,
-        isBlocked: isBlocked,
-        blocks: _userBlocks,
-        pending: _pendingUserBlocks,
-        toggled: _toggledUserBlocks,
-      );
+    did: userDid,
+    isBlocked: isBlocked,
+    blocks: _userBlocks,
+    pending: _pendingUserBlocks,
+    toggled: _toggledUserBlocks,
+  );
 
   /// Initialize community block state from community data
   void setInitialCommunityBlockState({
     required String communityDid,
     required bool isBlocked,
   }) => _setInitialBlockState(
-        did: communityDid,
-        isBlocked: isBlocked,
-        blocks: _communityBlocks,
-        pending: _pendingCommunityBlocks,
-        toggled: _toggledCommunityBlocks,
-      );
+    did: communityDid,
+    isBlocked: isBlocked,
+    blocks: _communityBlocks,
+    pending: _pendingCommunityBlocks,
+    toggled: _toggledCommunityBlocks,
+  );
 
   /// Seed block state from a server snapshot.
   ///

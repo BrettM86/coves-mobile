@@ -30,7 +30,8 @@ class ShareButton extends StatelessWidget {
   /// Padding around the icon (ignored when useIconButton is true)
   final EdgeInsets padding;
 
-  /// Whether to use IconButton style (for app bars) vs InkWell style (for cards)
+  /// Whether to use IconButton style (for app bars) vs InkWell style (for
+  /// cards)
   final bool useIconButton;
 
   Future<void> _handleTap(BuildContext context) async {
@@ -40,7 +41,9 @@ class ShareButton extends StatelessWidget {
       // Haptics not supported on this platform - ignore
     }
 
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      return;
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

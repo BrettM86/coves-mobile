@@ -67,10 +67,7 @@ class _BlueskySignInButtonState extends State<BlueskySignInButton> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(100),
             color: _getBackgroundColor(),
-            border: Border.all(
-              color: _getBorderColor(),
-              width: 2,
-            ),
+            border: Border.all(color: _getBorderColor(), width: 2),
           ),
           child: Center(
             child: Row(

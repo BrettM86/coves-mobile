@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
-import '../../utils/responsive_utils.dart';
 import '../../models/comment.dart';
 import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
@@ -13,14 +12,15 @@ import '../../providers/vote_provider.dart';
 import '../../services/comments_provider_cache.dart';
 import '../../utils/community_handle_utils.dart';
 import '../../utils/error_messages.dart';
+import '../../utils/responsive_utils.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/comments_header.dart';
 import '../../widgets/community_avatar.dart';
-import '../../widgets/share_button.dart';
 import '../../widgets/detailed_post_view.dart';
 import '../../widgets/loading_error_states.dart';
 import '../../widgets/post_action_bar.dart';
 import '../../widgets/report_dialog.dart';
+import '../../widgets/share_button.dart';
 import '../../widgets/sign_in_dialog.dart';
 import '../../widgets/status_bar_overlay.dart';
 import '../../widgets/tappable_community.dart';
@@ -86,7 +86,8 @@ class PostDetailScreen extends StatefulWidget {
 }
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
-  // ScrollController created lazily with cached scroll position for instant restoration
+  // ScrollController created lazily with cached scroll position for instant
+  // restoration
   late ScrollController _scrollController;
   final GlobalKey _commentsHeaderKey = GlobalKey();
 
@@ -114,7 +115,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   void initState() {
     super.initState();
-    // ScrollController and provider initialization moved to didChangeDependencies
+    // ScrollController and provider initialization moved to
+    // didChangeDependencies
     // where we have access to context for synchronous provider acquisition
   }
 
@@ -137,7 +139,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   /// Handle auth state changes (specifically sign-out)
   void _onAuthChanged() {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
 
     final authProvider = context.read<AuthProvider>();
 
@@ -190,7 +194,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
     if (kDebugMode && cachedScrollPosition > 0) {
       debugPrint(
-        '📍 Created ScrollController with initial offset: $cachedScrollPosition',
+        '📍 Created ScrollController with initial offset: '
+        '$cachedScrollPosition',
       );
     }
 
@@ -235,9 +240,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       // Cached data renders on the first frame with no provider change
       // event, so kick the focus attempt from here as well.
       if (_commentsProvider.comments.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _tryFocusComment(),
-        );
+        WidgetsBinding.instance.addPostFrameCallback((_) => _tryFocusComment());
       }
     }
   }
@@ -283,9 +286,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     if (mounted) {
       setState(() {});
       if (_focusPending && !_commentsProvider.isLoading) {
-        WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _tryFocusComment(),
-        );
+        WidgetsBinding.instance.addPostFrameCallback((_) => _tryFocusComment());
       }
     }
   }
@@ -361,10 +362,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         return;
       }
       final targetContext = _focusedCommentKey.currentContext;
-      if (targetContext != null) {
+      if (targetContext != null && targetContext.mounted) {
         // The context is re-read from the key on every iteration after the
         // frame await above, so it is never stale here.
-        // ignore: use_build_context_synchronously
         await Scrollable.ensureVisible(
           targetContext,
           alignment: 0.15,
@@ -427,11 +427,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   /// Handle scroll for pagination
   void _onScroll() {
     // Don't interact with disposed provider
-    if (_providerInvalidated) return;
+    if (_providerInvalidated) {
+      return;
+    }
 
     // Save scroll position to provider on every scroll event
     if (_scrollController.hasClients) {
-      _commentsProvider.saveScrollPosition(_scrollController.position.pixels);
+      _commentsProvider.scrollPosition = _scrollController.position.pixels;
     }
 
     // Load more comments when near bottom
@@ -444,7 +446,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   /// Handle pull-to-refresh
   Future<void> _onRefresh() async {
     // Don't interact with disposed provider
-    if (_providerInvalidated) return;
+    if (_providerInvalidated) {
+      return;
+    }
 
     await _commentsProvider.refreshComments();
   }
@@ -459,7 +463,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       );
     }
 
-    // If provider was invalidated (sign-out), show loading while navigating away
+    // If provider was invalidated (sign-out), show loading while navigating
+    // away
     if (_providerInvalidated) {
       return const Scaffold(
         backgroundColor: AppColors.background,
@@ -745,12 +750,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     // Navigate to reply screen with full post context
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder:
-            (context) => ReplyScreen(
-              post: widget.post,
-              onSubmit: _handleCommentSubmit,
-              commentsProvider: _commentsProvider,
-            ),
+        builder: (context) => ReplyScreen(
+          post: widget.post,
+          onSubmit: _handleCommentSubmit,
+          commentsProvider: _commentsProvider,
+        ),
       ),
     );
   }
@@ -846,14 +850,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     // Navigate to reply screen with comment context
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder:
-            (context) => ReplyScreen(
-              comment: comment,
-              onSubmit:
-                  (content, facets) =>
-                      _handleCommentReply(content, facets, comment),
-              commentsProvider: _commentsProvider,
-            ),
+        builder: (context) => ReplyScreen(
+          comment: comment,
+          onSubmit: (content, facets) =>
+              _handleCommentReply(content, facets, comment),
+          commentsProvider: _commentsProvider,
+        ),
       ),
     );
   }
@@ -865,13 +867,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   ) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder:
-            (context) => FocusedThreadScreen(
-              thread: thread,
-              ancestors: ancestors,
-              onReply: _handleCommentReply,
-              commentsProvider: _commentsProvider,
-            ),
+        builder: (context) => FocusedThreadScreen(
+          thread: thread,
+          ancestors: ancestors,
+          onReply: _handleCommentReply,
+          commentsProvider: _commentsProvider,
+        ),
       ),
     );
   }
@@ -941,53 +942,48 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       const ShareButton(
                         useIconButton: true,
                         color: AppColors.textPrimary,
-                        tooltip: 'Share',
                       ),
                       PopupMenuButton<String>(
                         icon: const Icon(Icons.more_vert),
                         tooltip: 'More options',
                         color: AppColors.backgroundSecondary,
                         onSelected: _handleMenuAction,
-                        itemBuilder:
-                            (context) => [
-                              const PopupMenuItem(
-                                value: 'copy_link',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.link, size: 20),
-                                    SizedBox(width: 12),
-                                    Text('Copy link'),
-                                  ],
-                                ),
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'copy_link',
+                            child: Row(
+                              children: [
+                                Icon(Icons.link, size: 20),
+                                SizedBox(width: 12),
+                                Text('Copy link'),
+                              ],
+                            ),
+                          ),
+                          // Report is hidden on the viewer's own posts
+                          // (parity with the feed card menu).
+                          if (context.read<AuthProvider>().did !=
+                              widget.post.post.author.did)
+                            const PopupMenuItem(
+                              value: 'report',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.flag_outlined, size: 20),
+                                  SizedBox(width: 12),
+                                  Text('Report'),
+                                ],
                               ),
-                              // Report is hidden on the viewer's own posts
-                              // (parity with the feed card menu).
-                              if (context.read<AuthProvider>().did !=
-                                  widget.post.post.author.did)
-                                const PopupMenuItem(
-                                  value: 'report',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.flag_outlined, size: 20),
-                                      SizedBox(width: 12),
-                                      Text('Report'),
-                                    ],
-                                  ),
-                                ),
-                              const PopupMenuItem(
-                                value: 'hide',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.visibility_off_outlined,
-                                      size: 20,
-                                    ),
-                                    SizedBox(width: 12),
-                                    Text('Hide post'),
-                                  ],
-                                ),
-                              ),
-                            ],
+                            ),
+                          const PopupMenuItem(
+                            value: 'hide',
+                            child: Row(
+                              children: [
+                                Icon(Icons.visibility_off_outlined, size: 20),
+                                SizedBox(width: 12),
+                                Text('Hide post'),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -1034,12 +1030,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                     key: _commentsHeaderKey,
                                     commentCount:
                                         PostDetailScreen.displayedCommentCount(
-                                          serverCount:
-                                              widget
-                                                  .post
-                                                  .post
-                                                  .stats
-                                                  .commentCount,
+                                          serverCount: widget
+                                              .post
+                                              .post
+                                              .stats
+                                              .commentCount,
                                           isLoading: isLoading,
                                           hasError: error != null,
                                           hasComments: comments.isNotEmpty,
@@ -1093,10 +1088,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               onLoadMoreReplies: _onLoadMoreReplies,
                               loadingMoreReplies:
                                   commentsProvider.loadingMoreReplies,
-                              onDelete:
-                                  (uri) => commentsProvider.deleteComment(
-                                    commentUri: uri,
-                                  ),
+                              onDelete: (uri) => commentsProvider.deleteComment(
+                                commentUri: uri,
+                              ),
                               focusedCommentUri: widget.focusCommentUri,
                               focusedCommentKey: _focusedCommentKey,
                             ),
@@ -1136,11 +1130,7 @@ class _PostHeader extends StatelessWidget {
     return ValueListenableBuilder<DateTime?>(
       valueListenable: currentTimeNotifier,
       builder: (context, currentTime, child) {
-        return DetailedPostView(
-          post: post,
-          currentTime: currentTime,
-          showSources: true,
-        );
+        return DetailedPostView(post: post, currentTime: currentTime);
       },
     );
   }

@@ -74,18 +74,14 @@ List<SingleChildWidget> postCardProviders({
     ChangeNotifierProvider<AuthProvider>.value(value: auth),
     ChangeNotifierProvider<VoteProvider>(create: (_) => FakeVoteProvider(auth)),
     ChangeNotifierProvider<CommunitySubscriptionProvider>(
-      create:
-          (_) => FakeSubscriptionProvider(
-            authProvider: auth,
-            apiService: tokenlessApiService(),
-          ),
+      create: (_) => FakeSubscriptionProvider(
+        authProvider: auth,
+        apiService: tokenlessApiService(),
+      ),
     ),
     ChangeNotifierProvider<BlockProvider>(
-      create:
-          (_) => BlockProvider(
-            apiService: tokenlessApiService(),
-            authProvider: auth,
-          ),
+      create: (_) =>
+          BlockProvider(apiService: tokenlessApiService(), authProvider: auth),
     ),
     Provider<StreamableService>.value(
       value: streamableService ?? StreamableService(),

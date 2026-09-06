@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
+
 import '../../constants/app_colors.dart';
-import '../../utils/responsive_utils.dart';
 import '../../models/community.dart';
 import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
@@ -21,13 +21,14 @@ import '../../utils/cursor_pagination_controller.dart';
 import '../../utils/display_utils.dart';
 import '../../utils/error_messages.dart';
 import '../../utils/pagination_scroll_listener.dart';
+import '../../utils/responsive_utils.dart';
 import '../../widgets/community_avatar.dart';
 import '../../widgets/community_header.dart';
+import '../../widgets/icons/back_icon.dart';
 import '../../widgets/loading_error_states.dart';
 import '../../widgets/paginated_sliver_list.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/share_button.dart';
-import '../../widgets/icons/back_icon.dart';
 
 /// Screen displaying a community's feed with header info
 ///
@@ -157,7 +158,9 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   }
 
   void _onFeedSortChanged(String sort) {
-    if (_feedSort == sort) return;
+    if (_feedSort == sort) {
+      return;
+    }
     setState(() {
       _feedSort = sort;
     });
@@ -175,7 +178,9 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   }
 
   Future<void> _loadCommunity() async {
-    if (_isLoadingCommunity) return;
+    if (_isLoadingCommunity) {
+      return;
+    }
 
     setState(() {
       _isLoadingCommunity = true;
@@ -209,7 +214,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
           ).hydrateCommunitySubscription(community);
         }
       }
-    } catch (e) {
+    } on Object catch (e) {
       if (kDebugMode) {
         debugPrint('Error loading community: $e');
       }
@@ -279,7 +284,9 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     }
 
     final authProvider = context.read<AuthProvider>();
-    if (!authProvider.isAuthenticated) return;
+    if (!authProvider.isAuthenticated) {
+      return;
+    }
 
     ViewerStateHydrator(
       authProvider: authProvider,
@@ -314,8 +321,9 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
           message: _communityError!,
           onRetry: _loadCommunity,
           secondaryActionLabel: _communityIsAuthError ? 'Sign In' : null,
-          onSecondaryAction:
-              _communityIsAuthError ? () => context.push('/login') : null,
+          onSecondaryAction: _communityIsAuthError
+              ? () => context.push('/login')
+              : null,
         ),
       );
     }
@@ -408,7 +416,8 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                                 1.0,
                               ),
                               child: Padding(
-                                // Left padding: back button (48) + small gap (8)
+                                // Left padding: back button (48) + small
+                                // gap (8)
                                 // Right padding: action buttons space
                                 padding: const EdgeInsets.only(
                                   left: 56,
@@ -468,7 +477,6 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
             ),
             // Tab bar header (scrolls away)
             SliverPersistentHeader(
-              pinned: false,
               delegate: _CommunityTabBarDelegate(
                 child: Container(
                   color: AppColors.background,
@@ -570,96 +578,89 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
 
         return AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
-          child:
-              isPending
-                  ? Container(
-                    key: const ValueKey('loading'),
-                    width: 32,
-                    height: 32,
-                    alignment: Alignment.center,
-                    child: const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.5,
-                        color: AppColors.textPrimary,
-                      ),
+          child: isPending
+              ? Container(
+                  key: const ValueKey('loading'),
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  child: const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: AppColors.textPrimary,
                     ),
-                  )
-                  : Material(
-                    key: ValueKey('button_$isSubscribed'),
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(14),
-                    child: InkWell(
-                      onTap: () async {
-                        try {
-                          await provider.toggleSubscription(
-                            communityDid: _community!.did,
-                          );
-                          await _loadCommunity();
-                        } on Exception catch (e) {
-                          if (kDebugMode) {
-                            debugPrint('Error toggling subscription: $e');
-                          }
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(ErrorMessage.subscription(e)),
-                                behavior: SnackBarBehavior.floating,
-                                backgroundColor: AppColors.primary,
-                              ),
-                            );
-                          }
+                  ),
+                )
+              : Material(
+                  key: ValueKey('button_$isSubscribed'),
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    onTap: () async {
+                      try {
+                        await provider.toggleSubscription(
+                          communityDid: _community!.did,
+                        );
+                        await _loadCommunity();
+                      } on Exception catch (e) {
+                        if (kDebugMode) {
+                          debugPrint('Error toggling subscription: $e');
                         }
-                      },
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(ErrorMessage.subscription(e)),
+                              behavior: SnackBarBehavior.floating,
+                              backgroundColor: AppColors.primary,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isSubscribed
+                              ? AppColors.teal
+                              : AppColors.textSecondary.withValues(alpha: 0.5),
                         ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color:
-                                isSubscribed
-                                    ? AppColors.teal
-                                    : AppColors.textSecondary.withValues(
-                                      alpha: 0.5,
-                                    ),
-                            width: 1,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isSubscribed
+                                ? Icons.check
+                                : Icons.add_circle_outline,
+                            size: 12,
+                            color: isSubscribed
+                                ? AppColors.teal
+                                : AppColors.textSecondary,
                           ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              isSubscribed
-                                  ? Icons.check
-                                  : Icons.add_circle_outline,
-                              size: 12,
-                              color:
-                                  isSubscribed
-                                      ? AppColors.teal
-                                      : AppColors.textSecondary,
+                          const SizedBox(width: 3),
+                          Text(
+                            isSubscribed ? 'Joined' : 'Join',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isSubscribed
+                                  ? AppColors.teal
+                                  : AppColors.textSecondary,
                             ),
-                            const SizedBox(width: 3),
-                            Text(
-                              isSubscribed ? 'Joined' : 'Join',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color:
-                                    isSubscribed
-                                        ? AppColors.teal
-                                        : AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
+                ),
         );
       },
     );
@@ -703,11 +704,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
       endOfFeedWidget: _buildEndOfFeed(),
       emptyWidget: _buildEmptyPostsState(),
       itemBuilder: (context, post, index) {
-        final postCard = PostCard(
-          post: post,
-          currentTime: _currentTime,
-          showHeader: true,
-        );
+        final postCard = PostCard(post: post, currentTime: _currentTime);
 
         // Constrain width on tablets for better readability
         if (ResponsiveUtils.isTablet(context)) {
@@ -726,6 +723,8 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   }
 
   Widget _buildEmptyPostsState() {
+    final communityName =
+        _community?.displayName ?? _community?.name ?? 'this community';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -756,7 +755,8 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Be the first to share something in ${_community?.displayName ?? _community?.name ?? 'this community'}!',
+              'Be the first to share something in '
+              '$communityName!',
               style: const TextStyle(
                 fontSize: 14,
                 color: AppColors.textSecondary,
@@ -883,15 +883,13 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
               child: Column(
                 children: [
                   _AboutStatRow(
-                    icon:
-                        _community!.visibility == 'public'
-                            ? Icons.public
-                            : Icons.lock_outline,
+                    icon: _community!.visibility == 'public'
+                        ? Icons.public
+                        : Icons.lock_outline,
                     label: 'Visibility',
-                    value:
-                        _community!.visibility == 'public'
-                            ? 'Public'
-                            : 'Private',
+                    value: _community!.visibility == 'public'
+                        ? 'Public'
+                        : 'Private',
                   ),
                   const SizedBox(height: 12),
                   _AboutStatRow(
@@ -983,22 +981,21 @@ class _TabItem extends StatelessWidget {
                 Icon(
                   icon,
                   size: 16,
-                  color:
-                      isSelected
-                          ? AppColors.textPrimary
-                          : AppColors.textSecondary,
+                  color: isSelected
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   label,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight:
-                        isSelected ? FontWeight.bold : FontWeight.normal,
-                    color:
-                        isSelected
-                            ? AppColors.textPrimary
-                            : AppColors.textSecondary,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: isSelected
+                        ? AppColors.textPrimary
+                        : AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -1165,14 +1162,12 @@ class _FeedSortChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color:
-              isSelected
-                  ? AppColors.teal.withValues(alpha: 0.15)
-                  : Colors.transparent,
+          color: isSelected
+              ? AppColors.teal.withValues(alpha: 0.15)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected ? AppColors.teal : AppColors.border,
-            width: 1,
           ),
         ),
         child: Row(

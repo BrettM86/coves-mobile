@@ -14,13 +14,13 @@ class ImageConstraints {
     this.imageQuality = 85,
     this.maxSizeBytes = 1024 * 1024, // 1 MB
     this.allowedMimeTypes = const {'image/jpeg', 'image/png', 'image/webp'},
-  })  : assert(maxWidth > 0, 'maxWidth must be positive'),
-        assert(maxHeight > 0, 'maxHeight must be positive'),
-        assert(
-          imageQuality >= 0 && imageQuality <= 100,
-          'imageQuality must be 0-100',
-        ),
-        assert(maxSizeBytes > 0, 'maxSizeBytes must be positive');
+  }) : assert(maxWidth > 0, 'maxWidth must be positive'),
+       assert(maxHeight > 0, 'maxHeight must be positive'),
+       assert(
+         imageQuality >= 0 && imageQuality <= 100,
+         'imageQuality must be 0-100',
+       ),
+       assert(maxSizeBytes > 0, 'maxSizeBytes must be positive');
 
   /// Maximum width in pixels (image will be resized if larger)
   final double maxWidth;
@@ -94,17 +94,9 @@ class ImagePickerUtils {
     final bytes = await file.readAsBytes();
     final mimeType = inferMimeTypeFromExtension(pickedFile.path);
 
-    validateImage(
-      bytes: bytes,
-      mimeType: mimeType,
-      constraints: constraints,
-    );
+    validateImage(bytes: bytes, mimeType: mimeType, constraints: constraints);
 
-    return PickedImage(
-      file: file,
-      bytes: bytes,
-      mimeType: mimeType,
-    );
+    return PickedImage(file: file, bytes: bytes, mimeType: mimeType);
   }
 
   /// Infer MIME type from file path extension.

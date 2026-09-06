@@ -101,12 +101,10 @@ class MockAuthProvider extends _i1.Mock implements _i8.AuthProvider {
   }
 
   @override
-  bool get isAuthenticated =>
-      (super.noSuchMethod(
-            Invocation.getter(#isAuthenticated),
-            returnValue: false,
-          )
-          as bool);
+  bool get isAuthenticated => (super.noSuchMethod(
+    Invocation.getter(#isAuthenticated),
+    returnValue: false,
+  ) as bool);
 
   @override
   bool get isLoading =>
@@ -119,47 +117,37 @@ class MockAuthProvider extends _i1.Mock implements _i8.AuthProvider {
           as bool);
 
   @override
-  _i9.Future<String?> getAccessToken() =>
-      (super.noSuchMethod(
-            Invocation.method(#getAccessToken, []),
-            returnValue: _i9.Future<String?>.value(),
-          )
-          as _i9.Future<String?>);
+  _i9.Future<String?> getAccessToken() => (super.noSuchMethod(
+    Invocation.method(#getAccessToken, []),
+    returnValue: _i9.Future<String?>.value(),
+  ) as _i9.Future<String?>);
 
   @override
-  _i9.Future<void> initialize() =>
-      (super.noSuchMethod(
-            Invocation.method(#initialize, []),
-            returnValue: _i9.Future<void>.value(),
-            returnValueForMissingStub: _i9.Future<void>.value(),
-          )
-          as _i9.Future<void>);
+  _i9.Future<void> initialize() => (super.noSuchMethod(
+    Invocation.method(#initialize, []),
+    returnValue: _i9.Future<void>.value(),
+    returnValueForMissingStub: _i9.Future<void>.value(),
+  ) as _i9.Future<void>);
 
   @override
-  _i9.Future<void> signIn(String? handle) =>
-      (super.noSuchMethod(
-            Invocation.method(#signIn, [handle]),
-            returnValue: _i9.Future<void>.value(),
-            returnValueForMissingStub: _i9.Future<void>.value(),
-          )
-          as _i9.Future<void>);
+  _i9.Future<void> signIn(String? handle) => (super.noSuchMethod(
+    Invocation.method(#signIn, [handle]),
+    returnValue: _i9.Future<void>.value(),
+    returnValueForMissingStub: _i9.Future<void>.value(),
+  ) as _i9.Future<void>);
 
   @override
-  _i9.Future<void> signOut() =>
-      (super.noSuchMethod(
-            Invocation.method(#signOut, []),
-            returnValue: _i9.Future<void>.value(),
-            returnValueForMissingStub: _i9.Future<void>.value(),
-          )
-          as _i9.Future<void>);
+  _i9.Future<void> signOut() => (super.noSuchMethod(
+    Invocation.method(#signOut, []),
+    returnValue: _i9.Future<void>.value(),
+    returnValueForMissingStub: _i9.Future<void>.value(),
+  ) as _i9.Future<void>);
 
   @override
-  _i9.Future<bool> refreshToken() =>
-      (super.noSuchMethod(
-            Invocation.method(#refreshToken, []),
-            returnValue: _i9.Future<bool>.value(false),
-          )
-          as _i9.Future<bool>);
+  _i9.Future<bool> refreshToken() => (super.noSuchMethod(
+    Invocation.method(#refreshToken, []),
+    returnValue: _i9.Future<bool>.value(false),
+  ) as _i9.Future<bool>);
 
   @override
   void clearError() => super.noSuchMethod(
@@ -206,27 +194,25 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
     String? timeframe,
     int? limit = 15,
     String? cursor,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#getTimeline, [], {
-              #sort: sort,
-              #timeframe: timeframe,
-              #limit: limit,
-              #cursor: cursor,
-            }),
-            returnValue: _i9.Future<_i2.TimelineResponse>.value(
-              _FakeTimelineResponse_0(
-                this,
-                Invocation.method(#getTimeline, [], {
-                  #sort: sort,
-                  #timeframe: timeframe,
-                  #limit: limit,
-                  #cursor: cursor,
-                }),
-              ),
-            ),
-          )
-          as _i9.Future<_i2.TimelineResponse>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#getTimeline, [], {
+      #sort: sort,
+      #timeframe: timeframe,
+      #limit: limit,
+      #cursor: cursor,
+    }),
+    returnValue: _i9.Future<_i2.TimelineResponse>.value(
+      _FakeTimelineResponse_0(
+        this,
+        Invocation.method(#getTimeline, [], {
+          #sort: sort,
+          #timeframe: timeframe,
+          #limit: limit,
+          #cursor: cursor,
+        }),
+      ),
+    ),
+  ) as _i9.Future<_i2.TimelineResponse>);
 
   @override
   _i9.Future<_i2.TimelineResponse> getDiscover({
@@ -234,27 +220,25 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
     String? timeframe,
     int? limit = 15,
     String? cursor,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#getDiscover, [], {
-              #sort: sort,
-              #timeframe: timeframe,
-              #limit: limit,
-              #cursor: cursor,
-            }),
-            returnValue: _i9.Future<_i2.TimelineResponse>.value(
-              _FakeTimelineResponse_0(
-                this,
-                Invocation.method(#getDiscover, [], {
-                  #sort: sort,
-                  #timeframe: timeframe,
-                  #limit: limit,
-                  #cursor: cursor,
-                }),
-              ),
-            ),
-          )
-          as _i9.Future<_i2.TimelineResponse>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#getDiscover, [], {
+      #sort: sort,
+      #timeframe: timeframe,
+      #limit: limit,
+      #cursor: cursor,
+    }),
+    returnValue: _i9.Future<_i2.TimelineResponse>.value(
+      _FakeTimelineResponse_0(
+        this,
+        Invocation.method(#getDiscover, [], {
+          #sort: sort,
+          #timeframe: timeframe,
+          #limit: limit,
+          #cursor: cursor,
+        }),
+      ),
+    ),
+  ) as _i9.Future<_i2.TimelineResponse>);
 
   @override
   _i9.Future<_i2.TimelineResponse> getCommunityFeed({
@@ -263,29 +247,27 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
     String? timeframe,
     int? limit = 15,
     String? cursor,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#getCommunityFeed, [], {
-              #community: community,
-              #sort: sort,
-              #timeframe: timeframe,
-              #limit: limit,
-              #cursor: cursor,
-            }),
-            returnValue: _i9.Future<_i2.TimelineResponse>.value(
-              _FakeTimelineResponse_0(
-                this,
-                Invocation.method(#getCommunityFeed, [], {
-                  #community: community,
-                  #sort: sort,
-                  #timeframe: timeframe,
-                  #limit: limit,
-                  #cursor: cursor,
-                }),
-              ),
-            ),
-          )
-          as _i9.Future<_i2.TimelineResponse>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#getCommunityFeed, [], {
+      #community: community,
+      #sort: sort,
+      #timeframe: timeframe,
+      #limit: limit,
+      #cursor: cursor,
+    }),
+    returnValue: _i9.Future<_i2.TimelineResponse>.value(
+      _FakeTimelineResponse_0(
+        this,
+        Invocation.method(#getCommunityFeed, [], {
+          #community: community,
+          #sort: sort,
+          #timeframe: timeframe,
+          #limit: limit,
+          #cursor: cursor,
+        }),
+      ),
+    ),
+  ) as _i9.Future<_i2.TimelineResponse>);
 
   @override
   _i9.Future<_i3.CommentsResponse> getComments({
@@ -296,58 +278,52 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
     int? limit = 50,
     String? cursor,
     String? parentRkey,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#getComments, [], {
-              #postUri: postUri,
-              #sort: sort,
-              #timeframe: timeframe,
-              #depth: depth,
-              #limit: limit,
-              #cursor: cursor,
-              #parentRkey: parentRkey,
-            }),
-            returnValue: _i9.Future<_i3.CommentsResponse>.value(
-              _FakeCommentsResponse_1(
-                this,
-                Invocation.method(#getComments, [], {
-                  #postUri: postUri,
-                  #sort: sort,
-                  #timeframe: timeframe,
-                  #depth: depth,
-                  #limit: limit,
-                  #cursor: cursor,
-                  #parentRkey: parentRkey,
-                }),
-              ),
-            ),
-          )
-          as _i9.Future<_i3.CommentsResponse>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#getComments, [], {
+      #postUri: postUri,
+      #sort: sort,
+      #timeframe: timeframe,
+      #depth: depth,
+      #limit: limit,
+      #cursor: cursor,
+      #parentRkey: parentRkey,
+    }),
+    returnValue: _i9.Future<_i3.CommentsResponse>.value(
+      _FakeCommentsResponse_1(
+        this,
+        Invocation.method(#getComments, [], {
+          #postUri: postUri,
+          #sort: sort,
+          #timeframe: timeframe,
+          #depth: depth,
+          #limit: limit,
+          #cursor: cursor,
+          #parentRkey: parentRkey,
+        }),
+      ),
+    ),
+  ) as _i9.Future<_i3.CommentsResponse>);
 
   @override
   _i9.Future<List<_i11.PostGetResult>> getPosts({
     required List<String>? uris,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#getPosts, [], {#uris: uris}),
-            returnValue: _i9.Future<List<_i11.PostGetResult>>.value(
-              <_i11.PostGetResult>[],
-            ),
-          )
-          as _i9.Future<List<_i11.PostGetResult>>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#getPosts, [], {#uris: uris}),
+    returnValue: _i9.Future<List<_i11.PostGetResult>>.value(
+      <_i11.PostGetResult>[],
+    ),
+  ) as _i9.Future<List<_i11.PostGetResult>>);
 
   @override
-  _i9.Future<_i11.PostGetResult> getPost(String? uri) =>
-      (super.noSuchMethod(
-            Invocation.method(#getPost, [uri]),
-            returnValue: _i9.Future<_i11.PostGetResult>.value(
-              _i12.dummyValue<_i11.PostGetResult>(
-                this,
-                Invocation.method(#getPost, [uri]),
-              ),
-            ),
-          )
-          as _i9.Future<_i11.PostGetResult>);
+  _i9.Future<_i11.PostGetResult> getPost(String? uri) => (super.noSuchMethod(
+    Invocation.method(#getPost, [uri]),
+    returnValue: _i9.Future<_i11.PostGetResult>.value(
+      _i12.dummyValue<_i11.PostGetResult>(
+        this,
+        Invocation.method(#getPost, [uri]),
+      ),
+    ),
+  ) as _i9.Future<_i11.PostGetResult>);
 
   @override
   _i9.Future<_i4.CommunitiesResponse> listCommunities({
@@ -355,40 +331,37 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
     String? cursor,
     String? sort = 'popular',
     bool? subscribed,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#listCommunities, [], {
-              #limit: limit,
-              #cursor: cursor,
-              #sort: sort,
-              #subscribed: subscribed,
-            }),
-            returnValue: _i9.Future<_i4.CommunitiesResponse>.value(
-              _FakeCommunitiesResponse_2(
-                this,
-                Invocation.method(#listCommunities, [], {
-                  #limit: limit,
-                  #cursor: cursor,
-                  #sort: sort,
-                  #subscribed: subscribed,
-                }),
-              ),
-            ),
-          )
-          as _i9.Future<_i4.CommunitiesResponse>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#listCommunities, [], {
+      #limit: limit,
+      #cursor: cursor,
+      #sort: sort,
+      #subscribed: subscribed,
+    }),
+    returnValue: _i9.Future<_i4.CommunitiesResponse>.value(
+      _FakeCommunitiesResponse_2(
+        this,
+        Invocation.method(#listCommunities, [], {
+          #limit: limit,
+          #cursor: cursor,
+          #sort: sort,
+          #subscribed: subscribed,
+        }),
+      ),
+    ),
+  ) as _i9.Future<_i4.CommunitiesResponse>);
 
   @override
   _i9.Future<_i4.CommunityView> getCommunity({required String? community}) =>
       (super.noSuchMethod(
+        Invocation.method(#getCommunity, [], {#community: community}),
+        returnValue: _i9.Future<_i4.CommunityView>.value(
+          _FakeCommunityView_3(
+            this,
             Invocation.method(#getCommunity, [], {#community: community}),
-            returnValue: _i9.Future<_i4.CommunityView>.value(
-              _FakeCommunityView_3(
-                this,
-                Invocation.method(#getCommunity, [], {#community: community}),
-              ),
-            ),
-          )
-          as _i9.Future<_i4.CommunityView>);
+          ),
+        ),
+      ) as _i9.Future<_i4.CommunityView>);
 
   @override
   _i9.Future<_i4.CreatePostResponse> createPost({
@@ -399,42 +372,38 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
     _i4.ExternalEmbedInput? embed,
     List<String>? langs,
     _i4.SelfLabels? labels,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#createPost, [], {
-              #community: community,
-              #title: title,
-              #content: content,
-              #facets: facets,
-              #embed: embed,
-              #langs: langs,
-              #labels: labels,
-            }),
-            returnValue: _i9.Future<_i4.CreatePostResponse>.value(
-              _FakeCreatePostResponse_4(
-                this,
-                Invocation.method(#createPost, [], {
-                  #community: community,
-                  #title: title,
-                  #content: content,
-                  #facets: facets,
-                  #embed: embed,
-                  #langs: langs,
-                  #labels: labels,
-                }),
-              ),
-            ),
-          )
-          as _i9.Future<_i4.CreatePostResponse>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#createPost, [], {
+      #community: community,
+      #title: title,
+      #content: content,
+      #facets: facets,
+      #embed: embed,
+      #langs: langs,
+      #labels: labels,
+    }),
+    returnValue: _i9.Future<_i4.CreatePostResponse>.value(
+      _FakeCreatePostResponse_4(
+        this,
+        Invocation.method(#createPost, [], {
+          #community: community,
+          #title: title,
+          #content: content,
+          #facets: facets,
+          #embed: embed,
+          #langs: langs,
+          #labels: labels,
+        }),
+      ),
+    ),
+  ) as _i9.Future<_i4.CreatePostResponse>);
 
   @override
-  _i9.Future<void> deletePost({required String? uri}) =>
-      (super.noSuchMethod(
-            Invocation.method(#deletePost, [], {#uri: uri}),
-            returnValue: _i9.Future<void>.value(),
-            returnValueForMissingStub: _i9.Future<void>.value(),
-          )
-          as _i9.Future<void>);
+  _i9.Future<void> deletePost({required String? uri}) => (super.noSuchMethod(
+    Invocation.method(#deletePost, [], {#uri: uri}),
+    returnValue: _i9.Future<void>.value(),
+    returnValueForMissingStub: _i9.Future<void>.value(),
+  ) as _i9.Future<void>);
 
   @override
   _i9.Future<_i4.CreateCommunityResponse> createCommunity({
@@ -442,40 +411,37 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
     required String? displayName,
     required String? description,
     String? visibility = 'public',
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#createCommunity, [], {
-              #name: name,
-              #displayName: displayName,
-              #description: description,
-              #visibility: visibility,
-            }),
-            returnValue: _i9.Future<_i4.CreateCommunityResponse>.value(
-              _FakeCreateCommunityResponse_5(
-                this,
-                Invocation.method(#createCommunity, [], {
-                  #name: name,
-                  #displayName: displayName,
-                  #description: description,
-                  #visibility: visibility,
-                }),
-              ),
-            ),
-          )
-          as _i9.Future<_i4.CreateCommunityResponse>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#createCommunity, [], {
+      #name: name,
+      #displayName: displayName,
+      #description: description,
+      #visibility: visibility,
+    }),
+    returnValue: _i9.Future<_i4.CreateCommunityResponse>.value(
+      _FakeCreateCommunityResponse_5(
+        this,
+        Invocation.method(#createCommunity, [], {
+          #name: name,
+          #displayName: displayName,
+          #description: description,
+          #visibility: visibility,
+        }),
+      ),
+    ),
+  ) as _i9.Future<_i4.CreateCommunityResponse>);
 
   @override
   _i9.Future<_i5.UserProfile> getProfile({required String? actor}) =>
       (super.noSuchMethod(
+        Invocation.method(#getProfile, [], {#actor: actor}),
+        returnValue: _i9.Future<_i5.UserProfile>.value(
+          _FakeUserProfile_6(
+            this,
             Invocation.method(#getProfile, [], {#actor: actor}),
-            returnValue: _i9.Future<_i5.UserProfile>.value(
-              _FakeUserProfile_6(
-                this,
-                Invocation.method(#getProfile, [], {#actor: actor}),
-              ),
-            ),
-          )
-          as _i9.Future<_i5.UserProfile>);
+          ),
+        ),
+      ) as _i9.Future<_i5.UserProfile>);
 
   @override
   _i9.Future<_i2.TimelineResponse> getAuthorPosts({
@@ -484,29 +450,27 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
     String? community,
     int? limit = 15,
     String? cursor,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#getAuthorPosts, [], {
-              #actor: actor,
-              #filter: filter,
-              #community: community,
-              #limit: limit,
-              #cursor: cursor,
-            }),
-            returnValue: _i9.Future<_i2.TimelineResponse>.value(
-              _FakeTimelineResponse_0(
-                this,
-                Invocation.method(#getAuthorPosts, [], {
-                  #actor: actor,
-                  #filter: filter,
-                  #community: community,
-                  #limit: limit,
-                  #cursor: cursor,
-                }),
-              ),
-            ),
-          )
-          as _i9.Future<_i2.TimelineResponse>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#getAuthorPosts, [], {
+      #actor: actor,
+      #filter: filter,
+      #community: community,
+      #limit: limit,
+      #cursor: cursor,
+    }),
+    returnValue: _i9.Future<_i2.TimelineResponse>.value(
+      _FakeTimelineResponse_0(
+        this,
+        Invocation.method(#getAuthorPosts, [], {
+          #actor: actor,
+          #filter: filter,
+          #community: community,
+          #limit: limit,
+          #cursor: cursor,
+        }),
+      ),
+    ),
+  ) as _i9.Future<_i2.TimelineResponse>);
 
   @override
   _i9.Future<_i3.ActorCommentsResponse> getActorComments({
@@ -514,124 +478,110 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
     String? community,
     int? limit = 50,
     String? cursor,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#getActorComments, [], {
-              #actor: actor,
-              #community: community,
-              #limit: limit,
-              #cursor: cursor,
-            }),
-            returnValue: _i9.Future<_i3.ActorCommentsResponse>.value(
-              _FakeActorCommentsResponse_7(
-                this,
-                Invocation.method(#getActorComments, [], {
-                  #actor: actor,
-                  #community: community,
-                  #limit: limit,
-                  #cursor: cursor,
-                }),
-              ),
-            ),
-          )
-          as _i9.Future<_i3.ActorCommentsResponse>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#getActorComments, [], {
+      #actor: actor,
+      #community: community,
+      #limit: limit,
+      #cursor: cursor,
+    }),
+    returnValue: _i9.Future<_i3.ActorCommentsResponse>.value(
+      _FakeActorCommentsResponse_7(
+        this,
+        Invocation.method(#getActorComments, [], {
+          #actor: actor,
+          #community: community,
+          #limit: limit,
+          #cursor: cursor,
+        }),
+      ),
+    ),
+  ) as _i9.Future<_i3.ActorCommentsResponse>);
 
   @override
   _i9.Future<String> subscribeToCommunity({required String? community}) =>
       (super.noSuchMethod(
+        Invocation.method(#subscribeToCommunity, [], {#community: community}),
+        returnValue: _i9.Future<String>.value(
+          _i12.dummyValue<String>(
+            this,
             Invocation.method(#subscribeToCommunity, [], {
               #community: community,
             }),
-            returnValue: _i9.Future<String>.value(
-              _i12.dummyValue<String>(
-                this,
-                Invocation.method(#subscribeToCommunity, [], {
-                  #community: community,
-                }),
-              ),
-            ),
-          )
-          as _i9.Future<String>);
+          ),
+        ),
+      ) as _i9.Future<String>);
 
   @override
   _i9.Future<void> unsubscribeFromCommunity({required String? community}) =>
       (super.noSuchMethod(
-            Invocation.method(#unsubscribeFromCommunity, [], {
-              #community: community,
-            }),
-            returnValue: _i9.Future<void>.value(),
-            returnValueForMissingStub: _i9.Future<void>.value(),
-          )
-          as _i9.Future<void>);
+        Invocation.method(#unsubscribeFromCommunity, [], {
+          #community: community,
+        }),
+        returnValue: _i9.Future<void>.value(),
+        returnValueForMissingStub: _i9.Future<void>.value(),
+      ) as _i9.Future<void>);
 
   @override
-  _i9.Future<String> blockUser({required String? actor}) =>
-      (super.noSuchMethod(
-            Invocation.method(#blockUser, [], {#actor: actor}),
-            returnValue: _i9.Future<String>.value(
-              _i12.dummyValue<String>(
-                this,
-                Invocation.method(#blockUser, [], {#actor: actor}),
-              ),
-            ),
-          )
-          as _i9.Future<String>);
+  _i9.Future<String> blockUser({required String? actor}) => (super.noSuchMethod(
+    Invocation.method(#blockUser, [], {#actor: actor}),
+    returnValue: _i9.Future<String>.value(
+      _i12.dummyValue<String>(
+        this,
+        Invocation.method(#blockUser, [], {#actor: actor}),
+      ),
+    ),
+  ) as _i9.Future<String>);
 
   @override
-  _i9.Future<void> unblockUser({required String? actor}) =>
-      (super.noSuchMethod(
-            Invocation.method(#unblockUser, [], {#actor: actor}),
-            returnValue: _i9.Future<void>.value(),
-            returnValueForMissingStub: _i9.Future<void>.value(),
-          )
-          as _i9.Future<void>);
+  _i9.Future<void> unblockUser({required String? actor}) => (super.noSuchMethod(
+    Invocation.method(#unblockUser, [], {#actor: actor}),
+    returnValue: _i9.Future<void>.value(),
+    returnValueForMissingStub: _i9.Future<void>.value(),
+  ) as _i9.Future<void>);
 
   @override
   _i9.Future<String> blockCommunity({required String? community}) =>
       (super.noSuchMethod(
+        Invocation.method(#blockCommunity, [], {#community: community}),
+        returnValue: _i9.Future<String>.value(
+          _i12.dummyValue<String>(
+            this,
             Invocation.method(#blockCommunity, [], {#community: community}),
-            returnValue: _i9.Future<String>.value(
-              _i12.dummyValue<String>(
-                this,
-                Invocation.method(#blockCommunity, [], {#community: community}),
-              ),
-            ),
-          )
-          as _i9.Future<String>);
+          ),
+        ),
+      ) as _i9.Future<String>);
 
   @override
   _i9.Future<void> unblockCommunity({required String? community}) =>
       (super.noSuchMethod(
-            Invocation.method(#unblockCommunity, [], {#community: community}),
-            returnValue: _i9.Future<void>.value(),
-            returnValueForMissingStub: _i9.Future<void>.value(),
-          )
-          as _i9.Future<void>);
+        Invocation.method(#unblockCommunity, [], {#community: community}),
+        returnValue: _i9.Future<void>.value(),
+        returnValueForMissingStub: _i9.Future<void>.value(),
+      ) as _i9.Future<void>);
 
   @override
   _i9.Future<_i4.CreateCommunityResponse> updateCommunity({
     required String? communityDid,
     required _i13.Uint8List? imageBytes,
     required String? mimeType,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#updateCommunity, [], {
-              #communityDid: communityDid,
-              #imageBytes: imageBytes,
-              #mimeType: mimeType,
-            }),
-            returnValue: _i9.Future<_i4.CreateCommunityResponse>.value(
-              _FakeCreateCommunityResponse_5(
-                this,
-                Invocation.method(#updateCommunity, [], {
-                  #communityDid: communityDid,
-                  #imageBytes: imageBytes,
-                  #mimeType: mimeType,
-                }),
-              ),
-            ),
-          )
-          as _i9.Future<_i4.CreateCommunityResponse>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#updateCommunity, [], {
+      #communityDid: communityDid,
+      #imageBytes: imageBytes,
+      #mimeType: mimeType,
+    }),
+    returnValue: _i9.Future<_i4.CreateCommunityResponse>.value(
+      _FakeCreateCommunityResponse_5(
+        this,
+        Invocation.method(#updateCommunity, [], {
+          #communityDid: communityDid,
+          #imageBytes: imageBytes,
+          #mimeType: mimeType,
+        }),
+      ),
+    ),
+  ) as _i9.Future<_i4.CreateCommunityResponse>);
 
   @override
   _i9.Future<_i6.UpdateProfileResponse> updateProfile({
@@ -641,47 +591,43 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
     String? avatarMimeType,
     _i13.Uint8List? bannerBytes,
     String? bannerMimeType,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#updateProfile, [], {
-              #displayName: displayName,
-              #bio: bio,
-              #avatarBytes: avatarBytes,
-              #avatarMimeType: avatarMimeType,
-              #bannerBytes: bannerBytes,
-              #bannerMimeType: bannerMimeType,
-            }),
-            returnValue: _i9.Future<_i6.UpdateProfileResponse>.value(
-              _FakeUpdateProfileResponse_8(
-                this,
-                Invocation.method(#updateProfile, [], {
-                  #displayName: displayName,
-                  #bio: bio,
-                  #avatarBytes: avatarBytes,
-                  #avatarMimeType: avatarMimeType,
-                  #bannerBytes: bannerBytes,
-                  #bannerMimeType: bannerMimeType,
-                }),
-              ),
-            ),
-          )
-          as _i9.Future<_i6.UpdateProfileResponse>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#updateProfile, [], {
+      #displayName: displayName,
+      #bio: bio,
+      #avatarBytes: avatarBytes,
+      #avatarMimeType: avatarMimeType,
+      #bannerBytes: bannerBytes,
+      #bannerMimeType: bannerMimeType,
+    }),
+    returnValue: _i9.Future<_i6.UpdateProfileResponse>.value(
+      _FakeUpdateProfileResponse_8(
+        this,
+        Invocation.method(#updateProfile, [], {
+          #displayName: displayName,
+          #bio: bio,
+          #avatarBytes: avatarBytes,
+          #avatarMimeType: avatarMimeType,
+          #bannerBytes: bannerBytes,
+          #bannerMimeType: bannerMimeType,
+        }),
+      ),
+    ),
+  ) as _i9.Future<_i6.UpdateProfileResponse>);
 
   @override
   _i9.Future<int> submitReport({
     required String? targetUri,
     required String? reason,
     String? explanation,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#submitReport, [], {
-              #targetUri: targetUri,
-              #reason: reason,
-              #explanation: explanation,
-            }),
-            returnValue: _i9.Future<int>.value(0),
-          )
-          as _i9.Future<int>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#submitReport, [], {
+      #targetUri: targetUri,
+      #reason: reason,
+      #explanation: explanation,
+    }),
+    returnValue: _i9.Future<int>.value(0),
+  ) as _i9.Future<int>);
 
   @override
   void dispose() => super.noSuchMethod(
@@ -715,44 +661,37 @@ class MockVoteProvider extends _i1.Mock implements _i14.VoteProvider {
           as _i14.VoteState?);
 
   @override
-  bool isLiked(String? postUri) =>
-      (super.noSuchMethod(
-            Invocation.method(#isLiked, [postUri]),
-            returnValue: false,
-          )
-          as bool);
+  bool isLiked(String? postUri) => (super.noSuchMethod(
+    Invocation.method(#isLiked, [postUri]),
+    returnValue: false,
+  ) as bool);
 
   @override
-  bool isPending(String? postUri) =>
-      (super.noSuchMethod(
-            Invocation.method(#isPending, [postUri]),
-            returnValue: false,
-          )
-          as bool);
+  bool isPending(String? postUri) => (super.noSuchMethod(
+    Invocation.method(#isPending, [postUri]),
+    returnValue: false,
+  ) as bool);
 
   @override
   int getAdjustedScore(String? postUri, int? serverScore) =>
       (super.noSuchMethod(
-            Invocation.method(#getAdjustedScore, [postUri, serverScore]),
-            returnValue: 0,
-          )
-          as int);
+        Invocation.method(#getAdjustedScore, [postUri, serverScore]),
+        returnValue: 0,
+      ) as int);
 
   @override
   _i9.Future<bool> toggleVote({
     required String? postUri,
     required String? postCid,
     String? direction = 'up',
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#toggleVote, [], {
-              #postUri: postUri,
-              #postCid: postCid,
-              #direction: direction,
-            }),
-            returnValue: _i9.Future<bool>.value(false),
-          )
-          as _i9.Future<bool>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#toggleVote, [], {
+      #postUri: postUri,
+      #postCid: postCid,
+      #direction: direction,
+    }),
+    returnValue: _i9.Future<bool>.value(false),
+  ) as _i9.Future<bool>);
 
   @override
   void applyServerVoteState({
@@ -809,38 +748,34 @@ class MockCommentService extends _i1.Mock implements _i7.CommentService {
     required String? parentCid,
     required String? content,
     List<_i2.RichTextFacet>? contentFacets,
-  }) =>
-      (super.noSuchMethod(
-            Invocation.method(#createComment, [], {
-              #rootUri: rootUri,
-              #rootCid: rootCid,
-              #parentUri: parentUri,
-              #parentCid: parentCid,
-              #content: content,
-              #contentFacets: contentFacets,
-            }),
-            returnValue: _i9.Future<_i7.CreateCommentResponse>.value(
-              _FakeCreateCommentResponse_9(
-                this,
-                Invocation.method(#createComment, [], {
-                  #rootUri: rootUri,
-                  #rootCid: rootCid,
-                  #parentUri: parentUri,
-                  #parentCid: parentCid,
-                  #content: content,
-                  #contentFacets: contentFacets,
-                }),
-              ),
-            ),
-          )
-          as _i9.Future<_i7.CreateCommentResponse>);
+  }) => (super.noSuchMethod(
+    Invocation.method(#createComment, [], {
+      #rootUri: rootUri,
+      #rootCid: rootCid,
+      #parentUri: parentUri,
+      #parentCid: parentCid,
+      #content: content,
+      #contentFacets: contentFacets,
+    }),
+    returnValue: _i9.Future<_i7.CreateCommentResponse>.value(
+      _FakeCreateCommentResponse_9(
+        this,
+        Invocation.method(#createComment, [], {
+          #rootUri: rootUri,
+          #rootCid: rootCid,
+          #parentUri: parentUri,
+          #parentCid: parentCid,
+          #content: content,
+          #contentFacets: contentFacets,
+        }),
+      ),
+    ),
+  ) as _i9.Future<_i7.CreateCommentResponse>);
 
   @override
-  _i9.Future<void> deleteComment({required String? uri}) =>
-      (super.noSuchMethod(
-            Invocation.method(#deleteComment, [], {#uri: uri}),
-            returnValue: _i9.Future<void>.value(),
-            returnValueForMissingStub: _i9.Future<void>.value(),
-          )
-          as _i9.Future<void>);
+  _i9.Future<void> deleteComment({required String? uri}) => (super.noSuchMethod(
+    Invocation.method(#deleteComment, [], {#uri: uri}),
+    returnValue: _i9.Future<void>.value(),
+    returnValueForMissingStub: _i9.Future<void>.value(),
+  ) as _i9.Future<void>);
 }

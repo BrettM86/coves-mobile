@@ -54,16 +54,12 @@ class CursorPage<T> {
 /// — so they reach crash reporting instead of only the debug console.
 class CursorPaginationController<T> extends ChangeNotifier {
   CursorPaginationController({
-    required Future<CursorPage<T>> Function(String? cursor) fetchPage,
-    Future<void> Function(List<T> newItems)? onPageLoaded,
-    String Function(Object error)? errorMapper,
-    String Function(T item)? idOf,
-    void Function(Object error, StackTrace stack)? onUnexpectedError,
-  }) : _fetchPage = fetchPage,
-       _onPageLoaded = onPageLoaded,
-       _errorMapper = errorMapper,
-       _idOf = idOf,
-       _onUnexpectedError = onUnexpectedError;
+    required this._fetchPage,
+    this._onPageLoaded,
+    this._errorMapper,
+    this._idOf,
+    this._onUnexpectedError,
+  });
 
   final Future<CursorPage<T>> Function(String? cursor) _fetchPage;
   final Future<void> Function(List<T> newItems)? _onPageLoaded;

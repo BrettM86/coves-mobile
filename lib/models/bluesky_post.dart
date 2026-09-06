@@ -81,8 +81,10 @@ class BlueskyPostResult {
 
   /// Creates a [BlueskyPostResult] from JSON data.
   ///
-  /// Throws [FormatException] if required fields are missing or have invalid types.
-  /// This includes validation for all required string, int, bool, and DateTime fields.
+  /// Throws [FormatException] if required fields are missing or have
+  /// invalid types.
+  /// This includes validation for all required string, int, bool, and
+  /// DateTime fields.
   factory BlueskyPostResult.fromJson(Map<String, dynamic> json) {
     // Validate required string fields
     final uri = json['uri'];
@@ -199,12 +201,11 @@ class BlueskyPostResult {
       likeCount: likeCount,
       hasMedia: hasMedia,
       mediaCount: mediaCount,
-      quotedPost:
-          json['quotedPost'] != null
-              ? BlueskyPostResult.fromJson(
-                json['quotedPost'] as Map<String, dynamic>,
-              )
-              : null,
+      quotedPost: json['quotedPost'] != null
+          ? BlueskyPostResult.fromJson(
+              json['quotedPost'] as Map<String, dynamic>,
+            )
+          : null,
       unavailable: unavailable,
       message: json['message'] as String?,
       embed: embed,
@@ -299,7 +300,8 @@ class BlueskyPostEmbed {
   /// Build Bluesky web URL from AT-URI and author handle
   /// at://did:plc:xxx/app.bsky.feed.post/abc123 -> https://bsky.app/profile/handle/post/abc123
   ///
-  /// Returns null if the AT-URI is invalid. Logs debug information when validation fails.
+  /// Returns null if the AT-URI is invalid. Logs debug information when
+  /// validation fails.
   ///
   /// Note: We manually parse AT-URIs because Dart's Uri.tryParse() fails on
   /// DIDs containing colons (e.g., did:plc:xxx).

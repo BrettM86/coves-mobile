@@ -12,11 +12,9 @@ import 'package:flutter/foundation.dart';
 /// This is crucial for proper alignment with the backend, especially
 /// when text contains emoji or other multi-byte characters.
 class ByteSlice {
-  const ByteSlice({
-    required this.byteStart,
-    required this.byteEnd,
-  })  : assert(byteStart >= 0, 'byteStart must be non-negative'),
-        assert(byteEnd >= byteStart, 'byteEnd must be >= byteStart');
+  const ByteSlice({required this.byteStart, required this.byteEnd})
+    : assert(byteStart >= 0, 'byteStart must be non-negative'),
+      assert(byteEnd >= byteStart, 'byteEnd must be >= byteStart');
 
   factory ByteSlice.fromJson(Map<String, dynamic> json) {
     final start = json['byteStart'];
@@ -35,15 +33,10 @@ class ByteSlice {
     }
 
     if (start < 0 || end < 0 || end < start) {
-      throw FormatException(
-        'ByteSlice: Invalid byte range [$start, $end)',
-      );
+      throw FormatException('ByteSlice: Invalid byte range [$start, $end)');
     }
 
-    return ByteSlice(
-      byteStart: start,
-      byteEnd: end,
-    );
+    return ByteSlice(byteStart: start, byteEnd: end);
   }
 
   /// Start byte position (inclusive)
@@ -54,10 +47,7 @@ class ByteSlice {
 
   /// Convert to JSON
   Map<String, dynamic> toJson() {
-    return {
-      'byteStart': byteStart,
-      'byteEnd': byteEnd,
-    };
+    return {'byteStart': byteStart, 'byteEnd': byteEnd};
   }
 
   @override
@@ -161,7 +151,8 @@ sealed class FacetFeature {
     }
   }
 
-  /// The type identifier for this feature (e.g., "social.coves.richtext.facet#link")
+  /// The type identifier for this feature (e.g.,
+  /// "social.coves.richtext.facet#link")
   String get type;
 
   /// Convert to JSON
@@ -182,10 +173,7 @@ class LinkFacetFeature extends FacetFeature {
 
   @override
   Map<String, dynamic> toJson() {
-    return {
-      r'$type': type,
-      'uri': uri,
-    };
+    return {r'$type': type, 'uri': uri};
   }
 
   @override
@@ -308,9 +296,9 @@ class SpoilerFacetFeature extends FacetFeature {
 
   @override
   Map<String, dynamic> toJson() => {
-        r'$type': type,
-        if (reason != null) 'reason': reason,
-      };
+    r'$type': type,
+    if (reason != null) 'reason': reason,
+  };
 
   @override
   String toString() => 'SpoilerFacetFeature($reason)';
@@ -332,7 +320,7 @@ class SpoilerFacetFeature extends FacetFeature {
 /// quotes are disjoint ranges with increasing [level], never containment.
 class BlockquoteFacetFeature extends FacetFeature {
   const BlockquoteFacetFeature({this.level = 1})
-      : assert(level >= 1 && level <= 6, 'level must be 1-6');
+    : assert(level >= 1 && level <= 6, 'level must be 1-6');
 
   static const typeId = 'social.coves.richtext.facet#blockquote';
 
@@ -344,9 +332,9 @@ class BlockquoteFacetFeature extends FacetFeature {
 
   @override
   Map<String, dynamic> toJson() => {
-        r'$type': type,
-        if (level != 1) 'level': level,
-      };
+    r'$type': type,
+    if (level != 1) 'level': level,
+  };
 
   @override
   String toString() => 'BlockquoteFacetFeature(level: $level)';
@@ -365,7 +353,7 @@ class BlockquoteFacetFeature extends FacetFeature {
 /// Section heading spanning a single whole line
 class HeadingFacetFeature extends FacetFeature {
   const HeadingFacetFeature({required this.level})
-      : assert(level >= 1 && level <= 6, 'level must be 1-6');
+    : assert(level >= 1 && level <= 6, 'level must be 1-6');
 
   static const typeId = 'social.coves.richtext.facet#heading';
 
@@ -426,9 +414,9 @@ class CodeBlockFacetFeature extends FacetFeature {
 
   @override
   Map<String, dynamic> toJson() => {
-        r'$type': type,
-        if (language != null) 'language': language,
-      };
+    r'$type': type,
+    if (language != null) 'language': language,
+  };
 
   @override
   String toString() => 'CodeBlockFacetFeature($language)';
@@ -487,9 +475,13 @@ class UnknownFacetFeature extends FacetFeature {
   }
 
   static bool _mapEquals(Map<String, dynamic> a, Map<String, dynamic> b) {
-    if (a.length != b.length) return false;
+    if (a.length != b.length) {
+      return false;
+    }
     for (final key in a.keys) {
-      if (!b.containsKey(key) || a[key] != b[key]) return false;
+      if (!b.containsKey(key) || a[key] != b[key]) {
+        return false;
+      }
     }
     return true;
   }
@@ -497,10 +489,7 @@ class UnknownFacetFeature extends FacetFeature {
 
 /// A rich text facet - metadata about a text segment
 class RichTextFacet {
-  const RichTextFacet({
-    required this.index,
-    required this.features,
-  });
+  const RichTextFacet({required this.index, required this.features});
 
   factory RichTextFacet.fromJson(Map<String, dynamic> json) {
     final indexData = json['index'];
@@ -535,8 +524,7 @@ class RichTextFacet {
   final List<FacetFeature> features;
 
   /// Check if this facet contains a link feature
-  bool get hasLink =>
-      features.any((feature) => feature is LinkFacetFeature);
+  bool get hasLink => features.any((feature) => feature is LinkFacetFeature);
 
   /// The first block-level feature (blockquote, heading, codeBlock), if any
   ///
@@ -587,9 +575,13 @@ class RichTextFacet {
   int get hashCode => Object.hash(index, Object.hashAll(features));
 
   static bool _listEquals(List<FacetFeature> a, List<FacetFeature> b) {
-    if (a.length != b.length) return false;
+    if (a.length != b.length) {
+      return false;
+    }
     for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
+      if (a[i] != b[i]) {
+        return false;
+      }
     }
     return true;
   }
@@ -603,7 +595,8 @@ const int _maxFeaturesPerFacet = 20;
 
 /// Parse facets from a record's 'facets' field
 ///
-/// Backend returns facets inside `record['facets']` rather than at the top level.
+/// Backend returns facets inside `record['facets']` rather than at the top
+/// level.
 /// This helper safely extracts and parses them, returning null if missing/invalid.
 ///
 /// Note: Malformed facets are dropped individually (logged in debug mode) so

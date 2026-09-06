@@ -73,7 +73,10 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
     _searchDebounce?.cancel();
 
     // Start new debounce timer (300ms)
-    _searchDebounce = Timer(const Duration(milliseconds: 300), _filterCommunities);
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 300),
+      _filterCommunities,
+    );
   }
 
   void _filterCommunities() {
@@ -120,9 +123,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
     });
 
     try {
-      final response = await _apiService.listCommunities(
-        limit: 50,
-      );
+      final response = await _apiService.listCommunities();
 
       if (mounted) {
         setState(() {
@@ -160,10 +161,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
     });
 
     try {
-      final response = await _apiService.listCommunities(
-        limit: 50,
-        cursor: _cursor,
-      );
+      final response = await _apiService.listCommunities(cursor: _cursor);
 
       if (mounted) {
         setState(() {
@@ -253,9 +251,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
             ),
 
             // Community list
-            Expanded(
-              child: _buildBody(),
-            ),
+            Expanded(child: _buildBody()),
           ],
         ),
       ),
@@ -266,9 +262,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
     // Loading state (initial load)
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: AppColors.primary,
-        ),
+        child: CircularProgressIndicator(color: AppColors.primary),
       );
     }
 
@@ -356,9 +350,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
           return const Padding(
             padding: EdgeInsets.all(16),
             child: Center(
-              child: CircularProgressIndicator(
-                color: AppColors.primary,
-              ),
+              child: CircularProgressIndicator(color: AppColors.primary),
             ),
           );
         }
@@ -379,8 +371,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
     var descriptionLine = '';
     if (community.memberCount != null && community.memberCount! > 0) {
       descriptionLine = '$memberCount members';
-      if (community.subscriberCount != null &&
-          community.subscriberCount! > 0) {
+      if (community.subscriberCount != null && community.subscriberCount! > 0) {
         descriptionLine += ' · $subscriberCount subscribers';
       }
     } else if (community.subscriberCount != null &&
@@ -402,12 +393,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: const BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: AppColors.inputBorder,
-                width: 1,
-              ),
-            ),
+            border: Border(bottom: BorderSide(color: AppColors.inputBorder)),
           ),
           child: Row(
             children: [

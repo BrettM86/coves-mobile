@@ -88,9 +88,8 @@ void main() {
 
       when(mockAuthProvider.isAuthenticated).thenReturn(true);
       when(mockAuthProvider.did).thenReturn(profileDid);
-      when(
-        mockAuthProvider.getAccessToken(),
-      ).thenAnswer((_) async => 'test-token');
+      when(mockAuthProvider.getAccessToken())
+          .thenAnswer((_) async => 'test-token');
 
       fakeVoteService = _FakeVoteService(
         response: const VoteResponse(

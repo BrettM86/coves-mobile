@@ -301,9 +301,8 @@ class _DetailedPostViewState extends State<DetailedPostView> {
       child: NativeImageGallery(
         images: embed.images,
         keyPrefix: 'detail',
-        onOpen:
-            (index) =>
-                ImageViewer.open(context, embed.images, initialIndex: index),
+        onOpen: (index) =>
+            ImageViewer.open(context, embed.images, initialIndex: index),
       ),
     );
   }
@@ -346,11 +345,8 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                 topRight: Radius.circular(7),
               ),
               child: GestureDetector(
-                onTap:
-                    () => UrlLauncher.launchExternalUrl(
-                      embed.uri,
-                      context: context,
-                    ),
+                onTap: () =>
+                    UrlLauncher.launchExternalUrl(embed.uri, context: context),
                 child: SizedBox(
                   height: 300,
                   child: PageView.builder(
@@ -376,8 +372,8 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                         fadeInDuration: Duration.zero,
                         fadeOutDuration: Duration.zero,
                         placeholder: (context, url) => _buildImagePlaceholder(),
-                        errorWidget:
-                            (context, url, error) => _buildImagePlaceholder(),
+                        errorWidget: (context, url, error) =>
+                            _buildImagePlaceholder(),
                       );
                     },
                   ),
@@ -387,11 +383,8 @@ class _DetailedPostViewState extends State<DetailedPostView> {
 
             // Link bar with page indicator (bottom of card)
             GestureDetector(
-              onTap:
-                  () => UrlLauncher.launchExternalUrl(
-                    embed.uri,
-                    context: context,
-                  ),
+              onTap: () =>
+                  UrlLauncher.launchExternalUrl(embed.uri, context: context),
               child: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: const BoxDecoration(
@@ -489,23 +482,21 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                   fit: BoxFit.cover,
                   fadeInDuration: Duration.zero,
                   fadeOutDuration: Duration.zero,
-                  placeholder:
-                      (context, url) => Container(
-                        height: 220,
-                        color: AppColors.backgroundSecondary,
+                  placeholder: (context, url) => Container(
+                    height: 220,
+                    color: AppColors.backgroundSecondary,
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    height: 220,
+                    color: AppColors.backgroundSecondary,
+                    child: const Center(
+                      child: Icon(
+                        Icons.image_outlined,
+                        color: AppColors.textMuted,
+                        size: 40,
                       ),
-                  errorWidget:
-                      (context, url, error) => Container(
-                        height: 220,
-                        color: AppColors.backgroundSecondary,
-                        child: const Center(
-                          child: Icon(
-                            Icons.image_outlined,
-                            color: AppColors.textMuted,
-                            size: 40,
-                          ),
-                        ),
-                      ),
+                    ),
+                  ),
                 ),
               ),
 

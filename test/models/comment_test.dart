@@ -294,10 +294,7 @@ void main() {
     test('replies list is unmodifiable', () {
       final node = _node('parent', replies: [_node('child')]);
 
-      expect(
-        () => node.replies!.add(_node('other')),
-        throwsUnsupportedError,
-      );
+      expect(() => node.replies!.add(_node('other')), throwsUnsupportedError);
     });
 
     group('copyWith', () {
@@ -313,8 +310,10 @@ void main() {
       test('sets and clears repliesCursor explicitly', () {
         final node = _node('a', repliesCursor: 'cursor-1');
 
-        expect(node.copyWith(repliesCursor: 'cursor-2').repliesCursor,
-            'cursor-2');
+        expect(
+          node.copyWith(repliesCursor: 'cursor-2').repliesCursor,
+          'cursor-2',
+        );
         // Explicit null clears the cursor (sentinel distinguishes this
         // from "not provided").
         expect(node.copyWith(repliesCursor: null).repliesCursor, isNull);
@@ -409,7 +408,10 @@ void main() {
         },
         'stats': {'upvotes': 10, 'downvotes': 2, 'score': 8},
         'viewer': {'vote': 'upvote'},
-        'embed': <String, dynamic>{'type': 'social.coves.embed.external', 'data': {}},
+        'embed': <String, dynamic>{
+          'type': 'social.coves.embed.external',
+          'data': {},
+        },
       };
 
       final comment = CommentView.fromJson(json);
@@ -631,40 +633,32 @@ void main() {
       expect(comment.contentFacets, isNull);
     });
 
-    test(
-      'should parse deleted comment with absent author and record keys',
-      () {
-        // New backend shape: for deleted comments the `author` and `record`
-        // keys are omitted entirely (not just null) to avoid leaking the
-        // author's DID.
-        final json = {
-          'uri': 'at://did:plc:test/comment/1',
-          'cid': 'cid1',
-          'isDeleted': true,
-          'deletionReason': 'author',
-          'deletedAt': '2025-01-02T12:00:00Z',
-          'createdAt': '2025-01-01T12:00:00Z',
-          'indexedAt': '2025-01-01T12:00:00Z',
-          'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
-          'stats': {
-            'upvotes': 0,
-            'downvotes': 0,
-            'score': 0,
-            'replyCount': 2,
-          },
-        };
+    test('should parse deleted comment with absent author and record keys', () {
+      // New backend shape: for deleted comments the `author` and `record`
+      // keys are omitted entirely (not just null) to avoid leaking the
+      // author's DID.
+      final json = {
+        'uri': 'at://did:plc:test/comment/1',
+        'cid': 'cid1',
+        'isDeleted': true,
+        'deletionReason': 'author',
+        'deletedAt': '2025-01-02T12:00:00Z',
+        'createdAt': '2025-01-01T12:00:00Z',
+        'indexedAt': '2025-01-01T12:00:00Z',
+        'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+        'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0, 'replyCount': 2},
+      };
 
-        final comment = CommentView.fromJson(json);
+      final comment = CommentView.fromJson(json);
 
-        expect(comment.isDeleted, true);
-        expect(comment.deletionReason, 'author');
-        expect(comment.author, isNull);
-        expect(comment.record, isNull);
-        expect(comment.content, '');
-        expect(comment.contentFacets, isNull);
-        expect(comment.stats.replyCount, 2);
-      },
-    );
+      expect(comment.isDeleted, true);
+      expect(comment.deletionReason, 'author');
+      expect(comment.author, isNull);
+      expect(comment.record, isNull);
+      expect(comment.content, '');
+      expect(comment.contentFacets, isNull);
+      expect(comment.stats.replyCount, 2);
+    });
 
     test('should default isDeleted to false when not present', () {
       final json = {
@@ -939,15 +933,15 @@ void main() {
 
   group('ActorCommentsResponse', () {
     Map<String, dynamic> validComment(String suffix) => {
-          'uri': 'at://did:plc:test/comment/$suffix',
-          'cid': 'cid-$suffix',
-          'record': {'content': 'Comment $suffix'},
-          'createdAt': '2025-01-01T12:00:00Z',
-          'indexedAt': '2025-01-01T12:00:00Z',
-          'author': {'did': 'did:plc:author', 'handle': 'test.user'},
-          'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
-          'stats': {'upvotes': 1, 'downvotes': 0, 'score': 1},
-        };
+      'uri': 'at://did:plc:test/comment/$suffix',
+      'cid': 'cid-$suffix',
+      'record': {'content': 'Comment $suffix'},
+      'createdAt': '2025-01-01T12:00:00Z',
+      'indexedAt': '2025-01-01T12:00:00Z',
+      'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+      'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+      'stats': {'upvotes': 1, 'downvotes': 0, 'score': 1},
+    };
 
     test('should parse valid JSON with comments and cursor', () {
       final json = {
@@ -992,10 +986,7 @@ void main() {
     });
 
     test('should treat a wrong-typed cursor as absent', () {
-      final json = {
-        'comments': <dynamic>[],
-        'cursor': 42,
-      };
+      final json = {'comments': <dynamic>[], 'cursor': 42};
 
       expect(ActorCommentsResponse.fromJson(json).cursor, null);
     });

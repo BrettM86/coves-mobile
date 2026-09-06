@@ -29,8 +29,8 @@ class SourceLine {
   SourceLine({
     required this.location,
     required this.index,
-    required StrippedSource source,
-  }) : _source = source;
+    required this._source,
+  });
 
   /// `<label>/<path relative to the scan root>:<1-based line number>`.
   final String location;
@@ -193,9 +193,8 @@ StrippedSource stripComments(List<String> lines) {
 
 /// Absolute path of this source file, read off a live stack frame.
 String _thisFile() {
-  final frame = RegExp(
-    r'(file:///.*?\.dart)',
-  ).firstMatch(StackTrace.current.toString());
+  final frame = RegExp(r'(file:///.*?\.dart)')
+      .firstMatch(StackTrace.current.toString());
   if (frame == null) {
     fail('could not locate this helper from a stack trace');
   }

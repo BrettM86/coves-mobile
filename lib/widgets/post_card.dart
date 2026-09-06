@@ -102,12 +102,11 @@ class PostCard extends StatelessWidget {
       margin: EdgeInsets.only(bottom: showHeader ? 8 : 0),
       decoration: BoxDecoration(
         color: AppColors.background,
-        border:
-            showBorder
-                ? const Border(
-                  bottom: BorderSide(color: AppColors.borderWarm, width: 0.5),
-                )
-                : null,
+        border: showBorder
+            ? const Border(
+                bottom: BorderSide(color: AppColors.borderWarm, width: 0.5),
+              )
+            : null,
       ),
       child: Padding(
         padding: EdgeInsets.fromLTRB(16, showHeader ? 4 : 12, 16, 1),
@@ -357,10 +356,9 @@ class PostCard extends StatelessWidget {
       keyPrefix: 'post',
       // With navigation off there is nothing to activate, and the block
       // drops its button semantics along with the handler.
-      onTap:
-          disableNavigation
-              ? null
-              : () => ImageViewer.open(context, embed.images),
+      onTap: disableNavigation
+          ? null
+          : () => ImageViewer.open(context, embed.images),
     );
   }
 
@@ -515,12 +513,11 @@ class _LinkThumbnail extends StatelessWidget {
         // Disable fade animation to prevent scroll jitter from height changes
         fadeInDuration: Duration.zero,
         fadeOutDuration: Duration.zero,
-        placeholder:
-            (context, url) => SizedBox(
-              width: double.infinity,
-              height: height,
-              child: const MediaFill(icon: Icons.image_outlined),
-            ),
+        placeholder: (context, url) => SizedBox(
+          width: double.infinity,
+          height: height,
+          child: const MediaFill(icon: Icons.image_outlined),
+        ),
         errorWidget: (context, url, error) {
           if (kDebugMode) {
             debugPrint('❌ Image load error: $error');

@@ -130,8 +130,7 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     try {
       // Keep a reference so dispose() can remove the listener without an
       // ancestor lookup (context.read is unsafe on a deactivated element)
-      _authProvider = context.read<AuthProvider>()
-        ..addListener(_onAuthChanged);
+      _authProvider = context.read<AuthProvider>()..addListener(_onAuthChanged);
     } on ProviderNotFoundException {
       // Expected in tests - AuthProvider may not be available
     } on Exception catch (e) {
@@ -142,7 +141,9 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   }
 
   void _onAuthChanged() {
-    if (!mounted || _authInvalidated) return;
+    if (!mounted || _authInvalidated) {
+      return;
+    }
 
     try {
       final authProvider = context.read<AuthProvider>();
@@ -163,7 +164,7 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
 
   /// Restore draft text if available for this reply context
   ///
-  /// Uses [widget.commentsProvider] directly — this screen is pushed on the
+  /// Uses `widget.commentsProvider` directly — this screen is pushed on the
   /// root navigator, so `context.read<CommentsProvider>()` would look above
   /// the route and find nothing (the provider lives in the detail screen).
   void _restoreDraft() {
@@ -192,7 +193,9 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     super.didChangeMetrics();
     // Guard against being called after widget is deactivated
     // (can happen during keyboard animation while navigating away)
-    if (!mounted || _cachedView == null) return;
+    if (!mounted || _cachedView == null) {
+      return;
+    }
 
     final keyboardHeight = _cachedView!.viewInsets.bottom;
 
@@ -351,7 +354,8 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // Provide CommentsProvider to descendant widgets (Consumer in _ContextPreview)
+    // Provide CommentsProvider to descendant widgets (Consumer in
+    // _ContextPreview)
     return ChangeNotifierProvider.value(
       value: widget.commentsProvider,
       // System back / predictive back must save the draft just like the
@@ -575,8 +579,9 @@ class _ReplyToolbarState extends State<_ReplyToolbar>
     final devicePixelRatio = view.devicePixelRatio;
     final keyboardInset = view.viewInsets.bottom / devicePixelRatio;
     final viewPaddingBottom = view.viewPadding.bottom / devicePixelRatio;
-    final safeAreaBottom =
-        math.max(0, viewPaddingBottom - keyboardInset).toDouble();
+    final safeAreaBottom = math
+        .max(0, viewPaddingBottom - keyboardInset)
+        .toDouble();
 
     // Smooth tracking: Follow keyboard height in real-time (Bluesky/Thunder approach)
     _keyboardMarginNotifier.value = keyboardInset;
@@ -643,18 +648,16 @@ class _ReplyToolbarState extends State<_ReplyToolbar>
                 button: true,
                 label: 'Send comment',
                 child: GestureDetector(
-                  onTap:
-                      (widget.hasText && !widget.isSubmitting)
-                          ? widget.onSubmit
-                          : null,
+                  onTap: (widget.hasText && !widget.isSubmitting)
+                      ? widget.onSubmit
+                      : null,
                   child: Container(
                     height: 32,
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
-                      color:
-                          (widget.hasText && !widget.isSubmitting)
-                              ? AppColors.primary
-                              : AppColors.textSecondary.withValues(alpha: 0.3),
+                      color: (widget.hasText && !widget.isSubmitting)
+                          ? AppColors.primary
+                          : AppColors.textSecondary.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(

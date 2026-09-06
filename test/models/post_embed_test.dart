@@ -387,12 +387,11 @@ void main() {
         late PostEmbed embed;
 
         expect(
-          () =>
-              embed = PostEmbed.fromJson({
-                r'$type': EmbedTypes.videoView,
-                'video': _videoUrl,
-                'duration': duration,
-              }),
+          () => embed = PostEmbed.fromJson({
+            r'$type': EmbedTypes.videoView,
+            'video': _videoUrl,
+            'duration': duration,
+          }),
           returnsNormally,
           reason: 'duration: $duration',
         );
@@ -760,13 +759,12 @@ void main() {
       late PostEmbed embed;
 
       expect(
-        () =>
-            embed = PostEmbed.fromJson({
-              r'$type': EmbedTypes.imagesView,
-              'images': [
-                {'thumb': 'ht tp://bad url', 'fullsize': _fullUrl},
-              ],
-            }),
+        () => embed = PostEmbed.fromJson({
+          r'$type': EmbedTypes.imagesView,
+          'images': [
+            {'thumb': 'ht tp://bad url', 'fullsize': _fullUrl},
+          ],
+        }),
         returnsNormally,
       );
       expect(embed, isA<UnknownPostEmbed>());
@@ -782,11 +780,10 @@ void main() {
       late PostEmbed embed;
 
       expect(
-        () =>
-            embed = PostEmbed.fromJson({
-              r'$type': EmbedTypes.externalView,
-              'external': <String, dynamic>{},
-            }),
+        () => embed = PostEmbed.fromJson({
+          r'$type': EmbedTypes.externalView,
+          'external': <String, dynamic>{},
+        }),
         returnsNormally,
       );
       expect(embed, isA<UnknownPostEmbed>());
@@ -807,11 +804,10 @@ void main() {
         late PostEmbed embed;
 
         expect(
-          () =>
-              embed = PostEmbed.fromJson({
-                r'$type': EmbedTypes.externalView,
-                'external': external,
-              }),
+          () => embed = PostEmbed.fromJson({
+            r'$type': EmbedTypes.externalView,
+            'external': external,
+          }),
           returnsNormally,
           reason: 'external: $external',
         );
@@ -823,17 +819,16 @@ void main() {
       late PostEmbed embed;
 
       expect(
-        () =>
-            embed = PostEmbed.fromJson({
-              r'$type': EmbedTypes.externalView,
-              'external': {
-                'uri': 'https://example.com/megathread',
-                'sources': [
-                  {'uri': 'https://example.com/ok', 'title': 'Fine'},
-                  {'title': 'No uri at all'},
-                ],
-              },
-            }),
+        () => embed = PostEmbed.fromJson({
+          r'$type': EmbedTypes.externalView,
+          'external': {
+            'uri': 'https://example.com/megathread',
+            'sources': [
+              {'uri': 'https://example.com/ok', 'title': 'Fine'},
+              {'title': 'No uri at all'},
+            ],
+          },
+        }),
         returnsNormally,
         reason: 'EmbedSource.fromJson throws FormatException on a bad source',
       );
@@ -844,12 +839,11 @@ void main() {
       late PostEmbed embed;
 
       expect(
-        () =>
-            embed = PostEmbed.fromJson({
-              r'$type': 'social.coves.embed.somethingNew',
-              'uri': 'https://example.com/bare-link',
-              'title': 42,
-            }),
+        () => embed = PostEmbed.fromJson({
+          r'$type': 'social.coves.embed.somethingNew',
+          'uri': 'https://example.com/bare-link',
+          'title': 42,
+        }),
         returnsNormally,
         reason: 'the fallback branch casts just as unsafely as the typed one',
       );
@@ -860,15 +854,14 @@ void main() {
       late PostEmbed embed;
 
       expect(
-        () =>
-            embed = PostEmbed.fromJson({
-              r'$type': EmbedTypes.postView,
-              'post': {
-                'uri': 'at://did:plc:xyz/app.bsky.feed.post/abc',
-                'cid': 'bafyrei123',
-              },
-              'resolved': 'not-a-map',
-            }),
+        () => embed = PostEmbed.fromJson({
+          r'$type': EmbedTypes.postView,
+          'post': {
+            'uri': 'at://did:plc:xyz/app.bsky.feed.post/abc',
+            'cid': 'bafyrei123',
+          },
+          'resolved': 'not-a-map',
+        }),
         returnsNormally,
         reason: '`resolved as Map` throws TypeError past on FormatException',
       );
@@ -893,7 +886,7 @@ void main() {
             'score': 0,
             'commentCount': 0,
           },
-          if (embed != null) 'embed': embed,
+          'embed': ?embed,
         },
       };
     }
@@ -902,18 +895,17 @@ void main() {
       late TimelineResponse response;
 
       expect(
-        () =>
-            response = TimelineResponse.fromJson({
-              'feed': [
-                feedItem(),
-                feedItem(
-                  embed: {
-                    r'$type': EmbedTypes.externalView,
-                    'external': {'uri': 42},
-                  },
-                ),
-              ],
-            }),
+        () => response = TimelineResponse.fromJson({
+          'feed': [
+            feedItem(),
+            feedItem(
+              embed: {
+                r'$type': EmbedTypes.externalView,
+                'external': {'uri': 42},
+              },
+            ),
+          ],
+        }),
         returnsNormally,
         reason: 'one hostile federated record must not blank the feed',
       );
@@ -938,10 +930,9 @@ void main() {
       late TimelineResponse response;
 
       expect(
-        () =>
-            response = TimelineResponse.fromJson({
-              'feed': ['not-a-map', feedItem()],
-            }),
+        () => response = TimelineResponse.fromJson({
+          'feed': ['not-a-map', feedItem()],
+        }),
         returnsNormally,
       );
       expect(response.feed, hasLength(1));
@@ -951,19 +942,18 @@ void main() {
       late TimelineResponse response;
 
       expect(
-        () =>
-            response = TimelineResponse.fromJson({
-              'feed': [
-                feedItem(
-                  embed: {
-                    r'$type': EmbedTypes.postView,
-                    'post': {'uri': 'at://x/y/z', 'cid': 'c'},
-                    'resolved': 'not-a-map',
-                  },
-                ),
-              ],
-              'cursor': 'next-page',
-            }),
+        () => response = TimelineResponse.fromJson({
+          'feed': [
+            feedItem(
+              embed: {
+                r'$type': EmbedTypes.postView,
+                'post': {'uri': 'at://x/y/z', 'cid': 'c'},
+                'resolved': 'not-a-map',
+              },
+            ),
+          ],
+          'cursor': 'next-page',
+        }),
         returnsNormally,
       );
       expect(response.cursor, 'next-page');

@@ -92,12 +92,15 @@ void main() {
 
   group('DateTimeUtils.formatFullDateTime', () {
     test('formats midnight (12:00 AM) correctly', () {
-      final midnight = DateTime(2025, 6, 15, 0, 0);
-      expect(DateTimeUtils.formatFullDateTime(midnight), '12:00AM · Jun 15, 2025');
+      final midnight = DateTime(2025, 6, 15);
+      expect(
+        DateTimeUtils.formatFullDateTime(midnight),
+        '12:00AM · Jun 15, 2025',
+      );
     });
 
     test('formats noon (12:00 PM) correctly', () {
-      final noon = DateTime(2025, 6, 15, 12, 0);
+      final noon = DateTime(2025, 6, 15, 12);
       expect(DateTimeUtils.formatFullDateTime(noon), '12:00PM · Jun 15, 2025');
     });
 
@@ -111,7 +114,10 @@ void main() {
 
     test('formats 12:59 PM correctly', () {
       final lateNoon = DateTime(2025, 6, 15, 12, 59);
-      expect(DateTimeUtils.formatFullDateTime(lateNoon), '12:59PM · Jun 15, 2025');
+      expect(
+        DateTimeUtils.formatFullDateTime(lateNoon),
+        '12:59PM · Jun 15, 2025',
+      );
     });
 
     test('pads single digit minutes correctly', () {
@@ -137,66 +143,72 @@ void main() {
 
       // 11 AM
       final elevenAm = DateTime(2025, 1, 1, 11, 45);
-      expect(DateTimeUtils.formatFullDateTime(elevenAm), '11:45AM · Jan 1, 2025');
+      expect(
+        DateTimeUtils.formatFullDateTime(elevenAm),
+        '11:45AM · Jan 1, 2025',
+      );
     });
 
     test('formats PM hours correctly (13-23)', () {
       // 1 PM (13:00)
-      final onePm = DateTime(2025, 1, 1, 13, 0);
+      final onePm = DateTime(2025, 1, 1, 13);
       expect(DateTimeUtils.formatFullDateTime(onePm), '1:00PM · Jan 1, 2025');
 
       // 11 PM (23:00)
       final elevenPm = DateTime(2025, 1, 1, 23, 30);
-      expect(DateTimeUtils.formatFullDateTime(elevenPm), '11:30PM · Jan 1, 2025');
+      expect(
+        DateTimeUtils.formatFullDateTime(elevenPm),
+        '11:30PM · Jan 1, 2025',
+      );
     });
 
     test('formats all months correctly', () {
       expect(
-        DateTimeUtils.formatFullDateTime(DateTime(2025, 1, 15, 10, 0)),
+        DateTimeUtils.formatFullDateTime(DateTime(2025, 1, 15, 10)),
         '10:00AM · Jan 15, 2025',
       );
       expect(
-        DateTimeUtils.formatFullDateTime(DateTime(2025, 2, 15, 10, 0)),
+        DateTimeUtils.formatFullDateTime(DateTime(2025, 2, 15, 10)),
         '10:00AM · Feb 15, 2025',
       );
       expect(
-        DateTimeUtils.formatFullDateTime(DateTime(2025, 3, 15, 10, 0)),
+        DateTimeUtils.formatFullDateTime(DateTime(2025, 3, 15, 10)),
         '10:00AM · Mar 15, 2025',
       );
       expect(
-        DateTimeUtils.formatFullDateTime(DateTime(2025, 4, 15, 10, 0)),
+        DateTimeUtils.formatFullDateTime(DateTime(2025, 4, 15, 10)),
         '10:00AM · Apr 15, 2025',
       );
       expect(
-        DateTimeUtils.formatFullDateTime(DateTime(2025, 5, 15, 10, 0)),
+        DateTimeUtils.formatFullDateTime(DateTime(2025, 5, 15, 10)),
         '10:00AM · May 15, 2025',
       );
       expect(
-        DateTimeUtils.formatFullDateTime(DateTime(2025, 6, 15, 10, 0)),
+        DateTimeUtils.formatFullDateTime(DateTime(2025, 6, 15, 10)),
         '10:00AM · Jun 15, 2025',
       );
       expect(
-        DateTimeUtils.formatFullDateTime(DateTime(2025, 7, 15, 10, 0)),
+        DateTimeUtils.formatFullDateTime(DateTime(2025, 7, 15, 10)),
         '10:00AM · Jul 15, 2025',
       );
       expect(
-        DateTimeUtils.formatFullDateTime(DateTime(2025, 8, 15, 10, 0)),
+        DateTimeUtils.formatFullDateTime(DateTime(2025, 8, 15, 10)),
         '10:00AM · Aug 15, 2025',
       );
       expect(
-        DateTimeUtils.formatFullDateTime(DateTime(2025, 9, 15, 10, 0)),
+        DateTimeUtils.formatFullDateTime(DateTime(2025, 9, 15, 10)),
         '10:00AM · Sep 15, 2025',
       );
       expect(
-        DateTimeUtils.formatFullDateTime(DateTime(2025, 10, 15, 10, 0)),
+        DateTimeUtils.formatFullDateTime(DateTime(2025, 10, 15, 10)),
         '10:00AM · Oct 15, 2025',
       );
       expect(
-        DateTimeUtils.formatFullDateTime(DateTime(2025, 11, 15, 10, 0)),
+        DateTimeUtils.formatFullDateTime(DateTime(2025, 11, 15, 10)),
         '10:00AM · Nov 15, 2025',
       );
       expect(
-        DateTimeUtils.formatFullDateTime(DateTime(2025, 12, 15, 10, 0)),
+        DateTimeUtils.formatFullDateTime(DateTime(2025, 12, 15, 10)),
         '10:00AM · Dec 15, 2025',
       );
     });
@@ -208,8 +220,11 @@ void main() {
         '11:59AM · Jun 15, 2025',
       );
 
-      final atNoon = DateTime(2025, 6, 15, 12, 0);
-      expect(DateTimeUtils.formatFullDateTime(atNoon), '12:00PM · Jun 15, 2025');
+      final atNoon = DateTime(2025, 6, 15, 12);
+      expect(
+        DateTimeUtils.formatFullDateTime(atNoon),
+        '12:00PM · Jun 15, 2025',
+      );
     });
 
     test('formats PM/AM boundary at 11:59 PM transitioning to 12:00 AM', () {
@@ -219,7 +234,7 @@ void main() {
         '11:59PM · Jun 15, 2025',
       );
 
-      final atMidnight = DateTime(2025, 6, 16, 0, 0);
+      final atMidnight = DateTime(2025, 6, 16);
       expect(
         DateTimeUtils.formatFullDateTime(atMidnight),
         '12:00AM · Jun 16, 2025',
@@ -227,8 +242,11 @@ void main() {
     });
 
     test('handles edge case: minute 00', () {
-      final zeroMinute = DateTime(2025, 5, 20, 15, 0);
-      expect(DateTimeUtils.formatFullDateTime(zeroMinute), '3:00PM · May 20, 2025');
+      final zeroMinute = DateTime(2025, 5, 20, 15);
+      expect(
+        DateTimeUtils.formatFullDateTime(zeroMinute),
+        '3:00PM · May 20, 2025',
+      );
     });
 
     test('handles single digit days', () {

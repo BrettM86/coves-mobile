@@ -14,6 +14,9 @@ import 'package:flutter_test/flutter_test.dart';
 /// that `testWidgets` installs.
 Future<void> pumpUnderAppTheme(WidgetTester tester, Widget child) {
   return tester.pumpWidget(
-    MaterialApp(theme: AppTheme.dark, home: Scaffold(body: child)),
+    MaterialApp(
+      theme: AppTheme.dark,
+      home: Scaffold(body: child),
+    ),
   );
 }

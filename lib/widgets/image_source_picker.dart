@@ -86,10 +86,7 @@ class _ImageSourcePickerSheet extends StatelessWidget {
                   color: AppColors.teal.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(
-                  Icons.camera_alt,
-                  color: AppColors.teal,
-                ),
+                child: const Icon(Icons.camera_alt, color: AppColors.teal),
               ),
               title: const Text(
                 'Take a Photo',

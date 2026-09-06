@@ -90,9 +90,8 @@ void main() {
       mockApiService = MockCovesApiService();
 
       when(mockAuthProvider.isAuthenticated).thenReturn(true);
-      when(
-        mockAuthProvider.getAccessToken(),
-      ).thenAnswer((_) async => 'test-token');
+      when(mockAuthProvider.getAccessToken())
+          .thenAnswer((_) async => 'test-token');
 
       voteProvider = VoteProvider(
         voteService: _FakeVoteService(
@@ -181,10 +180,7 @@ void main() {
       final result = await commentsProvider.loadMoreReplies(parentUri);
 
       // The branch survives for display...
-      expect(
-        result!.replies!.map((r) => r.comment.uri),
-        contains(childUri),
-      );
+      expect(result!.replies!.map((r) => r.comment.uri), contains(childUri));
 
       // ...and the confirmed vote survives the merge: the stale preserved
       // snapshot must not be blind-adopted. (Bug: heart flipped off and

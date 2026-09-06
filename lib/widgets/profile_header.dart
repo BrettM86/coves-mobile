@@ -20,10 +20,7 @@ import 'user_avatar.dart';
 /// stats, and join date live in [ProfileDetails], rendered as normal
 /// scroll content below the app bar.
 class ProfileHeader extends StatelessWidget {
-  const ProfileHeader({
-    required this.profile,
-    super.key,
-  });
+  const ProfileHeader({required this.profile, super.key});
 
   final UserProfile? profile;
 
@@ -92,8 +89,7 @@ class ProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final minBannerBottom = bannerBottomFor(context);
-    final scrimHeight =
-        MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final scrimHeight = MediaQuery.paddingOf(context).top + kToolbarHeight;
     final infoHeight = _infoHeightFor(context);
 
     return LayoutBuilder(
@@ -188,10 +184,7 @@ class ProfileHeader extends StatelessWidget {
       height: avatarSize,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(
-          color: AppColors.background,
-          width: 3,
-        ),
+        border: Border.all(color: AppColors.background, width: 3),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.3),
@@ -201,9 +194,7 @@ class ProfileHeader extends StatelessWidget {
           ),
         ],
       ),
-      child: ClipOval(
-        child: _buildAvatar(avatarSize - 6),
-      ),
+      child: ClipOval(child: _buildAvatar(avatarSize - 6)),
     );
   }
 
@@ -310,14 +301,14 @@ class _HandleTextState extends State<_HandleText> {
     // computeWidth disposes the painter it creates; a bare TextPainter here
     // would leak an engine paragraph on every measurement.
     double widthAt(double fontSize) => TextPainter.computeWidth(
-          text: TextSpan(
-            text: text,
-            style: style.copyWith(fontSize: fontSize),
-          ),
-          maxLines: 1,
-          textDirection: direction,
-          textScaler: scaler,
-        );
+      text: TextSpan(
+        text: text,
+        style: style.copyWith(fontSize: fontSize),
+      ),
+      maxLines: 1,
+      textDirection: direction,
+      textScaler: scaler,
+    );
 
     final fullWidth = widthAt(ProfileHeader._handleMaxFontSize);
     if (fullWidth <= available || fullWidth <= 0) {
@@ -345,11 +336,11 @@ class _HandleTextState extends State<_HandleText> {
     // Inherit the ambient style so the measurement below uses the same font
     // the Text will actually render with.
     final style = DefaultTextStyle.of(context).style.merge(
-          const TextStyle(
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        );
+      const TextStyle(
+        fontWeight: FontWeight.bold,
+        color: AppColors.textPrimary,
+      ),
+    );
     final scaler = MediaQuery.textScalerOf(context);
     final direction = Directionality.of(context);
 
@@ -388,10 +379,7 @@ class _HandleTextState extends State<_HandleText> {
 /// collapsing [ProfileHeader], so they are never clipped regardless of
 /// bio length or device inset.
 class ProfileDetails extends StatelessWidget {
-  const ProfileDetails({
-    required this.profile,
-    super.key,
-  });
+  const ProfileDetails({required this.profile, super.key});
 
   final UserProfile? profile;
 
@@ -458,10 +446,7 @@ class ProfileDetails extends StatelessWidget {
 
 /// Stats item showing label and value
 class _StatItem extends StatelessWidget {
-  const _StatItem({
-    required this.label,
-    required this.value,
-  });
+  const _StatItem({required this.label, required this.value});
 
   final String label;
   final int value;

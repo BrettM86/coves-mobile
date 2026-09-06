@@ -16,8 +16,8 @@ class PaginationScrollListener {
     required this.onLoadMore,
     this.threshold = 200,
     this.throttle = const Duration(milliseconds: 100),
-    DateTime Function() clock = DateTime.now,
-  }) : _clock = clock;
+    this._clock = DateTime.now,
+  });
 
   /// The scroll controller to observe. Not owned; never disposed here.
   final ScrollController controller;

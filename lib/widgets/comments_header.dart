@@ -112,38 +112,37 @@ class CommentsHeader extends StatelessWidget {
                   ),
                 ],
               ),
-              itemBuilder:
-                  (context) => [
-                    for (var i = 0; i < _sortOptions.length; i++)
-                      PopupMenuItem<String>(
-                        value: _sortOptions[i],
-                        child: Row(
-                          children: [
-                            Icon(
-                              _getSortIcon(_sortOptions[i]),
-                              color: AppColors.textPrimary,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                _sortLabels[i],
-                                style: const TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.normal,
-                                ),
-                              ),
-                            ),
-                            if (currentSort == _sortOptions[i])
-                              const Icon(
-                                Icons.check,
-                                color: AppColors.primary,
-                                size: 20,
-                              ),
-                          ],
+              itemBuilder: (context) => [
+                for (var i = 0; i < _sortOptions.length; i++)
+                  PopupMenuItem<String>(
+                    value: _sortOptions[i],
+                    child: Row(
+                      children: [
+                        Icon(
+                          _getSortIcon(_sortOptions[i]),
+                          color: AppColors.textPrimary,
+                          size: 18,
                         ),
-                      ),
-                  ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _sortLabels[i],
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                        if (currentSort == _sortOptions[i])
+                          const Icon(
+                            Icons.check,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
           ),
         ],

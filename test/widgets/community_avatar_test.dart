@@ -16,8 +16,9 @@ import 'package:flutter_test/flutter_test.dart';
 /// API that does not exist yet, so it is kept in its own file to avoid
 /// compile-breaking the characterization suite.
 void main() {
-  Widget wrap(Widget child) =>
-      MaterialApp(home: Scaffold(body: Center(child: child)));
+  Widget wrap(Widget child) => MaterialApp(
+    home: Scaffold(body: Center(child: child)),
+  );
 
   /// Reads the background color painted behind [textFinder].
   ///
@@ -112,10 +113,9 @@ void main() {
 
       expect(
         tester.getSize(
-          find.ancestor(
-            of: find.text('G'),
-            matching: find.byType(DecoratedBox),
-          ).first,
+          find
+              .ancestor(of: find.text('G'), matching: find.byType(DecoratedBox))
+              .first,
         ),
         const Size(40, 40),
       );

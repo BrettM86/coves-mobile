@@ -151,8 +151,9 @@ void main() {
         expect(rect.left, greaterThanOrEqualTo(0));
         expect(
           rect.right,
-          lessThanOrEqualTo(tester.view.physicalSize.width /
-              tester.view.devicePixelRatio),
+          lessThanOrEqualTo(
+            tester.view.physicalSize.width / tester.view.devicePixelRatio,
+          ),
         );
       }
     });
@@ -178,8 +179,9 @@ void main() {
     }
 
     bool isTruncated(WidgetTester tester, String handle) {
-      final paragraph =
-          tester.renderObject<RenderParagraph>(find.text('@$handle'));
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.text('@$handle'),
+      );
       return paragraph.didExceedMaxLines;
     }
 

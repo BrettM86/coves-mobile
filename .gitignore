@@ -78,3 +78,7 @@ windows/
 .env
 .env.*
 !.env.example
+
+# Local Bundler configuration and installed gems
+.bundle/
+vendor/bundle/

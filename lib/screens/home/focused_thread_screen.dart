@@ -49,7 +49,12 @@ class FocusedThreadScreen extends StatelessWidget {
   final List<ThreadViewComment> ancestors;
 
   /// Callback when user replies to a comment
-  final Future<void> Function(String content, List<RichTextFacet> facets, ThreadViewComment parent) onReply;
+  final Future<void> Function(
+    String content,
+    List<RichTextFacet> facets,
+    ThreadViewComment parent,
+  )
+  onReply;
 
   /// Parent's CommentsProvider for draft preservation and vote state
   final CommentsProvider commentsProvider;
@@ -80,7 +85,12 @@ class _FocusedThreadBody extends StatefulWidget {
 
   final ThreadViewComment thread;
   final List<ThreadViewComment> ancestors;
-  final Future<void> Function(String content, List<RichTextFacet> facets, ThreadViewComment parent) onReply;
+  final Future<void> Function(
+    String content,
+    List<RichTextFacet> facets,
+    ThreadViewComment parent,
+  )
+  onReply;
 
   @override
   State<_FocusedThreadBody> createState() => _FocusedThreadBodyState();
@@ -298,10 +308,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
               foregroundColor: AppColors.textPrimary,
               title: Text(
                 'Thread',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
               centerTitle: false,
               elevation: 0,
@@ -336,8 +343,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
                         onCollapseToggle: _toggleCollapsed,
                         onContinueThread: _onContinueThread,
                         onLoadMoreReplies: _onLoadMoreReplies,
-                        loadingMoreReplies:
-                            commentsProvider.loadingMoreReplies,
+                        loadingMoreReplies: commentsProvider.loadingMoreReplies,
                         ancestors: [thread],
                         onDelete: _onDelete,
                       );
@@ -348,8 +354,9 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
                       !_collapsedComments.contains(thread.comment.uri))
                     LoadMoreRepliesButton(
                       depth: 0,
-                      isLoading: commentsProvider.loadingMoreReplies
-                          .contains(thread.comment.uri),
+                      isLoading: commentsProvider.loadingMoreReplies.contains(
+                        thread.comment.uri,
+                      ),
                       onTap: () => _onLoadMoreReplies(thread),
                     ),
 

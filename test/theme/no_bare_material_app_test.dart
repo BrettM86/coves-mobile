@@ -193,7 +193,8 @@ void main() {
   ));
 }
 ''',
-      'hatched_test.dart': '''
+      'hatched_test.dart':
+          '''
 void main() {
   pump(MaterialApp(home: Text('x'))); // ignore: $_hatch
   pump(MaterialApp(home: Text('x')));

@@ -91,7 +91,8 @@ class UserAvatar extends StatelessWidget {
         shape: BoxShape.circle,
       ),
       child: Center(
-        child: fallbackIcon ??
+        child:
+            fallbackIcon ??
             Text(
               name.isNotEmpty ? name[0].toUpperCase() : '?',
               style: TextStyle(

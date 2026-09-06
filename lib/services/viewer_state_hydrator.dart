@@ -1,3 +1,9 @@
+import 'package:coves_flutter/providers/comments_provider.dart'
+    show CommentsProvider;
+import 'package:coves_flutter/providers/multi_feed_provider.dart'
+    show MultiFeedProvider;
+import 'package:coves_flutter/screens/home/post_detail_loader.dart'
+    show PostDetailLoader;
 import 'package:flutter/foundation.dart';
 
 import '../models/comment.dart';
@@ -48,12 +54,10 @@ import '../providers/vote_provider.dart';
 /// and, as above, not identically by every method.
 class ViewerStateHydrator {
   ViewerStateHydrator({
-    required AuthProvider authProvider,
-    VoteProvider? voteProvider,
-    CommunitySubscriptionProvider? subscriptionProvider,
-  }) : _authProvider = authProvider,
-       _voteProvider = voteProvider,
-       _subscriptionProvider = subscriptionProvider;
+    required this._authProvider,
+    this._voteProvider,
+    this._subscriptionProvider,
+  });
 
   final AuthProvider _authProvider;
 
@@ -225,9 +229,7 @@ class ViewerStateHydrator {
   /// entirely, but a *present* viewer with a null `subscribed` is coerced to
   /// false. [hydrateCommunitySubscription] treats that same input the
   /// opposite way, on purpose.
-  void hydrateCommunityListSubscriptions(
-    Iterable<CommunityView> communities,
-  ) {
+  void hydrateCommunityListSubscriptions(Iterable<CommunityView> communities) {
     final subscriptionProvider = _subscriptions;
     if (subscriptionProvider == null) {
       return;

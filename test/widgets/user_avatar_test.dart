@@ -25,8 +25,9 @@ import 'package:flutter_test/flutter_test.dart';
 ///   })
 /// Always circular.
 void main() {
-  Widget wrap(Widget child) =>
-      MaterialApp(home: Scaffold(body: Center(child: child)));
+  Widget wrap(Widget child) => MaterialApp(
+    home: Scaffold(body: Center(child: child)),
+  );
 
   BoxDecoration decorationBehind(WidgetTester tester, Finder inner) {
     final decorated = tester.widget<DecoratedBox>(
@@ -142,10 +143,9 @@ void main() {
 
       expect(
         tester.getSize(
-          find.ancestor(
-            of: find.text('A'),
-            matching: find.byType(DecoratedBox),
-          ).first,
+          find
+              .ancestor(of: find.text('A'), matching: find.byType(DecoratedBox))
+              .first,
         ),
         const Size(24, 24),
       );

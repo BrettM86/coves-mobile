@@ -22,9 +22,7 @@ void main() {
     mockStorage = MockFlutterSecureStorage();
   });
 
-  tearDown(() {
-    CovesAuthService.resetInstance();
-  });
+  tearDown(CovesAuthService.resetInstance);
 
   group('CovesAuthService - Singleton Pattern', () {
     test('should return the same instance on multiple factory calls', () {
@@ -61,12 +59,11 @@ void main() {
           '"token": "test-token", '
           '"did": "did:plc:test123", '
           '"session_id": "session-123", '
-          '"handle": "alice.bsky.social"'
+          '"handle": "alice.bsky.social" '
           '}';
 
-      when(
-        mockStorage.read(key: storageKey),
-      ).thenAnswer((_) async => sessionJson);
+      when(mockStorage.read(key: storageKey))
+          .thenAnswer((_) async => sessionJson);
 
       // Act - Restore session using first instance
       await instance1.restoreSession();
@@ -93,12 +90,11 @@ void main() {
           '"token": "old-token", '
           '"did": "did:plc:test123", '
           '"session_id": "session-123", '
-          '"handle": "alice.bsky.social"'
+          '"handle": "alice.bsky.social" '
           '}';
 
-      when(
-        mockStorage.read(key: storageKey),
-      ).thenAnswer((_) async => sessionJson);
+      when(mockStorage.read(key: storageKey))
+          .thenAnswer((_) async => sessionJson);
 
       await instance1.restoreSession();
 
@@ -118,9 +114,8 @@ void main() {
         );
       });
 
-      when(
-        mockStorage.write(key: storageKey, value: anyNamed('value')),
-      ).thenAnswer((_) async => {});
+      when(mockStorage.write(key: storageKey, value: anyNamed('value')))
+          .thenAnswer((_) async => {});
 
       // Act - Start refresh from first instance
       final refreshFuture1 = instance1.refreshToken();
@@ -196,44 +191,37 @@ void main() {
       );
     });
 
-    test(
-      'should avoid state loss when service is requested from multiple entry points',
-      () async {
-        // Arrange
-        final authProvider = CovesAuthService(
-          dio: mockDio,
-          storage: mockStorage,
-        );
+    test('preserves state across multiple entry points', () async {
+      // Arrange
+      final authProvider = CovesAuthService(dio: mockDio, storage: mockStorage);
 
-        const sessionJson =
-            '{'
-            '"token": "test-token", '
-            '"did": "did:plc:test123", '
-            '"session_id": "session-123"'
-            '}';
+      const sessionJson =
+          '{'
+          '"token": "test-token", '
+          '"did": "did:plc:test123", '
+          '"session_id": "session-123" '
+          '}';
 
-        when(
-          mockStorage.read(key: storageKey),
-        ).thenAnswer((_) async => sessionJson);
+      when(mockStorage.read(key: storageKey))
+          .thenAnswer((_) async => sessionJson);
 
-        // Act - Simulate different parts of the app requesting the service
-        await authProvider.restoreSession();
+      // Act - Simulate different parts of the app requesting the service
+      await authProvider.restoreSession();
 
-        final apiService = CovesAuthService();
-        final voteService = CovesAuthService();
-        final feedService = CovesAuthService();
+      final apiService = CovesAuthService();
+      final voteService = CovesAuthService();
+      final feedService = CovesAuthService();
 
-        // Assert - All should have access to the same session state
-        expect(apiService.isAuthenticated, isTrue);
-        expect(voteService.isAuthenticated, isTrue);
-        expect(feedService.isAuthenticated, isTrue);
-        expect(apiService.getToken(), 'test-token');
-        expect(voteService.getToken(), 'test-token');
-        expect(feedService.getToken(), 'test-token');
+      // Assert - All should have access to the same session state
+      expect(apiService.isAuthenticated, isTrue);
+      expect(voteService.isAuthenticated, isTrue);
+      expect(feedService.isAuthenticated, isTrue);
+      expect(apiService.getToken(), 'test-token');
+      expect(voteService.getToken(), 'test-token');
+      expect(feedService.getToken(), 'test-token');
 
-        // Storage should only be read once
-        verify(mockStorage.read(key: storageKey)).called(1);
-      },
-    );
+      // Storage should only be read once
+      verify(mockStorage.read(key: storageKey)).called(1);
+    });
   });
 }

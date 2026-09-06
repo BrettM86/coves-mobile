@@ -125,9 +125,8 @@ void main() {
 
     when(mockAuthProvider.isAuthenticated).thenReturn(true);
     when(mockAuthProvider.did).thenReturn('did:plc:me');
-    when(
-      mockAuthProvider.getAccessToken(),
-    ).thenAnswer((_) async => 'test-token');
+    when(mockAuthProvider.getAccessToken())
+        .thenAnswer((_) async => 'test-token');
 
     voteProvider = VoteProvider(
       voteService: _FakeVoteService(
@@ -439,7 +438,10 @@ void main() {
         // Cursor drift re-delivers the same post with the vote gone. No
         // local mutation is outstanding, so the snapshot is adopted.
         TimelineResponse(
-          feed: [buildFeedPost(uri: postUriA), buildFeedPost(uri: postUriB)],
+          feed: [
+            buildFeedPost(uri: postUriA),
+            buildFeedPost(uri: postUriB),
+          ],
         ),
       ]);
 
@@ -545,7 +547,10 @@ void main() {
           cursor: 'page-2',
         ),
         TimelineResponse(
-          feed: [buildFeedPost(uri: postUriA), buildFeedPost(uri: postUriB)],
+          feed: [
+            buildFeedPost(uri: postUriA),
+            buildFeedPost(uri: postUriB),
+          ],
         ),
       ]);
 
@@ -725,10 +730,7 @@ void main() {
       stubSubtreeResponse(buildThreadComment(uri: rootUri));
       final subtree = await comments.loadMoreReplies(rootUri);
 
-      expect(
-        subtree!.replies!.map((r) => r.comment.uri),
-        contains(childUri),
-      );
+      expect(subtree!.replies!.map((r) => r.comment.uri), contains(childUri));
       // The preserved node was never delivered, so it was never applied.
       expect(voteProvider.isLiked(childUri), true);
       expect(voteProvider.getAdjustedScore(childUri, 6), 6);

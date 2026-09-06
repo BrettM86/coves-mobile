@@ -145,7 +145,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
         background: Colors.red[700],
       );
       return;
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       if (kDebugMode) {
         debugPrint('Unexpected error in _createCommunity: $e');
         debugPrint('Stack trace: $stackTrace');
@@ -240,7 +240,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
         background: Colors.red[700],
       );
       return false;
-    } catch (e, stackTrace) {
+    } on Object catch (e, stackTrace) {
       developer.log(
         'Unexpected error uploading avatar',
         name: 'CommunitiesAdminPanel',
@@ -352,7 +352,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
           _isLoadingCommunities = false;
         });
       }
-    } catch (e) {
+    } on Object catch (e) {
       if (kDebugMode) {
         debugPrint('Error loading communities: $e');
       }
@@ -385,14 +385,13 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
         foregroundColor: Colors.white,
         title: Text(_getAdminTitle()),
         automaticallyImplyLeading: false,
-        leading:
-            _currentPage != AdminPage.menu
-                ? IconButton(
-                  icon: const BackIcon(),
-                  tooltip: 'Back',
-                  onPressed: _navigateBack,
-                )
-                : null,
+        leading: _currentPage != AdminPage.menu
+            ? IconButton(
+                icon: const BackIcon(),
+                tooltip: 'Back',
+                onPressed: _navigateBack,
+              )
+            : null,
       ),
       body: _buildAdminUI(),
     );

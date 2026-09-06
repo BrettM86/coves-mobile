@@ -76,15 +76,14 @@ FeedViewPost _post({bool long = true}) => FeedViewPost(
     createdAt: _longAgo,
     indexedAt: _longAgo,
     record: PostRecord(content: 'Body text.', title: long ? _title : 'A title'),
-    stats:
-        long
-            ? PostStats(
-              upvotes: 123456,
-              downvotes: 7890,
-              score: 115566,
-              commentCount: 98765,
-            )
-            : PostStats(upvotes: 3, downvotes: 0, score: 3, commentCount: 1),
+    stats: long
+        ? PostStats(
+            upvotes: 123456,
+            downvotes: 7890,
+            score: 115566,
+            commentCount: 98765,
+          )
+        : PostStats(upvotes: 3, downvotes: 0, score: 3, commentCount: 1),
   ),
 );
 
@@ -102,10 +101,9 @@ CommentView _comment({bool long = true}) => CommentView(
     displayName: long ? _displayName : _shortDisplayName,
   ),
   post: CommentRef(uri: 'at://did:plc:author/post/123', cid: 'post-cid'),
-  stats:
-      long
-          ? const CommentStats(upvotes: 123456, downvotes: 7890, score: 115566)
-          : const CommentStats(upvotes: 3, score: 3),
+  stats: long
+      ? const CommentStats(upvotes: 123456, downvotes: 7890, score: 115566)
+      : const CommentStats(upvotes: 3, score: 3),
 );
 
 CommunityView _community({bool long = true}) => CommunityView(
@@ -175,13 +173,18 @@ Future<Headroom> _sweep(WidgetTester tester, Widget Function() build) async {
   return (cleanTo: cleanTo, breaksAt: null, worst: null);
 }
 
-Widget _wrap(Widget child, ThemeData theme) =>
-    MaterialApp(theme: theme, home: Scaffold(body: child));
+Widget _wrap(Widget child, ThemeData theme) => MaterialApp(
+  theme: theme,
+  home: Scaffold(body: child),
+);
 
 Widget _wrapRouted(Widget child, ThemeData theme) {
   final router = GoRouter(
     routes: [
-      GoRoute(path: '/', builder: (context, state) => Scaffold(body: child)),
+      GoRoute(
+        path: '/',
+        builder: (context, state) => Scaffold(body: child),
+      ),
       GoRoute(
         path: '/post/:uri',
         builder: (context, state) => const Scaffold(body: Text('detail')),

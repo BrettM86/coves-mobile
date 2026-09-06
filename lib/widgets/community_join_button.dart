@@ -66,18 +66,15 @@ class CommunityJoinButton extends StatelessWidget {
       await provider.toggleSubscription(communityDid: communityDid);
     } on ApiException catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
     } on Exception catch (e, stackTrace) {
       await Sentry.captureException(e, stackTrace: stackTrace);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Failed to update membership. Please try again.',
-            ),
+            content: Text('Failed to update membership. Please try again.'),
           ),
         );
       }
@@ -96,7 +93,6 @@ class CommunityJoinButton extends StatelessWidget {
           color: isSubscribed
               ? AppColors.teal.withValues(alpha: 0.5)
               : Colors.white.withValues(alpha: 0.2),
-          width: 1,
         ),
       ),
       child: Text(
@@ -123,7 +119,6 @@ class CommunityJoinButton extends StatelessWidget {
           color: isSubscribed
               ? AppColors.teal
               : AppColors.textSecondary.withValues(alpha: 0.4),
-          width: 1,
         ),
       ),
       child: Row(

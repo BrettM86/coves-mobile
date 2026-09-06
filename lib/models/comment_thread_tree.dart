@@ -147,12 +147,13 @@ class CommentThreadTree {
     };
     final mergedReplies = <ThreadViewComment>[
       for (final freshChild in freshReplies)
-        existingByUri.containsKey(freshChild.comment.uri)
-            ? mergeSubtree(
-              freshChild,
-              existingByUri.remove(freshChild.comment.uri)!,
-            )
-            : freshChild,
+        if (existingByUri.containsKey(freshChild.comment.uri))
+          mergeSubtree(
+            freshChild,
+            existingByUri.remove(freshChild.comment.uri)!,
+          )
+        else
+          freshChild,
     ];
 
     // Children we had before that are missing from a sibling-truncated
@@ -219,8 +220,9 @@ class CommentThreadTree {
 
     // First page: merge with the existing node (if any) so deeper
     // branches hydrated earlier survive the refetch.
-    final merged =
-        existingNode == null ? fresh : mergeSubtree(fresh, existingNode);
+    final merged = existingNode == null
+        ? fresh
+        : mergeSubtree(fresh, existingNode);
     return merged.copyWith(
       hasMore: responseCursor != null,
       repliesCursor: responseCursor,

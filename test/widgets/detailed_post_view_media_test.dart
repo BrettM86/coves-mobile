@@ -134,9 +134,9 @@ void main() {
     return PostEmbed.fromJson({
       r'$type': 'social.coves.embed.video#view',
       'video': video,
-      if (thumbnail != null) 'thumbnail': thumbnail,
-      if (alt != null) 'alt': alt,
-      if (duration != null) 'duration': duration,
+      'thumbnail': ?thumbnail,
+      'alt': ?alt,
+      'duration': ?duration,
     });
   }
 
@@ -152,10 +152,10 @@ void main() {
       r'$type': 'social.coves.embed.external#view',
       'external': {
         'uri': uri,
-        if (thumb != null) 'thumb': thumb,
-        if (embedType != null) 'embedType': embedType,
-        if (provider != null) 'provider': provider,
-        if (images != null) 'images': images,
+        'thumb': ?thumb,
+        'embedType': ?embedType,
+        'provider': ?provider,
+        'images': ?images,
       },
     });
   }
@@ -302,11 +302,9 @@ void main() {
       await tester.pump();
 
       expect(find.byKey(_imagesKey), findsOneWidget);
-      expect(
-        imageUrlsIn(tester, _imagesKey),
-        [_full1],
-        reason: 'detail view shows fullsize; thumb is the feed-card size',
-      );
+      expect(imageUrlsIn(tester, _imagesKey), [
+        _full1,
+      ], reason: 'detail view shows fullsize; thumb is the feed-card size');
     });
 
     testWidgets('uses 16:9 when aspectRatio is absent', (tester) async {
@@ -631,7 +629,7 @@ void main() {
 
       expect(
         tester.getSemantics(find.bySemanticsLabel('View full image')),
-        containsSemantics(isButton: true, label: 'View full image'),
+        isSemantics(isButton: true, label: 'View full image'),
       );
       handle.dispose();
     });
@@ -652,7 +650,7 @@ void main() {
 
       expect(
         tester.getSemantics(find.bySemanticsLabel('View full image').first),
-        containsSemantics(isButton: true, label: 'View full image'),
+        isSemantics(isButton: true, label: 'View full image'),
       );
       handle.dispose();
     });
@@ -724,7 +722,7 @@ void main() {
       expect(find.byKey(_durationBadgeKey), findsOneWidget);
       expect(
         tester.getSemantics(find.bySemanticsLabel('Play video')),
-        containsSemantics(isButton: true, label: 'Play video'),
+        isSemantics(isButton: true, label: 'Play video'),
       );
       handle.dispose();
     });

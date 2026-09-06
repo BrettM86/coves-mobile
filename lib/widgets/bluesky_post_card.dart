@@ -80,7 +80,8 @@ class BlueskyPostCard extends StatelessWidget {
             _buildHeader(context, author),
             const SizedBox(height: 8),
 
-            // Post text content (no truncation - Bluesky posts are max 300 chars)
+            // Post text content (no truncation - Bluesky posts are max 300
+            // chars)
             if (post.text.isNotEmpty) ...[
               Text(
                 post.text,
@@ -134,10 +135,7 @@ class BlueskyPostCard extends StatelessWidget {
   Widget _buildTimestampRow(BuildContext context, BlueskyPostResult post) {
     return Text(
       DateTimeUtils.formatFullDateTime(post.createdAt),
-      style: const TextStyle(
-        color: BlueskyColors.textSecondary,
-        fontSize: 13,
-      ),
+      style: const TextStyle(color: BlueskyColors.textSecondary, fontSize: 13),
     );
   }
 
@@ -146,9 +144,7 @@ class BlueskyPostCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.only(top: 10),
       decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: BlueskyColors.cardBorder),
-        ),
+        border: Border(top: BorderSide(color: BlueskyColors.cardBorder)),
       ),
       child: Row(
         children: [
@@ -163,10 +159,7 @@ class BlueskyPostCard extends StatelessWidget {
           const SizedBox(width: 4),
           const Text(
             'likes',
-            style: TextStyle(
-              color: BlueskyColors.textSecondary,
-              fontSize: 14,
-            ),
+            style: TextStyle(color: BlueskyColors.textSecondary, fontSize: 14),
           ),
         ],
       ),
@@ -178,9 +171,7 @@ class BlueskyPostCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.only(top: 10),
       decoration: const BoxDecoration(
-        border: Border(
-          top: BorderSide(color: BlueskyColors.cardBorder),
-        ),
+        border: Border(top: BorderSide(color: BlueskyColors.cardBorder)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -318,8 +309,9 @@ class BlueskyPostCard extends StatelessWidget {
 
   /// Builds the media placeholder for images
   Widget _buildMediaPlaceholder(BuildContext context, int mediaCount) {
-    final mediaText =
-        mediaCount == 1 ? 'Contains 1 image' : 'Contains $mediaCount images';
+    final mediaText = mediaCount == 1
+        ? 'Contains 1 image'
+        : 'Contains $mediaCount images';
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -519,7 +511,8 @@ class BlueskyPostCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
 
-            // Quoted post text (no truncation - Bluesky posts are max 300 chars)
+            // Quoted post text (no truncation - Bluesky posts are max 300
+            // chars)
             if (quotedPost.text.isNotEmpty) ...[
               Text(
                 quotedPost.text,
@@ -561,11 +554,7 @@ class BlueskyPostCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.block,
-            size: 16,
-            color: BlueskyColors.textSecondary,
-          ),
+          const Icon(Icons.block, size: 16, color: BlueskyColors.textSecondary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

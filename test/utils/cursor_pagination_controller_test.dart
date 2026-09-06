@@ -337,33 +337,35 @@ void main() {
   });
 
   group('generation counter', () {
-    test('a refresh started during a loadMore discards the stale page',
-        () async {
-      // This is the community-feed sort-change race: the user changes sort
-      // while a page of the previous sort is still in flight.
-      final controller = build();
-      addTearDown(controller.dispose);
+    test(
+      'a refresh started during a loadMore discards the stale page',
+      () async {
+        // This is the community-feed sort-change race: the user changes sort
+        // while a page of the previous sort is still in flight.
+        final controller = build();
+        addTearDown(controller.dispose);
 
-      await loadFirstPage(controller);
+        await loadFirstPage(controller);
 
-      final staleLoadMore = controller.loadMore(); // request 1
-      final refreshed = controller.refresh(); // request 2 — must be allowed
+        final staleLoadMore = controller.loadMore(); // request 1
+        final refreshed = controller.refresh(); // request 2 — must be allowed
 
-      expect(fetcher.requestCount, 3);
+        expect(fetcher.requestCount, 3);
 
-      fetcher.complete(2, page(<String>['x'], cursor: 'cursor-new'));
-      await refreshed;
+        fetcher.complete(2, page(<String>['x'], cursor: 'cursor-new'));
+        await refreshed;
 
-      expect(controller.items, <String>['x']);
+        expect(controller.items, <String>['x']);
 
-      // The stale page lands last and must be thrown away.
-      fetcher.complete(1, page(<String>['stale'], cursor: 'cursor-stale'));
-      await staleLoadMore;
+        // The stale page lands last and must be thrown away.
+        fetcher.complete(1, page(<String>['stale'], cursor: 'cursor-stale'));
+        await staleLoadMore;
 
-      expect(controller.items, <String>['x']);
-      expect(controller.cursor, 'cursor-new');
-      expect(controller.isLoadingMore, isFalse);
-    });
+        expect(controller.items, <String>['x']);
+        expect(controller.cursor, 'cursor-new');
+        expect(controller.isLoadingMore, isFalse);
+      },
+    );
 
     test('a discarded stale page never reaches onPageLoaded', () async {
       final hydrated = <List<String>>[];
@@ -382,13 +384,10 @@ void main() {
       fetcher.complete(1, page(<String>['stale'], cursor: 'cursor-stale'));
       await staleLoadMore;
 
-      expect(
-        hydrated,
-        <List<String>>[
-          <String>['a', 'b'],
-          <String>['x'],
-        ],
-      );
+      expect(hydrated, <List<String>>[
+        <String>['a', 'b'],
+        <String>['x'],
+      ]);
     });
 
     test('a stale failure does not surface as an error', () async {
@@ -548,13 +547,10 @@ void main() {
       fetcher.complete(1, page(<String>['c'], cursor: 'cursor-2'));
       await more;
 
-      expect(
-        hydrated,
-        <List<String>>[
-          <String>['a', 'b'],
-          <String>['c'],
-        ],
-      );
+      expect(hydrated, <List<String>>[
+        <String>['a', 'b'],
+        <String>['c'],
+      ]);
     });
 
     test('runs after the new items are visible on the controller', () async {
@@ -730,8 +726,7 @@ void main() {
   });
 
   group('empty pages', () {
-    test('an empty load-more page ends the feed even with a cursor',
-        () async {
+    test('an empty load-more page ends the feed even with a cursor', () async {
       // Otherwise the cursor is polled forever by the scroll trigger.
       final controller = build();
       addTearDown(controller.dispose);
@@ -791,13 +786,10 @@ void main() {
       fetcher.complete(1, page(<String>['b', 'c'], cursor: 'cursor-2'));
       await more;
 
-      expect(
-        hydrated,
-        <List<String>>[
-          <String>['a', 'b'],
-          <String>['c'],
-        ],
-      );
+      expect(hydrated, <List<String>>[
+        <String>['a', 'b'],
+        <String>['c'],
+      ]);
     });
 
     test('without idOf the page is appended verbatim', () async {
@@ -896,8 +888,7 @@ void main() {
       expect(controller.loadMoreError, contains('page 2 exploded'));
     });
 
-    test('onUnexpectedError sees first-page and load-more failures',
-        () async {
+    test('onUnexpectedError sees first-page and load-more failures', () async {
       final reported = <Object>[];
       final controller = build(
         onUnexpectedError: (error, stack) => reported.add(error),
@@ -959,20 +950,22 @@ void main() {
       expect(controller.loadMoreError, isNull);
     });
 
-    test('a throwing onUnexpectedError does not wedge the controller',
-        () async {
-      final controller = build(
-        onUnexpectedError: (error, stack) => throw StateError('sentry down'),
-      );
-      addTearDown(controller.dispose);
+    test(
+      'a throwing onUnexpectedError does not wedge the controller',
+      () async {
+        final controller = build(
+          onUnexpectedError: (error, stack) => throw StateError('sentry down'),
+        );
+        addTearDown(controller.dispose);
 
-      final failed = controller.refresh();
-      fetcher.fail(0, Exception('boom'));
-      await expectLater(failed, completes);
+        final failed = controller.refresh();
+        fetcher.fail(0, Exception('boom'));
+        await expectLater(failed, completes);
 
-      expect(controller.isLoading, isFalse);
-      expect(controller.error, isNotNull);
-    });
+        expect(controller.isLoading, isFalse);
+        expect(controller.error, isNotNull);
+      },
+    );
   });
 
   group('reset', () {

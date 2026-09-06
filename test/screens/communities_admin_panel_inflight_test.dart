@@ -74,13 +74,13 @@ void main() {
       tester.widget<TextField>(field).controller?.text ?? '';
 
   VerificationResult verifyCreateCalls() => verify(
-        mockApiService.createCommunity(
-          name: anyNamed('name'),
-          displayName: anyNamed('displayName'),
-          description: anyNamed('description'),
-          visibility: anyNamed('visibility'),
-        ),
-      );
+    mockApiService.createCommunity(
+      name: anyNamed('name'),
+      displayName: anyNamed('displayName'),
+      description: anyNamed('description'),
+      visibility: anyNamed('visibility'),
+    ),
+  );
 
   Future<void> pumpPanel(WidgetTester tester) async {
     await tester.pumpWidget(

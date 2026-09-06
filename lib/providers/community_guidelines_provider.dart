@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Tracks whether the user has accepted the current community guidelines version.
+/// Tracks whether the user has accepted the current community guidelines
+/// version.
 ///
 /// Uses shared_preferences to persist acceptance state.
 /// Increment [currentVersion] when the guidelines change to re-prompt users.
@@ -25,11 +26,17 @@ class CommunityGuidelinesProvider with ChangeNotifier {
       _hasAccepted = acceptedVersion >= currentVersion;
     } on Exception catch (e, stackTrace) {
       if (kDebugMode) {
-        print('Failed to check community guidelines acceptance: $e\n$stackTrace');
+        print(
+          'Failed to check community guidelines acceptance: $e\n$stackTrace',
+        );
       }
-      await Sentry.captureException(e, stackTrace: stackTrace, withScope: (scope) {
-        scope.setTag('phase', 'community_guidelines_initialization');
-      });
+      await Sentry.captureException(
+        e,
+        stackTrace: stackTrace,
+        withScope: (scope) {
+          scope.setTag('phase', 'community_guidelines_initialization');
+        },
+      );
       // Fail closed - require acceptance if we can't read state
       _hasAccepted = false;
     } finally {
@@ -48,9 +55,13 @@ class CommunityGuidelinesProvider with ChangeNotifier {
       if (kDebugMode) {
         print('Failed to accept community guidelines: $e\n$stackTrace');
       }
-      await Sentry.captureException(e, stackTrace: stackTrace, withScope: (scope) {
-        scope.setTag('phase', 'community_guidelines_acceptance');
-      });
+      await Sentry.captureException(
+        e,
+        stackTrace: stackTrace,
+        withScope: (scope) {
+          scope.setTag('phase', 'community_guidelines_acceptance');
+        },
+      );
       _error = 'Failed to save acceptance. Please try again.';
     } finally {
       notifyListeners();

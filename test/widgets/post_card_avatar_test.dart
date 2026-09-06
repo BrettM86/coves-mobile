@@ -30,10 +30,9 @@ void main() {
       routes: [
         GoRoute(
           path: '/',
-          builder:
-              (context, state) => Scaffold(
-                body: PostCard(post: post, showAuthorFooter: showAuthorFooter),
-              ),
+          builder: (context, state) => Scaffold(
+            body: PostCard(post: post, showAuthorFooter: showAuthorFooter),
+          ),
         ),
         GoRoute(
           path: '/post/:uri',
@@ -64,10 +63,7 @@ void main() {
           handle: authorHandle,
           displayName: authorDisplayName,
         ),
-        community: CommunityRef(
-          did: 'did:plc:community',
-          name: communityName,
-        ),
+        community: CommunityRef(did: 'did:plc:community', name: communityName),
         createdAt: DateTime(2024),
         indexedAt: DateTime(2024),
         record: const PostRecord(content: 'body', title: 'title'),

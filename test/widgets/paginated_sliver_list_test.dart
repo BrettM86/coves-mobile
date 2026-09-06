@@ -58,9 +58,7 @@ void main() {
 
   Widget host(PaginatedSliverList<_Item> sliver) {
     return MaterialApp(
-      home: Scaffold(
-        body: CustomScrollView(slivers: <Widget>[sliver]),
-      ),
+      home: Scaffold(body: CustomScrollView(slivers: <Widget>[sliver])),
     );
   }
 
@@ -91,8 +89,7 @@ void main() {
       emptyWidget: emptyWidget,
       itemBuilder:
           itemBuilder ??
-          (context, item, index) =>
-              SizedBox(height: 120, child: Text(item.id)),
+          (context, item, index) => SizedBox(height: 120, child: Text(item.id)),
     );
   }
 
@@ -323,11 +320,7 @@ void main() {
     testWidgets('the spinner wins over the error footer', (tester) async {
       await tester.pumpWidget(
         host(
-          buildList(
-            data: items(1),
-            isLoadingMore: true,
-            loadMoreError: 'boom',
-          ),
+          buildList(data: items(1), isLoadingMore: true, loadMoreError: 'boom'),
         ),
       );
 
@@ -353,9 +346,7 @@ void main() {
 
     testWidgets('the idle 80px footer is used when no endOfFeedWidget is '
         'supplied', (tester) async {
-      await tester.pumpWidget(
-        host(buildList(data: items(1), hasMore: false)),
-      );
+      await tester.pumpWidget(host(buildList(data: items(1), hasMore: false)));
 
       expect(tester.getSize(footerFinder()).height, 80.0);
     });
@@ -463,10 +454,7 @@ void main() {
         'RepaintBoundary', (tester) async {
       await tester.pumpWidget(host(buildList(data: items(2))));
 
-      expect(
-        find.byKey(const ValueKey<String>('id-0')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey<String>('id-0')), findsOneWidget);
       expect(
         tester.widget(find.byKey(const ValueKey<String>('id-1'))),
         isA<RepaintBoundary>(),

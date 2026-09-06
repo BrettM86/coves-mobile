@@ -71,9 +71,8 @@ class UrlLauncher {
   /// Shows an error snackbar if context is available and mounted
   static void _showErrorIfPossible(BuildContext? context, String message) {
     if (context != null && context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     }
   }
 }

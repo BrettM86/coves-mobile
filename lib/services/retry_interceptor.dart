@@ -18,9 +18,9 @@ class RetryInterceptor extends Interceptor {
     this.maxRetries = 2,
     this.initialDelay = const Duration(milliseconds: 500),
     this.serviceName = 'API',
-  })  : assert(maxRetries >= 0, 'maxRetries must be non-negative'),
-        assert(initialDelay > Duration.zero, 'initialDelay must be positive'),
-        assert(serviceName.isNotEmpty, 'serviceName must not be empty');
+  }) : assert(maxRetries >= 0, 'maxRetries must be non-negative'),
+       assert(initialDelay > Duration.zero, 'initialDelay must be positive'),
+       assert(serviceName.isNotEmpty, 'serviceName must not be empty');
 
   /// Key used in request extras to track retry count
   static const _retryCountKey = 'retryCount';
@@ -57,7 +57,8 @@ class RetryInterceptor extends Interceptor {
         type: err.type,
         error: err.error,
         stackTrace: err.stackTrace,
-        message: '${err.message ?? _errorTypeDescription(err.type)} '
+        message:
+            '${err.message ?? _errorTypeDescription(err.type)} '
             '(failed after $maxRetries retries)',
       );
       enhancedError.requestOptions.extra['retriesExhausted'] = true;
@@ -102,6 +103,7 @@ class RetryInterceptor extends Interceptor {
   /// - HTTP errors (4xx, 5xx) - server responded, retry won't help
   /// - Request cancellation - intentional
   /// - Bad certificate - security issue
+  /// - Response transformation timeout - local processing failure
   /// - Ambiguous failures on mutating methods - see below
   bool _shouldRetry(DioException err) {
     // Never retry mutating requests (POST etc.) when the failure is
@@ -126,6 +128,8 @@ class RetryInterceptor extends Interceptor {
       case DioExceptionType.receiveTimeout:
       case DioExceptionType.connectionError:
         return true;
+      // Retrying cannot fix local response processing and may repeat a write.
+      case DioExceptionType.transformTimeout:
       case DioExceptionType.badResponse:
       case DioExceptionType.badCertificate:
       case DioExceptionType.cancel:

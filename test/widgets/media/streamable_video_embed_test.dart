@@ -258,7 +258,7 @@ void main() {
 
       expect(
         tester.getSemantics(find.bySemanticsLabel('Play video')),
-        containsSemantics(isButton: true, isEnabled: true),
+        isSemantics(isButton: true, isEnabled: true),
       );
       handle.dispose();
     });
@@ -287,11 +287,7 @@ void main() {
       expect(find.byIcon(Icons.play_arrow), findsNothing);
       expect(
         tester.getSemantics(find.bySemanticsLabel('Play video')),
-        containsSemantics(
-          isButton: true,
-          hasEnabledState: true,
-          isEnabled: false,
-        ),
+        isSemantics(isButton: true, hasEnabledState: true, isEnabled: false),
       );
 
       await tester.pump(const Duration(seconds: 1));
@@ -388,7 +384,7 @@ void main() {
 
       expect(
         tester.getSemantics(find.bySemanticsLabel('Play video')),
-        containsSemantics(isButton: true, isEnabled: true),
+        isSemantics(isButton: true, isEnabled: true),
       );
       handle.dispose();
     });

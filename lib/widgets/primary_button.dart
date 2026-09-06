@@ -159,15 +159,12 @@ class _PrimaryButtonState extends State<PrimaryButton> {
           color: widget.disabled
               ? AppColors.coral.withValues(alpha: 0.3)
               : _isPressed
-                  ? AppColors.coralLight
-                  : AppColors.coral,
+              ? AppColors.coralLight
+              : AppColors.coral,
           width: 2,
         );
       case ButtonVariant.tertiary:
-        return Border.all(
-          color: AppColors.border,
-          width: 1,
-        );
+        return Border.all(color: AppColors.border);
     }
   }
 

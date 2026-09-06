@@ -72,16 +72,12 @@ class UserProfile {
       avatar: json['avatar'] as String?,
       banner: json['banner'] as String?,
       createdAt: createdAtStr != null ? DateTime.tryParse(createdAtStr) : null,
-      stats:
-          json['stats'] != null
-              ? ProfileStats.fromJson(json['stats'] as Map<String, dynamic>)
-              : null,
-      viewer:
-          json['viewer'] != null
-              ? ProfileViewerState.fromJson(
-                json['viewer'] as Map<String, dynamic>,
-              )
-              : null,
+      stats: json['stats'] != null
+          ? ProfileStats.fromJson(json['stats'] as Map<String, dynamic>)
+          : null,
+      viewer: json['viewer'] != null
+          ? ProfileViewerState.fromJson(json['viewer'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -283,12 +279,11 @@ class ProfileViewerState {
     // malformed value never kills the whole profile parse.
     final rawBlockUri = json['blockUri'];
     final rawBlocking = json['blocking'];
-    final blockUri =
-        rawBlockUri is String
-            ? rawBlockUri
-            : rawBlocking is String
-            ? rawBlocking
-            : null;
+    final blockUri = rawBlockUri is String
+        ? rawBlockUri
+        : rawBlocking is String
+        ? rawBlocking
+        : null;
     final rawBlocked = json['blocked'];
     final rawBlockedBy = json['blockedBy'];
 

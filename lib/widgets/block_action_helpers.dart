@@ -26,14 +26,9 @@ MenuItemButton buildBlockMenuItem({
             height: 20,
             child: CircularProgressIndicator(strokeWidth: 2),
           )
-        : Icon(
-            isBlocked ? Icons.check_circle_outline : Icons.block,
-            size: 20,
-          ),
+        : Icon(isBlocked ? Icons.check_circle_outline : Icons.block, size: 20),
     child: Text(
-      isPending
-          ? (isBlocked ? 'Unblocking...' : 'Blocking...')
-          : label,
+      isPending ? (isBlocked ? 'Unblocking...' : 'Blocking...') : label,
     ),
   );
 }
@@ -57,7 +52,9 @@ Future<void> handleBlockUser({
   // Check authentication
   final authProvider = context.read<AuthProvider>();
   if (!authProvider.isAuthenticated) {
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      return;
+    }
     final shouldSignIn = await SignInDialog.show(
       context,
       message: 'You need to sign in to block users.',
@@ -78,7 +75,9 @@ Future<void> handleBlockUser({
 
   // Show confirmation dialog only when blocking
   if (!isUserBlocked) {
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -99,7 +98,9 @@ Future<void> handleBlockUser({
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true) {
+      return;
+    }
   }
 
   try {
@@ -108,21 +109,19 @@ Future<void> handleBlockUser({
     // Haptics not supported
   }
 
-  if (!context.mounted) return;
+  if (!context.mounted) {
+    return;
+  }
   final messenger = ScaffoldMessenger.of(context);
 
   try {
-    final nowBlocked = await blockProvider.toggleUserBlock(
-      userDid: authorDid,
-    );
+    final nowBlocked = await blockProvider.toggleUserBlock(userDid: authorDid);
 
     if (context.mounted) {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            nowBlocked
-                ? 'Blocked @$authorHandle'
-                : 'Unblocked @$authorHandle',
+            nowBlocked ? 'Blocked @$authorHandle' : 'Unblocked @$authorHandle',
           ),
           behavior: SnackBarBehavior.floating,
         ),
@@ -154,7 +153,9 @@ Future<void> handleBlockCommunity({
   // Check authentication
   final authProvider = context.read<AuthProvider>();
   if (!authProvider.isAuthenticated) {
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      return;
+    }
     final shouldSignIn = await SignInDialog.show(
       context,
       message: 'You need to sign in to block communities.',
@@ -171,12 +172,13 @@ Future<void> handleBlockCommunity({
   }
 
   final blockProvider = context.read<BlockProvider>();
-  final isCommunityBlocked =
-      blockProvider.isCommunityBlocked(communityDid);
+  final isCommunityBlocked = blockProvider.isCommunityBlocked(communityDid);
 
   // Show confirmation dialog only when blocking
   if (!isCommunityBlocked) {
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -197,7 +199,9 @@ Future<void> handleBlockCommunity({
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true) {
+      return;
+    }
   }
 
   try {
@@ -206,7 +210,9 @@ Future<void> handleBlockCommunity({
     // Haptics not supported
   }
 
-  if (!context.mounted) return;
+  if (!context.mounted) {
+    return;
+  }
   final messenger = ScaffoldMessenger.of(context);
 
   try {

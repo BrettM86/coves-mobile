@@ -11,11 +11,26 @@ import '../services/coves_api_service.dart';
 ///
 /// Uses enhanced enum to enforce a closed set of valid reasons at compile time.
 enum ReportReason {
-  spam(label: 'Spam', description: 'Unsolicited advertising or repetitive content'),
-  harassment(label: 'Harassment', description: 'Bullying, threats, or targeted attacks'),
-  doxing(label: 'Doxing', description: 'Sharing private information without consent'),
-  illegal(label: 'Illegal Content', description: 'Content that violates laws or regulations'),
-  csam(label: 'Child Safety', description: 'Content exploiting or endangering minors'),
+  spam(
+    label: 'Spam',
+    description: 'Unsolicited advertising or repetitive content',
+  ),
+  harassment(
+    label: 'Harassment',
+    description: 'Bullying, threats, or targeted attacks',
+  ),
+  doxing(
+    label: 'Doxing',
+    description: 'Sharing private information without consent',
+  ),
+  illegal(
+    label: 'Illegal Content',
+    description: 'Content that violates laws or regulations',
+  ),
+  csam(
+    label: 'Child Safety',
+    description: 'Content exploiting or endangering minors',
+  ),
   other(label: 'Other', description: 'Other policy violations');
 
   const ReportReason({required this.label, required this.description});
@@ -46,7 +61,8 @@ class ReportDialog extends StatefulWidget {
 
   /// Show the report dialog
   ///
-  /// Returns true if report was submitted, false if cancelled, null if dismissed
+  /// Returns true if report was submitted, false if cancelled, null if
+  /// dismissed
   static Future<bool?> show(
     BuildContext context, {
     required String targetUri,
@@ -54,10 +70,8 @@ class ReportDialog extends StatefulWidget {
   }) {
     return showDialog<bool>(
       context: context,
-      builder: (context) => ReportDialog(
-        targetUri: targetUri,
-        contentType: contentType,
-      ),
+      builder: (context) =>
+          ReportDialog(targetUri: targetUri, contentType: contentType),
     );
   }
 
@@ -160,14 +174,11 @@ class _ReportDialogState extends State<ReportDialog> {
             children: [
               const Text(
                 'Why are you reporting this?',
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
               ),
               const SizedBox(height: 16),
               // Reason selection list
-              ...ReportReason.values.map((reason) => _buildReasonTile(reason)),
+              ...ReportReason.values.map(_buildReasonTile),
               const SizedBox(height: 16),
               // Explanation field
               TextField(
@@ -204,10 +215,7 @@ class _ReportDialogState extends State<ReportDialog> {
                 const SizedBox(height: 8),
                 Text(
                   _error!,
-                  style: const TextStyle(
-                    color: AppColors.error,
-                    fontSize: 13,
-                  ),
+                  style: const TextStyle(color: AppColors.error, fontSize: 13),
                 ),
               ],
             ],
@@ -216,7 +224,9 @@ class _ReportDialogState extends State<ReportDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(false),
+          onPressed: _isSubmitting
+              ? null
+              : () => Navigator.of(context).pop(false),
           child: Text(
             'Cancel',
             style: TextStyle(
@@ -227,12 +237,16 @@ class _ReportDialogState extends State<ReportDialog> {
           ),
         ),
         ElevatedButton(
-          onPressed: _isSubmitting || _selectedReason == null ? null : _submitReport,
+          onPressed: _isSubmitting || _selectedReason == null
+              ? null
+              : _submitReport,
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.error,
             foregroundColor: AppColors.textPrimary,
             disabledBackgroundColor: AppColors.error.withValues(alpha: 0.3),
-            disabledForegroundColor: AppColors.textPrimary.withValues(alpha: 0.5),
+            disabledForegroundColor: AppColors.textPrimary.withValues(
+              alpha: 0.5,
+            ),
           ),
           child: _isSubmitting
               ? const SizedBox(
@@ -309,9 +323,13 @@ class _ReportDialogState extends State<ReportDialog> {
                   Text(
                     reason.label,
                     style: TextStyle(
-                      color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
+                      color: isSelected
+                          ? AppColors.textPrimary
+                          : AppColors.textSecondary,
                       fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 2),

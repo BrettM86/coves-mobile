@@ -16,10 +16,10 @@ import '../utils/display_utils.dart';
 import '../utils/error_messages.dart';
 import 'block_action_helpers.dart';
 import 'icons/animated_heart_icon.dart';
+import 'icons/reply_icon.dart';
 import 'report_dialog.dart';
 import 'share_button.dart';
 import 'sign_in_dialog.dart';
-import 'icons/reply_icon.dart';
 
 /// Action buttons row for post cards
 ///
@@ -56,7 +56,9 @@ class _PostCardActionsState extends State<PostCardActions> {
       // Check authentication - subscribe requires sign-in
       final authProvider = context.read<AuthProvider>();
       if (!authProvider.isAuthenticated) {
-        if (!context.mounted) return;
+        if (!context.mounted) {
+          return;
+        }
         final shouldSignIn = await SignInDialog.show(
           context,
           message: 'You need to sign in to subscribe to communities.',
@@ -79,10 +81,12 @@ class _PostCardActionsState extends State<PostCardActions> {
         // Haptics not supported
       }
 
-      if (!context.mounted) return;
+      if (!context.mounted) {
+        return;
+      }
       final messenger = ScaffoldMessenger.of(context);
-      final subscriptionProvider =
-          context.read<CommunitySubscriptionProvider>();
+      final subscriptionProvider = context
+          .read<CommunitySubscriptionProvider>();
 
       try {
         final nowSubscribed = await subscriptionProvider.toggleSubscription(
@@ -130,7 +134,9 @@ class _PostCardActionsState extends State<PostCardActions> {
       // Check authentication - report requires sign-in
       final authProvider = context.read<AuthProvider>();
       if (!authProvider.isAuthenticated) {
-        if (!context.mounted) return;
+        if (!context.mounted) {
+          return;
+        }
         final shouldSignIn = await SignInDialog.show(
           context,
           message: 'You need to sign in to report content.',
@@ -146,7 +152,9 @@ class _PostCardActionsState extends State<PostCardActions> {
         return;
       }
 
-      if (!context.mounted) return;
+      if (!context.mounted) {
+        return;
+      }
       final messenger = ScaffoldMessenger.of(context);
 
       // Show report dialog
@@ -156,11 +164,12 @@ class _PostCardActionsState extends State<PostCardActions> {
         contentType: 'post',
       );
 
-      if (reported == true && context.mounted) {
+      if ((reported ?? false) && context.mounted) {
         messenger.showSnackBar(
           const SnackBar(
             content: Text(
-              'Report submitted. Thank you for helping keep our community safe.',
+              'Report submitted. Thank you for helping keep our '
+              'community safe.',
             ),
             behavior: SnackBarBehavior.floating,
           ),
@@ -168,7 +177,9 @@ class _PostCardActionsState extends State<PostCardActions> {
       }
     } else if (action == 'delete') {
       // Prevent multiple taps - set flag immediately before dialog
-      if (_isDeleting) return;
+      if (_isDeleting) {
+        return;
+      }
       setState(() => _isDeleting = true);
 
       // Check authentication
@@ -181,28 +192,29 @@ class _PostCardActionsState extends State<PostCardActions> {
       // Show confirmation dialog
       final confirmed = await showDialog<bool>(
         context: context,
-        builder:
-            (context) => AlertDialog(
-              title: const Text('Delete Post'),
-              content: const Text(
-                'Are you sure you want to delete this post? This cannot be undone.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  style: TextButton.styleFrom(foregroundColor: Colors.red),
-                  child: const Text('Delete'),
-                ),
-              ],
+        builder: (context) => AlertDialog(
+          title: const Text('Delete Post'),
+          content: const Text(
+            'Are you sure you want to delete this post? This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
             ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
       );
 
       if (confirmed != true || !context.mounted) {
-        if (mounted) setState(() => _isDeleting = false);
+        if (mounted) {
+          setState(() => _isDeleting = false);
+        }
         return;
       }
 
@@ -214,7 +226,9 @@ class _PostCardActionsState extends State<PostCardActions> {
         }
       }
 
-      if (!context.mounted) return;
+      if (!context.mounted) {
+        return;
+      }
       final messenger = ScaffoldMessenger.of(context);
 
       // Shared app-wide API client (owned by main.dart) — do not dispose
@@ -313,151 +327,158 @@ class _PostCardActionsState extends State<PostCardActions> {
               AuthProvider,
               BlockProvider
             >(
-              builder: (
-                context,
-                subscriptionProvider,
-                authProvider,
-                blockProvider,
-                child,
-              ) {
-                final communityDid = post.post.community.did;
-                final communityName = post.post.community.name;
-                final isSubscribed = subscriptionProvider.isSubscribed(
-                  communityDid,
-                );
-                final isPending = subscriptionProvider.isPending(communityDid);
-                final isPostAuthor = authProvider.did == post.post.author.did;
-                final authorDid = post.post.author.did;
-                final authorHandle = post.post.author.handle;
-                final isUserBlocked = blockProvider.isUserBlocked(authorDid);
-                final isUserBlockPending = blockProvider.isUserBlockPending(
-                  authorDid,
-                );
-                final isCommunityBlocked = blockProvider.isCommunityBlocked(
-                  communityDid,
-                );
-                final isCommunityBlockPending = blockProvider
-                    .isCommunityBlockPending(communityDid);
-                // TODO: Set to true when the user is the community owner.
-                // CommunityRef currently lacks an owner/creator DID field,
-                // so we cannot determine ownership from post data alone.
-                const isCommunityOwner = false;
+              builder:
+                  (
+                    context,
+                    subscriptionProvider,
+                    authProvider,
+                    blockProvider,
+                    child,
+                  ) {
+                    final communityDid = post.post.community.did;
+                    final communityName = post.post.community.name;
+                    final isSubscribed = subscriptionProvider.isSubscribed(
+                      communityDid,
+                    );
+                    final isPending = subscriptionProvider.isPending(
+                      communityDid,
+                    );
+                    final isPostAuthor =
+                        authProvider.did == post.post.author.did;
+                    final authorDid = post.post.author.did;
+                    final authorHandle = post.post.author.handle;
+                    final isUserBlocked = blockProvider.isUserBlocked(
+                      authorDid,
+                    );
+                    final isUserBlockPending = blockProvider.isUserBlockPending(
+                      authorDid,
+                    );
+                    final isCommunityBlocked = blockProvider.isCommunityBlocked(
+                      communityDid,
+                    );
+                    final isCommunityBlockPending = blockProvider
+                        .isCommunityBlockPending(communityDid);
+                    // TODO: Set to true when the user is the community owner.
+                    // CommunityRef currently lacks an owner/creator DID field,
+                    // so we cannot determine ownership from post data alone.
+                    const isCommunityOwner = false;
 
-                return MenuAnchor(
-                  style: MenuStyle(
-                    backgroundColor: const WidgetStatePropertyAll(
-                      AppColors.backgroundSecondary,
-                    ),
-                    shape: WidgetStatePropertyAll(
-                      RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    return MenuAnchor(
+                      style: MenuStyle(
+                        backgroundColor: const WidgetStatePropertyAll(
+                          AppColors.backgroundSecondary,
+                        ),
+                        shape: WidgetStatePropertyAll(
+                          RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  menuChildren: [
-                    MenuItemButton(
-                      onPressed:
-                          isPending
+                      menuChildren: [
+                        MenuItemButton(
+                          onPressed: isPending
                               ? null
                               : () => _handleMenuAction(context, 'subscribe'),
-                      leadingIcon:
-                          isPending
+                          leadingIcon: isPending
                               ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
                               : Icon(
-                                isSubscribed
-                                    ? Icons.remove_circle_outline
-                                    : Icons.add_circle_outline,
-                                size: 20,
-                              ),
-                      trailingIcon:
-                          isSubscribed && !isPending
+                                  isSubscribed
+                                      ? Icons.remove_circle_outline
+                                      : Icons.add_circle_outline,
+                                  size: 20,
+                                ),
+                          trailingIcon: isSubscribed && !isPending
                               ? const Icon(
-                                Icons.check,
-                                color: AppColors.primary,
-                                size: 20,
-                              )
+                                  Icons.check,
+                                  color: AppColors.primary,
+                                  size: 20,
+                                )
                               : null,
-                      child: Text(
-                        isPending
-                            ? (isSubscribed
-                                ? 'Unsubscribing...'
-                                : 'Subscribing...')
-                            : (isSubscribed
-                                ? 'Unsubscribe from !$communityName'
-                                : 'Subscribe to !$communityName'),
-                      ),
-                    ),
-                    // Block community option (hidden for community owners)
-                    if (!isCommunityOwner)
-                      buildBlockMenuItem(
-                        isBlocked: isCommunityBlocked,
-                        isPending: isCommunityBlockPending,
-                        label:
-                            isCommunityBlocked
+                          child: Text(
+                            isPending
+                                ? (isSubscribed
+                                      ? 'Unsubscribing...'
+                                      : 'Subscribing...')
+                                : (isSubscribed
+                                      ? 'Unsubscribe from !$communityName'
+                                      : 'Subscribe to !$communityName'),
+                          ),
+                        ),
+                        // Block community option (hidden for community owners)
+                        if (!isCommunityOwner)
+                          buildBlockMenuItem(
+                            isBlocked: isCommunityBlocked,
+                            isPending: isCommunityBlockPending,
+                            label: isCommunityBlocked
                                 ? 'Unblock !$communityName'
                                 : 'Block !$communityName',
-                        onPressed:
-                            () => _handleMenuAction(context, 'blockCommunity'),
-                      ),
-                    // Block user option (except own posts)
-                    if (!isPostAuthor)
-                      buildBlockMenuItem(
-                        isBlocked: isUserBlocked,
-                        isPending: isUserBlockPending,
-                        label:
-                            isUserBlocked
+                            onPressed: () =>
+                                _handleMenuAction(context, 'blockCommunity'),
+                          ),
+                        // Block user option (except own posts)
+                        if (!isPostAuthor)
+                          buildBlockMenuItem(
+                            isBlocked: isUserBlocked,
+                            isPending: isUserBlockPending,
+                            label: isUserBlocked
                                 ? 'Unblock @$authorHandle'
                                 : 'Block @$authorHandle',
-                        onPressed:
-                            () => _handleMenuAction(context, 'blockUser'),
-                      ),
-                    // Report option (for all authenticated users, except own posts)
-                    if (!isPostAuthor)
-                      MenuItemButton(
-                        onPressed: () => _handleMenuAction(context, 'report'),
-                        leadingIcon: const Icon(Icons.flag_outlined, size: 20),
-                        child: const Text('Report post'),
-                      ),
-                    // Delete option (only for post author)
-                    if (isPostAuthor)
-                      MenuItemButton(
-                        onPressed: () => _handleMenuAction(context, 'delete'),
-                        leadingIcon: const Icon(
-                          Icons.delete_outline,
-                          size: 20,
-                          color: Colors.red,
-                        ),
-                        child: const Text(
-                          'Delete post',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                  ],
-                  builder: (context, controller, child) {
-                    return IconButton(
-                      icon: Icon(
-                        Icons.more_horiz,
-                        size: 20,
-                        color: AppColors.textPrimary.withValues(alpha: 0.6),
-                      ),
-                      tooltip: 'Post options',
-                      onPressed: () {
-                        if (controller.isOpen) {
-                          controller.close();
-                        } else {
-                          controller.open();
-                        }
+                            onPressed: () =>
+                                _handleMenuAction(context, 'blockUser'),
+                          ),
+                        // Report option (for all authenticated users,
+                        // except own posts)
+                        if (!isPostAuthor)
+                          MenuItemButton(
+                            onPressed: () =>
+                                _handleMenuAction(context, 'report'),
+                            leadingIcon: const Icon(
+                              Icons.flag_outlined,
+                              size: 20,
+                            ),
+                            child: const Text('Report post'),
+                          ),
+                        // Delete option (only for post author)
+                        if (isPostAuthor)
+                          MenuItemButton(
+                            onPressed: () =>
+                                _handleMenuAction(context, 'delete'),
+                            leadingIcon: const Icon(
+                              Icons.delete_outline,
+                              size: 20,
+                              color: Colors.red,
+                            ),
+                            child: const Text(
+                              'Delete post',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ),
+                      ],
+                      builder: (context, controller, child) {
+                        return IconButton(
+                          icon: Icon(
+                            Icons.more_horiz,
+                            size: 20,
+                            color: AppColors.textPrimary.withValues(alpha: 0.6),
+                          ),
+                          tooltip: 'Post options',
+                          onPressed: () {
+                            if (controller.isOpen) {
+                              controller.close();
+                            } else {
+                              controller.open();
+                            }
+                          },
+                        );
                       },
                     );
                   },
-                );
-              },
             ),
 
             // Share button
@@ -493,7 +514,6 @@ class _PostCardActionsState extends State<PostCardActions> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             ReplyIcon(
-                              size: 18,
                               color: AppColors.textPrimary.withValues(
                                 alpha: 0.6,
                               ),
@@ -529,12 +549,11 @@ class _PostCardActionsState extends State<PostCardActions> {
 
                 return Semantics(
                   button: true,
-                  label:
-                      isLiked
-                          ? 'Unlike post, $adjustedScore '
-                              '${adjustedScore == 1 ? "like" : "likes"}'
-                          : 'Like post, $adjustedScore '
-                              '${adjustedScore == 1 ? "like" : "likes"}',
+                  label: isLiked
+                      ? 'Unlike post, $adjustedScore '
+                            '${adjustedScore == 1 ? "like" : "likes"}'
+                      : 'Like post, $adjustedScore '
+                            '${adjustedScore == 1 ? "like" : "likes"}',
                   child: InkWell(
                     onTap: () async {
                       // Check authentication
@@ -606,8 +625,9 @@ class _PostCardActionsState extends State<PostCardActions> {
                                 alpha: 0.6,
                               ),
                               fontSize: 13,
-                              fontWeight:
-                                  isLiked ? FontWeight.w600 : FontWeight.w400,
+                              fontWeight: isLiked
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
                             ),
                           ),
                         ],

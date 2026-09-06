@@ -101,20 +101,16 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: Builder(
-              builder:
-                  (context) => ElevatedButton(
-                    onPressed:
-                        () => Navigator.of(context).push<void>(
-                          MaterialPageRoute<void>(
-                            builder:
-                                (_) => const FullscreenVideoPlayer(
-                                  videoUrl: _videoUrl,
-                                ),
-                            fullscreenDialog: true,
-                          ),
-                        ),
-                    child: const Text('OPEN'),
+              builder: (context) => ElevatedButton(
+                onPressed: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        const FullscreenVideoPlayer(videoUrl: _videoUrl),
+                    fullscreenDialog: true,
                   ),
+                ),
+                child: const Text('OPEN'),
+              ),
             ),
           ),
         ),
@@ -133,7 +129,7 @@ void main() {
       );
       expect(
         tester.getSemantics(closeButton.first),
-        containsSemantics(isButton: true, label: 'Close'),
+        isSemantics(isButton: true, label: 'Close'),
       );
 
       await tester.tap(closeButton.first);

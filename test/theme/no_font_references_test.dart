@@ -119,8 +119,9 @@ List<String> _violations(Directory root, {List<String>? scanned}) {
     // call both of those violations.
     final value = _valueAfter(line, key.end);
     final families = _literalsIn(value);
-    final disallowed =
-        families.where((family) => !_allowedFamilies.contains(family)).toList();
+    final disallowed = families
+        .where((family) => !_allowedFamilies.contains(family))
+        .toList();
 
     if (disallowed.isNotEmpty) {
       violations.add(
@@ -221,7 +222,8 @@ const resolved = TextStyle(fontFamily: AppTypography.fontFamily);
 // final commentedOut = GoogleFonts.nunito();
 /* const blockCommented = TextStyle(fontFamily: 'Nunito'); */
 ''',
-      'hatched.dart': '''
+      'hatched.dart':
+          '''
 final a = GoogleFonts.nunito(); // ignore: $_googleFontsHatch
 final b = GoogleFonts.nunito();
 // ignore: $_familyHatch

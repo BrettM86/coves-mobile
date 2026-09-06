@@ -34,7 +34,8 @@ void main() {
     expect(
       markdown,
       findsOneWidget,
-      reason: 'assets/legal/eula.md did not load - the screen is showing its '
+      reason:
+          'assets/legal/eula.md did not load - the screen is showing its '
           'error or loading state, so nothing below is being measured',
     );
 

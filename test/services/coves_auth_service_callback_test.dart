@@ -66,41 +66,34 @@ void main() {
       );
     });
 
-    test(
-      'malformed percent-encoding (token=%ZZ) throws FormatException, '
-      'not ArgumentError',
-      () {
-        // Uri.decodeComponent('%ZZ') throws ArgumentError — an Error, not an
-        // Exception — which would escape every catch chain and crash the app.
-        // parseCallbackUrl must convert it to a catchable FormatException.
-        expect(
-          () => CovesAuthService.parseCallbackUrl(
-            'social.coves:/callback?token=%ZZ&did=did:plc:test123'
-            '&session_id=sess456',
-          ),
-          throwsA(isA<FormatException>()),
-        );
-      },
-    );
+    test('malformed percent-encoding (token=%ZZ) throws FormatException, '
+        'not ArgumentError', () {
+      // Uri.decodeComponent('%ZZ') throws ArgumentError — an Error, not an
+      // Exception — which would escape every catch chain and crash the app.
+      // parseCallbackUrl must convert it to a catchable FormatException.
+      expect(
+        () => CovesAuthService.parseCallbackUrl(
+          'social.coves:/callback?token=%ZZ&did=did:plc:test123'
+          '&session_id=sess456',
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
 
-    test(
-      'truncated UTF-8 percent-encoding throws FormatException with a safe '
-      'message that does not echo the raw URL',
-      () {
-        expect(
-          () => CovesAuthService.parseCallbackUrl(
-            'social.coves:/callback?token=%E0%A4%A&did=did:plc:test123'
-            '&session_id=sess456',
+    test('truncated UTF-8 percent-encoding throws FormatException with a safe '
+        'message that does not echo the raw URL', () {
+      expect(
+        () => CovesAuthService.parseCallbackUrl(
+          'social.coves:/callback?token=%E0%A4%A&did=did:plc:test123'
+          '&session_id=sess456',
+        ),
+        throwsA(
+          predicate(
+            (e) => e is FormatException && !e.toString().contains('did:plc'),
           ),
-          throwsA(
-            predicate(
-              (e) =>
-                  e is FormatException && !e.toString().contains('did:plc'),
-            ),
-          ),
-        );
-      },
-    );
+        ),
+      );
+    });
 
     test('totally garbled URL throws FormatException, not an Error', () {
       expect(
@@ -110,31 +103,28 @@ void main() {
       );
     });
 
-    test(
-      'non-access_denied error mentioning "cancelled" surfaces as a real '
-      'error with the formatted description, not a quiet cancel',
-      () {
-        // Reviewer scenario: server-controlled text containing "cancelled"
-        // must never be reclassified as a user cancel.
-        expect(
-          () => CovesAuthService.parseCallbackUrl(
-            'social.coves:/callback?error=temporarily_unavailable'
-            '&error_description=request+was+cancelled+by+upstream',
+    test('non-access_denied error mentioning "cancelled" surfaces as a real '
+        'error with the formatted description, not a quiet cancel', () {
+      // Reviewer scenario: server-controlled text containing "cancelled"
+      // must never be reclassified as a user cancel.
+      expect(
+        () => CovesAuthService.parseCallbackUrl(
+          'social.coves:/callback?error=temporarily_unavailable'
+          '&error_description=request+was+cancelled+by+upstream',
+        ),
+        throwsA(
+          predicate(
+            (e) =>
+                e is Exception &&
+                e is! SignInCancelledException &&
+                e.toString().contains(
+                  'Authorization server error: temporarily_unavailable '
+                  '(request was cancelled by upstream)',
+                ),
           ),
-          throwsA(
-            predicate(
-              (e) =>
-                  e is Exception &&
-                  e is! SignInCancelledException &&
-                  e.toString().contains(
-                    'Authorization server error: temporarily_unavailable '
-                    '(request was cancelled by upstream)',
-                  ),
-            ),
-          ),
-        );
-      },
-    );
+        ),
+      );
+    });
 
     test('sanitizes error_description: strips control chars, caps length', () {
       final longDescription = 'a' * 500;

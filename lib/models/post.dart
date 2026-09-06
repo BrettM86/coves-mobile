@@ -61,10 +61,9 @@ class FeedViewPost {
   factory FeedViewPost.fromJson(Map<String, dynamic> json) {
     return FeedViewPost(
       post: PostView.fromJson(json['post'] as Map<String, dynamic>),
-      reason:
-          json['reason'] != null
-              ? FeedReason.fromJson(json['reason'] as Map<String, dynamic>)
-              : null,
+      reason: json['reason'] != null
+          ? FeedReason.fromJson(json['reason'] as Map<String, dynamic>)
+          : null,
     );
   }
   final PostView post;
@@ -175,14 +174,12 @@ class PostView {
       isDeleted: json['isDeleted'] as bool? ?? false,
       deletionReason: json['deletionReason'] as String?,
       stats: PostStats.fromJson(json['stats'] as Map<String, dynamic>),
-      embed:
-          json['embed'] != null
-              ? PostEmbed.fromJson(json['embed'] as Map<String, dynamic>)
-              : null,
-      viewer:
-          json['viewer'] != null
-              ? ViewerState.fromJson(json['viewer'] as Map<String, dynamic>)
-              : null,
+      embed: json['embed'] != null
+          ? PostEmbed.fromJson(json['embed'] as Map<String, dynamic>)
+          : null,
+      viewer: json['viewer'] != null
+          ? ViewerState.fromJson(json['viewer'] as Map<String, dynamic>)
+          : null,
     );
   }
   final String uri;
@@ -312,12 +309,11 @@ class CommunityRef {
       origin: json['origin'] is String ? json['origin'] as String : null,
       handle: json['handle'] as String?,
       avatar: json['avatar'] as String?,
-      viewer:
-          json['viewer'] != null
-              ? CommunityRefViewerState.fromJson(
-                json['viewer'] as Map<String, dynamic>,
-              )
-              : null,
+      viewer: json['viewer'] != null
+          ? CommunityRefViewerState.fromJson(
+              json['viewer'] as Map<String, dynamic>,
+            )
+          : null,
     );
   }
   final String did;
@@ -748,18 +744,18 @@ class ExternalEmbed {
     // Handle images array if present
     List<Map<String, dynamic>>? imagesList;
     if (json['images'] != null && json['images'] is List) {
-      imagesList =
-          (json['images'] as List).whereType<Map<String, dynamic>>().toList();
+      imagesList = (json['images'] as List)
+          .whereType<Map<String, dynamic>>()
+          .toList();
     }
 
     // Handle sources array if present
     List<EmbedSource>? sourcesList;
     if (json['sources'] != null && json['sources'] is List) {
-      sourcesList =
-          (json['sources'] as List)
-              .whereType<Map<String, dynamic>>()
-              .map(EmbedSource.fromJson)
-              .toList();
+      sourcesList = (json['sources'] as List)
+          .whereType<Map<String, dynamic>>()
+          .map(EmbedSource.fromJson)
+          .toList();
     }
 
     return ExternalEmbed(

@@ -38,9 +38,8 @@ void main() {
     // vote button renders in the un-liked state.
     when(mockAuthProvider.isAuthenticated).thenReturn(false);
     when(mockVoteProvider.isLiked(any)).thenReturn(false);
-    when(mockVoteProvider.getAdjustedScore(any, any)).thenAnswer(
-      (invocation) => invocation.positionalArguments[1] as int,
-    );
+    when(mockVoteProvider.getAdjustedScore(any, any))
+        .thenAnswer((invocation) => invocation.positionalArguments[1] as int);
   });
 
   /// Helper to create a test comment
@@ -62,8 +61,9 @@ void main() {
       createdAt: DateTime(2025),
       indexedAt: DateTime(2025),
       // Backend omits author entirely for deleted comments.
-      author:
-          isDeleted ? null : AuthorView(did: 'did:plc:author', handle: handle),
+      author: isDeleted
+          ? null
+          : AuthorView(did: 'did:plc:author', handle: handle),
       post: CommentRef(uri: 'at://did:plc:test/post/123', cid: 'post-cid'),
       stats: CommentStats(
         upvotes: 5,
@@ -146,10 +146,7 @@ void main() {
 
   group('CommentThread rendering', () {
     testWidgets('renders comment content', (tester) async {
-      final thread = createThread(
-        uri: 'comment/1',
-        content: 'Hello, world!',
-      );
+      final thread = createThread(uri: 'comment/1', content: 'Hello, world!');
 
       await tester.pumpWidget(createTestWidget(thread));
 
@@ -180,8 +177,7 @@ void main() {
       expect(find.text('1500.0k'), findsNothing);
     });
 
-    testWidgets('renders nested replies when depth < maxDepth',
-        (tester) async {
+    testWidgets('renders nested replies when depth < maxDepth', (tester) async {
       final thread = createThread(
         uri: 'comment/1',
         content: 'Parent',
@@ -198,15 +194,14 @@ void main() {
       expect(find.text('Child 2'), findsOneWidget);
     });
 
-    testWidgets('shows "Read X more replies" at maxDepth using replyCount',
-        (tester) async {
+    testWidgets('shows "Read X more replies" at maxDepth using replyCount', (
+      tester,
+    ) async {
       final thread = createThread(
         uri: 'comment/1',
         content: 'At max depth',
         replyCount: 2,
-        replies: [
-          createThread(uri: 'comment/2', content: 'Hidden reply'),
-        ],
+        replies: [createThread(uri: 'comment/2', content: 'Hidden reply')],
       );
 
       await tester.pumpWidget(createTestWidget(thread, depth: 5));
@@ -218,13 +213,12 @@ void main() {
       expect(find.text('Hidden reply'), findsNothing);
     });
 
-    testWidgets('does not show "Read more" when depth < maxDepth',
-        (tester) async {
+    testWidgets('does not show "Read more" when depth < maxDepth', (
+      tester,
+    ) async {
       final thread = createThread(
         uri: 'comment/1',
-        replies: [
-          createThread(uri: 'comment/2'),
-        ],
+        replies: [createThread(uri: 'comment/2')],
       );
 
       await tester.pumpWidget(createTestWidget(thread, depth: 3));
@@ -232,27 +226,28 @@ void main() {
       expect(find.textContaining('Read'), findsNothing);
     });
 
-    testWidgets('calls onContinueThread with correct ancestors',
-        (tester) async {
+    testWidgets('calls onContinueThread with correct ancestors', (
+      tester,
+    ) async {
       ThreadViewComment? tappedThread;
       List<ThreadViewComment>? receivedAncestors;
 
       final thread = createThread(
         uri: 'comment/1',
         replyCount: 1,
-        replies: [
-          createThread(uri: 'comment/2'),
-        ],
+        replies: [createThread(uri: 'comment/2')],
       );
 
-      await tester.pumpWidget(createTestWidget(
-        thread,
-        depth: 5,
-        onContinueThread: (t, a) {
-          tappedThread = t;
-          receivedAncestors = a;
-        },
-      ));
+      await tester.pumpWidget(
+        createTestWidget(
+          thread,
+          depth: 5,
+          onContinueThread: (t, a) {
+            tappedThread = t;
+            receivedAncestors = a;
+          },
+        ),
+      );
 
       // Find and tap the "Read more" link
       final readMoreFinder = find.textContaining('Read');
@@ -268,25 +263,23 @@ void main() {
       expect(receivedAncestors, isEmpty);
     });
 
-    testWidgets('singular reply count reads "Read 1 more reply"',
-        (tester) async {
+    testWidgets('singular reply count reads "Read 1 more reply"', (
+      tester,
+    ) async {
       final singleReplyThread = createThread(
         uri: 'comment/1',
         replyCount: 1,
-        replies: [
-          createThread(uri: 'comment/2'),
-        ],
+        replies: [createThread(uri: 'comment/2')],
       );
 
-      await tester.pumpWidget(
-        createTestWidget(singleReplyThread, depth: 5),
-      );
+      await tester.pumpWidget(createTestWidget(singleReplyThread, depth: 5));
 
       expect(find.text('Read 1 more reply'), findsOneWidget);
     });
 
-    testWidgets('plural reply count reads "Read 3 more replies"',
-        (tester) async {
+    testWidgets('plural reply count reads "Read 3 more replies"', (
+      tester,
+    ) async {
       final multiReplyThread = createThread(
         uri: 'comment/1',
         replyCount: 3,
@@ -302,21 +295,19 @@ void main() {
       expect(find.text('Read 3 more replies'), findsOneWidget);
     });
 
-    testWidgets('collapsed comment hides its content and replies',
-        (tester) async {
+    testWidgets('collapsed comment hides its content and replies', (
+      tester,
+    ) async {
       final thread = createThread(
         uri: 'comment/1',
         content: 'Parent',
         replyCount: 1,
-        replies: [
-          createThread(uri: 'comment/2', content: 'Child'),
-        ],
+        replies: [createThread(uri: 'comment/2', content: 'Child')],
       );
 
-      await tester.pumpWidget(createTestWidget(
-        thread,
-        collapsedComments: {'comment/1'},
-      ));
+      await tester.pumpWidget(
+        createTestWidget(thread, collapsedComments: {'comment/1'}),
+      );
       await tester.pumpAndSettle();
 
       // Author row stays visible; content and replies are hidden
@@ -325,16 +316,13 @@ void main() {
       expect(find.text('Child'), findsNothing);
     });
 
-    testWidgets(
-        'deleted comment with absent author renders placeholder '
+    testWidgets('deleted comment with absent author renders placeholder '
         '(regression 652f075)', (tester) async {
       final thread = createThread(
         uri: 'comment/1',
         isDeleted: true,
         deletionReason: 'author',
-        replies: [
-          createThread(uri: 'comment/2', content: 'Surviving reply'),
-        ],
+        replies: [createThread(uri: 'comment/2', content: 'Surviving reply')],
       );
 
       await tester.pumpWidget(createTestWidget(thread));
@@ -375,17 +363,15 @@ void main() {
         // Scrollable.ensureVisible it.
         expect(focusKey.currentContext, isNotNull);
         expect(
-          find.descendant(
-            of: find.byKey(focusKey),
-            matching: find.text('Me'),
-          ),
+          find.descendant(of: find.byKey(focusKey), matching: find.text('Me')),
           findsOneWidget,
         );
 
         // Only the target is tinted.
         final cards = tester.widgetList<CommentCard>(find.byType(CommentCard));
-        final highlighted =
-            cards.where((c) => c.isHighlighted).map((c) => c.comment.uri);
+        final highlighted = cards
+            .where((c) => c.isHighlighted)
+            .map((c) => c.comment.uri);
         expect(highlighted, ['comment/target']);
       },
     );
@@ -402,9 +388,9 @@ void main() {
 
       expect(focusKey.currentContext, isNull);
       expect(
-        tester.widgetList<CommentCard>(find.byType(CommentCard)).any(
-          (c) => c.isHighlighted,
-        ),
+        tester
+            .widgetList<CommentCard>(find.byType(CommentCard))
+            .any((c) => c.isHighlighted),
         isFalse,
       );
     });
@@ -433,8 +419,9 @@ void main() {
       expect(find.text('Load more replies'), findsNothing);
     });
 
-    testWidgets('tap invokes onLoadMoreReplies with the thread',
-        (tester) async {
+    testWidgets('tap invokes onLoadMoreReplies with the thread', (
+      tester,
+    ) async {
       ThreadViewComment? tapped;
       final thread = createThread(
         uri: 'comment/1',
@@ -442,10 +429,9 @@ void main() {
         hasMore: true,
       );
 
-      await tester.pumpWidget(createTestWidget(
-        thread,
-        onLoadMoreReplies: (t) => tapped = t,
-      ));
+      await tester.pumpWidget(
+        createTestWidget(thread, onLoadMoreReplies: (t) => tapped = t),
+      );
 
       await tester.tap(find.text('Load more replies'));
       await tester.pump();
@@ -455,30 +441,33 @@ void main() {
     });
 
     testWidgets(
-        'in-flight fetch shows spinner, loading label, and disables tap',
-        (tester) async {
-      var tapCount = 0;
-      final thread = createThread(
-        uri: 'comment/1',
-        content: 'Parent',
-        hasMore: true,
-      );
+      'in-flight fetch shows spinner, loading label, and disables tap',
+      (tester) async {
+        var tapCount = 0;
+        final thread = createThread(
+          uri: 'comment/1',
+          content: 'Parent',
+          hasMore: true,
+        );
 
-      await tester.pumpWidget(createTestWidget(
-        thread,
-        onLoadMoreReplies: (_) => tapCount++,
-        loadingMoreReplies: {'comment/1'},
-      ));
+        await tester.pumpWidget(
+          createTestWidget(
+            thread,
+            onLoadMoreReplies: (_) => tapCount++,
+            loadingMoreReplies: {'comment/1'},
+          ),
+        );
 
-      expect(find.text('Loading replies…'), findsOneWidget);
-      expect(find.text('Load more replies'), findsNothing);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      expect(find.byIcon(Icons.add_circle_outline), findsNothing);
+        expect(find.text('Loading replies…'), findsOneWidget);
+        expect(find.text('Load more replies'), findsNothing);
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        expect(find.byIcon(Icons.add_circle_outline), findsNothing);
 
-      // Tap is disabled while loading
-      await tester.tap(find.text('Loading replies…'), warnIfMissed: false);
-      await tester.pump();
-      expect(tapCount, 0);
-    });
+        // Tap is disabled while loading
+        await tester.tap(find.text('Loading replies…'), warnIfMissed: false);
+        await tester.pump();
+        expect(tapCount, 0);
+      },
+    );
   });
 }

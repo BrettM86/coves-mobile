@@ -3,7 +3,7 @@
 
 # Cut a Coves release and ship it to Google Play and the App Store.
 #
-#   tool/release <version-name> [--dry-run] [--skip-tests]
+#   tool/release <version-name> [--dry-run]
 #
 # The version *name* (1.4.0) is the one judgment call, so it is the one
 # argument. The build number is never chosen by hand: both stores are asked
@@ -12,7 +12,7 @@
 #
 # What it does, in order:
 #   1. Preflight: clean tree on main, exactly in sync with origin, analyze
-#      (errors fatal), tests.
+#      formatting, tests (including skipped-test detection).
 #   2. Ask Play (the four built-in tracks) and App Store Connect (every build
 #      ever uploaded) for their build numbers.
 #   3. Write version: <name>+<build> to pubspec.yaml and copy
@@ -34,6 +34,8 @@ require "fileutils"
 require "json"
 require "open3"
 require "tmpdir"
+require "rbconfig"
+require "tempfile"
 
 ROOT = File.expand_path("..", __dir__)
 KEYTOOL = "/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin/keytool"
@@ -65,7 +67,9 @@ def capture(*cmd, chdir: ROOT)
 end
 
 def fastlane(platform, lane)
-  run("fastlane", lane, chdir: File.join(ROOT, platform))
+  run(RbConfig.ruby, File.join(ROOT, "bin/fastlane"), lane,
+      chdir: File.join(ROOT, platform),
+      env: { "BUNDLE_GEMFILE" => File.join(ROOT, "Gemfile") })
 end
 
 def read_store_state(name)
@@ -98,10 +102,9 @@ end
 
 args = ARGV.dup
 dry_run = args.delete("--dry-run")
-skip_tests = args.delete("--skip-tests")
 name = args.shift
 if name.nil? || !args.empty? || name !~ /\A\d+\.\d+\.\d+\z/
-  warn "usage: tool/release <major.minor.patch> [--dry-run] [--skip-tests]"
+  warn "usage: tool/release <major.minor.patch> [--dry-run]"
   exit 2
 end
 
@@ -120,6 +123,16 @@ end
 step "Preflight"
 dirty = capture("git", "status", "--porcelain").strip
 fail!("working tree is not clean:\n#{dirty}") unless dirty.empty?
+
+begin
+  bundle = Gem.bin_path("bundler", "bundle")
+rescue Gem::Exception => error
+  fail!("Bundler is unavailable: #{error.message}. See docs/TOOLCHAIN.md")
+end
+unless system({ "BUNDLE_GEMFILE" => File.join(ROOT, "Gemfile") },
+              RbConfig.ruby, bundle, "check", chdir: ROOT)
+  fail!("Ruby dependencies are missing; run mise exec -- bundle install (docs/TOOLCHAIN.md)")
+end
 
 # A dry run may be exercised from a feature branch; a real release may not.
 unless dry_run
@@ -143,15 +156,44 @@ dotenv = File.exist?(env_file) ? File.read(env_file) : ""
   fail!("#{var} is not set in the environment or ios/fastlane/.env -- see RELEASING.md")
 end
 
-# Errors are fatal. Infos and warnings are not: the repo carries a standing
-# tail of style infos and a handful of test-file warnings, and a release
-# should not be blocked on lint hygiene that the build does not depend on.
-run("flutter", "analyze", "--no-fatal-infos", "--no-fatal-warnings")
+run("flutter", "analyze")
+run("dart", "format", "--output=none", "--set-exit-if-changed", "lib", "test")
 
-if skip_tests
-  puts "flutter test: skipped (--skip-tests)"
-else
-  run("flutter", "test")
+# Flutter exits successfully even when tests are skipped. Require its machine
+# report to confirm a completed, successful run with no skips before stores.
+Tempfile.create(["coves-release-tests", ".jsonl"]) do |report|
+  reporter = "--file-reporter=json:#{report.path}"
+  puts "$ flutter test #{reporter}"
+  succeeded = system("flutter", "test", reporter, chdir: ROOT)
+  report.rewind
+  skipped = 0
+  completed_tests = 0
+  completed = false
+  failed = false
+  report.each_line do |line|
+    begin
+      event = JSON.parse(line)
+    rescue JSON::ParserError
+      fail!("flutter test emitted an invalid machine report")
+    end
+    unless event.is_a?(Hash) && event["type"].is_a?(String)
+      fail!("flutter test emitted an invalid machine report")
+    end
+    case event["type"]
+    when "testDone"
+      completed_tests += 1
+      skipped += 1 if event["skipped"]
+      failed = true if event["result"] != "success"
+    when "error"
+      failed = true
+      warn event["error"]
+    when "done"
+      completed = event["success"] == true
+    end
+  end
+  fail!("flutter test skipped #{skipped} test(s)") unless skipped.zero?
+  fail!("flutter test failed or did not complete") unless succeeded && completed && !failed && completed_tests.positive?
+  puts "flutter test: passed with no skipped tests"
 end
 
 # --- 2. store truth ----------------------------------------------------------

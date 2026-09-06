@@ -27,7 +27,9 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: ExternalLinkBar(embed: embed))),
+        MaterialApp(
+          home: Scaffold(body: ExternalLinkBar(embed: embed)),
+        ),
       );
 
       // Verify domain is displayed
@@ -43,7 +45,9 @@ void main() {
       final embed = ExternalEmbed(uri: 'https://test.example.com/path');
 
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: ExternalLinkBar(embed: embed))),
+        MaterialApp(
+          home: Scaffold(body: ExternalLinkBar(embed: embed)),
+        ),
       );
 
       // Should extract domain from URI
@@ -54,7 +58,9 @@ void main() {
       final embed = ExternalEmbed(uri: 'not a valid url');
 
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: ExternalLinkBar(embed: embed))),
+        MaterialApp(
+          home: Scaffold(body: ExternalLinkBar(embed: embed)),
+        ),
       );
 
       // Should fallback to showing full URI
@@ -68,7 +74,9 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: ExternalLinkBar(embed: embed))),
+        MaterialApp(
+          home: Scaffold(body: ExternalLinkBar(embed: embed)),
+        ),
       );
 
       // Tap the link bar
@@ -89,7 +97,9 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: ExternalLinkBar(embed: embed))),
+        MaterialApp(
+          home: Scaffold(body: ExternalLinkBar(embed: embed)),
+        ),
       );
 
       // Verify Semantics widget is present
@@ -106,7 +116,9 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: ExternalLinkBar(embed: embed))),
+        MaterialApp(
+          home: Scaffold(body: ExternalLinkBar(embed: embed)),
+        ),
       );
 
       // Let images load
@@ -121,7 +133,9 @@ void main() {
         final embed = ExternalEmbed(uri: 'https://example.com', domain: '');
 
         await tester.pumpWidget(
-          MaterialApp(home: Scaffold(body: ExternalLinkBar(embed: embed))),
+          MaterialApp(
+            home: Scaffold(body: ExternalLinkBar(embed: embed)),
+          ),
         );
 
         // Should extract from URI
@@ -134,7 +148,9 @@ void main() {
         );
 
         await tester.pumpWidget(
-          MaterialApp(home: Scaffold(body: ExternalLinkBar(embed: embed))),
+          MaterialApp(
+            home: Scaffold(body: ExternalLinkBar(embed: embed)),
+          ),
         );
 
         // Should show just domain
@@ -145,7 +161,9 @@ void main() {
         final embed = ExternalEmbed(uri: 'https://sub.example.com/article');
 
         await tester.pumpWidget(
-          MaterialApp(home: Scaffold(body: ExternalLinkBar(embed: embed))),
+          MaterialApp(
+            home: Scaffold(body: ExternalLinkBar(embed: embed)),
+          ),
         );
 
         // Should show full host
@@ -156,7 +174,9 @@ void main() {
         final embed = ExternalEmbed(uri: 'https://example.com:8080/path');
 
         await tester.pumpWidget(
-          MaterialApp(home: Scaffold(body: ExternalLinkBar(embed: embed))),
+          MaterialApp(
+            home: Scaffold(body: ExternalLinkBar(embed: embed)),
+          ),
         );
 
         // Should show host with port

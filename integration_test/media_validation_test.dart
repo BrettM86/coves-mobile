@@ -164,13 +164,12 @@ void main() {
       await settleABit(tester);
       galleryBadge = find.byKey(const Key('post-images-count-badge'));
     }
-    final galleryBlock =
-        find
-            .ancestor(
-              of: galleryBadge,
-              matching: find.byKey(const Key('post-images-embed')),
-            )
-            .first;
+    final galleryBlock = find
+        .ancestor(
+          of: galleryBadge,
+          matching: find.byKey(const Key('post-images-embed')),
+        )
+        .first;
     await tester.ensureVisible(galleryBlock);
     await settleABit(tester);
     await tester.tap(galleryBlock, warnIfMissed: false);
@@ -189,15 +188,15 @@ void main() {
 
     // ── Feed → detail: the media block no longer navigates, so go through
     // the card's comment button, which routes to detail for all post types.
-    final galleryCard =
-        find.ancestor(of: galleryBadge, matching: find.byType(PostCard)).first;
-    final commentButton =
-        find
-            .descendant(
-              of: galleryCard,
-              matching: find.byIcon(Icons.chat_bubble_outline),
-            )
-            .first;
+    final galleryCard = find
+        .ancestor(of: galleryBadge, matching: find.byType(PostCard))
+        .first;
+    final commentButton = find
+        .descendant(
+          of: galleryCard,
+          matching: find.byIcon(Icons.chat_bubble_outline),
+        )
+        .first;
     await tester.ensureVisible(commentButton);
     await settleABit(tester);
     await tester.tap(commentButton, warnIfMissed: false);

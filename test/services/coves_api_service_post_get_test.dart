@@ -30,18 +30,10 @@ void main() {
       'name': 'testcommunity',
       'handle': 'testcommunity.coves.social',
     },
-    'record': {
-      'title': 'Test Post Title',
-      'content': 'Test post content',
-    },
+    'record': {'title': 'Test Post Title', 'content': 'Test post content'},
     'createdAt': '2025-06-01T12:00:00Z',
     'indexedAt': '2025-06-01T12:00:01Z',
-    'stats': {
-      'upvotes': 10,
-      'downvotes': 2,
-      'score': 8,
-      'commentCount': 3,
-    },
+    'stats': {'upvotes': 10, 'downvotes': 2, 'score': 8, 'commentCount': 3},
   };
 
   group('CovesApiService - getPosts', () {
@@ -161,48 +153,42 @@ void main() {
       expect((results[2] as PostGetBlocked).blockedBy, BlockedBy.moderator);
     });
 
-    test(
-      r'should discriminate via booleans when $type is missing '
-      r'(backend omits $type) and via $type when present',
-      () {
-        // Backend reality: no $type, booleans discriminate
-        expect(
-          PostGetResult.fromJson({'uri': uri1, 'notFound': true}),
-          isA<PostGetNotFound>(),
-        );
-        expect(
-          PostGetResult.fromJson({
-            'uri': uri1,
-            'blocked': true,
-            'blockedBy': 'community',
-          }),
-          isA<PostGetBlocked>(),
-        );
-        // No discriminators at all -> parsed as postView
-        expect(
-          PostGetResult.fromJson(postViewJson(uri1)),
-          isA<PostGetSuccess>(),
-        );
-
-        // Defensive: standard atproto $type discriminators also work
-        expect(
-          PostGetResult.fromJson({
-            r'$type': 'social.coves.community.post.get#notFoundPost',
-            'uri': uri1,
-            'notFound': true,
-          }),
-          isA<PostGetNotFound>(),
-        );
-        final blocked = PostGetResult.fromJson({
-          r'$type': 'social.coves.community.post.get#blockedPost',
+    test(r'should discriminate via booleans when $type is missing '
+        r'(backend omits $type) and via $type when present', () {
+      // Backend reality: no $type, booleans discriminate
+      expect(
+        PostGetResult.fromJson({'uri': uri1, 'notFound': true}),
+        isA<PostGetNotFound>(),
+      );
+      expect(
+        PostGetResult.fromJson({
           'uri': uri1,
           'blocked': true,
-          'blockedBy': 'author',
-        });
-        expect(blocked, isA<PostGetBlocked>());
-        expect((blocked as PostGetBlocked).blockedBy, BlockedBy.author);
-      },
-    );
+          'blockedBy': 'community',
+        }),
+        isA<PostGetBlocked>(),
+      );
+      // No discriminators at all -> parsed as postView
+      expect(PostGetResult.fromJson(postViewJson(uri1)), isA<PostGetSuccess>());
+
+      // Defensive: standard atproto $type discriminators also work
+      expect(
+        PostGetResult.fromJson({
+          r'$type': 'social.coves.community.post.get#notFoundPost',
+          'uri': uri1,
+          'notFound': true,
+        }),
+        isA<PostGetNotFound>(),
+      );
+      final blocked = PostGetResult.fromJson({
+        r'$type': 'social.coves.community.post.get#blockedPost',
+        'uri': uri1,
+        'blocked': true,
+        'blockedBy': 'author',
+      });
+      expect(blocked, isA<PostGetBlocked>());
+      expect((blocked as PostGetBlocked).blockedBy, BlockedBy.author);
+    });
 
     test('should default blockedBy to unknown when omitted', () {
       final result = PostGetResult.fromJson({'uri': uri1, 'blocked': true});
@@ -261,37 +247,34 @@ void main() {
       expect(results[0].uri, uri1);
     });
 
-    test(
-      'should degrade a malformed entry to PostGetNotFound '
-      'while the rest of the batch parses',
-      () async {
-        dioAdapter.onGet(
-          endpoint,
-          (server) => server.reply(200, {
-            'posts': [
-              postViewJson(uri1),
-              // Malformed postView: missing required fields (cid, author,
-              // community, record, ...) so PostView.fromJson throws.
-              {'uri': uri2},
-              {'uri': uri3, 'notFound': true},
-            ],
-          }),
-          queryParameters: {
-            'uris': [uri1, uri2, uri3],
-          },
-        );
+    test('should degrade a malformed entry to PostGetNotFound '
+        'while the rest of the batch parses', () async {
+      dioAdapter.onGet(
+        endpoint,
+        (server) => server.reply(200, {
+          'posts': [
+            postViewJson(uri1),
+            // Malformed postView: missing required fields (cid, author,
+            // community, record, ...) so PostView.fromJson throws.
+            {'uri': uri2},
+            {'uri': uri3, 'notFound': true},
+          ],
+        }),
+        queryParameters: {
+          'uris': [uri1, uri2, uri3],
+        },
+      );
 
-        final results = await apiService.getPosts(uris: [uri1, uri2, uri3]);
+      final results = await apiService.getPosts(uris: [uri1, uri2, uri3]);
 
-        expect(results.length, 3);
-        expect(results[0], isA<PostGetSuccess>());
-        expect(results[0].uri, uri1);
-        expect(results[1], isA<PostGetNotFound>());
-        expect(results[1].uri, uri2);
-        expect(results[2], isA<PostGetNotFound>());
-        expect(results[2].uri, uri3);
-      },
-    );
+      expect(results.length, 3);
+      expect(results[0], isA<PostGetSuccess>());
+      expect(results[0].uri, uri1);
+      expect(results[1], isA<PostGetNotFound>());
+      expect(results[1].uri, uri2);
+      expect(results[2], isA<PostGetNotFound>());
+      expect(results[2].uri, uri3);
+    });
 
     test(
       'should fall back to the input URI when a malformed entry has no uri',
@@ -409,26 +392,23 @@ void main() {
       expect(result.uri, uri1);
     });
 
-    test(
-      'should return PostGetNotFound when the response entry uri '
-      'does not match the requested uri',
-      () async {
-        dioAdapter.onGet(
-          endpoint,
-          (server) => server.reply(200, {
-            'posts': [postViewJson(uri2)],
-          }),
-          queryParameters: {
-            'uris': [uri1],
-          },
-        );
+    test('should return PostGetNotFound when the response entry uri '
+        'does not match the requested uri', () async {
+      dioAdapter.onGet(
+        endpoint,
+        (server) => server.reply(200, {
+          'posts': [postViewJson(uri2)],
+        }),
+        queryParameters: {
+          'uris': [uri1],
+        },
+      );
 
-        final result = await apiService.getPost(uri1);
+      final result = await apiService.getPost(uri1);
 
-        expect(result, isA<PostGetNotFound>());
-        expect(result.uri, uri1);
-      },
-    );
+      expect(result, isA<PostGetNotFound>());
+      expect(result.uri, uri1);
+    });
 
     test(
       'should pick the matching entry when a mismatched one comes first',
