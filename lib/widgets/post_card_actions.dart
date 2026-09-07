@@ -14,8 +14,10 @@ import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
 import '../utils/display_utils.dart';
 import '../utils/error_messages.dart';
+import 'animated_vote_count.dart';
 import 'block_action_helpers.dart';
 import 'icons/animated_heart_icon.dart';
+import 'icons/downvote_icon.dart';
 import 'icons/reply_icon.dart';
 import 'report_dialog.dart';
 import 'share_button.dart';
@@ -23,7 +25,7 @@ import 'sign_in_dialog.dart';
 
 /// Action buttons row for post cards
 ///
-/// Displays menu, share, comment, and like buttons with proper
+/// Displays menu, share, comment, and vote buttons with proper
 /// authentication handling and optimistic updates.
 class PostCardActions extends StatefulWidget {
   const PostCardActions({
@@ -312,8 +314,56 @@ class _PostCardActionsState extends State<PostCardActions> {
     }
   }
 
+  Future<void> _handleVote(
+    BuildContext context,
+    VoteProvider voteProvider, {
+    required String direction,
+  }) async {
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.isAuthenticated) {
+      final shouldSignIn = await SignInDialog.show(
+        context,
+        message: 'You need to sign in to vote on posts.',
+      );
+
+      if ((shouldSignIn ?? false) && context.mounted) {
+        if (kDebugMode) {
+          debugPrint('Navigate to sign-in screen');
+        }
+      }
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    // Do not delay VoteProvider's per-subject lock on non-essential haptics.
+    HapticFeedback.lightImpact().ignore();
+
+    try {
+      await voteProvider.toggleVote(
+        postUri: post.post.uri,
+        postCid: post.post.cid,
+        direction: direction,
+      );
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('Failed to toggle vote: $e');
+      }
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(ErrorMessage.vote(e)),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final compactActions = MediaQuery.sizeOf(context).width <= 340;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -486,7 +536,7 @@ class _PostCardActionsState extends State<PostCardActions> {
           ],
         ),
 
-        // Right side: Comment and heart
+        // Right side: Comment and voting
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -505,30 +555,38 @@ class _PostCardActionsState extends State<PostCardActions> {
                         final encodedUri = Uri.encodeComponent(post.post.uri);
                         context.push('/post/$encodedUri', extra: post);
                       },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ReplyIcon(
-                              color: AppColors.textPrimary.withValues(
-                                alpha: 0.6,
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              DisplayUtils.formatCount(count),
-                              style: TextStyle(
+                      child: SizedBox(
+                        width: compactActions ? 48 : null,
+                        height: 48,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: compactActions ? 0 : 12,
+                          ),
+                          child: Row(
+                            mainAxisSize: compactActions
+                                ? MainAxisSize.max
+                                : MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              ReplyIcon(
                                 color: AppColors.textPrimary.withValues(
                                   alpha: 0.6,
                                 ),
-                                fontSize: 13,
                               ),
-                            ),
-                          ],
+                              if (!compactActions) ...[
+                                const SizedBox(width: 5),
+                                Text(
+                                  DisplayUtils.formatCount(count),
+                                  style: TextStyle(
+                                    color: AppColors.textPrimary.withValues(
+                                      alpha: 0.6,
+                                    ),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -538,102 +596,115 @@ class _PostCardActionsState extends State<PostCardActions> {
               const SizedBox(width: 8),
             ],
 
-            // Heart button
+            // Vote group
             Consumer<VoteProvider>(
               builder: (context, voteProvider, child) {
                 final isLiked = voteProvider.isLiked(post.post.uri);
+                final voteState = voteProvider.getVoteState(post.post.uri);
+                final isDownvoted =
+                    voteState != null &&
+                    voteState.direction == 'down' &&
+                    !voteState.deleted;
+                final isPending = voteProvider.isPending(post.post.uri);
                 final adjustedScore = voteProvider.getAdjustedScore(
                   post.post.uri,
                   post.post.stats.score,
                 );
+                final neutralColor = AppColors.textPrimary.withValues(
+                  alpha: 0.6,
+                );
+                final downvoteLabel = isDownvoted
+                    ? 'Remove downvote'
+                    : 'Downvote post';
 
-                return Semantics(
-                  button: true,
-                  label: isLiked
-                      ? 'Unlike post, $adjustedScore '
-                            '${adjustedScore == 1 ? "like" : "likes"}'
-                      : 'Like post, $adjustedScore '
-                            '${adjustedScore == 1 ? "like" : "likes"}',
-                  child: InkWell(
-                    onTap: () async {
-                      // Check authentication
-                      final authProvider = context.read<AuthProvider>();
-                      if (!authProvider.isAuthenticated) {
-                        // Show sign-in dialog
-                        final shouldSignIn = await SignInDialog.show(
-                          context,
-                          message: 'You need to sign in to like posts.',
-                        );
-
-                        if ((shouldSignIn ?? false) && context.mounted) {
-                          // TODO: Navigate to sign-in screen
-                          if (kDebugMode) {
-                            debugPrint('Navigate to sign-in screen');
-                          }
-                        }
-                        return;
-                      }
-
-                      // Capture messenger before async gap
-                      final messenger = ScaffoldMessenger.of(context);
-
-                      // Light haptic feedback on both like and unlike
-                      try {
-                        await HapticFeedback.lightImpact();
-                      } on PlatformException {
-                        // Haptics not supported on this platform - ignore
-                      }
-
-                      // Toggle vote with optimistic update
-                      try {
-                        await voteProvider.toggleVote(
-                          postUri: post.post.uri,
-                          postCid: post.post.cid,
-                        );
-                      } on Exception catch (e) {
-                        if (kDebugMode) {
-                          debugPrint('Failed to toggle vote: $e');
-                        }
-                        if (context.mounted) {
-                          messenger.showSnackBar(
-                            SnackBar(
-                              content: Text(ErrorMessage.vote(e)),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        }
-                      }
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AnimatedHeartIcon(
-                            isLiked: isLiked,
-                            color: AppColors.textPrimary.withValues(alpha: 0.6),
-                            likedColor: AppColors.voteLiked,
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            DisplayUtils.formatCount(adjustedScore),
-                            style: TextStyle(
-                              color: AppColors.textPrimary.withValues(
-                                alpha: 0.6,
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Semantics(
+                      button: true,
+                      enabled: !isPending,
+                      label: isLiked ? 'Remove upvote' : 'Upvote post',
+                      value: 'Score $adjustedScore',
+                      child: InkWell(
+                        onTap: isPending
+                            ? null
+                            : () => _handleVote(
+                                context,
+                                voteProvider,
+                                direction: 'up',
                               ),
-                              fontSize: 13,
-                              fontWeight: isLiked
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            minWidth: 48,
+                            minHeight: 48,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                AnimatedHeartIcon(
+                                  isLiked: isLiked,
+                                  color: neutralColor,
+                                  likedColor: AppColors.voteLiked,
+                                ),
+                                const SizedBox(width: 5),
+                                ExcludeSemantics(
+                                  child: AnimatedVoteCount(
+                                    count: adjustedScore,
+                                    key: ValueKey(
+                                      'vote-count:${post.post.uri}',
+                                    ),
+                                    style: TextStyle(
+                                      color: isLiked
+                                          ? AppColors.voteLiked
+                                          : neutralColor,
+                                      fontSize: 13,
+                                      fontWeight: isLiked
+                                          ? FontWeight.w600
+                                          : FontWeight.w400,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
+                    Tooltip(
+                      message: downvoteLabel,
+                      excludeFromSemantics: true,
+                      child: Semantics(
+                        button: true,
+                        enabled: !isPending,
+                        label: downvoteLabel,
+                        value: 'Score $adjustedScore',
+                        child: InkWell(
+                          onTap: isPending
+                              ? null
+                              : () => _handleVote(
+                                  context,
+                                  voteProvider,
+                                  direction: 'down',
+                                ),
+                          child: SizedBox.square(
+                            dimension: 48,
+                            child: Center(
+                              child: DownvoteIcon(
+                                key: ValueKey('downvote:${post.post.uri}'),
+                                color: isDownvoted
+                                    ? AppColors.teal
+                                    : neutralColor,
+                                isDownvoted: isDownvoted,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 );
               },
             ),

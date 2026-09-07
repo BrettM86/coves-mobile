@@ -10,14 +10,15 @@ class LucideIconPainter extends CustomPainter {
     required this.paths,
     required this.color,
     this.filled = false,
+    this.strokeWidth = 2,
   });
 
   final List<String> paths;
   final Color color;
   final bool filled;
+  final double strokeWidth;
 
   static const double _viewBox = 24;
-  static const double _strokeWidth = 2;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -26,7 +27,7 @@ class LucideIconPainter extends CustomPainter {
     final stroke = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = _strokeWidth
+      ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     final fill = Paint()
@@ -46,6 +47,7 @@ class LucideIconPainter extends CustomPainter {
   bool shouldRepaint(LucideIconPainter oldDelegate) =>
       oldDelegate.color != color ||
       oldDelegate.filled != filled ||
+      oldDelegate.strokeWidth != strokeWidth ||
       oldDelegate.paths != paths;
 }
 

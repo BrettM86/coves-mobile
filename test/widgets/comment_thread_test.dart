@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:coves_flutter/constants/app_colors.dart';
 import 'package:coves_flutter/models/comment.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
@@ -5,7 +8,10 @@ import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/widgets/comment_card.dart';
 import 'package:coves_flutter/widgets/comment_thread.dart';
+import 'package:coves_flutter/widgets/icons/animated_heart_icon.dart';
+import 'package:coves_flutter/widgets/icons/lucide_icon_painter.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
@@ -38,8 +44,17 @@ void main() {
     // vote button renders in the un-liked state.
     when(mockAuthProvider.isAuthenticated).thenReturn(false);
     when(mockVoteProvider.isLiked(any)).thenReturn(false);
+    when(mockVoteProvider.getVoteState(any)).thenReturn(null);
+    when(mockVoteProvider.isPending(any)).thenReturn(false);
     when(mockVoteProvider.getAdjustedScore(any, any))
         .thenAnswer((invocation) => invocation.positionalArguments[1] as int);
+    when(
+      mockVoteProvider.toggleVote(
+        postUri: anyNamed('postUri'),
+        postCid: anyNamed('postCid'),
+        direction: anyNamed('direction'),
+      ),
+    ).thenAnswer((_) async => true);
   });
 
   /// Helper to create a test comment
@@ -330,6 +345,365 @@ void main() {
       // Placeholder shown instead of content; reply still renders
       expect(find.text('[deleted by user]'), findsOneWidget);
       expect(find.text('Surviving reply'), findsOneWidget);
+    });
+  });
+
+  group('comment vote group', () {
+    const commentUri = 'at://did:plc:author/social.coves.community.comment/123';
+    const commentCid = 'cid-$commentUri';
+    final thumbsDownPaths = <String>[
+      <String>[
+        'M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56',
+        'l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8',
+        'a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11',
+        'L12 22a3.13 3.13 0 0 1-3-3.88Z',
+      ].join(),
+      'M17 14V2',
+    ];
+
+    Finder commentCard() => find.byType(CommentCard);
+
+    Finder actionRow() => find.descendant(
+      of: commentCard(),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Row && widget.children.any((child) => child is Spacer),
+        description: 'comment action Row containing its Spacer',
+      ),
+    );
+
+    Finder ellipsisControl() => find.descendant(
+      of: actionRow(),
+      matching: find.byTooltip('Comment options'),
+    );
+
+    Finder heartControl() => find.descendant(
+      of: actionRow(),
+      matching: find.byType(AnimatedHeartIcon),
+    );
+
+    Finder upvoteControl(String actionLabel) => find.descendant(
+      of: actionRow(),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics && widget.properties.label == actionLabel,
+        description: 'Semantics labelled "$actionLabel"',
+      ),
+    );
+
+    Finder scoreText(String score) =>
+        find.descendant(of: actionRow(), matching: find.text(score));
+
+    Finder downvoteControl(String actionLabel) {
+      final semanticDownvote = find.descendant(
+        of: actionRow(),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics && widget.properties.label == actionLabel,
+          description: 'Semantics labelled "$actionLabel"',
+        ),
+      );
+      final tooltipDownvote = find.descendant(
+        of: actionRow(),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is Tooltip && widget.message == actionLabel,
+          description: 'Tooltip labelled "$actionLabel"',
+        ),
+      );
+      return semanticDownvote.evaluate().isNotEmpty
+          ? semanticDownvote
+          : tooltipDownvote;
+    }
+
+    LucideIconPainter? downvotePainter(
+      WidgetTester tester,
+      String actionLabel,
+    ) {
+      final downvote = downvoteControl(actionLabel);
+      if (downvote.evaluate().length != 1) {
+        return null;
+      }
+      final paints = find.descendant(
+        of: downvote,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is CustomPaint && widget.painter is LucideIconPainter,
+          description: 'CustomPaint with a LucideIconPainter',
+        ),
+      );
+      if (paints.evaluate().length != 1) {
+        return null;
+      }
+      final painter = tester.widget<CustomPaint>(paints.first).painter;
+      return painter is LucideIconPainter ? painter : null;
+    }
+
+    bool usesCanonicalThumbsDownPaths(LucideIconPainter? painter) {
+      final paths = painter?.paths;
+      if (paths == null || paths.length != thumbsDownPaths.length) {
+        return false;
+      }
+      for (var index = 0; index < paths.length; index++) {
+        if (paths[index] != thumbsDownPaths[index]) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    Color? effectiveScoreColor(WidgetTester tester, Finder score) {
+      final text = tester.widget<Text>(score);
+      return text.style?.color ??
+          DefaultTextStyle.of(tester.element(score)).style.color;
+    }
+
+    void expectMinimumTapTargets(
+      WidgetTester tester,
+      Map<String, Finder> controls,
+    ) {
+      final undersized = <String, Size>{};
+      for (final entry in controls.entries) {
+        final size = tester.getSize(entry.value);
+        if (size.width < 48 || size.height < 48) {
+          undersized[entry.key] = size;
+        }
+      }
+      expect(
+        undersized,
+        isEmpty,
+        reason: 'interactive vote render boxes must be at least 48x48',
+      );
+    }
+
+    Future<void> pumpVoteComment(
+      WidgetTester tester, {
+      Future<Object?>? hapticFuture,
+    }) {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (methodCall) {
+          if (hapticFuture != null &&
+              methodCall.method == 'HapticFeedback.vibrate') {
+            return hapticFuture;
+          }
+          return Future<Object?>.value();
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      return tester.pumpWidget(
+        createTestWidget(createThread(uri: commentUri, score: 5)),
+      );
+    }
+
+    setUp(() {
+      when(mockAuthProvider.isAuthenticated).thenReturn(true);
+      when(mockAuthProvider.did).thenReturn('did:plc:viewer');
+      when(mockVoteProvider.getAdjustedScore(commentUri, 5)).thenReturn(4);
+    });
+
+    testWidgets('keeps menu left and heart-score-downvote right', (
+      tester,
+    ) async {
+      await pumpVoteComment(tester);
+
+      final actions = actionRow();
+      final ellipsis = ellipsisControl();
+      final downvote = downvoteControl('Downvote comment');
+      final heart = heartControl();
+      final upvote = upvoteControl('Upvote comment');
+      final score = scoreText('4');
+      expect(actions, findsOneWidget);
+      expect(ellipsis, findsOneWidget);
+      expect(heart, findsOneWidget);
+      expect(upvote, findsOneWidget);
+      expect(score, findsOneWidget);
+      expect(tester.getTopLeft(score).dx - tester.getTopRight(heart).dx, 5);
+      expect(find.descendant(of: upvote, matching: score), findsOneWidget);
+      expect(
+        tester.widget<Row>(actions).children.whereType<Spacer>(),
+        hasLength(1),
+      );
+      expect(
+        downvote,
+        findsOneWidget,
+        reason: 'the right comment action group needs a downvote control',
+      );
+
+      final ellipsisX = tester.getCenter(ellipsis).dx;
+      final downvoteX = tester.getCenter(downvote).dx;
+      final heartX = tester.getCenter(heart).dx;
+      final scoreX = tester.getCenter(score).dx;
+      expect(ellipsisX, lessThan(heartX));
+      expect(heartX, lessThan(scoreX));
+      expect(scoreX, lessThan(downvoteX));
+      expect(heartX - ellipsisX, greaterThan(downvoteX - heartX));
+      expectMinimumTapTargets(tester, {
+        'comment upvote': upvote,
+        'comment downvote': downvote,
+      });
+    });
+
+    testWidgets('liked score is red beside the heart', (tester) async {
+      when(mockVoteProvider.isLiked(commentUri)).thenReturn(true);
+      await pumpVoteComment(tester);
+      expect(effectiveScoreColor(tester, scoreText('4')), AppColors.voteLiked);
+    });
+
+    testWidgets('authenticated downvote requests the down direction', (
+      tester,
+    ) async {
+      await pumpVoteComment(tester);
+
+      final downvote = downvoteControl('Downvote comment');
+      expect(
+        downvote,
+        findsOneWidget,
+        reason: 'the authenticated comment downvote must be rendered',
+      );
+      await tester.tap(downvote);
+      await tester.pumpAndSettle();
+
+      verify(
+        mockVoteProvider.toggleVote(
+          postUri: commentUri,
+          postCid: commentCid,
+          direction: 'down',
+        ),
+      ).called(1);
+    });
+
+    testWidgets(
+      'starts comment downvote mutation before haptic feedback completes',
+      (tester) async {
+        final hapticGate = Completer<Object?>();
+        addTearDown(() {
+          if (!hapticGate.isCompleted) {
+            hapticGate.complete(null);
+          }
+        });
+        await pumpVoteComment(tester, hapticFuture: hapticGate.future);
+
+        await tester.tap(downvoteControl('Downvote comment'));
+        await tester.pump();
+
+        try {
+          expect(hapticGate.isCompleted, isFalse);
+          verify(
+            mockVoteProvider.toggleVote(
+              postUri: commentUri,
+              postCid: commentCid,
+              direction: 'down',
+            ),
+          ).called(1);
+        } finally {
+          if (!hapticGate.isCompleted) {
+            hapticGate.complete(null);
+          }
+          await tester.pump();
+        }
+      },
+    );
+
+    testWidgets('existing downvote is teal and keeps score neutral', (
+      tester,
+    ) async {
+      when(mockVoteProvider.getVoteState(commentUri))
+          .thenReturn(const VoteState(direction: 'down', deleted: false));
+      await pumpVoteComment(tester);
+
+      final downvote = downvoteControl('Remove downvote');
+      expect(
+        find.descendant(
+          of: actionRow(),
+          matching: find.byTooltip('Remove downvote'),
+        ),
+        findsOneWidget,
+      );
+      final painter = downvotePainter(tester, 'Remove downvote');
+      final score = scoreText('4');
+      final scoreColor = effectiveScoreColor(tester, score);
+      expect(score, findsOneWidget);
+      expect(
+        (
+          downvoteVisible: downvote.evaluate().length == 1,
+          usesLucidePainter: painter != null,
+          usesCanonicalPaths: usesCanonicalThumbsDownPaths(painter),
+          selectedIsFilled: painter?.filled ?? false,
+          selectedIsTeal: painter?.color == AppColors.teal,
+          scoreIsNeutral:
+              scoreColor != AppColors.teal && scoreColor != AppColors.voteLiked,
+        ),
+        (
+          downvoteVisible: true,
+          usesLucidePainter: true,
+          usesCanonicalPaths: true,
+          selectedIsFilled: false,
+          selectedIsTeal: true,
+          scoreIsNeutral: true,
+        ),
+      );
+      verify(mockVoteProvider.getVoteState(commentUri)).called(1);
+    });
+
+    testWidgets('pending vote keeps both controls visible and inert', (
+      tester,
+    ) async {
+      final requestedDirections = <String?>[];
+      when(mockVoteProvider.isPending(commentUri)).thenReturn(true);
+      when(mockVoteProvider.getVoteState(commentUri))
+          .thenReturn(const VoteState(direction: 'down', deleted: false));
+      when(mockVoteProvider.getAdjustedScore(commentUri, 5)).thenReturn(3);
+      when(
+        mockVoteProvider.toggleVote(
+          postUri: anyNamed('postUri'),
+          postCid: anyNamed('postCid'),
+          direction: anyNamed('direction'),
+        ),
+      ).thenAnswer((invocation) async {
+        requestedDirections.add(
+          invocation.namedArguments[#direction] as String?,
+        );
+        return true;
+      });
+      await pumpVoteComment(tester);
+
+      final heart = heartControl();
+      final downvote = downvoteControl('Remove downvote');
+      final downvoteVisible = downvote.evaluate().length == 1;
+      final painter = downvotePainter(tester, 'Remove downvote');
+      await tester.tap(heart);
+      if (downvoteVisible) {
+        await tester.tap(downvote);
+      }
+      await tester.pumpAndSettle();
+
+      expect(
+        (
+          heartVisible: heart.evaluate().length == 1,
+          downvoteVisible: downvoteVisible,
+          optimisticScoreVisible: scoreText('3').evaluate().length == 1,
+          optimisticDownvoteSelected: painter?.color == AppColors.teal,
+          mutationCalls: requestedDirections.length,
+          spinnerVisible: find
+              .byType(CircularProgressIndicator)
+              .evaluate()
+              .isNotEmpty,
+        ),
+        (
+          heartVisible: true,
+          downvoteVisible: true,
+          optimisticScoreVisible: true,
+          optimisticDownvoteSelected: true,
+          mutationCalls: 0,
+          spinnerVisible: false,
+        ),
+      );
+      verify(mockVoteProvider.isPending(commentUri)).called(1);
     });
   });
 

@@ -158,12 +158,10 @@ class VoteProvider with ChangeNotifier {
       _votes[postUri] = VoteState(direction: direction, deleted: false);
     }
 
-    // Apply score adjustment
+    // Apply score adjustment and publish it together with the pending state.
     _scoreAdjustments[postUri] = newAdjustment;
-    notifyListeners();
-
-    // Mark request as pending
     _pendingRequests[postUri] = true;
+    notifyListeners();
 
     void rollbackOptimisticUpdate() {
       if (previousState != null) {
@@ -227,6 +225,7 @@ class VoteProvider with ChangeNotifier {
       rethrow;
     } finally {
       _pendingRequests.remove(postUri);
+      notifyListeners();
     }
   }
 

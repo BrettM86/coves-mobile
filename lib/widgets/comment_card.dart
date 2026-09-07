@@ -13,10 +13,11 @@ import '../providers/block_provider.dart';
 import '../providers/vote_provider.dart';
 import '../services/api_exceptions.dart';
 import '../utils/date_time_utils.dart';
-import '../utils/display_utils.dart';
 import '../utils/error_messages.dart';
+import 'animated_vote_count.dart';
 import 'block_action_helpers.dart';
 import 'icons/animated_heart_icon.dart';
+import 'icons/downvote_icon.dart';
 import 'report_dialog.dart';
 import 'rich_text_renderer.dart';
 import 'sign_in_dialog.dart';
@@ -28,7 +29,7 @@ import 'user_avatar.dart';
 /// Displays a comment with:
 /// - Author information (avatar, handle, timestamp)
 /// - Comment content (supports facets for links/mentions)
-/// - Heart vote button with optimistic updates via VoteProvider
+/// - Upvote and downvote controls with optimistic updates via VoteProvider
 /// - Visual threading indicator based on nesting depth
 /// - Tap-to-reply functionality via [onTap] callback
 /// - Long-press to collapse thread via [onLongPress] callback
@@ -38,7 +39,7 @@ import 'user_avatar.dart';
 ///
 /// When the comment's `isDeleted` flag is true, the card displays a
 /// placeholder based on `deletionReason`: `[removed by moderator]` or
-/// `[deleted by user]`. The vote button and actions are hidden.
+/// `[deleted by user]`. The vote controls and actions are hidden.
 /// Author information is hidden for deleted comments to preserve privacy.
 ///
 /// The [currentTime] parameter allows passing the current time for
@@ -607,15 +608,67 @@ class _CommentCardState extends State<CommentCard> {
     );
   }
 
-  /// Builds the action buttons row (menu and vote button)
+  Future<void> _handleVote(
+    BuildContext context,
+    VoteProvider voteProvider, {
+    required String direction,
+  }) async {
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.isAuthenticated) {
+      final shouldSignIn = await SignInDialog.show(
+        context,
+        message: 'You need to sign in to vote on comments.',
+      );
+
+      if ((shouldSignIn ?? false) && context.mounted) {
+        await context.push('/login');
+      }
+      return;
+    }
+
+    // Do not delay VoteProvider's per-subject lock on non-essential haptics.
+    HapticFeedback.lightImpact().ignore();
+
+    try {
+      await voteProvider.toggleVote(
+        postUri: comment.uri,
+        postCid: comment.cid,
+        direction: direction,
+      );
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('Failed to vote on comment: $e');
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ErrorMessage.vote(e)),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Builds the action buttons row (menu and vote controls)
   Widget _buildActionButtons(BuildContext context) {
     return Consumer<VoteProvider>(
       builder: (context, voteProvider, child) {
         final isLiked = voteProvider.isLiked(comment.uri);
+        final voteState = voteProvider.getVoteState(comment.uri);
+        final isDownvoted =
+            voteState != null &&
+            voteState.direction == 'down' &&
+            !voteState.deleted;
+        final isPending = voteProvider.isPending(comment.uri);
         final adjustedScore = voteProvider.getAdjustedScore(
           comment.uri,
           comment.stats.score,
         );
+        final neutralColor = AppColors.textPrimary.withValues(alpha: 0.6);
+        final downvoteLabel = isDownvoted
+            ? 'Remove downvote'
+            : 'Downvote comment';
 
         return Row(
           children: [
@@ -623,78 +676,76 @@ class _CommentCardState extends State<CommentCard> {
             const Spacer(),
             Semantics(
               button: true,
-              label: isLiked
-                  ? 'Unlike comment, $adjustedScore '
-                        '${adjustedScore == 1 ? "like" : "likes"}'
-                  : 'Like comment, $adjustedScore '
-                        '${adjustedScore == 1 ? "like" : "likes"}',
+              enabled: !isPending,
+              label: isLiked ? 'Remove upvote' : 'Upvote comment',
+              value: 'Score $adjustedScore',
               child: InkWell(
-                onTap: () async {
-                  // Check authentication
-                  final authProvider = context.read<AuthProvider>();
-                  if (!authProvider.isAuthenticated) {
-                    // Show sign-in dialog
-                    final shouldSignIn = await SignInDialog.show(
-                      context,
-                      message: 'You need to sign in to vote on comments.',
-                    );
-
-                    if ((shouldSignIn ?? false) && context.mounted) {
-                      await context.push('/login');
-                    }
-                    return;
-                  }
-
-                  try {
-                    await HapticFeedback.lightImpact();
-                  } on PlatformException catch (e) {
-                    if (kDebugMode) {
-                      debugPrint('Haptics not supported: $e');
-                    }
-                  }
-
-                  try {
-                    await voteProvider.toggleVote(
-                      postUri: comment.uri,
-                      postCid: comment.cid,
-                    );
-                  } on Exception catch (e) {
-                    if (kDebugMode) {
-                      debugPrint('Failed to vote on comment: $e');
-                    }
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(ErrorMessage.vote(e)),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  }
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 6,
+                onTap: isPending
+                    ? null
+                    : () => _handleVote(context, voteProvider, direction: 'up'),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedHeartIcon(
-                        isLiked: isLiked,
-                        size: 16,
-                        color: AppColors.textPrimary.withValues(alpha: 0.6),
-                        likedColor: AppColors.voteLiked,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        DisplayUtils.formatCount(adjustedScore),
-                        style: TextStyle(
-                          color: AppColors.textPrimary.withValues(alpha: 0.6),
-                          fontSize: 12,
+                  child: Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedHeartIcon(
+                          isLiked: isLiked,
+                          size: 16,
+                          color: neutralColor,
+                          likedColor: AppColors.voteLiked,
                         ),
+                        const SizedBox(width: 5),
+                        ExcludeSemantics(
+                          child: AnimatedVoteCount(
+                            count: adjustedScore,
+                            key: ValueKey('vote-count:${comment.uri}'),
+                            style: TextStyle(
+                              color: isLiked
+                                  ? AppColors.voteLiked
+                                  : neutralColor,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Tooltip(
+              message: downvoteLabel,
+              excludeFromSemantics: true,
+              child: Semantics(
+                button: true,
+                enabled: !isPending,
+                label: downvoteLabel,
+                value: 'Score $adjustedScore',
+                child: InkWell(
+                  onTap: isPending
+                      ? null
+                      : () => _handleVote(
+                          context,
+                          voteProvider,
+                          direction: 'down',
+                        ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    child: Center(
+                      child: DownvoteIcon(
+                        key: ValueKey('downvote:${comment.uri}'),
+                        size: 16,
+                        color: isDownvoted ? AppColors.teal : neutralColor,
+                        isDownvoted: isDownvoted,
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),

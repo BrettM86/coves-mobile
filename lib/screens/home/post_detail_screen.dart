@@ -646,11 +646,50 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
-  /// Build bottom action bar with vote, save, and comment actions
+  Future<void> _handleVote(
+    VoteProvider voteProvider, {
+    required String direction,
+  }) async {
+    final authProvider = context.read<AuthProvider>();
+    if (!authProvider.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sign in to vote on posts'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    // Do not delay VoteProvider's per-subject lock on non-essential haptics.
+    HapticFeedback.lightImpact().ignore();
+
+    try {
+      await voteProvider.toggleVote(
+        postUri: widget.post.post.uri,
+        postCid: widget.post.post.cid,
+        direction: direction,
+      );
+    } on Exception catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(ErrorMessage.vote(e)),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Build bottom action bar with voting and comment actions
   Widget _buildActionBar() {
     return Consumer<VoteProvider>(
       builder: (context, voteProvider, child) {
         final isVoted = voteProvider.isLiked(widget.post.post.uri);
+        final isVotePending = voteProvider.isPending(widget.post.post.uri);
         final adjustedScore = voteProvider.getAdjustedScore(
           widget.post.post.uri,
           widget.post.post.stats.score,
@@ -666,49 +705,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         return PostActionBar(
           post: displayPost,
           isVoted: isVoted,
+          isVotePending: isVotePending,
           onCommentInputTap: _openCommentComposer,
           onCommentCountTap: _scrollToComments,
-          onVoteTap: () async {
-            // Check authentication
-            final authProvider = context.read<AuthProvider>();
-            if (!authProvider.isAuthenticated) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Sign in to vote on posts'),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-              return;
-            }
-
-            // Capture messenger before async operations
-            final messenger = ScaffoldMessenger.of(context);
-
-            // Light haptic feedback on both like and unlike
-            // Haptic feedback is non-essential, silently fail if unsupported
-            try {
-              await HapticFeedback.lightImpact();
-            } on PlatformException {
-              // Haptics not supported on this platform - ignore
-            }
-            try {
-              await voteProvider.toggleVote(
-                postUri: widget.post.post.uri,
-                postCid: widget.post.post.cid,
-              );
-            } on Exception catch (e) {
-              if (mounted) {
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(ErrorMessage.vote(e)),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              }
-            }
-          },
+          onVoteTap: () => _handleVote(voteProvider, direction: 'up'),
           onSaveTap: () {
-            // TODO: Add save functionality
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('Save feature coming soon!'),

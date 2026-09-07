@@ -542,6 +542,53 @@ void main() {
         expect(voteProvider.isPending(testPostUri), false);
       });
 
+      test('notifies listeners when a downvote starts and settles', () async {
+        final completer = Completer<VoteResponse>();
+        when(
+          mockVoteService.createVote(
+            postUri: anyNamed('postUri'),
+            postCid: anyNamed('postCid'),
+            direction: anyNamed('direction'),
+          ),
+        ).thenAnswer((_) => completer.future);
+
+        final observedPending = <bool>[];
+        voteProvider.addListener(
+          () => observedPending.add(voteProvider.isPending(testPostUri)),
+        );
+
+        final mutation = voteProvider.toggleVote(
+          postUri: testPostUri,
+          postCid: testPostCid,
+          direction: 'down',
+        );
+
+        expect(voteProvider.isPending(testPostUri), true);
+        expect(voteProvider.getVoteState(testPostUri)?.direction, 'down');
+        expect(voteProvider.getAdjustedScore(testPostUri, 4), 3);
+        final observedWhileUnresolved = List<bool>.of(observedPending);
+
+        completer.complete(
+          const VoteResponse(
+            uri: 'at://did:plc:test/social.coves.feed.vote/456',
+            cid: 'bafy123',
+            rkey: '456',
+            deleted: false,
+          ),
+        );
+        await mutation;
+
+        expect(voteProvider.isPending(testPostUri), false);
+        expect(
+          (
+            pendingWhileUnresolved: observedWhileUnresolved.contains(true),
+            settledAfterMutation:
+                observedPending.isNotEmpty && !observedPending.last,
+          ),
+          (pendingWhileUnresolved: true, settledAfterMutation: true),
+        );
+      });
+
       test('should return false for posts with no pending request', () {
         const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
         expect(voteProvider.isPending(testPostUri), false);

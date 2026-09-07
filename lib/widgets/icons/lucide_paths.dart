@@ -30,6 +30,10 @@ const String _messageSquareD =
 const String _messageCircleD =
     'M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 '
     '1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719';
+const String _thumbsDownD =
+    'M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 '
+    '2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 '
+    '3.13 0 0 1-3-3.88Z';
 
 abstract final class LucidePaths {
   /// Declares the ISC license for the bundled Lucide glyphs (both the `d`
@@ -75,6 +79,9 @@ abstract final class LucidePaths {
 
   /// `message-square` — comment bubble
   static const List<String> messageSquare = [_messageSquareD];
+
+  /// `thumbs-down` — downvote
+  static const List<String> thumbsDown = [_thumbsDownD, 'M17 14V2'];
 
   /// `repeat-2` — repost
   static const List<String> repeat2 = [

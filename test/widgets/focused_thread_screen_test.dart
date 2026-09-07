@@ -44,6 +44,8 @@ void main() {
     // vote button renders in the un-liked state.
     when(mockAuthProvider.isAuthenticated).thenReturn(false);
     when(mockVoteProvider.isLiked(any)).thenReturn(false);
+    when(mockVoteProvider.getVoteState(any)).thenReturn(null);
+    when(mockVoteProvider.isPending(any)).thenReturn(false);
     when(mockVoteProvider.getAdjustedScore(any, any))
         .thenAnswer((invocation) => invocation.positionalArguments[1] as int);
 
