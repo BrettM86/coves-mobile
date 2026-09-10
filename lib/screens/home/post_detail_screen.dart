@@ -223,10 +223,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         );
       }
 
-      // Background refresh if data is stale (won't cause flicker)
-      if (_commentsProvider.isStale) {
+      // Background refresh if data is stale (won't cause flicker). A focused
+      // comment deep link always refreshes so replies posted since the thread
+      // was cached are not missed.
+      if (_commentsProvider.isStale || widget.focusCommentUri != null) {
         if (kDebugMode) {
-          debugPrint('🔄 Data stale, refreshing in background');
+          debugPrint('🔄 Refreshing cached thread in background');
         }
         _commentsProvider.loadComments(refresh: true);
       }
