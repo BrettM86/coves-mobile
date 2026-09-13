@@ -324,4 +324,250 @@ void main() {
       );
     });
   });
+
+  group('PostView.isSensitive', () {
+    // The appview serves self-labels inside the record, so every case here
+    // goes through PostView.fromJson rather than a hand-built PostRecord:
+    // a throw in label parsing would make TimelineResponse.fromJson drop the
+    // post entirely, and only the json path can catch that.
+    Map<String, dynamic> postJson({
+      Map<String, dynamic>? record,
+      bool isDeleted = false,
+    }) {
+      return <String, dynamic>{
+        'uri': 'at://did:plc:test/social.coves.community.post/123',
+        'cid': 'bafypostcid',
+        'rkey': '123',
+        'author': <String, dynamic>{
+          'did': 'did:plc:author',
+          'handle': 'test.user',
+        },
+        'community': <String, dynamic>{
+          'did': 'did:plc:community',
+          'name': 'testcove',
+        },
+        'createdAt': '2025-01-01T12:00:00Z',
+        'indexedAt': '2025-01-01T12:00:05Z',
+        'record': ?record,
+        'isDeleted': isDeleted,
+        'stats': <String, dynamic>{
+          'upvotes': 0,
+          'downvotes': 0,
+          'score': 0,
+          'commentCount': 0,
+        },
+      };
+    }
+
+    PostView parseWithLabels(Object? labels) {
+      return PostView.fromJson(
+        postJson(
+          record: <String, dynamic>{
+            'title': 'Title',
+            'content': 'Body',
+            'labels': labels,
+          },
+        ),
+      );
+    }
+
+    Map<String, dynamic> selfLabels(List<dynamic> values, {String? type}) {
+      return <String, dynamic>{r'$type': ?type, 'values': values};
+    }
+
+    test('a bare nsfw self-label marks the post sensitive', () {
+      final post = parseWithLabels(
+        selfLabels(<dynamic>[
+          <String, dynamic>{'val': 'nsfw'},
+        ]),
+      );
+
+      expect(post.isSensitive, isTrue);
+      expect(post.record!.labels, contains('nsfw'));
+    });
+
+    test('the labels object may carry its lexicon type', () {
+      final post = parseWithLabels(
+        selfLabels(<dynamic>[
+          <String, dynamic>{'val': 'nsfw'},
+        ], type: 'com.atproto.label.defs#selfLabels'),
+      );
+
+      expect(post.isSensitive, isTrue);
+    });
+
+    test('nsfw is found among malformed and unrelated entries', () {
+      final post = parseWithLabels(
+        selfLabels(<dynamic>[
+          null,
+          <String, dynamic>{},
+          'junk',
+          <String, dynamic>{'val': 'other'},
+          <String, dynamic>{'val': 'nsfw'},
+        ]),
+      );
+
+      expect(post.isSensitive, isTrue);
+      expect(post.record!.labels, contains('nsfw'));
+    });
+
+    test('an explicit neg:false still counts as an active label', () {
+      final post = parseWithLabels(
+        selfLabels(<dynamic>[
+          <String, dynamic>{'val': 'nsfw', 'neg': false},
+        ]),
+      );
+
+      expect(post.isSensitive, isTrue);
+    });
+
+    test('a record without a labels field is not sensitive', () {
+      final post = PostView.fromJson(
+        postJson(
+          record: <String, dynamic>{'title': 'Title', 'content': 'Body'},
+        ),
+      );
+
+      expect(post.isSensitive, isFalse);
+      expect(post.record!.labels, isEmpty);
+    });
+
+    test('a null labels field is not sensitive', () {
+      final post = parseWithLabels(null);
+
+      expect(post.isSensitive, isFalse);
+      expect(post.record!.labels, isEmpty);
+    });
+
+    test('an unrelated label is kept but is not sensitive', () {
+      final post = parseWithLabels(
+        selfLabels(<dynamic>[
+          <String, dynamic>{'val': 'other'},
+        ]),
+      );
+
+      expect(post.isSensitive, isFalse);
+      expect(post.record!.labels, <String>['other']);
+    });
+
+    test('a negated nsfw label is dropped', () {
+      final post = parseWithLabels(
+        selfLabels(<dynamic>[
+          <String, dynamic>{'val': 'nsfw', 'neg': true},
+        ]),
+      );
+
+      expect(post.isSensitive, isFalse);
+      expect(post.record!.labels, isEmpty);
+    });
+
+    test('an explicit neg:null drops the label rather than guessing', () {
+      // A present `neg` that is not the boolean false is not the value the
+      // lexicon specifies, so it cannot be read as "not negated". The web
+      // client treats this entry as inactive; a post is only concealed on
+      // both clients if they agree.
+      final post = parseWithLabels(
+        selfLabels(<dynamic>[
+          <String, dynamic>{'val': 'nsfw', 'neg': null},
+        ]),
+      );
+
+      expect(post.isSensitive, isFalse);
+      expect(post.record!.labels, isEmpty);
+    });
+
+    test('a non-boolean neg drops the label rather than guessing', () {
+      // 'false' and 'true' are both strings: neither is the boolean the
+      // lexicon specifies, so neither may be interpreted.
+      for (final neg in const ['false', 'true']) {
+        final post = parseWithLabels(
+          selfLabels(<dynamic>[
+            <String, dynamic>{'val': 'nsfw', 'neg': neg},
+          ]),
+        );
+
+        expect(post.isSensitive, isFalse, reason: 'neg: $neg');
+        expect(post.record!.labels, isEmpty, reason: 'neg: $neg');
+      }
+    });
+
+    test('a string labels field is ignored', () {
+      final post = parseWithLabels('nsfw');
+
+      expect(post.isSensitive, isFalse);
+      expect(post.record!.labels, isEmpty);
+    });
+
+    test('a non-list values field is ignored', () {
+      final post = parseWithLabels(<String, dynamic>{'values': 'nsfw'});
+
+      expect(post.isSensitive, isFalse);
+      expect(post.record!.labels, isEmpty);
+    });
+
+    test('an entry without a val is ignored', () {
+      final post = parseWithLabels(selfLabels(<dynamic>[<String, dynamic>{}]));
+
+      expect(post.isSensitive, isFalse);
+      expect(post.record!.labels, isEmpty);
+    });
+
+    test('a non-string val is ignored', () {
+      final post = parseWithLabels(
+        selfLabels(<dynamic>[
+          <String, dynamic>{'val': 42},
+        ]),
+      );
+
+      expect(post.isSensitive, isFalse);
+      expect(post.record!.labels, isEmpty);
+    });
+
+    test('a deleted post with no record is not sensitive', () {
+      final post = PostView.fromJson(postJson(isDeleted: true));
+
+      expect(post.record, isNull);
+      expect(post.isSensitive, isFalse);
+    });
+
+    test('PostRecord.fromJson never throws on a malformed labels field', () {
+      // TimelineResponse.fromJson skips any feed item whose parse throws, so
+      // a hostile labels field must degrade to no labels, never cost the
+      // reader the post.
+      const malformed = <Object?>[
+        null,
+        42,
+        'nsfw',
+        <Object?>[],
+        <String, dynamic>{},
+        <String, dynamic>{'values': null},
+        <String, dynamic>{'values': 'nsfw'},
+        <String, dynamic>{'values': 42},
+        <String, dynamic>{
+          'values': <Object?>[null, 'junk', 42],
+        },
+        <String, dynamic>{
+          'values': <Object?>[<String, dynamic>{}],
+        },
+        <String, dynamic>{
+          'values': <Object?>[
+            <String, dynamic>{'val': 42},
+          ],
+        },
+        <String, dynamic>{
+          'values': <Object?>[
+            <String, dynamic>{'val': 'nsfw', 'neg': 'true'},
+          ],
+        },
+      ];
+
+      for (final labels in malformed) {
+        expect(
+          () => PostRecord.fromJson(<String, dynamic>{'labels': labels}),
+          returnsNormally,
+          reason: 'labels: $labels',
+        );
+      }
+    });
+  });
 }

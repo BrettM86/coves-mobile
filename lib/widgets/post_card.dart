@@ -13,12 +13,14 @@ import 'bluesky_post_card.dart';
 import 'community_avatar.dart';
 import 'external_link_bar.dart';
 import 'image_viewer.dart';
+import 'media/media_aspect.dart';
 import 'media/media_surface.dart';
 import 'media/native_image_embed.dart';
 import 'media/native_video_embed.dart';
 import 'media/streamable_video_embed.dart';
 import 'post_card_actions.dart';
 import 'rich_text_renderer.dart';
+import 'sensitive_content.dart';
 import 'source_link_bar.dart';
 import 'tappable_author.dart';
 import 'tappable_community.dart';
@@ -43,7 +45,7 @@ const BoxDecoration _embedFrame = BoxDecoration(
 /// time-ago calculations, enabling:
 /// - Periodic updates of time strings
 /// - Deterministic testing without DateTime.now()
-class PostCard extends StatelessWidget {
+class PostCard extends StatefulWidget {
   const PostCard({
     required this.post,
     this.currentTime,
@@ -79,6 +81,106 @@ class PostCard extends StatelessWidget {
   final double titleFontSize;
   final FontWeight titleFontWeight;
 
+  @override
+  State<PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends State<PostCard> {
+  /// The uri whose sensitive content the reader chose to reveal, if any.
+  ///
+  /// Held against the uri rather than as a bare flag because a feed recycles
+  /// this element across posts: a different post arriving in the same slot
+  /// must start concealed even when its predecessor was revealed.
+  String? _revealedUri;
+
+  @override
+  void didUpdateWidget(PostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Cleared explicitly on any uri change, so revealing A, scrolling to B
+    // and coming back to A conceals A again.
+    if (oldWidget.post.post.uri != widget.post.post.uri) {
+      _revealedUri = null;
+    }
+  }
+
+  void _toggleReveal() {
+    final uri = widget.post.post.uri;
+    setState(() {
+      _revealedUri = _revealedUri == uri ? null : uri;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _PostCardContent(
+      post: widget.post,
+      currentTime: widget.currentTime,
+      showCommentButton: widget.showCommentButton,
+      disableNavigation: widget.disableNavigation,
+      showActions: widget.showActions,
+      showHeader: widget.showHeader,
+      showBorder: widget.showBorder,
+      showFullText: widget.showFullText,
+      showAuthorFooter: widget.showAuthorFooter,
+      showSources: widget.showSources,
+      textFontSize: widget.textFontSize,
+      textLineHeight: widget.textLineHeight,
+      embedHeight: widget.embedHeight,
+      titleFontSize: widget.titleFontSize,
+      titleFontWeight: widget.titleFontWeight,
+      concealed:
+          widget.post.post.isSensitive && _revealedUri != widget.post.post.uri,
+      onToggleReveal: _toggleReveal,
+    );
+  }
+}
+
+/// The card's rendering, split out so [PostCard] holds nothing but the
+/// reveal state of the post it is currently showing.
+class _PostCardContent extends StatelessWidget {
+  const _PostCardContent({
+    required this.post,
+    required this.currentTime,
+    required this.showCommentButton,
+    required this.disableNavigation,
+    required this.showActions,
+    required this.showHeader,
+    required this.showBorder,
+    required this.showFullText,
+    required this.showAuthorFooter,
+    required this.showSources,
+    required this.textFontSize,
+    required this.textLineHeight,
+    required this.embedHeight,
+    required this.titleFontSize,
+    required this.titleFontWeight,
+    required this.concealed,
+    required this.onToggleReveal,
+  });
+
+  final FeedViewPost post;
+  final DateTime? currentTime;
+  final bool showCommentButton;
+  final bool disableNavigation;
+  final bool showActions;
+  final bool showHeader;
+  final bool showBorder;
+  final bool showFullText;
+  final bool showAuthorFooter;
+  final bool showSources;
+  final double textFontSize;
+  final double textLineHeight;
+  final double embedHeight;
+  final double titleFontSize;
+  final FontWeight titleFontWeight;
+
+  /// Whether the post's content is currently hidden behind the reveal
+  /// controls. Only ever true for a self-labelled post.
+  final bool concealed;
+
+  /// Flips the card's reveal state.
+  final VoidCallback onToggleReveal;
+
   void _navigateToDetail(BuildContext context) {
     // Navigate to post detail screen
     // Use URI-encoded version of the post URI for the URL path
@@ -89,14 +191,25 @@ class PostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final media = _buildMediaEmbed(context);
+    final sensitive = post.post.isSensitive;
+    // While concealed the only media shown is the blurred stand-in for a
+    // native image embed; every other embed is dropped entirely.
+    final media = concealed
+        ? _buildSensitivePlaceholder()
+        : _buildMediaEmbed(context);
+    final showsExternalEmbed = !concealed && post.post.embed?.external != null;
+    final showsBlueskyEmbed =
+        !concealed && post.post.embed?.blueskyPost != null;
+    final showsText = !concealed && post.post.text.isNotEmpty;
     // Everything that can sit under the title and therefore needs the gap
-    // after it: native media, either embed card, or the post text.
+    // after it: the reveal banner, native media, either embed card, or the
+    // post text.
     final hasContentBelowTitle =
+        sensitive ||
         media != null ||
-        post.post.embed?.external != null ||
-        post.post.embed?.blueskyPost != null ||
-        post.post.text.isNotEmpty;
+        showsExternalEmbed ||
+        showsBlueskyEmbed ||
+        showsText;
 
     return Container(
       margin: EdgeInsets.only(bottom: showHeader ? 8 : 0),
@@ -220,17 +333,27 @@ class PostCard extends StatelessWidget {
                   if (hasContentBelowTitle) const SizedBox(height: 12),
                 ],
 
+                // Reveal control for a self-labelled post, directly under
+                // the title so the reader sees why the content is missing.
+                if (sensitive) ...[
+                  SensitiveContentBanner(
+                    concealed: concealed,
+                    onToggle: onToggleReveal,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+
                 // Native image/video embed
                 if (media != null) ...[media, const SizedBox(height: 8)],
 
                 // Embed thumbnail
-                if (post.post.embed?.external != null) ...[
+                if (showsExternalEmbed) ...[
                   _buildExternalEmbed(context, post.post.embed!.external!),
                   const SizedBox(height: 8),
                 ],
 
                 // Bluesky post embed
-                if (post.post.embed?.blueskyPost != null) ...[
+                if (showsBlueskyEmbed) ...[
                   BlueskyPostCard(
                     embed: post.post.embed!.blueskyPost!,
                     currentTime: currentTime,
@@ -239,7 +362,7 @@ class PostCard extends StatelessWidget {
                 ],
 
                 // Post text (clickable for navigation)
-                if (post.post.text.isNotEmpty) ...[
+                if (showsText) ...[
                   if (!disableNavigation)
                     InkWell(
                       onTap: () => _navigateToDetail(context),
@@ -252,13 +375,14 @@ class PostCard extends StatelessWidget {
             ),
 
             // External link (if present)
-            if (post.post.embed?.external != null) ...[
+            if (showsExternalEmbed) ...[
               const SizedBox(height: 8),
               ExternalLinkBar(embed: post.post.embed!.external!),
             ],
 
             // Sources section (for megathreads, shown in detail view)
             if (showSources &&
+                !concealed &&
                 post.post.embed?.external?.sources != null &&
                 post.post.embed!.external!.sources!.isNotEmpty) ...[
               const SizedBox(height: 16),
@@ -332,6 +456,23 @@ class PostCard extends StatelessWidget {
         ),
       );
     }
+  }
+
+  /// Builds the blurred stand-in for a concealed native image embed.
+  ///
+  /// Only native images get one: a video, link or quote block shows nothing
+  /// of the post on its own, so concealing it leaves nothing to stand in for.
+  Widget? _buildSensitivePlaceholder() {
+    final embed = post.post.embed;
+    if (embed is! ImagesPostEmbed) {
+      return null;
+    }
+
+    return SensitiveImagePlaceholder(
+      image: embed.images.first,
+      bounds: kFeedRatioBounds,
+      onReveal: onToggleReveal,
+    );
   }
 
   /// Builds the native media block for image and video embeds.

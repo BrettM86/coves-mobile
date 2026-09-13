@@ -347,6 +347,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           title: _titleController.text.trim().isNotEmpty
               ? _titleController.text.trim()
               : null,
+          // Mirror the self-label sent to the API so the author's own post
+          // arrives at the detail screen concealed, not exposed until refetch.
+          labels: _isNsfw ? const ['nsfw'] : const [],
         ),
         stats: PostStats(upvotes: 0, downvotes: 0, score: 0, commentCount: 0),
         embed: embed,

@@ -18,6 +18,7 @@ import 'media/native_image_embed.dart';
 import 'media/native_video_embed.dart';
 import 'media/streamable_video_embed.dart';
 import 'rich_text_renderer.dart';
+import 'sensitive_content.dart';
 import 'source_link_bar.dart';
 import 'tappable_author.dart';
 import 'user_avatar.dart';
@@ -54,6 +55,13 @@ class _DetailedPostViewState extends State<DetailedPostView> {
   int _currentImageIndex = 0;
   final PageController _imagePageController = PageController();
 
+  /// The uri whose sensitive content the reader chose to reveal, if any.
+  ///
+  /// Held against the uri rather than as a bare flag because this State is
+  /// reused across posts: a different post must start concealed even when
+  /// its predecessor was revealed.
+  String? _revealedUri;
+
   @override
   void didUpdateWidget(DetailedPostView oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -67,6 +75,9 @@ class _DetailedPostViewState extends State<DetailedPostView> {
       if (_imagePageController.hasClients) {
         _imagePageController.jumpToPage(0);
       }
+      // Cleared explicitly, so revealing A, moving to B and coming back to A
+      // conceals A again.
+      _revealedUri = null;
     }
   }
 
@@ -74,6 +85,28 @@ class _DetailedPostViewState extends State<DetailedPostView> {
   void dispose() {
     _imagePageController.dispose();
     super.dispose();
+  }
+
+  /// Whether the post's content is currently hidden behind the reveal
+  /// controls. Only ever true for a self-labelled post.
+  bool get _concealed =>
+      widget.post.post.isSensitive && _revealedUri != widget.post.post.uri;
+
+  void _toggleReveal() {
+    final uri = widget.post.post.uri;
+    final concealing = _revealedUri == uri;
+    setState(() {
+      _revealedUri = concealing ? null : uri;
+      // Concealing unmounts the external carousel, which remounts on page
+      // one when shown again. Without this the indicator would keep counting
+      // from the page the reader had left it on.
+      if (concealing) {
+        _currentImageIndex = 0;
+        if (_imagePageController.hasClients) {
+          _imagePageController.jumpToPage(0);
+        }
+      }
+    });
   }
 
   /// Whether the post carries a native (images/video) embed to render.
@@ -131,28 +164,44 @@ class _DetailedPostViewState extends State<DetailedPostView> {
           _buildTitle(),
         ],
 
-        // Media section - full width, content-first
-        if (widget.post.post.embed?.external != null ||
-            widget.post.post.embed?.blueskyPost != null ||
-            _hasNativeMedia) ...[
+        // Reveal control for a self-labelled post, under the title so the
+        // reader sees why the content is missing.
+        if (widget.post.post.isSensitive) ...[
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SensitiveContentBanner(
+              concealed: _concealed,
+              onToggle: _toggleReveal,
+            ),
+          ),
+        ],
+
+        // Media section - full width, content-first. While concealed only a
+        // native image embed has a stand-in to show, so anything else would
+        // contribute this spacer and an empty section.
+        if ((!_concealed || widget.post.post.embed is ImagesPostEmbed) &&
+            (widget.post.post.embed?.external != null ||
+                widget.post.post.embed?.blueskyPost != null ||
+                _hasNativeMedia)) ...[
           const SizedBox(height: 12),
           _buildMediaSection(),
         ],
 
         // Post text - clean and readable
-        if (widget.post.post.text.isNotEmpty) ...[
+        if (!_concealed && widget.post.post.text.isNotEmpty) ...[
           const SizedBox(height: 12),
           _buildBodyText(),
         ],
 
         // External link bar
-        if (widget.post.post.embed?.external != null) ...[
+        if (!_concealed && widget.post.post.embed?.external != null) ...[
           const SizedBox(height: 12),
           _buildExternalLink(),
         ],
 
         // Bluesky post embed
-        if (widget.post.post.embed?.blueskyPost != null) ...[
+        if (!_concealed && widget.post.post.embed?.blueskyPost != null) ...[
           const SizedBox(height: 12),
           BlueskyPostCard(
             embed: widget.post.post.embed!.blueskyPost!,
@@ -161,7 +210,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
         ],
 
         // Sources section
-        if (widget.showSources) _buildSourcesSection(),
+        if (widget.showSources && !_concealed) _buildSourcesSection(),
       ],
     );
   }
@@ -246,6 +295,10 @@ class _DetailedPostViewState extends State<DetailedPostView> {
 
   /// Main media section based on content type
   Widget _buildMediaSection() {
+    if (_concealed) {
+      return _buildSensitivePlaceholder();
+    }
+
     switch (_contentType) {
       case _ContentType.nativeSingleImage:
         return _buildNativeSingleImage();
@@ -271,6 +324,28 @@ class _DetailedPostViewState extends State<DetailedPostView> {
       case _ContentType.textOnly:
         return const SizedBox.shrink();
     }
+  }
+
+  /// The blurred stand-in for a concealed native image embed, single or
+  /// gallery.
+  ///
+  /// Only native images get one: a video, carousel, link card or quote shows
+  /// nothing of the post on its own, so concealing it leaves nothing to stand
+  /// in for.
+  Widget _buildSensitivePlaceholder() {
+    final embed = widget.post.post.embed;
+    if (embed is! ImagesPostEmbed) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: SensitiveImagePlaceholder(
+        image: embed.images.first,
+        bounds: kDetailRatioBounds,
+        onReveal: _toggleReveal,
+      ),
+    );
   }
 
   /// Native single image: full card width at its own aspect ratio, tapping

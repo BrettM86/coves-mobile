@@ -112,25 +112,71 @@ class ViewerState {
   final List<String>? tags;
 }
 
+/// Reads the active self-label values out of a record's `labels` field.
+///
+/// Records come from federated repos and may be shaped however the writing
+/// client left them, so every malformed part is skipped instead of throwing:
+/// a throw here would make TimelineResponse.fromJson drop the whole post.
+/// `com.atproto.label.defs#selfLabel` defines only `val`; `neg` is a Coves
+/// extension, mirrored from the backend's `posts.SelfLabel` struct and the web
+/// client's `hasNSFWLabel` rule: a label counts as active only when the `neg`
+/// key is absent or its value is the boolean `false`. Anything else — an
+/// explicit `null` included — is not a value either side writes, so it is
+/// skipped rather than guessed at.
+List<String> _parseSelfLabels(Object? labels) {
+  if (labels is! Map) {
+    return const [];
+  }
+  final values = labels['values'];
+  if (values is! List) {
+    return const [];
+  }
+
+  final active = <String>[];
+  for (final entry in values) {
+    if (entry is! Map) {
+      continue;
+    }
+    final value = entry['val'];
+    if (value is! String) {
+      continue;
+    }
+    if (entry.containsKey('neg') && entry['neg'] != false) {
+      continue;
+    }
+    active.add(value);
+  }
+  return List.unmodifiable(active);
+}
+
 /// Record data for a post, containing the actual content.
 ///
 /// This matches the backend's `social.coves.community.post` record type.
 /// When a post is deleted, this record will be null and PostView.isDeleted
 /// will be true.
 class PostRecord {
-  const PostRecord({this.title, this.content, this.facets});
+  const PostRecord({
+    this.title,
+    this.content,
+    this.facets,
+    this.labels = const [],
+  });
 
   factory PostRecord.fromJson(Map<String, dynamic> json) {
     return PostRecord(
       title: json['title'] as String?,
       content: json['content'] as String?,
       facets: parseFacetsFromRecord(json),
+      labels: _parseSelfLabels(json['labels']),
     );
   }
 
   final String? title;
   final String? content;
   final List<RichTextFacet>? facets;
+
+  /// Active (non-negated) self-label values carried by the record.
+  final List<String> labels;
 }
 
 class PostView {
@@ -229,6 +275,9 @@ class PostView {
   ///
   /// Returns null when [record] is null or when the post has no facets.
   List<RichTextFacet>? get facets => record?.facets;
+
+  /// Whether the author self-labelled this post as sensitive.
+  bool get isSensitive => record?.labels.contains('nsfw') ?? false;
 
   /// Returns a copy with the given fields replaced.
   ///

@@ -50,6 +50,16 @@ abstract final class LucidePaths {
   /// `heart`
   static const List<String> heart = [_heartD];
 
+  /// `info` — the sensitive-content banner's glyph
+  ///
+  /// The circle is drawn as two half arcs: the parser reads arc commands but
+  /// has no `circle` primitive.
+  static const List<String> info = [
+    'M22 12a10 10 0 1 0-20 0a10 10 0 1 0 20 0',
+    'M12 16v-4',
+    'M12 8h.01',
+  ];
+
   /// `arrow-left` — back button
   static const List<String> arrowLeft = ['m12 19-7-7 7-7', 'M19 12H5'];
 
