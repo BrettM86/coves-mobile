@@ -1,0 +1,9 @@
+What's new in 1.4.0
+
+*New*
+• Search for posts within a community
+• Added Downvote for posts and comments
+• Added NSFW post handling
+• Smoother zoom and swipe gestures in the image viewer
+• Opening a comment now always refreshes feed
+• More reliable sign-in functionality
