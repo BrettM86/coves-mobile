@@ -99,6 +99,12 @@ abstract final class ErrorMessage {
   static String loadFeed(Object error) =>
       getErrorMessage(error, fallback: 'Could not load feed. Pull to refresh.');
 
+  /// Error message for post search
+  static String searchPosts(Object error) => getErrorMessage(
+    error,
+    fallback: 'Could not search posts. Pull to refresh.',
+  );
+
   /// Error message for profile operations
   static String profile(Object error) => getErrorMessage(
     error,

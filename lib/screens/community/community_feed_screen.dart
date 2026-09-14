@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -24,6 +25,7 @@ import '../../utils/pagination_scroll_listener.dart';
 import '../../utils/responsive_utils.dart';
 import '../../widgets/community_avatar.dart';
 import '../../widgets/community_header.dart';
+import '../../widgets/icons/app_icons.dart';
 import '../../widgets/icons/back_icon.dart';
 import '../../widgets/loading_error_states.dart';
 import '../../widgets/paginated_sliver_list.dart';
@@ -54,6 +56,10 @@ class CommunityFeedScreen extends StatefulWidget {
   State<CommunityFeedScreen> createState() => _CommunityFeedScreenState();
 }
 
+/// The backend caps `q` at 500 bytes of UTF-8, so a query is measured after
+/// encoding rather than by character count.
+const int _maxSearchQueryBytes = 500;
+
 class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   // Shared app-wide API client (owned by main.dart) — do not dispose here
   late final CovesApiService _apiService;
@@ -64,6 +70,18 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
 
   // Feed sort state
   String _feedSort = 'hot';
+
+  // Search state. The controller and focus node are owned here, not in the
+  // header: `_FeedSortDelegate.shouldRebuild` fires on every screen rebuild,
+  // so anything created inside the header's build would drop the typed text.
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+
+  // The query the feed is actually showing, committed on submit. Paging and
+  // refresh read this, never the live controller text, so editing the field
+  // without submitting cannot change what the next page asks for.
+  String? _submittedQuery;
 
   // Community state
   CommunityView? _community;
@@ -91,7 +109,12 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     _feedController = CursorPaginationController<FeedViewPost>(
       fetchPage: _fetchFeedPage,
       onPageLoaded: _syncViewerStates,
-      errorMapper: ErrorMessage.loadFeed,
+      // Read at the moment the failure lands, so the copy describes what
+      // was actually asked for: a search while one is committed, the
+      // community feed otherwise.
+      errorMapper: (error) => _submittedQuery != null
+          ? ErrorMessage.searchPosts(error)
+          : ErrorMessage.loadFeed(error),
       // Cursor drift hands back overlapping pages; the list keys its rows
       // by this URI and asserts on duplicates.
       idOf: (post) => post.post.uri,
@@ -115,6 +138,8 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     _paginationListener.dispose();
     _feedController.dispose();
     _scrollController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -256,11 +281,18 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   }
 
   Future<CursorPage<FeedViewPost>> _fetchFeedPage(String? cursor) async {
-    final response = await _apiService.getCommunityFeed(
-      community: widget.identifier,
-      sort: _feedSort,
-      cursor: cursor,
-    );
+    final query = _submittedQuery;
+    final response = query != null
+        ? await _apiService.searchPosts(
+            q: query,
+            community: widget.identifier,
+            cursor: cursor,
+          )
+        : await _apiService.getCommunityFeed(
+            community: widget.identifier,
+            sort: _feedSort,
+            cursor: cursor,
+          );
 
     return CursorPage<FeedViewPost>(
       items: response.feed,
@@ -491,44 +523,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
             if (_selectedTabIndex == 0)
               SliverPersistentHeader(
                 pinned: true,
-                delegate: _FeedSortDelegate(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: const BoxDecoration(
-                      color: AppColors.background,
-                      border: Border(
-                        bottom: BorderSide(color: AppColors.border),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        _FeedSortChip(
-                          label: 'Hot',
-                          icon: Icons.local_fire_department,
-                          isSelected: _feedSort == 'hot',
-                          onTap: () => _onFeedSortChanged('hot'),
-                        ),
-                        const SizedBox(width: 8),
-                        _FeedSortChip(
-                          label: 'New',
-                          icon: Icons.schedule,
-                          isSelected: _feedSort == 'new',
-                          onTap: () => _onFeedSortChanged('new'),
-                        ),
-                        const SizedBox(width: 8),
-                        _FeedSortChip(
-                          label: 'Top',
-                          icon: Icons.trending_up,
-                          isSelected: _feedSort == 'top',
-                          onTap: () => _onFeedSortChanged('top'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                delegate: _FeedSortDelegate(child: _buildFeedSortHeader()),
               ),
             // Content based on selected tab
             if (_selectedTabIndex == 0)
@@ -539,6 +534,214 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
         ),
       ),
     );
+  }
+
+  /// The pinned 56px header: sort chips plus a search button, or the search
+  /// field while a search is open. Vertical padding of 8 leaves exactly 40px
+  /// of content, which is what both rows are sized to.
+  Widget _buildFeedSortHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: _isSearching ? _buildFeedSearchRow() : _buildFeedSortRow(),
+    );
+  }
+
+  Widget _buildFeedSortRow() {
+    return Row(
+      children: [
+        // The chips scroll rather than shrink: at 320dp the three of them
+        // plus the search button do not fit, and truncating a sort label
+        // is worse than letting the row slide.
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _FeedSortChip(
+                  label: 'Hot',
+                  icon: Icons.local_fire_department,
+                  isSelected: _feedSort == 'hot',
+                  onTap: () => _onFeedSortChanged('hot'),
+                ),
+                const SizedBox(width: 8),
+                _FeedSortChip(
+                  label: 'New',
+                  icon: Icons.schedule,
+                  isSelected: _feedSort == 'new',
+                  onTap: () => _onFeedSortChanged('new'),
+                ),
+                const SizedBox(width: 8),
+                _FeedSortChip(
+                  label: 'Top',
+                  icon: Icons.trending_up,
+                  isSelected: _feedSort == 'top',
+                  onTap: () => _onFeedSortChanged('top'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Semantics(
+          button: true,
+          label: 'Search posts',
+          child: GestureDetector(
+            key: const ValueKey('community_feed_search_button'),
+            behavior: HitTestBehavior.opaque,
+            onTap: _onSearchOpened,
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: Center(
+                child: AppIcon.search(color: AppColors.textSecondary, size: 20),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFeedSearchRow() {
+    return Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 40,
+            child: TextField(
+              key: const ValueKey('community_feed_search_field'),
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              autofocus: true,
+              textInputAction: TextInputAction.search,
+              onSubmitted: _onSearchSubmitted,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 15,
+              ),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Search posts in this community',
+                hintStyle: TextStyle(
+                  color: AppColors.textMuted.withValues(alpha: 0.8),
+                  fontSize: 15,
+                ),
+                filled: true,
+                fillColor: AppColors.backgroundTertiary,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(
+                    color: AppColors.border.withValues(alpha: 0.5),
+                    width: 0.5,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: AppColors.teal),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Semantics(
+          button: true,
+          label: 'Close search',
+          child: GestureDetector(
+            key: const ValueKey('community_feed_search_close'),
+            behavior: HitTestBehavior.opaque,
+            onTap: _onSearchClosed,
+            child: const SizedBox(
+              width: 40,
+              height: 40,
+              child: Icon(
+                Icons.close,
+                size: 20,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _onSearchOpened() {
+    setState(() {
+      _isSearching = true;
+    });
+  }
+
+  /// Commits the typed query.
+  ///
+  /// A blank one is not a search: with nothing committed it leaves the feed
+  /// on screen untouched, and over a running search it drops the results and
+  /// brings the community feed back, keeping the field open so the user can
+  /// type again. A query the backend would reject for length is refused here
+  /// instead, with the field and its text left alone to be shortened.
+  void _onSearchSubmitted(String value) {
+    final query = value.trim();
+    if (query.isEmpty) {
+      if (_submittedQuery == null) {
+        return;
+      }
+      setState(() {
+        _submittedQuery = null;
+      });
+      _feedController.reset();
+      _loadFeed();
+      return;
+    }
+    if (utf8.encode(query).length > _maxSearchQueryBytes) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Search is too long.'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.primary,
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _submittedQuery = query;
+    });
+    // Drop the feed the search is replacing. Without this a search that
+    // fails or matches nothing would leave the community's own posts under
+    // the error banner, since refresh() keeps the loaded items on failure.
+    _feedController.reset();
+    _loadFeed();
+  }
+
+  /// Closes the field, restoring the community feed if a search replaced it.
+  void _onSearchClosed() {
+    _searchController.clear();
+    _searchFocusNode.unfocus();
+    final hadSearch = _submittedQuery != null;
+    setState(() {
+      _isSearching = false;
+      _submittedQuery = null;
+    });
+    // A field that was never submitted replaced nothing, so there is nothing
+    // to restore: refetching would throw away the user's place in the list
+    // already on screen. After a real search, the results must not linger
+    // under what replaces them. `_feedSort` was never touched by the search,
+    // so this reloads at whatever sort the user had chosen before opening it.
+    if (!hadSearch) {
+      return;
+    }
+    _feedController.reset();
+    _loadFeed();
   }
 
   AppBar _buildSimpleAppBar() {
@@ -725,6 +928,13 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   Widget _buildEmptyPostsState() {
     final communityName =
         _community?.displayName ?? _community?.name ?? 'this community';
+    // A search with no matches is not an empty community: saying "No posts
+    // yet" here would be false whenever the community has posts.
+    final isSearch = _submittedQuery != null;
+    final title = isSearch ? 'No posts match' : 'No posts yet';
+    final subtitle = isSearch
+        ? 'Try a different search.'
+        : 'Be the first to share something in $communityName!';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -745,9 +955,9 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'No posts yet',
-              style: TextStyle(
+            Text(
+              title,
+              style: const TextStyle(
                 fontSize: 20,
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.bold,
@@ -755,8 +965,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Be the first to share something in '
-              '$communityName!',
+              subtitle,
               style: const TextStyle(
                 fontSize: 14,
                 color: AppColors.textSecondary,

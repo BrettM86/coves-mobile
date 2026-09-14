@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/icons/app_icons.dart';
 import 'communities_admin_panel.dart';
 import 'communities_discovery_screen.dart';
 
@@ -35,11 +36,11 @@ class CommunitiesScreen extends StatelessWidget {
         backgroundColor: AppColors.background,
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.workspaces_rounded, size: 22, color: AppColors.coral),
-            SizedBox(width: 10),
-            Text(
+            AppIcon.communities(size: 22, color: AppColors.coral),
+            const SizedBox(width: 10),
+            const Text(
               'Communities',
               style: TextStyle(
                 fontSize: 20,

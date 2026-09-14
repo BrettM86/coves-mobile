@@ -141,11 +141,12 @@ class CovesApiService {
     return data;
   }
 
-  /// Shared implementation for the three feed endpoints, which take the
+  /// Shared implementation for the feed endpoints, which take the
   /// same parameters and return the same shape.
   Future<TimelineResponse> _getFeed(
     String path,
     String operation, {
+    String? q,
     String? community,
     required String sort,
     String? timeframe,
@@ -157,6 +158,7 @@ class CovesApiService {
       send: () => _dio.get(
         path,
         queryParameters: {
+          'q': ?q,
           'community': ?community,
           'sort': sort,
           'limit': limit,
@@ -238,6 +240,35 @@ class CovesApiService {
     return _getFeed(
       '/xrpc/social.coves.communityFeed.getCommunity',
       'fetch community feed',
+      community: community,
+      sort: sort,
+      timeframe: timeframe,
+      limit: limit,
+      cursor: cursor,
+    );
+  }
+
+  /// Search posts (public, no auth required)
+  ///
+  /// Parameters:
+  /// - [q]: Search query (required, max 500 bytes of UTF-8)
+  /// - [community]: Restrict results to one community (DID, handle or name)
+  /// - [sort]: 'relevance', 'new' or 'top' (default: 'relevance')
+  /// - [timeframe]: only meaningful with 'top' sort
+  /// - [limit]: Number of posts per page (default: 15, max: 50)
+  /// - [cursor]: Pagination cursor from previous response
+  Future<TimelineResponse> searchPosts({
+    required String q,
+    String? community,
+    String sort = 'relevance',
+    String? timeframe,
+    int limit = 15,
+    String? cursor,
+  }) {
+    return _getFeed(
+      '/xrpc/social.coves.feed.searchPosts',
+      'search posts',
+      q: q,
       community: community,
       sort: sort,
       timeframe: timeframe,
