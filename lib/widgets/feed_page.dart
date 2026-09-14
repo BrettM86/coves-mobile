@@ -35,6 +35,8 @@ class FeedPage extends StatefulWidget {
     required this.onClearErrorAndLoadMore,
     required this.isAuthenticated,
     required this.currentTime,
+    this.loadMoreError,
+    this.onRetryLoadMore,
     super.key,
   });
 
@@ -44,10 +46,12 @@ class FeedPage extends StatefulWidget {
   final bool isLoadingMore;
   final bool hasMore;
   final String? error;
+  final String? loadMoreError;
   final ScrollController scrollController;
   final Future<void> Function() onRefresh;
   final VoidCallback onRetry;
   final VoidCallback onClearErrorAndLoadMore;
+  final VoidCallback? onRetryLoadMore;
   final bool isAuthenticated;
   final DateTime? currentTime;
 
@@ -277,7 +281,9 @@ class _FeedPageState extends State<FeedPage>
     }
 
     // Show error message for pagination failures
-    if (widget.error != null) {
+    final paginationError = widget.loadMoreError ?? widget.error;
+    if (paginationError != null) {
+      final hasLoadMoreError = widget.loadMoreError != null;
       return Container(
         margin: const EdgeInsets.all(16),
         padding: const EdgeInsets.all(16),
@@ -291,7 +297,9 @@ class _FeedPageState extends State<FeedPage>
             const Icon(Icons.error_outline, color: AppColors.primary, size: 32),
             const SizedBox(height: 8),
             Text(
-              _getUserFriendlyError(widget.error!),
+              hasLoadMoreError
+                  ? paginationError
+                  : _getUserFriendlyError(paginationError),
               style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 14,
@@ -300,7 +308,9 @@ class _FeedPageState extends State<FeedPage>
             ),
             const SizedBox(height: 12),
             TextButton(
-              onPressed: widget.onClearErrorAndLoadMore,
+              onPressed: hasLoadMoreError
+                  ? widget.onRetryLoadMore ?? widget.onClearErrorAndLoadMore
+                  : widget.onRetry,
               style: TextButton.styleFrom(foregroundColor: AppColors.primary),
               child: const Text('Retry'),
             ),

@@ -79,9 +79,15 @@ class FakeMultiFeedProvider extends MultiFeedProvider {
 
   int _loadFeedCallCount = 0;
   int _retryCallCount = 0;
+  FeedType _currentFeedType = FeedType.discover;
+  final List<FeedType> loadMoreCalls = [];
+  final List<FeedType> retryLoadMoreCalls = [];
 
   int get loadFeedCallCount => _loadFeedCallCount;
   int get retryCallCount => _retryCallCount;
+
+  @override
+  FeedType get currentFeedType => _currentFeedType;
 
   @override
   FeedState getState(FeedType type) => _states[type] ?? FeedState.initial();
@@ -89,6 +95,10 @@ class FakeMultiFeedProvider extends MultiFeedProvider {
   void setStateForType(FeedType type, FeedState state) {
     _states[type] = state;
     notifyListeners();
+  }
+
+  set currentFeedType(FeedType type) {
+    _currentFeedType = type;
   }
 
   void setPosts(FeedType type, List<FeedViewPost> posts) {
@@ -128,7 +138,12 @@ class FakeMultiFeedProvider extends MultiFeedProvider {
 
   @override
   Future<void> loadMore(FeedType type) async {
-    // No-op for testing
+    loadMoreCalls.add(type);
+  }
+
+  @override
+  Future<void> retryLoadMore(FeedType type) async {
+    retryLoadMoreCalls.add(type);
   }
 
   @override
@@ -303,6 +318,37 @@ void main() {
       // Should show the post and a loading indicator
       expect(find.text('Test Post'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('wires For You load-more error and Retry without refreshing', (
+      tester,
+    ) async {
+      const message =
+          'Discover is temporarily unavailable. Try again in 18 seconds.';
+      fakeAuthProvider.setAuthenticated(value: true);
+      fakeFeedProvider
+        ..currentFeedType = FeedType.forYou
+        ..setStateForType(
+          FeedType.forYou,
+          FeedState(
+            posts: [_createMockPost('For You post')],
+            loadMoreError: message,
+          ),
+        );
+
+      await tester.pumpWidget(createTestWidget());
+      await tester.pump();
+      final loadFeedCallsBeforeRetry = fakeFeedProvider.loadFeedCallCount;
+
+      expect(find.text(message), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Retry'));
+      await tester.pump();
+
+      expect(fakeFeedProvider.retryLoadMoreCalls, [FeedType.forYou]);
+      expect(fakeFeedProvider.loadMoreCalls, isEmpty);
+      expect(fakeFeedProvider.retryCallCount, 0);
+      expect(fakeFeedProvider.loadFeedCallCount, loadFeedCallsBeforeRetry);
     });
 
     testWidgets('should have SafeArea wrapping body', (tester) async {

@@ -16,6 +16,7 @@ void main() {
     int statusCode,
     Object? data, {
     DioExceptionType type = DioExceptionType.badResponse,
+    Headers? headers,
   }) {
     return DioException(
       requestOptions: RequestOptions(path: '/test'),
@@ -24,8 +25,13 @@ void main() {
         requestOptions: RequestOptions(path: '/test'),
         statusCode: statusCode,
         data: data,
+        headers: headers,
       ),
     );
+  }
+
+  Headers retryAfterHeaders(List<String> values) {
+    return Headers.fromMap({'Retry-After': values});
   }
 
   DioException networkError(DioExceptionType type, {String? message}) {
@@ -87,6 +93,111 @@ void main() {
       );
 
       expect(exception.message, 'title too long');
+    });
+
+    test('retains the XRPC error code through every response subtype', () {
+      final cases = [
+        (statusCode: 400, expectedType: ApiException),
+        (statusCode: 401, expectedType: AuthenticationException),
+        (statusCode: 404, expectedType: NotFoundException),
+        (statusCode: 500, expectedType: ServerException),
+      ];
+
+      for (final testCase in cases) {
+        final errorCode = 'MachineError${testCase.statusCode}';
+        final message = 'Display message ${testCase.statusCode}';
+        final error = responseError(testCase.statusCode, {
+          'error': errorCode,
+          'message': message,
+        });
+
+        final exception = ApiException.fromDioError(error);
+
+        expect(exception.runtimeType, testCase.expectedType);
+        expect(exception.errorCode, errorCode);
+        expect(exception.message, message);
+        expect(exception.statusCode, testCase.statusCode);
+        expect(exception.originalError, same(error));
+      }
+    });
+
+    test('parses and caps Retry-After for DiscoverUnavailable 503 only', () {
+      for (var seconds = 0; seconds <= 300; seconds++) {
+        final error = responseError(503, {
+          'error': 'DiscoverUnavailable',
+          'message': 'Discover is temporarily unavailable',
+        }, headers: retryAfterHeaders(['$seconds']));
+
+        final exception = ApiException.fromDioError(error);
+
+        expect(
+          exception.retryAfterSeconds,
+          seconds,
+          reason: 'Retry-After: $seconds',
+        );
+        expect(exception.message, 'Discover is temporarily unavailable');
+        expect(exception.statusCode, 503);
+        expect(exception.originalError, same(error));
+      }
+
+      for (final value in [
+        '301',
+        '99999999999999999999999999999999999999999999999999',
+      ]) {
+        final exception = ApiException.fromDioError(
+          responseError(503, {
+            'error': 'DiscoverUnavailable',
+          }, headers: retryAfterHeaders([value])),
+        );
+
+        expect(exception.retryAfterSeconds, 300, reason: 'Retry-After: $value');
+      }
+    });
+
+    test('rejects invalid or inapplicable Retry-After values', () {
+      for (final values in [
+        [''],
+        ['not-a-number'],
+        ['-1'],
+        ['+1'],
+        ['1.5'],
+        ['1e2'],
+        [' 1'],
+        ['1 '],
+        ['301seconds'],
+        ['301, 20'],
+        ['301.5'],
+        ['999seconds'],
+        ['999, 20'],
+        ['999.5'],
+        ['Wed, 21 Oct 2015 07:28:00 GMT'],
+        ['10', '20'],
+      ]) {
+        final exception = ApiException.fromDioError(
+          responseError(503, {
+            'error': 'DiscoverUnavailable',
+          }, headers: retryAfterHeaders(values)),
+        );
+
+        expect(exception.retryAfterSeconds, isNull, reason: '$values');
+      }
+
+      for (final statusCode in [502, 504]) {
+        final exception = ApiException.fromDioError(
+          responseError(statusCode, {
+            'error': 'DiscoverUnavailable',
+          }, headers: retryAfterHeaders(['10'])),
+        );
+
+        expect(exception.retryAfterSeconds, isNull);
+      }
+
+      final wrongCode = ApiException.fromDioError(
+        responseError(503, {
+          'error': 'OtherUnavailable',
+        }, headers: retryAfterHeaders(['10'])),
+      );
+      expect(wrongCode.retryAfterSeconds, isNull);
     });
 
     test('falls back to the XRPC error code when message is absent', () {

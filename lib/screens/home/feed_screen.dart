@@ -27,7 +27,7 @@ class FeedScreenState extends State<FeedScreen> {
   late PageController _pageController;
   final Map<FeedType, ScrollController> _scrollControllers = {};
   late AuthProvider _authProvider;
-  bool _wasAuthenticated = false;
+  String? _authDid;
 
   // Throttle pagination calls per feed type (100ms minimum between calls).
   // Prevents rapid-fire pagination requests during fast scrolling which can
@@ -53,7 +53,7 @@ class FeedScreenState extends State<FeedScreen> {
 
     // Save reference to AuthProvider for listener management
     _authProvider = context.read<AuthProvider>();
-    _wasAuthenticated = _authProvider.isAuthenticated;
+    _authDid = _authProvider.did;
 
     // Listen to auth changes to sync PageController with provider state
     _authProvider.addListener(_onAuthChanged);
@@ -109,16 +109,25 @@ class FeedScreenState extends State<FeedScreen> {
   /// Discover but PageController stays on page 1. This listener ensures
   /// they stay in sync.
   void _onAuthChanged() {
-    final isAuthenticated = _authProvider.isAuthenticated;
+    if (!mounted) {
+      return;
+    }
+
+    final authDid = _authProvider.did;
+    if (_authDid == authDid) {
+      return;
+    }
+    _authDid = authDid;
 
     // On sign-out: jump to Discover (page 0) to match provider state
-    if (_wasAuthenticated && !isAuthenticated) {
+    if (authDid == null) {
+      _lastSyncedPage = 0;
       if (_pageController.hasClients && _pageController.page != 0) {
         _pageController.jumpToPage(0);
       }
     }
 
-    _wasAuthenticated = isAuthenticated;
+    _loadInitialFeed();
   }
 
   /// Load initial feed based on authentication
@@ -427,12 +436,14 @@ class FeedScreenState extends State<FeedScreen> {
           isLoadingMore: state.isLoadingMore,
           hasMore: state.hasMore,
           error: hasError ? error : null,
+          loadMoreError: state.loadMoreError,
           scrollController: _getOrCreateScrollController(feedType),
           onRefresh: () => provider.loadFeed(feedType, refresh: true),
           onRetry: () => provider.retry(feedType),
           onClearErrorAndLoadMore: () => provider
             ..clearError(feedType)
             ..loadMore(feedType),
+          onRetryLoadMore: () => provider.retryLoadMore(feedType),
           isAuthenticated: isAuthenticated,
           currentTime: provider.currentTime,
         );

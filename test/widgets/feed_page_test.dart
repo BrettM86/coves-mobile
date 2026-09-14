@@ -60,25 +60,32 @@ void main() {
 
   Widget host({
     required List<FeedViewPost> posts,
+    FeedType feedType = FeedType.discover,
     bool isLoadingMore = false,
     bool hasMore = true,
     String? error,
+    String? loadMoreError,
+    VoidCallback? onRetry,
+    VoidCallback? onClearErrorAndLoadMore,
+    VoidCallback? onRetryLoadMore,
   }) {
     return MultiProvider(
       providers: postCardProviders(auth: auth),
       child: MaterialApp(
         home: Scaffold(
           body: FeedPage(
-            feedType: FeedType.discover,
+            feedType: feedType,
             posts: posts,
             isLoading: false,
             isLoadingMore: isLoadingMore,
             hasMore: hasMore,
             error: error,
+            loadMoreError: loadMoreError,
             scrollController: scrollController,
             onRefresh: () async {},
-            onRetry: () {},
-            onClearErrorAndLoadMore: () {},
+            onRetry: onRetry ?? () {},
+            onClearErrorAndLoadMore: onClearErrorAndLoadMore ?? () {},
+            onRetryLoadMore: onRetryLoadMore,
             isAuthenticated: false,
             currentTime: DateTime.parse('2025-01-01T13:00:00Z'),
           ),
@@ -172,5 +179,128 @@ void main() {
     await tester.pumpWidget(host(posts: posts));
 
     expect(find.byKey(ValueKey<String>(posts[0].post.uri)), findsOneWidget);
+  });
+
+  testWidgets('renders a dedicated load-more error verbatim in the footer', (
+    tester,
+  ) async {
+    const message =
+        'Discover is temporarily unavailable. Try again in 18 seconds.';
+
+    await tester.pumpWidget(
+      host(
+        posts: <FeedViewPost>[buildPost('a')],
+        loadMoreError: message,
+        onRetryLoadMore: () {},
+      ),
+    );
+
+    expect(
+      find.descendant(of: find.byKey(footerKey), matching: find.text(message)),
+      findsOneWidget,
+    );
+    expect(find.text('Something went wrong. Please try again'), findsNothing);
+  });
+
+  testWidgets('load-more Retry uses only the dedicated callback', (
+    tester,
+  ) async {
+    var fullRefreshRetries = 0;
+    var legacyPaginationRetries = 0;
+    var loadMoreRetries = 0;
+
+    await tester.pumpWidget(
+      host(
+        posts: <FeedViewPost>[buildPost('a')],
+        loadMoreError:
+            'Discover is temporarily unavailable. Try again in 18 seconds.',
+        onRetry: () => fullRefreshRetries++,
+        onClearErrorAndLoadMore: () => legacyPaginationRetries++,
+        onRetryLoadMore: () => loadMoreRetries++,
+      ),
+    );
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(footerKey),
+        matching: find.widgetWithText(TextButton, 'Retry'),
+      ),
+    );
+    await tester.pump();
+
+    expect(loadMoreRetries, 1);
+    expect(fullRefreshRetries, 0);
+    expect(legacyPaginationRetries, 0);
+  });
+
+  testWidgets('For You full-page errors keep friendly mapping and retry', (
+    tester,
+  ) async {
+    var fullRefreshRetries = 0;
+    var legacyPaginationRetries = 0;
+    var loadMoreRetries = 0;
+
+    await tester.pumpWidget(
+      host(
+        feedType: FeedType.forYou,
+        posts: const <FeedViewPost>[],
+        error: 'SocketException: offline',
+        onRetry: () => fullRefreshRetries++,
+        onClearErrorAndLoadMore: () => legacyPaginationRetries++,
+        onRetryLoadMore: () => loadMoreRetries++,
+      ),
+    );
+
+    expect(find.text('Failed to load feed'), findsOneWidget);
+    expect(find.text('Please check your internet connection'), findsOneWidget);
+    expect(find.text('SocketException: offline'), findsNothing);
+
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Retry'));
+    await tester.pump();
+
+    expect(fullRefreshRetries, 1);
+    expect(legacyPaginationRetries, 0);
+    expect(loadMoreRetries, 0);
+  });
+
+  testWidgets('ordinary footer errors use the refresh retry callback', (
+    tester,
+  ) async {
+    var fullRefreshRetries = 0;
+    var legacyPaginationRetries = 0;
+    var loadMoreRetries = 0;
+
+    await tester.pumpWidget(
+      host(
+        feedType: FeedType.forYou,
+        posts: <FeedViewPost>[buildPost('a')],
+        error: 'Network error: offline',
+        onRetry: () => fullRefreshRetries++,
+        onClearErrorAndLoadMore: () => legacyPaginationRetries++,
+        onRetryLoadMore: () => loadMoreRetries++,
+      ),
+    );
+
+    expect(find.text('Failed to load feed'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(footerKey),
+        matching: find.text('Please check your internet connection'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Network error: offline'), findsNothing);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(footerKey),
+        matching: find.widgetWithText(TextButton, 'Retry'),
+      ),
+    );
+    await tester.pump();
+
+    expect(fullRefreshRetries, 1);
+    expect(legacyPaginationRetries, 0);
+    expect(loadMoreRetries, 0);
   });
 }

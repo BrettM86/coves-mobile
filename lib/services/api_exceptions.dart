@@ -21,7 +21,13 @@ import 'log_redaction.dart';
 
 /// Base class for all API exceptions
 class ApiException implements Exception {
-  ApiException(this.message, {this.statusCode, this.originalError});
+  ApiException(
+    this.message, {
+    this.statusCode,
+    this.errorCode,
+    this.retryAfterSeconds,
+    this.originalError,
+  });
 
   /// Canonical mapping from [DioException] to a typed [ApiException].
   ///
@@ -44,28 +50,39 @@ class ApiException implements Exception {
       // non-string values in either, and a TypeError thrown here would
       // escape the whole ApiException taxonomy.
       String? message;
+      String? errorCode;
       final data = response.data;
       if (data is Map<String, dynamic>) {
         final rawMessage = data['message'];
         final rawError = data['error'];
+        if (rawError is String && rawError.isNotEmpty) {
+          errorCode = rawError;
+        }
         if (rawMessage is String && rawMessage.isNotEmpty) {
           message = rawMessage;
-        } else if (rawError is String && rawError.isNotEmpty) {
-          message = rawError;
+        } else {
+          message = errorCode;
         }
       } else if (data is String && data.isNotEmpty) {
         message = data;
       }
 
+      final retryAfterSeconds =
+          statusCode == 503 && errorCode == 'DiscoverUnavailable'
+          ? _parseRetryAfter(response.headers['retry-after'])
+          : null;
+
       if (statusCode == 401) {
         return AuthenticationException(
           message ?? 'Authentication failed. Token expired or invalid',
+          errorCode: errorCode,
           originalError: error,
         );
       }
       if (statusCode == 404) {
         return NotFoundException(
           message ?? 'Resource not found. PDS or content may not exist',
+          errorCode: errorCode,
           originalError: error,
         );
       }
@@ -73,12 +90,15 @@ class ApiException implements Exception {
         return ServerException(
           message ?? 'Server error. Please try again later',
           statusCode: statusCode,
+          errorCode: errorCode,
+          retryAfterSeconds: retryAfterSeconds,
           originalError: error,
         );
       }
       return ApiException(
         message ?? 'Request failed with status $statusCode',
         statusCode: statusCode,
+        errorCode: errorCode,
         originalError: error,
       );
     }
@@ -143,6 +163,29 @@ class ApiException implements Exception {
     }
   }
 
+  static int? _parseRetryAfter(List<String>? values) {
+    if (values == null || values.length != 1 || values.single.isEmpty) {
+      return null;
+    }
+
+    var seconds = 0;
+    var exceedsMaximum = false;
+    for (final codeUnit in values.single.codeUnits) {
+      final digit = codeUnit - 0x30;
+      if (digit < 0 || digit > 9) {
+        return null;
+      }
+      if (!exceedsMaximum) {
+        if (seconds > 30 || (seconds == 30 && digit > 0)) {
+          exceedsMaximum = true;
+        } else {
+          seconds = seconds * 10 + digit;
+        }
+      }
+    }
+    return exceedsMaximum ? 300 : seconds;
+  }
+
   /// True when a connection error is a DNS resolution failure. Prefers the
   /// typed [SocketException] over Dio's message text, which varies by
   /// platform; the substring check remains as a fallback.
@@ -157,6 +200,8 @@ class ApiException implements Exception {
 
   final String message;
   final int? statusCode;
+  final String? errorCode;
+  final int? retryAfterSeconds;
 
   /// The underlying error, typically the mapped [DioException].
   ///
@@ -187,21 +232,27 @@ ApiException mapDioException(DioException error, {required String operation}) {
 /// Authentication failure (401)
 /// Token expired, invalid, or missing
 class AuthenticationException extends ApiException {
-  AuthenticationException(super.message, {super.originalError})
+  AuthenticationException(super.message, {super.errorCode, super.originalError})
     : super(statusCode: 401);
 }
 
 /// Resource not found (404)
 /// PDS, community, post, or user not found
 class NotFoundException extends ApiException {
-  NotFoundException(super.message, {super.originalError})
+  NotFoundException(super.message, {super.errorCode, super.originalError})
     : super(statusCode: 404);
 }
 
 /// Server error (500+)
 /// Backend or PDS server failure
 class ServerException extends ApiException {
-  ServerException(super.message, {super.statusCode, super.originalError});
+  ServerException(
+    super.message, {
+    super.statusCode,
+    super.errorCode,
+    super.retryAfterSeconds,
+    super.originalError,
+  });
 }
 
 /// Network connectivity failure
