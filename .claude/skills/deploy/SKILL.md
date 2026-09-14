@@ -15,8 +15,10 @@ its steps by hand with individual fastlane lanes, and do not edit
 
 ## Step 1: Decide whether this should ship
 
-1. `git status` — the tree must be clean and on `main`. Uncommitted work either
-   gets committed first or is not in the release.
+1. `git status` — the tree must be clean, on `main`, and `main` must be
+   pushed to `origin`. The script's preflight refuses an untracked or modified
+   file and refuses a local `main` that is ahead of `origin/main`. Uncommitted
+   work either gets committed and pushed first or is not in the release.
 2. Read `git log <last release commit>..HEAD --oneline`. Release commits are
    `chore(release): <version>`, so the previous one is easy to find.
 3. Check for backend coupling. Coves is federated: a client that ships before
@@ -49,6 +51,10 @@ enforce:
 - Plain text. Bullets with `•` render fine on both stores.
 
 The same text goes to both stores; the script copies it into place.
+
+Commit the notes file and push before running the script. Preflight treats the
+untracked notes file as a dirty tree and stops, so a commit such as
+`docs(release): add <name> release notes` has to land on `origin/main` first.
 
 ## Step 4: Run it
 
