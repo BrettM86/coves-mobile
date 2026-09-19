@@ -434,6 +434,7 @@ class _PostCardContent extends StatelessWidget {
     } else {
       // Feed view: compact preview with refined container
       return Container(
+        width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: AppColors.backgroundSecondary.withValues(alpha: 0.7),
