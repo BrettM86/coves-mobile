@@ -962,6 +962,165 @@ void main() {
       expect(result.embed!.thumb, isNull);
     });
   });
+
+  group('unavailable quoted posts', () {
+    // Backend wire shape for a quoted post that cannot be shown. A deleted or
+    // detached quote carries no `author` key at all; a blocked quote carries a
+    // partial author. Literal JSON here on purpose: the `validPostJson` helper
+    // above substitutes a valid author when passed null.
+    Map<String, dynamic> quotedPostJson({
+      required bool unavailable,
+      String? message,
+      Map<String, dynamic>? author,
+    }) {
+      return {
+        'uri': 'at://did:plc:quoted/app.bsky.feed.post/q1',
+        'cid': '',
+        'text': '',
+        'createdAt': '0001-01-01T00:00:00Z',
+        'replyCount': 0,
+        'repostCount': 0,
+        'likeCount': 0,
+        'mediaCount': 0,
+        'hasMedia': false,
+        'unavailable': unavailable,
+        'message': ?message,
+        'author': ?author,
+      };
+    }
+
+    Map<String, dynamic> embedJson({
+      Map<String, dynamic>? quotedPost,
+      Map<String, dynamic>? parentAuthor = const {
+        'did': 'did:plc:parent',
+        'handle': 'parent.bsky.social',
+      },
+      bool parentUnavailable = false,
+      String? parentMessage,
+    }) {
+      return {
+        'post': {
+          'uri': 'at://did:plc:parent/app.bsky.feed.post/p1',
+          'cid': 'bafyparentcid',
+        },
+        'resolved': {
+          'uri': 'at://did:plc:parent/app.bsky.feed.post/p1',
+          'cid': 'bafyparentcid',
+          'text': 'Parent post text',
+          'createdAt': '2026-09-01T12:00:00Z',
+          'replyCount': 0,
+          'repostCount': 0,
+          'likeCount': 0,
+          'mediaCount': 0,
+          'hasMedia': false,
+          'unavailable': parentUnavailable,
+          'message': ?parentMessage,
+          'author': ?parentAuthor,
+          'quotedPost': ?quotedPost,
+        },
+      };
+    }
+
+    test('keeps the parent when a deleted quote has no author', () {
+      final embed = BlueskyPostEmbed.fromJson(
+        embedJson(
+          quotedPost: quotedPostJson(
+            unavailable: true,
+            message: 'This post has been deleted',
+          ),
+        ),
+      );
+
+      expect(embed.resolved, isNotNull);
+      expect(embed.resolved!.text, 'Parent post text');
+      expect(embed.resolved!.quotedPost, isNotNull);
+      expect(embed.resolved!.quotedPost!.unavailable, true);
+      expect(embed.resolved!.quotedPost!.message, 'This post has been deleted');
+    });
+
+    test('keeps the parent when a detached quote has no author', () {
+      final embed = BlueskyPostEmbed.fromJson(
+        embedJson(
+          quotedPost: quotedPostJson(
+            unavailable: true,
+            message: 'This post is unavailable',
+          ),
+        ),
+      );
+
+      expect(embed.resolved, isNotNull);
+      expect(embed.resolved!.text, 'Parent post text');
+      expect(embed.resolved!.quotedPost, isNotNull);
+      expect(embed.resolved!.quotedPost!.unavailable, true);
+      expect(embed.resolved!.quotedPost!.message, 'This post is unavailable');
+    });
+
+    test('keeps the parent when a blocked quote has a partial author', () {
+      final embed = BlueskyPostEmbed.fromJson(
+        embedJson(
+          quotedPost: quotedPostJson(
+            unavailable: true,
+            message: 'This post is from a blocked account',
+            author: const {'did': 'did:plc:blocked', 'handle': ''},
+          ),
+        ),
+      );
+
+      expect(embed.resolved, isNotNull);
+      expect(embed.resolved!.quotedPost, isNotNull);
+      expect(embed.resolved!.quotedPost!.unavailable, true);
+      expect(
+        embed.resolved!.quotedPost!.message,
+        'This post is from a blocked account',
+      );
+    });
+
+    test('treats an available quote without an author as malformed', () {
+      final embed = BlueskyPostEmbed.fromJson(
+        embedJson(quotedPost: quotedPostJson(unavailable: false)),
+      );
+
+      expect(embed.resolved, isNull);
+    });
+
+    test('treats an available parent without an author as malformed', () {
+      final embed = BlueskyPostEmbed.fromJson(embedJson(parentAuthor: null));
+
+      expect(embed.resolved, isNull);
+    });
+
+    test('keeps the parent when a deleted quote sends a null author', () {
+      // The helper drops null-valued keys, so set the explicit null here.
+      final quotedPost = quotedPostJson(
+        unavailable: true,
+        message: 'This post has been deleted',
+      );
+      quotedPost['author'] = null;
+
+      final embed = BlueskyPostEmbed.fromJson(
+        embedJson(quotedPost: quotedPost),
+      );
+
+      expect(embed.resolved, isNotNull);
+      expect(embed.resolved!.text, 'Parent post text');
+      expect(embed.resolved!.quotedPost, isNotNull);
+      expect(embed.resolved!.quotedPost!.unavailable, true);
+      expect(embed.resolved!.quotedPost!.message, 'This post has been deleted');
+    });
+
+    test('treats a quote missing both author and unavailable as malformed', () {
+      final quotedPost = quotedPostJson(
+        unavailable: true,
+        message: 'This post has been deleted',
+      )..remove('unavailable');
+
+      final embed = BlueskyPostEmbed.fromJson(
+        embedJson(quotedPost: quotedPost),
+      );
+
+      expect(embed.resolved, isNull);
+    });
+  });
 }
 
 // Helper to create AuthorView for tests

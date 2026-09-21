@@ -203,13 +203,32 @@ class BlueskyPostResult {
       mediaCount: mediaCount,
       quotedPost: json['quotedPost'] != null
           ? BlueskyPostResult.fromJson(
-              json['quotedPost'] as Map<String, dynamic>,
+              _withAuthorPlaceholder(
+                json['quotedPost'] as Map<String, dynamic>,
+              ),
             )
           : null,
       unavailable: unavailable,
       message: json['message'] as String?,
       embed: embed,
     );
+  }
+
+  /// Stand-in author for an unavailable quoted post, which the backend sends
+  /// with no author field at all (deleted and detached quotes). Callers only
+  /// ever show such a quote's [message], never its author.
+  static const Map<String, dynamic> _unknownAuthor = {'did': '', 'handle': ''};
+
+  /// Supplies [_unknownAuthor] for an unavailable quoted post so the quoting
+  /// post still parses instead of being dropped as malformed. Any other post
+  /// is returned untouched, so a missing author remains a format error.
+  static Map<String, dynamic> _withAuthorPlaceholder(
+    Map<String, dynamic> json,
+  ) {
+    if (json['author'] != null || json['unavailable'] != true) {
+      return json;
+    }
+    return {...json, 'author': _unknownAuthor};
   }
 
   final String uri;
