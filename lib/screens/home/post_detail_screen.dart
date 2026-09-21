@@ -27,6 +27,27 @@ import '../../widgets/tappable_community.dart';
 import '../compose/reply_screen.dart';
 import 'focused_thread_screen.dart';
 
+const _commentThreadMaxDepth = 6;
+
+bool _isCommentDisplayable(
+  Iterable<ThreadViewComment> comments,
+  String targetUri,
+  Set<String> collapsedComments,
+) {
+  bool visit(ThreadViewComment thread, int depth) {
+    if (thread.comment.uri == targetUri) {
+      return true;
+    }
+    if (depth >= _commentThreadMaxDepth ||
+        collapsedComments.contains(thread.comment.uri)) {
+      return false;
+    }
+    return thread.replies?.any((reply) => visit(reply, depth + 1)) ?? false;
+  }
+
+  return comments.any((thread) => visit(thread, 0));
+}
+
 /// Post Detail Screen
 ///
 /// Displays a full post with its comments.
@@ -86,8 +107,8 @@ class PostDetailScreen extends StatefulWidget {
 }
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
-  // ScrollController created lazily with cached scroll position for instant
-  // restoration
+  // ScrollController created lazily; explicit comment focus overrides
+  // restoration.
   late ScrollController _scrollController;
   final GlobalKey _commentsHeaderKey = GlobalKey();
 
@@ -174,7 +195,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   ///
   /// Called from didChangeDependencies to ensure cached data is available
   /// for the first build. Creates ScrollController with initialScrollOffset
-  /// set to cached position for instant scroll restoration without flicker.
+  /// set to cached position unless an explicit comment focus takes precedence.
   void _initializeProviderSync() {
     // Get or create provider from cache
     final cache = context.read<CommentsProviderCache>();
@@ -184,18 +205,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       postCid: widget.post.post.cid,
     );
 
-    // Create scroll controller with cached position for instant restoration
-    // This avoids the flash: loading → content at top → jump to cached position
-    final cachedScrollPosition = _commentsProvider.scrollPosition;
+    // Focus scans downward from the top, so cached scroll restoration must
+    // not start below the requested comment.
+    final hasCommentFocus = widget.focusCommentUri != null;
+    final initialScrollOffset = hasCommentFocus
+        ? 0.0
+        : _commentsProvider.scrollPosition;
     _scrollController = ScrollController(
-      initialScrollOffset: cachedScrollPosition,
+      initialScrollOffset: initialScrollOffset,
     );
     _scrollController.addListener(_onScroll);
 
-    if (kDebugMode && cachedScrollPosition > 0) {
+    if (kDebugMode && initialScrollOffset > 0) {
       debugPrint(
         '📍 Created ScrollController with initial offset: '
-        '$cachedScrollPosition',
+        '$initialScrollOffset',
       );
     }
 
@@ -298,8 +322,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   /// Runs once after the first successful thread load. The comment list is
   /// a lazy sliver, so the target's key has no context until its top-level
   /// ancestor has been laid out: we page the viewport down until it appears,
-  /// then `ensureVisible` it. If the comment isn't in the loaded tree at all,
-  /// its subtree is fetched by rkey and opened as a focused thread.
+  /// then `ensureVisible` it. If the comment cannot be displayed in the loaded
+  /// tree, its subtree is fetched by rkey and opened as a focused thread.
   Future<void> _tryFocusComment() async {
     final targetUri = widget.focusCommentUri;
     if (targetUri == null ||
@@ -325,19 +349,29 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      final inTree = provider.comments.any(
-        (thread) => thread.findByUri(targetUri) != null,
+      final isDisplayable = _isCommentDisplayable(
+        provider.comments,
+        targetUri,
+        provider.collapsedComments,
       );
 
-      if (inTree) {
-        await _scrollToFocusedComment();
-        return;
+      if (isDisplayable) {
+        final displayed = await _scrollToFocusedComment();
+        if (!mounted || _providerInvalidated || displayed) {
+          return;
+        }
+        if (_scrollController.hasClients) {
+          _scrollController.jumpTo(0);
+        }
+        if (!mounted || _providerInvalidated) {
+          return;
+        }
       }
 
-      // Not on the loaded page(s) / past the depth cutoff: fetch its subtree
-      // and present it focused, with this full thread underneath.
+      // Missing or not displayable (e.g. collapsed / past the depth cutoff):
+      // fetch its subtree and present it focused, with this thread underneath.
       final subtree = await provider.loadMoreReplies(targetUri);
-      if (!mounted) {
+      if (!mounted || _providerInvalidated) {
         return;
       }
       if (subtree == null) {
@@ -349,7 +383,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       if (kDebugMode) {
         debugPrint('⚠️ Could not focus comment: $e');
       }
-      if (mounted) {
+      if (mounted && !_providerInvalidated) {
         _showFocusFailed(messenger);
       }
     } finally {
@@ -357,11 +391,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
-  Future<void> _scrollToFocusedComment() async {
+  Future<bool> _scrollToFocusedComment() async {
     // Lazy sliver: page down until the keyed card is built, then align it.
     for (var attempt = 0; attempt < 60; attempt++) {
-      if (!mounted) {
-        return;
+      if (!mounted || _providerInvalidated) {
+        return false;
       }
       final targetContext = _focusedCommentKey.currentContext;
       if (targetContext != null && targetContext.mounted) {
@@ -373,15 +407,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
-        return;
+        return mounted && !_providerInvalidated;
       }
       if (!_scrollController.hasClients) {
-        return;
+        return false;
       }
       final position = _scrollController.position;
       if (position.pixels >= position.maxScrollExtent) {
         // Reached the end without finding it (it was collapsed or removed).
-        return;
+        return false;
       }
       _scrollController.jumpTo(
         (position.pixels + position.viewportDimension).clamp(
@@ -391,6 +425,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       );
       await WidgetsBinding.instance.endOfFrame;
     }
+    return false;
   }
 
   void _showFocusFailed(ScaffoldMessengerState messenger) {
@@ -1179,7 +1214,7 @@ class _CommentItem extends StatelessWidget {
         return CommentThread(
           thread: comment,
           currentTime: currentTime,
-          maxDepth: 6,
+          maxDepth: _commentThreadMaxDepth,
           onCommentTap: onCommentTap,
           collapsedComments: collapsedComments,
           onCollapseToggle: onCollapseToggle,
