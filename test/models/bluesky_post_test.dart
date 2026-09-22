@@ -1121,6 +1121,447 @@ void main() {
       expect(embed.resolved, isNull);
     });
   });
+
+  group('images', () {
+    // Backend wire shape (coves e92395d). The parent and the quote use
+    // different cdn.bsky.app paths so a gallery attributed to the wrong post
+    // is detectable.
+    const parentThumb1 =
+        'https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:parent/bafyparent1@jpeg';
+    const parentFullsize1 =
+        'https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:parent/bafyparent1@jpeg';
+    const parentThumb2 =
+        'https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:parent/bafyparent2@jpeg';
+    const parentFullsize2 =
+        'https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:parent/bafyparent2@jpeg';
+    const quoteThumb1 =
+        'https://cdn.bsky.app/img/feed_thumbnail/plain/did:plc:quoted/bafyquote1@jpeg';
+    const quoteFullsize1 =
+        'https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:quoted/bafyquote1@jpeg';
+
+    Map<String, dynamic> imageJson({
+      required String thumb,
+      required String fullsize,
+      String? alt,
+      int? aspectWidth,
+      int? aspectHeight,
+    }) {
+      return {
+        'thumb': thumb,
+        'fullsize': fullsize,
+        'alt': ?alt,
+        'aspectRatio': ?(aspectWidth != null && aspectHeight != null
+            ? {'width': aspectWidth, 'height': aspectHeight}
+            : null),
+      };
+    }
+
+    /// A post with an optional gallery. A null [images] omits the key, which is
+    /// what the backend sends for a post with no images.
+    Map<String, dynamic> postJson({
+      List<Map<String, dynamic>>? images,
+      Map<String, dynamic>? quotedPost,
+      String uri = 'at://did:plc:parent/app.bsky.feed.post/p1',
+      String text = 'Look at these cats',
+      String handle = 'images.bsky.social',
+    }) {
+      return {
+        'uri': uri,
+        'cid': 'bafyparentcid',
+        'createdAt': '2026-09-01T12:00:00Z',
+        'author': {'did': 'did:plc:parent', 'handle': handle},
+        'text': text,
+        'replyCount': 0,
+        'repostCount': 0,
+        'likeCount': 0,
+        'hasMedia': images != null && images.isNotEmpty,
+        'mediaCount': images?.length ?? 0,
+        'unavailable': false,
+        'images': ?images,
+        'quotedPost': ?quotedPost,
+      };
+    }
+
+    test('parses each image with its alt text and aspect ratio', () {
+      final result = BlueskyPostResult.fromJson(
+        postJson(
+          images: [
+            imageJson(
+              thumb: parentThumb1,
+              fullsize: parentFullsize1,
+              alt: 'A cat',
+              aspectWidth: 1200,
+              aspectHeight: 900,
+            ),
+            imageJson(thumb: parentThumb2, fullsize: parentFullsize2),
+          ],
+        ),
+      );
+
+      expect(result.images, hasLength(2));
+
+      final first = result.images.first;
+      expect(first.thumb, parentThumb1);
+      expect(first.fullsize, parentFullsize1);
+      expect(first.alt, 'A cat');
+      expect(first.aspectRatio, isNotNull);
+      expect(first.aspectRatio!.width, 1200);
+      expect(first.aspectRatio!.height, 900);
+    });
+
+    test('leaves alt and aspectRatio null when those keys are absent', () {
+      final result = BlueskyPostResult.fromJson(
+        postJson(
+          images: [imageJson(thumb: parentThumb2, fullsize: parentFullsize2)],
+        ),
+      );
+
+      expect(result.images, hasLength(1));
+      expect(result.images.single.thumb, parentThumb2);
+      expect(result.images.single.fullsize, parentFullsize2);
+      expect(result.images.single.alt, isNull);
+      expect(result.images.single.aspectRatio, isNull);
+    });
+
+    test('keeps an empty alt string as sent', () {
+      final result = BlueskyPostResult.fromJson(
+        postJson(
+          images: [
+            imageJson(thumb: parentThumb1, fullsize: parentFullsize1, alt: ''),
+          ],
+        ),
+      );
+
+      expect(result.images.single.alt, '');
+    });
+
+    test('exposes an empty list when the images key is absent', () {
+      final result = BlueskyPostResult.fromJson(postJson());
+
+      expect(result.images, isEmpty);
+    });
+
+    test('parses the quoted post gallery independently of the parent', () {
+      final result = BlueskyPostResult.fromJson(
+        postJson(
+          images: [imageJson(thumb: parentThumb1, fullsize: parentFullsize1)],
+          quotedPost: postJson(
+            uri: 'at://did:plc:quoted/app.bsky.feed.post/q1',
+            text: 'The quoted post',
+            handle: 'quoted.bsky.social',
+            images: [imageJson(thumb: quoteThumb1, fullsize: quoteFullsize1)],
+          ),
+        ),
+      );
+
+      expect(result.images.single.thumb, parentThumb1);
+      expect(result.quotedPost, isNotNull);
+      expect(result.quotedPost!.images, hasLength(1));
+      expect(result.quotedPost!.images.single.thumb, quoteThumb1);
+      expect(result.quotedPost!.images.single.fullsize, quoteFullsize1);
+    });
+
+    test('a parent without images keeps an empty list beside a quote that '
+        'has them', () {
+      final result = BlueskyPostResult.fromJson(
+        postJson(
+          quotedPost: postJson(
+            uri: 'at://did:plc:quoted/app.bsky.feed.post/q1',
+            text: 'The quoted post',
+            handle: 'quoted.bsky.social',
+            images: [imageJson(thumb: quoteThumb1, fullsize: quoteFullsize1)],
+          ),
+        ),
+      );
+
+      expect(result.images, isEmpty);
+      expect(result.quotedPost!.images.single.thumb, quoteThumb1);
+    });
+
+    // A malformed gallery must not cost the reader the post: the text still
+    // parses and the gallery drops out whole, so a half-rendered set of
+    // images can never reach the card.
+    group('validation', () {
+      test('drops the gallery when images is a map', () {
+        final json = postJson()
+          ..['images'] = {'thumb': parentThumb1, 'fullsize': parentFullsize1};
+
+        final result = BlueskyPostResult.fromJson(json);
+
+        expect(result.images, isEmpty);
+        expect(result.text, 'Look at these cats');
+      });
+
+      test('drops the gallery when images is a string', () {
+        final json = postJson()..['images'] = 'nope';
+
+        expect(BlueskyPostResult.fromJson(json).images, isEmpty);
+      });
+
+      test('drops the gallery when an entry is not a map', () {
+        final json = postJson()..['images'] = ['not a map'];
+
+        expect(BlueskyPostResult.fromJson(json).images, isEmpty);
+      });
+
+      test('drops the gallery when an entry lacks thumb', () {
+        final json = postJson(
+          images: [
+            imageJson(thumb: parentThumb1, fullsize: parentFullsize1)
+              ..remove('thumb'),
+          ],
+        );
+
+        expect(BlueskyPostResult.fromJson(json).images, isEmpty);
+      });
+
+      test('drops the gallery when an entry lacks fullsize', () {
+        final json = postJson(
+          images: [
+            imageJson(thumb: parentThumb1, fullsize: parentFullsize1)
+              ..remove('fullsize'),
+          ],
+        );
+
+        expect(BlueskyPostResult.fromJson(json).images, isEmpty);
+      });
+
+      test('drops the gallery when thumb is not an allowed web url', () {
+        final json = postJson(
+          images: [
+            imageJson(thumb: 'javascript:alert(1)', fullsize: parentFullsize1),
+          ],
+        );
+
+        expect(BlueskyPostResult.fromJson(json).images, isEmpty);
+      });
+
+      test('drops the gallery when fullsize is a bare path', () {
+        final json = postJson(
+          images: [imageJson(thumb: parentThumb1, fullsize: '/img/x.jpg')],
+        );
+
+        expect(BlueskyPostResult.fromJson(json).images, isEmpty);
+      });
+
+      test('drops the whole gallery when only the second entry is invalid', () {
+        final json = postJson()
+          ..['images'] = [
+            imageJson(thumb: parentThumb1, fullsize: parentFullsize1),
+            {'thumb': parentThumb2},
+          ];
+
+        expect(
+          BlueskyPostResult.fromJson(json).images,
+          isEmpty,
+          reason: 'all-or-nothing: no partial galleries',
+        );
+      });
+
+      test('keeps the image with a null aspectRatio when it is not a map', () {
+        final json = postJson(
+          images: [
+            imageJson(thumb: parentThumb1, fullsize: parentFullsize1)
+              ..['aspectRatio'] = '1200x900',
+          ],
+        );
+
+        final result = BlueskyPostResult.fromJson(json);
+
+        expect(result.images, hasLength(1));
+        expect(result.images.single.thumb, parentThumb1);
+        expect(result.images.single.aspectRatio, isNull);
+      });
+
+      test('keeps the image with a null aspectRatio when a dimension is not '
+          'an int', () {
+        final json = postJson(
+          images: [
+            imageJson(thumb: parentThumb1, fullsize: parentFullsize1)
+              ..['aspectRatio'] = {'width': '1200', 'height': 900},
+          ],
+        );
+
+        final result = BlueskyPostResult.fromJson(json);
+
+        expect(result.images, hasLength(1));
+        expect(result.images.single.aspectRatio, isNull);
+      });
+
+      test('keeps the image with a null aspectRatio when a dimension is below '
+          'one', () {
+        final json = postJson(
+          images: [
+            imageJson(
+              thumb: parentThumb1,
+              fullsize: parentFullsize1,
+              aspectWidth: 1200,
+              aspectHeight: 0,
+            ),
+          ],
+        );
+
+        final result = BlueskyPostResult.fromJson(json);
+
+        expect(result.images, hasLength(1));
+        expect(result.images.single.aspectRatio, isNull);
+      });
+
+      test('keeps the image with a null alt when alt is not a string', () {
+        final json = postJson(
+          images: [
+            imageJson(thumb: parentThumb1, fullsize: parentFullsize1)
+              ..['alt'] = 42,
+          ],
+        );
+
+        final result = BlueskyPostResult.fromJson(json);
+
+        expect(result.images, hasLength(1));
+        expect(result.images.single.thumb, parentThumb1);
+        expect(result.images.single.alt, isNull);
+      });
+
+      test('truncates alt longer than 10000 characters to exactly 10000', () {
+        final json = postJson(
+          images: [
+            imageJson(
+              thumb: parentThumb1,
+              fullsize: parentFullsize1,
+              alt: 'a' * 20000,
+            ),
+          ],
+        );
+
+        final result = BlueskyPostResult.fromJson(json);
+
+        expect(result.images, hasLength(1));
+        expect(result.images.single.thumb, parentThumb1);
+        expect(result.images.single.alt?.length, 10000);
+        expect(result.images.single.alt, 'a' * 10000);
+      });
+
+      test('keeps alt of exactly 10000 characters unchanged', () {
+        final alt = 'b' * 10000;
+        final json = postJson(
+          images: [
+            imageJson(thumb: parentThumb1, fullsize: parentFullsize1, alt: alt),
+          ],
+        );
+
+        expect(BlueskyPostResult.fromJson(json).images.single.alt, alt);
+      });
+
+      // Bluesky allows at most four images per post; a longer list is not a
+      // real gallery and drops out whole.
+      test('drops the gallery when it has more than four entries', () {
+        final json = postJson(
+          images: [
+            for (var index = 0; index < 5; index++)
+              imageJson(thumb: parentThumb1, fullsize: parentFullsize1),
+          ],
+        );
+
+        final result = BlueskyPostResult.fromJson(json);
+
+        expect(result.images, isEmpty);
+        expect(result.text, 'Look at these cats');
+      });
+
+      test('keeps a gallery of exactly four entries', () {
+        final json = postJson(
+          images: [
+            for (var index = 0; index < 4; index++)
+              imageJson(thumb: parentThumb1, fullsize: parentFullsize1),
+          ],
+        );
+
+        expect(BlueskyPostResult.fromJson(json).images, hasLength(4));
+      });
+
+      test('an invalid quote gallery leaves the parent gallery intact', () {
+        final result = BlueskyPostResult.fromJson(
+          postJson(
+            images: [imageJson(thumb: parentThumb1, fullsize: parentFullsize1)],
+            quotedPost: postJson(
+              uri: 'at://did:plc:quoted/app.bsky.feed.post/q1',
+              text: 'The quoted post',
+              handle: 'quoted.bsky.social',
+              images: [
+                imageJson(
+                  thumb: 'javascript:alert(1)',
+                  fullsize: quoteFullsize1,
+                ),
+              ],
+            ),
+          ),
+        );
+
+        expect(result.images, hasLength(1));
+        expect(result.images.single.thumb, parentThumb1);
+        expect(result.quotedPost!.images, isEmpty);
+        expect(result.quotedPost!.text, 'The quoted post');
+      });
+
+      test('an invalid parent gallery leaves the quote gallery intact', () {
+        final result = BlueskyPostResult.fromJson(
+          postJson(
+            images: [
+              imageJson(
+                thumb: 'javascript:alert(1)',
+                fullsize: parentFullsize1,
+              ),
+            ],
+            quotedPost: postJson(
+              uri: 'at://did:plc:quoted/app.bsky.feed.post/q1',
+              text: 'The quoted post',
+              handle: 'quoted.bsky.social',
+              images: [imageJson(thumb: quoteThumb1, fullsize: quoteFullsize1)],
+            ),
+          ),
+        );
+
+        expect(result.images, isEmpty);
+        expect(result.text, 'Look at these cats');
+        expect(result.quotedPost!.images, hasLength(1));
+        expect(result.quotedPost!.images.single.thumb, quoteThumb1);
+      });
+
+      test('still requires hasMedia on a post that has valid images', () {
+        final json = postJson(
+          images: [imageJson(thumb: parentThumb1, fullsize: parentFullsize1)],
+        )..remove('hasMedia');
+
+        expect(
+          () => BlueskyPostResult.fromJson(json),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains('hasMedia'),
+            ),
+          ),
+        );
+      });
+
+      test('still requires mediaCount on a post that has valid images', () {
+        final json = postJson(
+          images: [imageJson(thumb: parentThumb1, fullsize: parentFullsize1)],
+        )..remove('mediaCount');
+
+        expect(
+          () => BlueskyPostResult.fromJson(json),
+          throwsA(
+            isA<FormatException>().having(
+              (e) => e.message,
+              'message',
+              contains('mediaCount'),
+            ),
+          ),
+        );
+      });
+    });
+  });
 }
 
 // Helper to create AuthorView for tests

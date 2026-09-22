@@ -4,6 +4,7 @@
 
 import 'package:flutter/foundation.dart';
 
+import '../utils/url_policy.dart';
 import 'post.dart';
 
 /// External link embed from a Bluesky post (link cards with title/description).
@@ -70,6 +71,7 @@ class BlueskyPostResult {
     required this.likeCount,
     required this.hasMedia,
     required this.mediaCount,
+    this.images = const [],
     this.quotedPost,
     required this.unavailable,
     this.message,
@@ -201,6 +203,7 @@ class BlueskyPostResult {
       likeCount: likeCount,
       hasMedia: hasMedia,
       mediaCount: mediaCount,
+      images: _parseImages(json['images']),
       quotedPost: json['quotedPost'] != null
           ? BlueskyPostResult.fromJson(
               _withAuthorPlaceholder(
@@ -212,6 +215,99 @@ class BlueskyPostResult {
       message: json['message'] as String?,
       embed: embed,
     );
+  }
+
+  /// Bluesky's per-post image limit. A longer gallery is not one Bluesky
+  /// produced, so it is rejected whole.
+  static const int _maxGalleryImages = 4;
+
+  /// Parses the `images` array of a hydrated gallery. The backend omits the
+  /// key entirely for a post with no images, which parses as an empty list.
+  ///
+  /// All-or-nothing: more than [_maxGalleryImages] entries, an entry that is
+  /// not a map, lacks a String `thumb` or `fullsize`, or carries a url outside
+  /// the app's web allowlist empties the whole gallery. Half a gallery is
+  /// never rendered, and one hostile url poisons the rest. A malformed gallery
+  /// costs the images, not the post, so nothing here throws — the text still
+  /// parses. Alt text is capped by [parseAltText].
+  static List<EmbedImage> _parseImages(Object? raw) {
+    if (raw == null) {
+      return const [];
+    }
+    if (raw is! List) {
+      if (kDebugMode) {
+        debugPrint('BlueskyPostResult: Dropped images: not a list');
+      }
+      return const [];
+    }
+    if (raw.length > _maxGalleryImages) {
+      if (kDebugMode) {
+        debugPrint(
+          'BlueskyPostResult: Dropped images: ${raw.length} entries exceeds '
+          'limit of $_maxGalleryImages',
+        );
+      }
+      return const [];
+    }
+
+    final images = <EmbedImage>[];
+    for (var index = 0; index < raw.length; index++) {
+      final entry = raw[index];
+      if (entry is! Map<String, dynamic>) {
+        if (kDebugMode) {
+          debugPrint(
+            'BlueskyPostResult: Dropped images: entry $index is not a map',
+          );
+        }
+        return const [];
+      }
+
+      final thumb = entry['thumb'];
+      final fullsize = entry['fullsize'];
+      if (thumb is! String ||
+          fullsize is! String ||
+          !isAllowedWebUrl(thumb) ||
+          !isAllowedWebUrl(fullsize)) {
+        if (kDebugMode) {
+          debugPrint(
+            'BlueskyPostResult: Dropped images: entry $index has a missing '
+            'or disallowed thumb/fullsize url',
+          );
+        }
+        return const [];
+      }
+
+      images.add(
+        EmbedImage(
+          thumb: thumb,
+          fullsize: fullsize,
+          alt: parseAltText(entry['alt']),
+          aspectRatio: _parseAspectRatio(entry['aspectRatio']),
+        ),
+      );
+    }
+
+    return images;
+  }
+
+  /// Parses an image's `aspectRatio`, which the backend omits when Bluesky
+  /// recorded no intrinsic dimensions.
+  ///
+  /// A malformed ratio only costs layout hinting, so it is dropped without
+  /// rejecting the image itself. Dimensions below 1 are rejected here rather
+  /// than left to [EmbedAspectRatio]'s own check, which would throw.
+  static EmbedAspectRatio? _parseAspectRatio(Object? raw) {
+    if (raw is! Map) {
+      return null;
+    }
+
+    final width = raw['width'];
+    final height = raw['height'];
+    if (width is! int || height is! int || width < 1 || height < 1) {
+      return null;
+    }
+
+    return EmbedAspectRatio(width: width, height: height);
   }
 
   /// Stand-in author for an unavailable quoted post, which the backend sends
@@ -241,6 +337,10 @@ class BlueskyPostResult {
   final int likeCount;
   final bool hasMedia;
   final int mediaCount;
+
+  /// Hydrated gallery images, empty when the post has none.
+  final List<EmbedImage> images;
+
   final BlueskyPostResult? quotedPost;
   final bool unavailable;
   final String? message;

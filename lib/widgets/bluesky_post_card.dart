@@ -8,6 +8,9 @@ import '../models/post.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/display_utils.dart';
 import '../utils/url_launcher.dart';
+import 'image_viewer.dart';
+import 'media/media_surface.dart';
+import 'media/native_image_embed.dart';
 import 'user_avatar.dart';
 
 /// Bluesky post card widget for displaying Bluesky crossposts
@@ -26,6 +29,13 @@ class BlueskyPostCard extends StatelessWidget {
   const BlueskyPostCard({required this.embed, this.currentTime, super.key});
 
   static const _blueskyBaseUrl = 'https://bsky.app';
+
+  /// Loading and error fill for hydrated media, in the embed's own chrome
+  /// rather than the Coves feed's.
+  static const MediaFillStyle _mediaFill = (
+    iconColor: BlueskyColors.textSecondary,
+    iconSize: 32,
+  );
 
   final BlueskyPostEmbed embed;
   final DateTime? currentTime;
@@ -94,9 +104,13 @@ class BlueskyPostCard extends StatelessWidget {
               const SizedBox(height: 8),
             ],
 
-            // Media placeholder
-            if (post.hasMedia) ...[
-              _buildMediaPlaceholder(context, post.mediaCount),
+            // Gallery when the backend hydrated one, otherwise the
+            // placeholder for media this card cannot render (e.g. video)
+            if (post.images.isNotEmpty) ...[
+              _buildImagesEmbed(context, post.images, keyPrefix: 'bluesky'),
+              const SizedBox(height: 8),
+            ] else if (post.hasMedia) ...[
+              _buildMediaPlaceholder(),
               const SizedBox(height: 8),
             ],
 
@@ -307,12 +321,29 @@ class BlueskyPostCard extends StatelessWidget {
     );
   }
 
-  /// Builds the media placeholder for images
-  Widget _buildMediaPlaceholder(BuildContext context, int mediaCount) {
-    final mediaText = mediaCount == 1
-        ? 'Contains 1 image'
-        : 'Contains $mediaCount images';
+  /// Builds the images block: the first image at full card width, with a
+  /// "1/N" badge when the gallery holds more. Tapping opens the fullscreen
+  /// viewer directly — the rest of the card still opens the post on bsky.app.
+  Widget _buildImagesEmbed(
+    BuildContext context,
+    List<EmbedImage> images, {
+    required String keyPrefix,
+  }) {
+    return NativeImageThumb(
+      images: images,
+      keyPrefix: keyPrefix,
+      fill: _mediaFill,
+      onTap: () => ImageViewer.open(context, images),
+    );
+  }
 
+  /// Builds the placeholder for media this card cannot render.
+  ///
+  /// The backend only hydrates image URLs, so this covers video posts. It also
+  /// covers image posts from backend cache rows written before the gallery
+  /// was hydrated (coves e92395d), which arrive with `hasMedia` true and no
+  /// images — hence the neutral wording.
+  Widget _buildMediaPlaceholder() {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -320,28 +351,24 @@ class BlueskyPostCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: BlueskyColors.cardBorder),
       ),
-      child: Row(
+      child: const Row(
         children: [
-          const Icon(
-            Icons.image_outlined,
+          Icon(
+            Icons.perm_media_outlined,
             size: 18,
             color: BlueskyColors.textSecondary,
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
-              mediaText,
-              style: const TextStyle(
+              'Contains media',
+              style: TextStyle(
                 color: BlueskyColors.textSecondary,
                 fontSize: 14,
               ),
             ),
           ),
-          const Icon(
-            Icons.open_in_new,
-            size: 14,
-            color: BlueskyColors.textSecondary,
-          ),
+          Icon(Icons.open_in_new, size: 14, color: BlueskyColors.textSecondary),
         ],
       ),
     );
@@ -522,13 +549,23 @@ class BlueskyPostCard extends StatelessWidget {
                   height: 1.4,
                 ),
               ),
-              if (quotedPost.hasMedia || quotedPost.embed != null)
+              if (quotedPost.images.isNotEmpty ||
+                  quotedPost.hasMedia ||
+                  quotedPost.embed != null)
                 const SizedBox(height: 8),
             ],
 
-            // Media placeholder in quoted post
-            if (quotedPost.hasMedia) ...[
-              _buildMediaPlaceholder(context, quotedPost.mediaCount),
+            // Gallery when the backend hydrated one, otherwise the
+            // placeholder for media this card cannot render (e.g. video)
+            if (quotedPost.images.isNotEmpty) ...[
+              _buildImagesEmbed(
+                context,
+                quotedPost.images,
+                keyPrefix: 'bluesky-quote',
+              ),
+              if (quotedPost.embed != null) const SizedBox(height: 8),
+            ] else if (quotedPost.hasMedia) ...[
+              _buildMediaPlaceholder(),
               if (quotedPost.embed != null) const SizedBox(height: 8),
             ],
 

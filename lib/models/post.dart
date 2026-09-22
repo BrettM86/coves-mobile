@@ -467,7 +467,7 @@ sealed class PostEmbed {
         type: embedType,
         video: video,
         thumbnail: thumbnail,
-        alt: _parseAltText(json['alt']),
+        alt: parseAltText(json['alt']),
         duration: duration is int ? duration : null,
         data: json,
       );
@@ -703,7 +703,7 @@ const int _maxAltLength = 10000;
 /// Lenient about type — alt is decorative enough that a malformed one is
 /// dropped rather than poisoning the embed — but not about length: nothing
 /// downstream bounds it before it reaches the semantics tree.
-String? _parseAltText(Object? raw) {
+String? parseAltText(Object? raw) {
   if (raw is! String) {
     return null;
   }
@@ -745,7 +745,7 @@ List<EmbedImage>? _parseEmbedImages(Object? raw) {
       EmbedImage(
         thumb: thumb,
         fullsize: fullsize,
-        alt: _parseAltText(entry['alt']),
+        alt: parseAltText(entry['alt']),
         aspectRatio: _parseEmbedAspectRatio(entry['aspectRatio']),
       ),
     );
