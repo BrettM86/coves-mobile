@@ -223,7 +223,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       );
     }
 
-    // Listen for changes to trigger rebuilds
+    // Rebuilds come from the Consumer in _buildContent; this listener only
+    // retries a pending comment focus once a load settles.
     _commentsProvider.addListener(_onProviderChanged);
 
     // Setup auth listener
@@ -307,13 +308,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     super.dispose();
   }
 
-  /// Handle provider changes
+  /// Retry a pending comment focus after the provider settles.
+  ///
+  /// No setState: the Consumer in [_buildContent] already rebuilds the
+  /// comment list, and a screen-level rebuild would double the work.
   void _onProviderChanged() {
-    if (mounted) {
-      setState(() {});
-      if (_focusPending && !_commentsProvider.isLoading) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _tryFocusComment());
-      }
+    if (mounted && _focusPending && !_commentsProvider.isLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _tryFocusComment());
     }
   }
 

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
+import 'package:coves_flutter/providers/comments_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/post_detail_screen.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
@@ -196,5 +197,28 @@ void main() {
         }
       },
     );
+  });
+
+  group('PostDetailScreen rebuild scope', () {
+    testWidgets('comments change rebuilds only the comments consumer', (
+      tester,
+    ) async {
+      await pumpScreen(tester);
+      final scaffoldBefore = tester.widget<Scaffold>(find.byType(Scaffold));
+      Provider.of<CommentsProvider>(
+        tester.element(find.byType(CustomScrollView)),
+        listen: false,
+      ).toggleCollapsed('at://did:plc:x/comment/1');
+      await tester.pump();
+
+      expect(
+        identical(
+          tester.widget<Scaffold>(find.byType(Scaffold)),
+          scaffoldBefore,
+        ),
+        isTrue,
+        reason: 'the screen State must not setState on comment notifications',
+      );
+    });
   });
 }
