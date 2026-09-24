@@ -1,12 +1,12 @@
 import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
-import 'package:coves_flutter/providers/user_profile_provider.dart';
 import 'package:coves_flutter/screens/home/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/fake_providers.dart';
 import '../test_helpers/test_mocks.dart';
 
 class _RetryableSignOutProvider extends AuthProvider {
@@ -37,11 +37,6 @@ void main() {
     tester,
   ) async {
     final authProvider = _RetryableSignOutProvider();
-    final profileProvider = UserProfileProvider(
-      authProvider,
-      apiService: MockCovesApiService(),
-      commentService: MockCommentService(),
-    );
     final router = GoRouter(
       initialLocation: '/profile',
       routes: [
@@ -58,16 +53,15 @@ void main() {
     );
     addTearDown(router.dispose);
     addTearDown(authProvider.dispose);
-    addTearDown(profileProvider.dispose);
 
+    // App-level dependencies only: the screen owns its profile state.
     await tester.pumpWidget(
       MultiProvider(
-        providers: [
-          ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
-          ChangeNotifierProvider<UserProfileProvider>.value(
-            value: profileProvider,
-          ),
-        ],
+        providers: profileScreenProviders(
+          auth: authProvider,
+          apiService: MockCovesApiService(),
+          commentService: MockCommentService(),
+        ),
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),
     );

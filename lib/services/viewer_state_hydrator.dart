@@ -73,22 +73,6 @@ class ViewerStateHydrator {
   bool _warnedMissingVotes = false;
   bool _warnedMissingSubscriptions = false;
 
-  /// A copy of this hydrator bound to [authProvider], keeping the same
-  /// collaborators.
-  ///
-  /// UserProfileProvider swaps its AuthProvider at runtime. Before the auth
-  /// gate moved in here it was read at CALL time, so a swap took effect
-  /// immediately; a hydrator captured at construction would instead keep
-  /// gating on the old instance forever. Rebinding through this method
-  /// restores the original behaviour without exposing the collaborators.
-  ViewerStateHydrator withAuthProvider(AuthProvider authProvider) {
-    return ViewerStateHydrator(
-      authProvider: authProvider,
-      voteProvider: _voteProvider,
-      subscriptionProvider: _subscriptionProvider,
-    );
-  }
-
   /// The vote provider to write through, or null when this hydrator must
   /// not touch votes.
   ///

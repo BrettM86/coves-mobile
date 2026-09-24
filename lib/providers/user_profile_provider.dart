@@ -10,6 +10,7 @@ import '../models/user_profile.dart';
 import '../services/api_exceptions.dart';
 import '../services/comment_service.dart';
 import '../services/coves_api_service.dart';
+import '../services/profile_cache.dart';
 import '../services/viewer_state_hydrator.dart';
 import '../utils/cursor_pagination_controller.dart';
 import 'auth_provider.dart';
@@ -28,9 +29,11 @@ class UserProfileProvider with ChangeNotifier {
     AuthProvider authProvider, {
     required this._apiService,
     required this._commentService,
+    required this._profileCache,
     VoteProvider? voteProvider,
     ViewerStateHydrator? hydrator,
   }) : _authProvider = authProvider,
+       _lastSignedInDid = _signedInDid(authProvider),
        _hydrator =
            hydrator ??
            ViewerStateHydrator(
@@ -61,6 +64,7 @@ class UserProfileProvider with ChangeNotifier {
 
     // Listen to auth state changes
     _authProvider.addListener(_onAuthChanged);
+    _profileCache.addPutListener(_onProfileCached);
   }
 
   late final CursorPaginationController<FeedViewPost> _postsController;
@@ -82,40 +86,40 @@ class UserProfileProvider with ChangeNotifier {
     unawaited(Sentry.captureException(error, stackTrace: stackTrace));
   }
 
-  AuthProvider _authProvider;
+  final AuthProvider _authProvider;
+
+  /// The signed-in DID the last auth notification left, or null when signed
+  /// out. Only a change to it resets this provider.
+  String? _lastSignedInDid;
+
+  static String? _signedInDid(AuthProvider authProvider) =>
+      authProvider.isAuthenticated ? authProvider.did : null;
 
   /// Seeds vote state from each page this provider loads. Injected app-wide
   /// (where it also carries a subscription provider, which this surface
   /// deliberately never uses - see [_hydratePostVotes]); when omitted, built
   /// from the raw vote provider this constructor still accepts.
-  ///
-  /// Rebound whenever [_authProvider] changes - see [updateAuthProvider].
-  ViewerStateHydrator _hydrator;
+  final ViewerStateHydrator _hydrator;
 
   final CommentService _commentService;
 
-  /// Update auth provider reference (called by ChangeNotifierProxyProvider)
-  ///
-  /// The hydrator is rebound to the new instance, not just the listener.
-  /// Its signed-in gate closes over whichever AuthProvider it was built
-  /// with, and this provider's hydration used to consult `_authProvider`
-  /// at call time - so leaving a stale hydrator here would silently keep
-  /// gating on the previous session. main.dart asserts the instance never
-  /// actually changes, but that assert is stripped in release.
-  void updateAuthProvider(AuthProvider newAuth) {
-    if (_authProvider != newAuth) {
-      _authProvider.removeListener(_onAuthChanged);
-      _authProvider = newAuth;
-      _authProvider.addListener(_onAuthChanged);
-      _hydrator = _hydrator.withAuthProvider(newAuth);
-    }
-  }
+  /// App-level cache shared with every other profile screen's provider.
+  final ProfileCache _profileCache;
 
   final CovesApiService _apiService;
 
   // Profile state
   UserProfile? _profile;
   bool _isLoadingProfile = false;
+
+  /// Bumped by [clearProfile], the session reset and [dispose]; a profile
+  /// load that started under an older value was superseded and is dropped
+  /// (a save's refresh after dispose still reaches the cache).
+  int _profileLoadGeneration = 0;
+
+  /// The [ProfileCache.nextRequestSequence] of the in-flight profile load;
+  /// a sibling put older than it does not cancel that load.
+  int _profileRequestSequence = 0;
   String? _profileError;
   String? _currentProfileDid;
 
@@ -126,41 +130,6 @@ class UserProfileProvider with ChangeNotifier {
 
   // Comments feed state — a projection of _commentsController
   CommentsState _commentsState = CommentsState.initial();
-
-  // LRU profile cache keyed by DID (max 50 entries)
-  static const int _maxCacheSize = 50;
-  final Map<String, UserProfile> _profileCache = {};
-  final List<String> _cacheAccessOrder = [];
-
-  /// Add profile to cache with LRU eviction
-  void _cacheProfile(UserProfile profile) {
-    final did = profile.did;
-
-    // Remove from current position in access order
-    _cacheAccessOrder
-      ..remove(did)
-      // Add to end (most recently used)
-      ..add(did);
-    _profileCache[did] = profile;
-
-    // Evict oldest entries if over capacity
-    while (_cacheAccessOrder.length > _maxCacheSize) {
-      final oldestDid = _cacheAccessOrder.removeAt(0);
-      _profileCache.remove(oldestDid);
-    }
-  }
-
-  /// Get profile from cache (updates access order)
-  UserProfile? _getCachedProfile(String did) {
-    final profile = _profileCache[did];
-    if (profile != null) {
-      // Update access order (move to end)
-      _cacheAccessOrder
-        ..remove(did)
-        ..add(did);
-    }
-    return profile;
-  }
 
   // Getters
   UserProfile? get profile => _profile;
@@ -180,18 +149,27 @@ class UserProfileProvider with ChangeNotifier {
 
   /// Handle auth state changes
   void _onAuthChanged() {
-    // Clear profile cache on sign-out to prevent stale data
-    if (!_authProvider.isAuthenticated) {
-      if (kDebugMode) {
-        debugPrint('🔒 User signed out - clearing profile cache');
-      }
-      _profileCache.clear();
-      _cacheAccessOrder.clear();
-      _profile = null;
-      _resetFeeds();
-      _currentProfileDid = null;
-      notifyListeners();
+    // Reset view state on sign-out or an account switch; the shared
+    // ProfileCache clears itself. Other notifications change nothing.
+    final signedInDid = _signedInDid(_authProvider);
+    if (signedInDid == _lastSignedInDid) {
+      return;
     }
+    _lastSignedInDid = signedInDid;
+
+    // A screen that was showing or loading a profile, or showing an error,
+    // gets an actionable error instead of a blank page.
+    final hadProfileState =
+        _profile != null || _isLoadingProfile || _profileError != null;
+    _profileLoadGeneration++;
+    _isLoadingProfile = false;
+    _profile = null;
+    _resetFeeds();
+    _currentProfileDid = null;
+    _profileError = hadProfileState
+        ? 'Your session changed. Retry to reload this profile.'
+        : null;
+    notifyListeners();
   }
 
   /// Load profile for a user
@@ -199,9 +177,18 @@ class UserProfileProvider with ChangeNotifier {
   /// Parameters:
   /// - [actor]: User's DID or handle (required)
   /// - [forceRefresh]: Bypass cache and fetch fresh data
-  Future<void> loadProfile(String actor, {bool forceRefresh = false}) async {
+  Future<void> loadProfile(String actor, {bool forceRefresh = false}) =>
+      _loadProfile(actor, forceRefresh: forceRefresh);
+
+  /// [loadProfile] body. [isSaveRefresh] marks [updateProfile]'s follow-up
+  /// fetch, whose result still reaches the shared cache after [dispose].
+  Future<void> _loadProfile(
+    String actor, {
+    required bool forceRefresh,
+    bool isSaveRefresh = false,
+  }) async {
     // Check cache first (updates LRU access order)
-    final cachedProfile = _getCachedProfile(actor);
+    final cachedProfile = _profileCache.get(actor);
     if (cachedProfile != null && !forceRefresh) {
       _profile = cachedProfile;
       _currentProfileDid = cachedProfile.did;
@@ -219,16 +206,56 @@ class UserProfileProvider with ChangeNotifier {
     _currentProfileDid = actor.startsWith('did:') ? actor : null;
     notifyListeners();
 
+    final loadGeneration = _profileLoadGeneration;
+    final cacheGeneration = _profileCache.generation;
+    final requestSequence = _profileCache.nextRequestSequence();
+    _profileRequestSequence = requestSequence;
     try {
-      final profile = await _apiService.getProfile(actor: actor);
+      // A superseded load's success or failure must not reach this state.
+      final UserProfile profile;
+      try {
+        profile = await _apiService.getProfile(actor: actor);
+      } on Exception {
+        if (loadGeneration != _profileLoadGeneration) {
+          if (kDebugMode) {
+            debugPrint('⚠️ Dropped failure of superseded profile load: $actor');
+          }
+          return;
+        }
+        rethrow;
+      }
+      if (loadGeneration != _profileLoadGeneration) {
+        // A saved profile outlives the screen that saved it: after dispose
+        // it is still published to siblings, without touching this
+        // provider's state. The cache ignores it if a newer request already
+        // put that DID.
+        if (isSaveRefresh &&
+            _disposed &&
+            _profileCache.generation == cacheGeneration) {
+          _profileCache.put(profile, requestSequence: requestSequence);
+          return;
+        }
+        if (kDebugMode) {
+          debugPrint('⚠️ Dropped superseded profile load: $actor');
+        }
+        return;
+      }
 
-      // Cache by DID with LRU eviction
-      _cacheProfile(profile);
-
+      // Set before the cache put so this provider's own put listener sees
+      // the instance it already holds and skips it, and so a failure after
+      // the fetch cannot leave the loading flag set.
       _profile = profile;
       _currentProfileDid = profile.did;
       _isLoadingProfile = false;
       _profileError = null;
+
+      // A response fetched for a previous session carries that viewer's
+      // state, so it must not enter the cache the new session reads.
+      if (_profileCache.generation == cacheGeneration) {
+        _profileCache.put(profile, requestSequence: requestSequence);
+      } else if (kDebugMode) {
+        debugPrint('⚠️ Skipped caching profile from an old session: $actor');
+      }
 
       if (kDebugMode) {
         debugPrint('✅ Profile loaded: ${profile.displayNameOrHandle}');
@@ -524,6 +551,7 @@ class UserProfileProvider with ChangeNotifier {
 
   /// Clear current profile and reset state
   void clearProfile() {
+    _profileLoadGeneration++;
     _profile = null;
     _currentProfileDid = null;
     _resetFeeds();
@@ -547,26 +575,6 @@ class UserProfileProvider with ChangeNotifier {
     _profileError = message;
     _isLoadingProfile = false;
     notifyListeners();
-  }
-
-  /// Retry loading profile after error
-  ///
-  /// Returns:
-  /// - `true` if retry was initiated (profile DID was available)
-  /// - `false` if no profile DID is available to retry
-  ///
-  /// Note: A return of `true` does not mean the profile loaded successfully,
-  /// only that the retry attempt was started. Check [profileError] after
-  /// the operation completes to determine if it succeeded.
-  Future<bool> retryProfile() async {
-    if (_currentProfileDid == null) {
-      if (kDebugMode) {
-        debugPrint('⚠️ retryProfile called but no profile DID available');
-      }
-      return false;
-    }
-    await loadProfile(_currentProfileDid!, forceRefresh: true);
-    return true;
   }
 
   /// Retry loading posts after error
@@ -623,16 +631,69 @@ class UserProfileProvider with ChangeNotifier {
     );
 
     // Force refresh profile from server to get updated URLs
-    await loadProfile(_currentProfileDid!, forceRefresh: true);
+    await _loadProfile(
+      _currentProfileDid!,
+      forceRefresh: true,
+      isSaveRefresh: true,
+    );
 
     if (kDebugMode) {
       debugPrint('✅ Profile updated and refreshed');
     }
   }
 
+  /// Adopts a profile a sibling provider put in the shared cache when it
+  /// is for the DID this provider is showing. No fetch; the only cache
+  /// access is reading the put's request sequence.
+  ///
+  /// - While a load is in flight, a put from a request that started later
+  ///   wins: the load is dropped. An older put is ignored and the load
+  ///   continues.
+  /// - While a profile is showing, the put replaces it and clears a failed
+  ///   refresh's error.
+  /// - With no profile and no load (the error screen), the put is ignored;
+  ///   the screen's Retry reruns the full load.
+  void _onProfileCached(UserProfile cachedProfile) {
+    if (_currentProfileDid == null ||
+        cachedProfile.did != _currentProfileDid ||
+        identical(cachedProfile, _profile)) {
+      return;
+    }
+    if (_isLoadingProfile) {
+      final putSequence = _profileCache.requestSequenceOf(cachedProfile.did);
+      if (putSequence == null || putSequence < _profileRequestSequence) {
+        return;
+      }
+      _profileLoadGeneration++;
+      _isLoadingProfile = false;
+    } else if (_profile == null) {
+      return;
+    }
+    _profile = cachedProfile;
+    _profileError = null;
+    notifyListeners();
+  }
+
+  /// The edit route borrows this provider and can outlive its screen, so a
+  /// save that completes after dispose still refreshes the shared cache for
+  /// sibling screens (see [_loadProfile]); this provider's own state updates
+  /// and notifications are skipped.
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_disposed) {
+      return;
+    }
+    super.notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
+    _profileLoadGeneration++;
     _authProvider.removeListener(_onAuthChanged);
+    _profileCache.removePutListener(_onProfileCached);
     _postsController.dispose();
     _commentsController.dispose();
     super.dispose();

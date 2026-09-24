@@ -5,11 +5,12 @@ import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/community_subscription_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
-import 'package:coves_flutter/providers/user_profile_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/main_shell_screen.dart';
 import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/profile_cache.dart';
+import 'package:coves_flutter/services/viewer_state_hydrator.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -80,7 +81,7 @@ void main() {
     late FakeVoteProvider fakeVoteProvider;
     late CommunitySubscriptionProvider subscriptionProvider;
     late BlockProvider blockProvider;
-    late UserProfileProvider profileProvider;
+    late ProfileCache profileCache;
     late GlobalKey<NavigatorState> navigatorKey;
 
     setUp(() {
@@ -94,18 +95,14 @@ void main() {
         apiService: CovesApiService(),
         authProvider: fakeAuthProvider,
       );
-      profileProvider = UserProfileProvider(
-        fakeAuthProvider,
-        apiService: CovesApiService(),
-        commentService: CommentService(),
-      );
+      profileCache = ProfileCache(fakeAuthProvider);
       navigatorKey = GlobalKey<NavigatorState>();
     });
 
     tearDown(() {
       subscriptionProvider.dispose();
       blockProvider.dispose();
-      profileProvider.dispose();
+      profileCache.dispose();
       fakeVoteProvider.dispose();
       fakeFeedProvider.dispose();
       fakeAuthProvider.dispose();
@@ -134,9 +131,16 @@ void main() {
               value: subscriptionProvider,
             ),
             ChangeNotifierProvider<BlockProvider>.value(value: blockProvider),
-            ChangeNotifierProvider<UserProfileProvider>.value(
-              value: profileProvider,
+            // App-level dependencies the Profile tab builds its own
+            // UserProfileProvider from
+            Provider<CommentService>(create: (_) => CommentService()),
+            Provider<ViewerStateHydrator>(
+              create: (_) => ViewerStateHydrator(
+                authProvider: fakeAuthProvider,
+                voteProvider: fakeVoteProvider,
+              ),
             ),
+            Provider<ProfileCache>.value(value: profileCache),
           ],
           child: MaterialApp(
             navigatorKey: navigatorKey,

@@ -19,7 +19,6 @@ import 'providers/community_guidelines_provider.dart';
 import 'providers/community_subscription_provider.dart';
 import 'providers/eula_provider.dart';
 import 'providers/multi_feed_provider.dart';
-import 'providers/user_profile_provider.dart';
 import 'providers/vote_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/community/community_feed_screen.dart';
@@ -33,6 +32,7 @@ import 'screens/landing_screen.dart';
 import 'services/comment_service.dart';
 import 'services/comments_provider_cache.dart';
 import 'services/coves_api_service.dart';
+import 'services/profile_cache.dart';
 import 'services/streamable_service.dart';
 import 'services/viewer_state_hydrator.dart';
 import 'services/vote_service.dart';
@@ -166,6 +166,8 @@ Future<Widget> bootstrapCovesApp() async {
       ),
       // Expose the shared API client so screens/widgets can context.read it
       Provider<CovesApiService>.value(value: apiService),
+      // Expose the shared comment service for per-screen profile providers
+      Provider<CommentService>.value(value: commentService),
       ChangeNotifierProvider(
         create: (_) => CommunitySubscriptionProvider(
           authProvider: authProvider,
@@ -185,9 +187,7 @@ Future<Widget> bootstrapCovesApp() async {
       // plain ChangeNotifierProvider(create:) instances, created once and
       // never replaced, and every consumer proxy returns `previous ?? ...`
       // so the `vote` and `subscription` arguments its `update` receives
-      // are discarded. (The `auth` argument is NOT discarded everywhere -
-      // UserProfileProvider's update forwards it to updateAuthProvider,
-      // which rebinds its hydrator.)
+      // are discarded.
       Provider<ViewerStateHydrator>(
         create: (context) => ViewerStateHydrator(
           authProvider: authProvider,
@@ -241,41 +241,10 @@ Future<Widget> bootstrapCovesApp() async {
       ),
       // StreamableService for video embeds
       Provider<StreamableService>(create: (_) => StreamableService()),
-      // UserProfileProvider for profile pages
-      ChangeNotifierProxyProvider2<
-        AuthProvider,
-        VoteProvider,
-        UserProfileProvider
-      >(
-        create: (context) => UserProfileProvider(
-          authProvider,
-          apiService: apiService,
-          commentService: commentService,
-          // Fully wired, subscriptions included: this surface calls
-          // hydrateFeedVotesOnly, so "profile posts never seed
-          // subscriptions" is a property of the call, not of a missing
-          // provider.
-          hydrator: context.read<ViewerStateHydrator>(),
-        ),
-        update: (context, auth, vote, previous) {
-          // The shared apiService/commentService auth callbacks are bound
-          // to the bootstrap AuthProvider instance; a different instance
-          // flowing through here would leave them stale.
-          assert(
-            identical(auth, authProvider),
-            'AuthProvider instance changed: shared service auth callbacks '
-            'are bound to the bootstrap instance',
-          );
-          // Propagate auth changes to existing provider
-          previous?.updateAuthProvider(auth);
-          return previous ??
-              UserProfileProvider(
-                auth,
-                apiService: apiService,
-                commentService: commentService,
-                hydrator: context.read<ViewerStateHydrator>(),
-              );
-        },
+      // Profile cache shared by every profile screen's provider
+      Provider<ProfileCache>(
+        create: (_) => ProfileCache(authProvider),
+        dispose: (_, cache) => cache.dispose(),
       ),
     ],
     child: const CovesApp(),

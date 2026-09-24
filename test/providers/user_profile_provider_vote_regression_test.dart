@@ -14,6 +14,7 @@ import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/models/user_profile.dart';
 import 'package:coves_flutter/providers/user_profile_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
+import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
@@ -79,6 +80,7 @@ void main() {
     late MockCommentService mockCommentService;
     late _FakeVoteService fakeVoteService;
     late VoteProvider voteProvider;
+    late ProfileCache profileCache;
     late UserProfileProvider profileProvider;
 
     setUp(() async {
@@ -104,11 +106,13 @@ void main() {
         authProvider: mockAuthProvider,
       );
 
+      profileCache = ProfileCache(mockAuthProvider);
       profileProvider = UserProfileProvider(
         mockAuthProvider,
         apiService: mockApiService,
         voteProvider: voteProvider,
         commentService: mockCommentService,
+        profileCache: profileCache,
       );
 
       when(mockApiService.getProfile(actor: anyNamed('actor'))).thenAnswer(
@@ -120,6 +124,7 @@ void main() {
 
     tearDown(() {
       profileProvider.dispose();
+      profileCache.dispose();
       voteProvider.dispose();
     });
 

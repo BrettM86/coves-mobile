@@ -23,6 +23,7 @@ import 'package:coves_flutter/providers/community_subscription_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/providers/user_profile_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
+import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:coves_flutter/services/viewer_state_hydrator.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -245,12 +246,15 @@ void main() {
     ViewerStateHydrator? hydrator,
   }) async {
     const profileDid = 'did:plc:profileowner';
+    final profileCache = ProfileCache(mockAuthProvider);
+    addTearDown(profileCache.dispose);
     final provider = UserProfileProvider(
       mockAuthProvider,
       apiService: mockApiService,
       voteProvider: votes,
       hydrator: hydrator,
       commentService: MockCommentService(),
+      profileCache: profileCache,
     );
     addTearDown(provider.dispose);
 

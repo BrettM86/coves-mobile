@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -11,6 +12,10 @@ import '../../models/user_profile.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/block_provider.dart';
 import '../../providers/user_profile_provider.dart';
+import '../../services/comment_service.dart';
+import '../../services/coves_api_service.dart';
+import '../../services/profile_cache.dart';
+import '../../services/viewer_state_hydrator.dart';
 import '../../utils/pagination_scroll_listener.dart';
 import '../../utils/responsive_utils.dart';
 import '../../widgets/comment_card.dart';
@@ -29,17 +34,50 @@ import 'edit_profile_screen.dart';
 ///
 /// Supports viewing both own profile (via bottom nav) and other users
 /// (via /profile/:actor route with DID or handle parameter).
-class ProfileScreen extends StatefulWidget {
+///
+/// Each screen owns its own [UserProfileProvider], created here and
+/// disposed with the screen, so the own-profile tab and any pushed
+/// profile pages never show each other's state. Only the [ProfileCache]
+/// is shared between them. The scope is keyed by [actor], so a different
+/// actor gets a fresh provider and view state instead of reusing the old.
+class ProfileScreen extends StatelessWidget {
   const ProfileScreen({this.actor, super.key});
 
   /// User DID or handle to display. If null, shows current user's profile.
   final String? actor;
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider<UserProfileProvider>(
+      key: ValueKey<String?>(actor),
+      create: (context) => UserProfileProvider(
+        context.read<AuthProvider>(),
+        apiService: context.read<CovesApiService>(),
+        commentService: context.read<CommentService>(),
+        profileCache: context.read<ProfileCache>(),
+        // Fully wired, subscriptions included: this surface calls
+        // hydrateFeedVotesOnly, so "profile posts never seed
+        // subscriptions" is a property of the call, not of a missing
+        // provider.
+        hydrator: context.read<ViewerStateHydrator>(),
+      ),
+      child: _ProfileView(actor: actor),
+    );
+  }
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+/// The profile view itself; its context sits below the screen's own
+/// [UserProfileProvider].
+class _ProfileView extends StatefulWidget {
+  const _ProfileView({required this.actor});
+
+  final String? actor;
+
+  @override
+  State<_ProfileView> createState() => _ProfileViewState();
+}
+
+class _ProfileViewState extends State<_ProfileView> {
   int _selectedTabIndex = 0;
   bool _commentsLoadedOnce = false;
 
@@ -113,16 +151,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  @override
-  void didUpdateWidget(ProfileScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.actor != widget.actor) {
-      // Reset comments loaded flag when viewing a different profile
-      _commentsLoadedOnce = false;
-      _loadProfile();
-    }
-  }
-
   void _onTabChanged(int index) {
     setState(() {
       _selectedTabIndex = index;
@@ -135,7 +163,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _loadProfile() async {
+  /// Loads the profile, then seeds block state and loads posts (and
+  /// comments, if their tab is selected). Retry reruns this whole load with
+  /// [forceRefresh].
+  Future<void> _loadProfile({bool forceRefresh = false}) async {
     final authProvider = context.read<AuthProvider>();
     final profileProvider = context.read<UserProfileProvider>();
 
@@ -148,7 +179,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    await profileProvider.loadProfile(actor);
+    await profileProvider.loadProfile(actor, forceRefresh: forceRefresh);
 
     // Check mounted after async gap (CLAUDE.md requirement)
     if (!mounted) {
@@ -156,23 +187,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     // Only seed block state / load posts if the profile loaded successfully
-    // (no error) — a failed load can leave a stale cached profile whose
-    // viewer state must not be seeded.
-    if (profileProvider.profileError == null) {
+    // (a profile and no error) — a failed load can leave a stale cached
+    // profile whose viewer state must not be seeded, and a load dropped by
+    // a session change leaves no profile at all.
+    final profile = profileProvider.profile;
+    if (profile != null && profileProvider.profileError == null) {
       // Seed block state from the profile's viewer data so block/unblock
       // menus reflect the server-side block after an app restart (the
       // seed never clobbers fresher in-session optimistic state). Only
       // seed when a viewer object is present: an unauthenticated response
       // omits it entirely, and that absence must not be read as "false".
-      final profile = profileProvider.profile;
-      final viewer = profile?.viewer;
-      if (profile != null &&
-          viewer != null &&
-          profile.did != authProvider.did) {
+      final viewer = profile.viewer;
+      if (viewer != null && profile.did != authProvider.did) {
         context.read<BlockProvider>().setInitialUserBlockState(
           userDid: profile.did,
           isBlocked: viewer.blocked,
         );
+      }
+
+      // A full load (including Retry after a session reset cleared both
+      // feeds) starts comments over: load them now if their tab is showing,
+      // otherwise lazily on the next switch to it.
+      _commentsLoadedOnce = _selectedTabIndex == 1;
+      if (_commentsLoadedOnce) {
+        unawaited(profileProvider.loadComments(refresh: true));
       }
 
       await profileProvider.loadPosts(refresh: true);
@@ -278,10 +316,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _navigateToEditProfile(BuildContext context, UserProfile profile) {
+    // The pushed route sits outside this screen's subtree, so hand it the
+    // owning provider explicitly: saving refreshes this screen's header.
+    final profileProvider = context.read<UserProfileProvider>();
     Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (context) => EditProfileScreen(profile: profile),
+        builder: (context) => ChangeNotifierProvider<UserProfileProvider>.value(
+          value: profileProvider,
+          child: EditProfileScreen(profile: profile),
+        ),
       ),
     );
   }
@@ -318,7 +362,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         body: FullScreenError(
           title: 'Failed to load profile',
           message: profileProvider.profileError!,
-          onRetry: profileProvider.retryProfile,
+          onRetry: () => _loadProfile(forceRefresh: true),
           secondaryActionLabel: isOwnProfile ? 'Sign Out' : null,
           onSecondaryAction: isOwnProfile ? _handleSignOut : null,
           secondaryActionDestructive: true,

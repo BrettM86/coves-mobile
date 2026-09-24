@@ -2,8 +2,11 @@ import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/community_subscription_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
+import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:coves_flutter/services/streamable_service.dart';
+import 'package:coves_flutter/services/viewer_state_hydrator.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
@@ -16,14 +19,40 @@ import 'package:provider/single_child_widget.dart';
 /// BlockProvider>`), so a lookalike ChangeNotifier registered under its own
 /// type throws ProviderNotFoundException at build time.
 
-/// AuthProvider that reports a signed-out user and never touches secure
-/// storage or the network.
+/// AuthProvider that never touches secure storage or the network.
+///
+/// Signed out by default. Pass `signedInDid` (and optionally
+/// `signedInHandle`) to start signed in; [setSignedInDid] changes the DID
+/// with real ChangeNotifier behavior, so observers see the change.
 class FakeAuthProvider extends AuthProvider {
+  FakeAuthProvider({this._signedInDid, this._signedInHandle});
+
+  String? _signedInDid;
+  final String? _signedInHandle;
+
   @override
-  bool get isAuthenticated => false;
+  bool get isAuthenticated => _signedInDid != null;
 
   @override
   bool get isLoading => false;
+
+  @override
+  String? get did => _signedInDid;
+
+  @override
+  String? get handle => _signedInHandle;
+
+  /// Whether anything is currently listening to this provider.
+  bool get isObserved => hasListeners;
+
+  /// Changes the signed-in DID (null means signed out) and notifies.
+  void setSignedInDid(String? did) {
+    _signedInDid = did;
+    notifyListeners();
+  }
+
+  /// Notifies without changing the signed-in DID, as a token refresh does.
+  void notifyWithoutChange() => notifyListeners();
 }
 
 /// VoteProvider wired to a VoteService with no session and no DID, so vote
@@ -85,6 +114,42 @@ List<SingleChildWidget> postCardProviders({
     ),
     Provider<StreamableService>.value(
       value: streamableService ?? StreamableService(),
+    ),
+  ];
+}
+
+/// The app-level dependencies a `ProfileScreen` resolves, mirroring the
+/// registrations in main.dart.
+///
+/// Each ProfileScreen builds and owns its own UserProfileProvider from
+/// these, so no UserProfileProvider is provided here.
+List<SingleChildWidget> profileScreenProviders({
+  required AuthProvider auth,
+  required CovesApiService apiService,
+  required CommentService commentService,
+}) {
+  return [
+    ChangeNotifierProvider<AuthProvider>.value(value: auth),
+    Provider<CovesApiService>.value(value: apiService),
+    Provider<CommentService>.value(value: commentService),
+    ChangeNotifierProvider<VoteProvider>(create: (_) => FakeVoteProvider(auth)),
+    ChangeNotifierProvider<CommunitySubscriptionProvider>(
+      create: (_) =>
+          FakeSubscriptionProvider(authProvider: auth, apiService: apiService),
+    ),
+    ChangeNotifierProvider<BlockProvider>(
+      create: (_) => BlockProvider(apiService: apiService, authProvider: auth),
+    ),
+    Provider<ViewerStateHydrator>(
+      create: (context) => ViewerStateHydrator(
+        authProvider: auth,
+        voteProvider: context.read<VoteProvider>(),
+      ),
+    ),
+    Provider<StreamableService>.value(value: StreamableService()),
+    Provider<ProfileCache>(
+      create: (_) => ProfileCache(auth),
+      dispose: (_, cache) => cache.dispose(),
     ),
   ];
 }

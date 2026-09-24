@@ -16,6 +16,7 @@ import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/models/user_profile.dart';
 import 'package:coves_flutter/providers/user_profile_provider.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
+import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 
@@ -45,6 +46,7 @@ void main() {
   late MockAuthProvider mockAuthProvider;
   late MockCovesApiService mockApiService;
   late MockCommentService mockCommentService;
+  late ProfileCache profileCache;
   late UserProfileProvider provider;
 
   setUp(() async {
@@ -55,10 +57,12 @@ void main() {
     when(mockAuthProvider.isAuthenticated).thenReturn(false);
     when(mockAuthProvider.did).thenReturn(null);
 
+    profileCache = ProfileCache(mockAuthProvider);
     provider = UserProfileProvider(
       mockAuthProvider,
       apiService: mockApiService,
       commentService: mockCommentService,
+      profileCache: profileCache,
     );
 
     when(
@@ -70,6 +74,7 @@ void main() {
 
   tearDown(() {
     provider.dispose();
+    profileCache.dispose();
   });
 
   void stubPosts(List<Object> pages) {
