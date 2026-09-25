@@ -1,10 +1,107 @@
+import 'dart:async';
+
 import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/models/post.dart';
+import 'package:coves_flutter/services/media_saver.dart';
+import 'package:coves_flutter/widgets/icons/lucide_icon_painter.dart';
+import 'package:coves_flutter/widgets/icons/lucide_paths.dart';
 import 'package:coves_flutter/widgets/image_viewer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
 
 const _viewerKey = Key('image-viewer');
+
+const _twoImageGallery = [
+  EmbedImage(
+    thumb: 'https://cdn.test/thumb-1.jpg',
+    fullsize: 'https://cdn.test/fullsize-1.jpg',
+  ),
+  EmbedImage(
+    thumb: 'https://cdn.test/thumb-2.jpg',
+    fullsize: 'https://cdn.test/fullsize-2.jpg',
+  ),
+];
+
+/// Records every requested URL and completes each save immediately.
+class _RecordingMediaSaver implements MediaSaver {
+  final List<String> savedUrls = [];
+
+  @override
+  Future<void> saveImage(String url) async {
+    savedUrls.add(url);
+  }
+}
+
+const _threeImageGallery = [
+  EmbedImage(
+    thumb: 'https://cdn.test/thumb-1.jpg',
+    fullsize: 'https://cdn.test/fullsize-1.jpg',
+  ),
+  EmbedImage(
+    thumb: 'https://cdn.test/thumb-2.jpg',
+    fullsize: 'https://cdn.test/fullsize-2.jpg',
+  ),
+  EmbedImage(
+    thumb: 'https://cdn.test/thumb-3.jpg',
+    fullsize: 'https://cdn.test/fullsize-3.jpg',
+  ),
+];
+
+/// Records every requested URL and leaves each save pending until the test
+/// completes its [Completer].
+class _PendingMediaSaver implements MediaSaver {
+  final List<String> savedUrls = [];
+  final List<Completer<void>> pendingSaves = [];
+
+  @override
+  Future<void> saveImage(String url) {
+    savedUrls.add(url);
+    final save = Completer<void>();
+    pendingSaves.add(save);
+    return save.future;
+  }
+}
+
+/// Pumps the viewer directly as the app's home under a [MediaSaver].
+Future<void> _pumpViewerWithSaver(
+  WidgetTester tester, {
+  required MediaSaver saver,
+  required List<EmbedImage> images,
+  int initialIndex = 0,
+}) async {
+  await tester.pumpWidget(
+    Provider<MediaSaver>.value(
+      value: saver,
+      child: MaterialApp(
+        theme: AppTheme.dark,
+        home: ImageViewer(images: images, initialIndex: initialIndex),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+Finder _saveButton() => find.descendant(
+  of: find.byKey(_viewerKey),
+  matching: find.byTooltip('Save image'),
+);
+
+Finder _downloadGlyph() => find.descendant(
+  of: find.byKey(_viewerKey),
+  matching: find.byWidgetPredicate(
+    (widget) =>
+        widget is LucideGlyph && identical(widget.paths, LucidePaths.download),
+  ),
+);
+
+Finder _saveIconButton() =>
+    find.ancestor(of: _saveButton(), matching: find.byType(IconButton));
+
+Finder _progressIndicator() => find.descendant(
+  of: find.byKey(_viewerKey),
+  matching: find.byWidgetPredicate((widget) => widget is ProgressIndicator),
+);
 
 Widget _harness({
   List<EmbedImage> images = const [
@@ -753,5 +850,611 @@ void main() {
       0.0,
       reason: 'cancellation must restore vertical translation',
     );
+  });
+
+  group('save image', () {
+    testWidgets(
+      'saves the currently visible gallery image and keeps the viewer open',
+      (tester) async {
+        final saver = _RecordingMediaSaver();
+        // The saver wraps MaterialApp so the root-navigator viewer route
+        // can read it, the same way the app root provides it.
+        await tester.pumpWidget(
+          Provider<MediaSaver>.value(
+            value: saver,
+            child: _harness(images: _twoImageGallery),
+          ),
+        );
+        await tester.tap(find.text('Open image'));
+        await tester.pumpAndSettle();
+
+        final viewerFinder = find.byKey(_viewerKey);
+        await tester.fling(
+          find.descendant(of: viewerFinder, matching: find.byType(PageView)),
+          const Offset(-500, 0),
+          1200,
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.descendant(of: viewerFinder, matching: find.text('2/2')),
+          findsOneWidget,
+          reason: 'the swipe must bring the second image into view',
+        );
+
+        await tester.tap(
+          find.descendant(
+            of: viewerFinder,
+            matching: find.byTooltip('Save image'),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(saver.savedUrls, [
+          'https://cdn.test/fullsize-2.jpg',
+        ], reason: 'one tap must save the visible image at full size, once');
+        expect(find.text('Saved to Photos'), findsOneWidget);
+        expect(
+          viewerFinder,
+          findsOneWidget,
+          reason: 'saving must not close the viewer',
+        );
+      },
+    );
+
+    testWidgets(
+      'save button sits top-left inside the safe area and saves on tap',
+      (tester) async {
+        const safeAreaPadding = EdgeInsets.only(top: 40, left: 24);
+        final saver = _RecordingMediaSaver();
+        await tester.pumpWidget(
+          Provider<MediaSaver>.value(
+            value: saver,
+            child: MaterialApp(
+              theme: AppTheme.dark,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(padding: safeAreaPadding),
+                child: child!,
+              ),
+              home: ImageViewer(
+                images: const [
+                  EmbedImage(
+                    thumb: 'https://cdn.test/thumb.jpg',
+                    fullsize: 'https://cdn.test/fullsize.jpg',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final viewerFinder = find.byKey(_viewerKey);
+        final saveButton = find.descendant(
+          of: viewerFinder,
+          matching: find.byTooltip('Save image'),
+        );
+        expect(saveButton, findsOneWidget);
+
+        final screen = tester.getSize(viewerFinder);
+        final buttonRect = tester.getRect(saveButton);
+        expect(
+          buttonRect.top,
+          greaterThanOrEqualTo(safeAreaPadding.top),
+          reason: 'the button must clear the top inset',
+        );
+        expect(
+          buttonRect.left,
+          greaterThanOrEqualTo(safeAreaPadding.left),
+          reason: 'the button must clear the left inset',
+        );
+        expect(
+          buttonRect.right,
+          lessThanOrEqualTo(screen.width / 2),
+          reason: 'the button belongs on the left, opposite the close button',
+        );
+        expect(
+          buttonRect.bottom,
+          lessThanOrEqualTo(screen.height / 2),
+          reason: 'the button belongs at the top of the viewer',
+        );
+
+        final imageTopLeftBeforeTap = tester.getTopLeft(_interactiveViewer());
+        await tester.tap(saveButton);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(saver.savedUrls, ['https://cdn.test/fullsize.jpg']);
+        expect(find.text('Saved to Photos'), findsOneWidget);
+        expect(
+          viewerFinder,
+          findsOneWidget,
+          reason: 'saving must not close the viewer',
+        );
+        expect(
+          tester.getTopLeft(_interactiveViewer()),
+          imageTopLeftBeforeTap,
+          reason: 'tapping save must not start a dismissal drag on the image',
+        );
+      },
+    );
+
+    testWidgets('gallery opened on its last image saves that image', (
+      tester,
+    ) async {
+      final saver = _RecordingMediaSaver();
+      await _pumpViewerWithSaver(
+        tester,
+        saver: saver,
+        images: _threeImageGallery,
+        initialIndex: 2,
+      );
+
+      await tester.tap(_saveButton());
+      await tester.pump();
+
+      expect(saver.savedUrls, ['https://cdn.test/fullsize-3.jpg']);
+    });
+
+    testWidgets(
+      'ignores taps while a save is pending, then saves the visible page',
+      (tester) async {
+        final saver = _PendingMediaSaver();
+        await _pumpViewerWithSaver(
+          tester,
+          saver: saver,
+          images: _threeImageGallery,
+        );
+        final viewerFinder = find.byKey(_viewerKey);
+        final buttonCenter = tester.getCenter(_saveButton());
+
+        // Both taps land before any rebuild could swap the button out.
+        await tester.tap(_saveButton());
+        await tester.tap(_saveButton());
+        await tester.pump();
+        await tester.tapAt(buttonCenter);
+        await tester.pump();
+
+        expect(saver.savedUrls, [
+          'https://cdn.test/fullsize-1.jpg',
+        ], reason: 'repeat taps while saving must not start another save');
+        expect(
+          _progressIndicator(),
+          findsOneWidget,
+          reason: 'a pending save must show progress',
+        );
+        expect(
+          _downloadGlyph(),
+          findsNothing,
+          reason: 'the progress indicator replaces the download glyph',
+        );
+
+        await tester.fling(
+          find.descendant(of: viewerFinder, matching: find.byType(PageView)),
+          const Offset(-500, 0),
+          1200,
+        );
+        for (var frame = 0; frame < 20; frame++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        expect(
+          find.descendant(of: viewerFinder, matching: find.text('2/3')),
+          findsOneWidget,
+          reason: 'paging must still work while a save is pending',
+        );
+        expect(saver.savedUrls, [
+          'https://cdn.test/fullsize-1.jpg',
+        ], reason: 'paging must not change the save already in flight');
+
+        saver.pendingSaves.single.complete();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(
+          _progressIndicator(),
+          findsNothing,
+          reason: 'a finished save must clear the progress indicator',
+        );
+        expect(
+          _downloadGlyph(),
+          findsOneWidget,
+          reason: 'a finished save must restore the download glyph',
+        );
+
+        await tester.tap(_saveButton());
+        await tester.pump();
+
+        expect(saver.savedUrls, [
+          'https://cdn.test/fullsize-1.jpg',
+          'https://cdn.test/fullsize-2.jpg',
+        ], reason: 'after the first save, a tap saves the newly visible page');
+      },
+    );
+
+    testWidgets(
+      'save button is disabled for accessibility while a save is pending',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        final saver = _PendingMediaSaver();
+        await _pumpViewerWithSaver(
+          tester,
+          saver: saver,
+          images: _twoImageGallery,
+        );
+
+        expect(
+          tester.widget<IconButton>(_saveIconButton()).onPressed,
+          isNotNull,
+        );
+        expect(
+          tester.getSemantics(_saveIconButton()),
+          isSemantics(isButton: true, isEnabled: true),
+        );
+
+        await tester.tap(_saveButton());
+        await tester.pump();
+
+        expect(
+          tester.widget<IconButton>(_saveIconButton()).onPressed,
+          isNull,
+          reason:
+              'a pending save must disable the button, not just ignore taps',
+        );
+        expect(
+          tester.getSemantics(_saveIconButton()),
+          isSemantics(isButton: true, isEnabled: false),
+          reason:
+              'screen readers must hear the button as disabled while saving',
+        );
+
+        saver.pendingSaves.single.complete();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(
+          tester.widget<IconButton>(_saveIconButton()).onPressed,
+          isNotNull,
+          reason: 'a finished save must re-enable the button',
+        );
+        expect(
+          tester.getSemantics(_saveIconButton()),
+          isSemantics(isButton: true, isEnabled: true),
+        );
+        // Disposed in the body: testWidgets checks for live semantics
+        // handles before tear-downs run.
+        semantics.dispose();
+      },
+    );
+
+    testWidgets(
+      'without a MediaSaver provider the tap fails loudly, leaving no spinner',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: AppTheme.dark,
+            home: ImageViewer(images: _twoImageGallery),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(_saveButton());
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(
+          tester.takeException(),
+          isA<ProviderNotFoundException>(),
+          reason: 'a missing provider is a wiring bug and must not be hidden',
+        );
+        expect(
+          _progressIndicator(),
+          findsNothing,
+          reason: 'the failed tap must not leave a stuck spinner',
+        );
+        expect(
+          _downloadGlyph(),
+          findsOneWidget,
+          reason: 'the download glyph must come back after the failed tap',
+        );
+      },
+    );
+
+    testWidgets(
+      'outcomes finishing during a snackbar exit show only the newest one',
+      (tester) async {
+        const savedMessage = 'Saved to Photos';
+        const saveFailedMessage = "Couldn't save image";
+        const accessMessage = 'Allow photo access in Settings to save images';
+        final saver = _PendingMediaSaver();
+        await _pumpViewerWithSaver(
+          tester,
+          saver: saver,
+          images: _twoImageGallery,
+        );
+
+        // Outcome A is fully on screen.
+        await tester.tap(_saveButton());
+        await tester.pump();
+        saver.pendingSaves.last.complete();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(find.text(savedMessage), findsOneWidget);
+
+        // Outcome B starts A's exit animation.
+        await tester.tap(_saveButton());
+        await tester.pump();
+        saver.pendingSaves.last.completeError(
+          const MediaSaveException(MediaSaveFailure.saveFailed),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
+
+        // Outcome C lands while A is still animating out.
+        await tester.tap(_saveButton());
+        await tester.pump();
+        saver.pendingSaves.last.completeError(
+          const MediaSaveException(MediaSaveFailure.accessDenied),
+        );
+        await tester.pump();
+        expect(saver.savedUrls, hasLength(3));
+
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(
+          find.text(accessMessage),
+          findsOneWidget,
+          reason: 'the newest outcome must show once the old snackbar exits',
+        );
+        expect(
+          find.text(saveFailedMessage),
+          findsNothing,
+          reason: 'a superseded outcome must never be shown',
+        );
+
+        for (var step = 0; step < 60; step++) {
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(
+            find.text(saveFailedMessage),
+            findsNothing,
+            reason: 'a superseded outcome must not appear after the newest',
+          );
+        }
+        expect(find.byType(SnackBar), findsNothing);
+      },
+    );
+
+    testWidgets('a newer save outcome replaces the current snackbar at once', (
+      tester,
+    ) async {
+      final saver = _PendingMediaSaver();
+      await _pumpViewerWithSaver(
+        tester,
+        saver: saver,
+        images: _twoImageGallery,
+      );
+
+      await tester.tap(_saveButton());
+      await tester.pump();
+      saver.pendingSaves.single.completeError(
+        const MediaSaveException(MediaSaveFailure.saveFailed),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text("Couldn't save image"), findsOneWidget);
+
+      await tester.tap(_saveButton());
+      await tester.pump();
+      saver.pendingSaves.last.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.text('Saved to Photos'),
+        findsOneWidget,
+        reason: 'the newest outcome must show within a second, not queue',
+      );
+      expect(
+        find.text("Couldn't save image"),
+        findsNothing,
+        reason: 'the older outcome must be replaced, not left on screen',
+      );
+      expect(find.byType(SnackBar), findsOneWidget);
+    });
+
+    testWidgets('two back-to-back saves leave no queued snackbar behind', (
+      tester,
+    ) async {
+      final saver = _RecordingMediaSaver();
+      await _pumpViewerWithSaver(
+        tester,
+        saver: saver,
+        images: _twoImageGallery,
+      );
+
+      await tester.tap(_saveButton());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Saved to Photos'), findsOneWidget);
+
+      await tester.tap(_saveButton());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(saver.savedUrls, hasLength(2));
+      expect(find.byType(SnackBar), findsOneWidget);
+
+      // The second snackbar's 4-second display plus its exit animation fit
+      // well inside 6 seconds; a queued one would still be on screen.
+      for (var step = 0; step < 60; step++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      expect(
+        find.byType(SnackBar),
+        findsNothing,
+        reason:
+            'the second save must replace the first snackbar, not queue '
+            'behind it',
+      );
+    });
+
+    const accessMessage = 'Allow photo access in Settings to save images';
+    const genericFailureMessage = "Couldn't save image";
+    const downloadFailureMessage =
+        "Couldn't download image. Check your connection and try again.";
+    final failureCases = <(String, Object, String)>[
+      (
+        'access denied',
+        const MediaSaveException(MediaSaveFailure.accessDenied),
+        accessMessage,
+      ),
+      (
+        'download failed',
+        const MediaSaveException(MediaSaveFailure.downloadFailed),
+        downloadFailureMessage,
+      ),
+      (
+        'save failed',
+        const MediaSaveException(MediaSaveFailure.saveFailed),
+        genericFailureMessage,
+      ),
+      (
+        'an unexpected error',
+        StateError('unexpected platform failure'),
+        genericFailureMessage,
+      ),
+    ];
+
+    for (final (description, error, message) in failureCases) {
+      testWidgets('$description shows "$message" and re-enables the button', (
+        tester,
+      ) async {
+        final saver = _PendingMediaSaver();
+        await _pumpViewerWithSaver(
+          tester,
+          saver: saver,
+          images: _twoImageGallery,
+        );
+
+        await tester.tap(_saveButton());
+        await tester.pump();
+        saver.pendingSaves.single.completeError(error);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+
+        expect(tester.takeException(), isNull);
+        expect(find.text(message), findsOneWidget);
+        expect(find.text('Saved to Photos'), findsNothing);
+        expect(
+          find.byKey(_viewerKey),
+          findsOneWidget,
+          reason: 'a failed save must not close the viewer',
+        );
+        expect(
+          _progressIndicator(),
+          findsNothing,
+          reason: 'a failed save must clear the progress indicator',
+        );
+
+        await tester.tap(_saveButton());
+        await tester.pump();
+
+        expect(saver.savedUrls, [
+          'https://cdn.test/fullsize-1.jpg',
+          'https://cdn.test/fullsize-1.jpg',
+        ], reason: 'after a failure, the next tap must start a new save');
+
+        saver.pendingSaves.last.complete();
+        await tester.pump();
+      });
+    }
+
+    final closingCases = <(String, Object?, String)>[
+      ('success', null, 'Saved to Photos'),
+      (
+        'access denied',
+        const MediaSaveException(MediaSaveFailure.accessDenied),
+        accessMessage,
+      ),
+    ];
+
+    for (final (outcome, error, message) in closingCases) {
+      void finishSave(_PendingMediaSaver saver) {
+        final save = saver.pendingSaves.single;
+        if (error == null) {
+          save.complete();
+        } else {
+          save.completeError(error);
+        }
+      }
+
+      Future<_PendingMediaSaver> startSaveAndClose(WidgetTester tester) async {
+        final saver = _PendingMediaSaver();
+        await tester.pumpWidget(
+          Provider<MediaSaver>.value(
+            value: saver,
+            child: _harness(images: _twoImageGallery),
+          ),
+        );
+        await tester.tap(find.text('Open image'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(_saveButton());
+        await tester.pump();
+        expect(saver.savedUrls, ['https://cdn.test/fullsize-1.jpg']);
+
+        await tester.tap(
+          find.descendant(
+            of: find.byKey(_viewerKey),
+            matching: find.byTooltip('Close'),
+          ),
+        );
+        return saver;
+      }
+
+      testWidgets(
+        '$outcome that finishes during the close transition still reports '
+        '"$message" on the underlying screen',
+        (tester) async {
+          final saver = await startSaveAndClose(tester);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
+          expect(
+            find.byKey(_viewerKey),
+            findsOneWidget,
+            reason: 'the save must finish while the viewer is still fading out',
+          );
+
+          finishSave(saver);
+          await tester.pumpAndSettle();
+
+          expect(tester.takeException(), isNull);
+          expect(find.byKey(_viewerKey), findsNothing);
+          expect(find.text('Open image'), findsOneWidget);
+          expect(find.text(message), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        '$outcome that finishes after the viewer is gone still reports '
+        '"$message" on the underlying screen',
+        (tester) async {
+          final saver = await startSaveAndClose(tester);
+          await tester.pumpAndSettle();
+          expect(
+            find.byKey(_viewerKey),
+            findsNothing,
+            reason:
+                'the viewer route must be fully removed before the save ends',
+          );
+
+          finishSave(saver);
+          await tester.pumpAndSettle();
+
+          expect(tester.takeException(), isNull);
+          expect(find.text('Open image'), findsOneWidget);
+          expect(find.text(message), findsOneWidget);
+        },
+      );
+    }
   });
 }

@@ -63,6 +63,13 @@ abstract final class LucidePaths {
   /// `arrow-left` — back button
   static const List<String> arrowLeft = ['m12 19-7-7 7-7', 'M19 12H5'];
 
+  /// `download` — save image
+  static const List<String> download = [
+    'M12 15V3',
+    'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4',
+    'm7 10 5 5 5-5',
+  ];
+
   /// `forward` — curved share/forward arrow
   static const List<String> forward = [
     'm15 17 5-5-5-5',

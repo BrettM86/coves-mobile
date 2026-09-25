@@ -1,8 +1,14 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
 import '../models/post.dart';
+import '../services/media_saver.dart';
+import 'icons/lucide_icon_painter.dart';
+import 'icons/lucide_paths.dart';
 
 /// Fullscreen image viewer with pinch and double-tap zoom.
 ///
@@ -71,6 +77,10 @@ class _ImageViewerState extends State<ImageViewer>
   bool _gestureHadMultiplePointers = false;
   bool _contactSequenceCanceled = false;
   Offset? _doubleTapPosition;
+
+  // Set synchronously on tap so a second tap in the same frame, before the
+  // button rebuilds, still sees the save in flight.
+  bool _saving = false;
 
   @override
   void initState() {
@@ -207,6 +217,48 @@ class _ImageViewerState extends State<ImageViewer>
     });
   }
 
+  void _onSavePressed() {
+    if (_saving) {
+      return;
+    }
+    // Looked up before any busy state so a missing provider throws from the
+    // tap itself instead of leaving a stuck spinner. The messenger is captured
+    // before the await: the viewer may be closed by the time the save
+    // finishes.
+    final saver = context.read<MediaSaver>();
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _saving = true);
+    unawaited(_saveImage(saver, messenger));
+  }
+
+  Future<void> _saveImage(
+    MediaSaver saver,
+    ScaffoldMessengerState messenger,
+  ) async {
+    String message;
+    try {
+      await saver.saveImage(widget.images[_index].fullsize);
+      message = 'Saved to Photos';
+    } on MediaSaveException catch (error) {
+      message = switch (error.failure) {
+        MediaSaveFailure.accessDenied =>
+          'Allow photo access in Settings to save images',
+        MediaSaveFailure.downloadFailed =>
+          "Couldn't download image. Check your connection and try again.",
+        MediaSaveFailure.saveFailed => "Couldn't save image",
+      };
+    } on Object {
+      message = "Couldn't save image";
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Widget _buildPage(BuildContext context, int index) {
     final image = widget.images[index];
     final alt = image.alt;
@@ -330,6 +382,32 @@ class _ImageViewerState extends State<ImageViewer>
                 ),
               ),
             ),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: IconButton(
+                // Same 24px footprint as the glyph so the button doesn't
+                // shift while saving.
+                icon: _saving
+                    ? const SizedBox.square(
+                        dimension: 24,
+                        child: Padding(
+                          padding: EdgeInsets.all(3),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      )
+                    : const LucideGlyph(
+                        LucidePaths.download,
+                        color: AppColors.textPrimary,
+                      ),
+                tooltip: 'Save image',
+                onPressed: _saving ? null : _onSavePressed,
+              ),
+            ),
+          ),
           SafeArea(
             child: Align(
               alignment: Alignment.topRight,
