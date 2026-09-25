@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../constants/app_colors.dart';
+import '../services/link_sharer.dart';
+import '../utils/share_link.dart';
 import 'icons/share_icon.dart';
 
 /// Standardized share button used across the app
 ///
 /// Displays the ArrowShareRight icon from Bluesky's design system.
-/// Shows a "Share coming soon!" snackbar when tapped.
+/// Hands [url] to the ambient [LinkSharer] when tapped.
 class ShareButton extends StatelessWidget {
   const ShareButton({
+    required this.url,
     this.size = 18,
     this.color,
     this.tooltip = 'Share',
@@ -17,6 +19,13 @@ class ShareButton extends StatelessWidget {
     this.useIconButton = false,
     super.key,
   });
+
+  /// Web URL this button shares.
+  ///
+  /// Required so a call site cannot quietly render a button with nothing to
+  /// share. Null when the surface cannot build a link for what it is showing;
+  /// tapping then reports that instead of sharing.
+  final String? url;
 
   /// Size of the share icon
   final double size;
@@ -34,24 +43,10 @@ class ShareButton extends StatelessWidget {
   /// cards)
   final bool useIconButton;
 
-  Future<void> _handleTap(BuildContext context) async {
-    try {
-      await HapticFeedback.lightImpact();
-    } on PlatformException {
-      // Haptics not supported on this platform - ignore
-    }
-
-    if (!context.mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Share coming soon!'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
+  /// The share sheet is anchored on this button's own bounds, which is what
+  /// iPad puts the popover next to.
+  Future<void> _handleTap(BuildContext context) =>
+      shareLinkFrom(context, url, globalRectOf(context));
 
   @override
   Widget build(BuildContext context) {

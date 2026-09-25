@@ -12,12 +12,17 @@ import '../providers/auth_provider.dart';
 import '../providers/block_provider.dart';
 import '../providers/vote_provider.dart';
 import '../services/api_exceptions.dart';
+import '../utils/copy_link.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/error_messages.dart';
+import '../utils/post_web_link.dart';
+import '../utils/share_link.dart';
+import '../utils/web_link_builder.dart';
 import 'animated_vote_count.dart';
 import 'block_action_helpers.dart';
 import 'icons/animated_heart_icon.dart';
 import 'icons/downvote_icon.dart';
+import 'icons/share_icon.dart';
 import 'report_dialog.dart';
 import 'rich_text_renderer.dart';
 import 'sign_in_dialog.dart';
@@ -58,10 +63,16 @@ class CommentCard extends StatefulWidget {
     this.collapsedCount = 0,
     this.onDelete,
     this.isHighlighted = false,
+    this.parentPost,
     super.key,
   });
 
   final CommentView comment;
+
+  /// The post this comment belongs to, when the surface showing the comment
+  /// has it loaded. Supplies the community and post author a comment
+  /// permalink needs.
+  final PostView? parentPost;
   final int depth;
   final DateTime? currentTime;
 
@@ -90,6 +101,9 @@ class CommentCard extends StatefulWidget {
 
 class _CommentCardState extends State<CommentCard> {
   bool _isDeleting = false;
+
+  /// The options button, which the share popover anchors on.
+  final GlobalKey _menuTriggerKey = GlobalKey();
 
   CommentView get comment => widget.comment;
   int get depth => widget.depth;
@@ -514,30 +528,83 @@ class _CommentCardState extends State<CommentCard> {
     }
   }
 
+  /// The moderation entries of the comment menu: block and report for another
+  /// user's comment, delete for the viewer's own.
+  ///
+  /// Empty when there is nobody to act on — a signed-out viewer, or a deleted
+  /// comment, which the backend serves without its author so there is nobody
+  /// to block, report, or match against for delete permissions.
+  List<Widget> _buildModerationMenuItems(
+    BuildContext context,
+    AuthProvider authProvider,
+    BlockProvider blockProvider,
+  ) {
+    final author = comment.author;
+    if (!authProvider.isAuthenticated || author == null) {
+      return const [];
+    }
+
+    final authorDid = author.did;
+    final authorHandle = author.handle;
+    if (authProvider.did == authorDid) {
+      return [
+        MenuItemButton(
+          onPressed: () => _handleMenuAction(context, 'delete'),
+          leadingIcon: const Icon(
+            Icons.delete_outline,
+            size: 20,
+            color: Colors.red,
+          ),
+          child: const Text(
+            'Delete comment',
+            style: TextStyle(color: Colors.red),
+          ),
+        ),
+      ];
+    }
+
+    final isUserBlocked = blockProvider.isUserBlocked(authorDid);
+    return [
+      buildBlockMenuItem(
+        isBlocked: isUserBlocked,
+        isPending: blockProvider.isUserBlockPending(authorDid),
+        label: isUserBlocked
+            ? 'Unblock @$authorHandle'
+            : 'Block @$authorHandle',
+        onPressed: () => _handleMenuAction(context, 'blockUser'),
+      ),
+      MenuItemButton(
+        onPressed: () => _handleMenuAction(context, 'report'),
+        leadingIcon: const Icon(Icons.flag_outlined, size: 20),
+        child: const Text('Report comment'),
+      ),
+    ];
+  }
+
   /// Builds the three-dots menu for comment actions.
   ///
-  /// Shows either a report option (for non-authors) or a delete option
-  /// (for the comment author). Only visible when authenticated.
+  /// Share and copy link need no account — a link is public — but need the
+  /// parent post the permalink is built under, so they appear only where the
+  /// surface showing the comment has it. The moderation items stay
+  /// signed-in only, and the menu disappears entirely when neither is
+  /// available.
   Widget _buildCommentMenu(BuildContext context) {
+    final parentPost = widget.parentPost;
+
     return Consumer2<AuthProvider, BlockProvider>(
       builder: (context, authProvider, blockProvider, child) {
-        // Only show menu for authenticated users
-        if (!authProvider.isAuthenticated) {
+        final moderationItems = _buildModerationMenuItems(
+          context,
+          authProvider,
+          blockProvider,
+        );
+        if (parentPost == null && moderationItems.isEmpty) {
           return const SizedBox.shrink();
         }
 
-        // Deleted comments have no author, so there is nobody to block,
-        // report, or match against for delete permissions.
-        final author = comment.author;
-        if (author == null) {
-          return const SizedBox.shrink();
-        }
-
-        final isCommentAuthor = authProvider.did == author.did;
-        final authorDid = author.did;
-        final authorHandle = author.handle;
-        final isUserBlocked = blockProvider.isUserBlocked(authorDid);
-        final isUserBlockPending = blockProvider.isUserBlockPending(authorDid);
+        final permalink = parentPost == null
+            ? null
+            : comment.webUrl(WebLinkBuilder.current(), parentPost: parentPost);
 
         return MenuAnchor(
           style: MenuStyle(
@@ -549,40 +616,29 @@ class _CommentCardState extends State<CommentCard> {
             ),
           ),
           menuChildren: [
-            // Block user option (for non-authors)
-            if (!isCommentAuthor)
-              buildBlockMenuItem(
-                isBlocked: isUserBlocked,
-                isPending: isUserBlockPending,
-                label: isUserBlocked
-                    ? 'Unblock @$authorHandle'
-                    : 'Block @$authorHandle',
-                onPressed: () => _handleMenuAction(context, 'blockUser'),
-              ),
-            // Report option (for non-authors)
-            if (!isCommentAuthor)
+            if (parentPost != null) ...[
               MenuItemButton(
-                onPressed: () => _handleMenuAction(context, 'report'),
-                leadingIcon: const Icon(Icons.flag_outlined, size: 20),
-                child: const Text('Report comment'),
+                // The tapped item is gone by the time the sheet opens, so the
+                // popover anchors on the trigger, which stays put.
+                onPressed: () => shareLinkFrom(
+                  context,
+                  permalink,
+                  globalRectOf(_menuTriggerKey.currentContext),
+                ),
+                leadingIcon: const ShareIcon(size: 20),
+                child: const Text('Share'),
               ),
-            // Delete option (only for comment author)
-            if (isCommentAuthor)
               MenuItemButton(
-                onPressed: () => _handleMenuAction(context, 'delete'),
-                leadingIcon: const Icon(
-                  Icons.delete_outline,
-                  size: 20,
-                  color: Colors.red,
-                ),
-                child: const Text(
-                  'Delete comment',
-                  style: TextStyle(color: Colors.red),
-                ),
+                onPressed: () => copyLinkToClipboard(context, permalink),
+                leadingIcon: const Icon(Icons.link, size: 20),
+                child: const Text('Copy link'),
               ),
+            ],
+            ...moderationItems,
           ],
           builder: (context, controller, child) {
             return IconButton(
+              key: _menuTriggerKey,
               icon: Icon(
                 Icons.more_horiz,
                 size: 18,

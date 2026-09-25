@@ -39,11 +39,16 @@ class FocusedThreadScreen extends StatelessWidget {
     required this.ancestors,
     required this.onReply,
     required this.commentsProvider,
+    this.parentPost,
     super.key,
   });
 
   /// The comment thread to focus on (becomes the new root)
   final ThreadViewComment thread;
+
+  /// The post this thread belongs to, when the caller has it loaded.
+  /// Supplies what a comment permalink needs.
+  final PostView? parentPost;
 
   /// Ancestor comments leading to this thread (for context display)
   final List<ThreadViewComment> ancestors;
@@ -70,6 +75,7 @@ class FocusedThreadScreen extends StatelessWidget {
           thread: thread,
           ancestors: ancestors,
           onReply: onReply,
+          parentPost: parentPost,
         ),
       ),
     );
@@ -81,10 +87,14 @@ class _FocusedThreadBody extends StatefulWidget {
     required this.thread,
     required this.ancestors,
     required this.onReply,
+    this.parentPost,
   });
 
   final ThreadViewComment thread;
   final List<ThreadViewComment> ancestors;
+
+  /// The post these comments belong to, when the caller has it loaded.
+  final PostView? parentPost;
   final Future<void> Function(
     String content,
     List<RichTextFacet> facets,
@@ -269,6 +279,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
           ancestors: ancestors,
           onReply: widget.onReply,
           commentsProvider: context.read<CommentsProvider>(),
+          parentPost: widget.parentPost,
         ),
       ),
     );
@@ -346,6 +357,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
                         loadingMoreReplies: commentsProvider.loadingMoreReplies,
                         ancestors: [thread],
                         onDelete: _onDelete,
+                        parentPost: widget.parentPost,
                       );
                     }),
 
@@ -394,6 +406,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
         comment: ancestor.comment,
         onTap: () => _openReplyScreen(ancestor),
         onDelete: _onDelete,
+        parentPost: widget.parentPost,
       ),
     );
   }
@@ -421,6 +434,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
             ? thread.comment.stats.replyCount
             : 0,
         onDelete: _onDelete,
+        parentPost: widget.parentPost,
       ),
     );
   }

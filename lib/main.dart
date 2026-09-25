@@ -32,6 +32,7 @@ import 'screens/landing_screen.dart';
 import 'services/comment_service.dart';
 import 'services/comments_provider_cache.dart';
 import 'services/coves_api_service.dart';
+import 'services/link_sharer.dart';
 import 'services/profile_cache.dart';
 import 'services/streamable_service.dart';
 import 'services/viewer_state_hydrator.dart';
@@ -241,6 +242,8 @@ Future<Widget> bootstrapCovesApp() async {
       ),
       // StreamableService for video embeds
       Provider<StreamableService>(create: (_) => StreamableService()),
+      // Share sheet dispatch for outbound web links
+      Provider<LinkSharer>(create: (_) => const SharePlusLinkSharer()),
       // Profile cache shared by every profile screen's provider
       Provider<ProfileCache>(
         create: (_) => ProfileCache(authProvider),

@@ -18,6 +18,7 @@ import '../../services/profile_cache.dart';
 import '../../services/viewer_state_hydrator.dart';
 import '../../utils/pagination_scroll_listener.dart';
 import '../../utils/responsive_utils.dart';
+import '../../utils/web_link_builder.dart';
 import '../../widgets/comment_card.dart';
 import '../../widgets/icons/back_icon.dart';
 import '../../widgets/icons/lucide_icon_painter.dart';
@@ -375,6 +376,8 @@ class _ProfileViewState extends State<_ProfileView> {
     // SliverAppBar adds the status-bar inset to this itself.
     final expandedHeight = ProfileHeader.expandedHeightFor(context);
 
+    final profile = profileProvider.profile;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
@@ -409,29 +412,32 @@ class _ProfileViewState extends State<_ProfileView> {
                     )
                   : null,
               automaticallyImplyLeading: widget.actor != null,
-              actions: profileProvider.isOwnProfile
-                  ? [
-                      if (profileProvider.profile != null)
-                        IconButton(
-                          icon: const LucideGlyph(LucidePaths.pencil),
-                          onPressed: () => _navigateToEditProfile(
-                            context,
-                            profileProvider.profile!,
-                          ),
-                          tooltip: 'Edit Profile',
-                        ),
-                      const ShareButton(
-                        useIconButton: true,
-                        color: AppColors.textPrimary,
-                        tooltip: 'Share Profile',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.menu),
-                        onPressed: () => _showMenuSheet(context),
-                        tooltip: 'Menu',
-                      ),
-                    ]
-                  : null,
+              actions: [
+                if (profileProvider.isOwnProfile && profile != null)
+                  IconButton(
+                    icon: const LucideGlyph(LucidePaths.pencil),
+                    onPressed: () => _navigateToEditProfile(context, profile),
+                    tooltip: 'Edit Profile',
+                  ),
+                // Anyone who can see a profile can share it; editing and the
+                // menu act on the viewer's own account.
+                if (profile != null)
+                  ShareButton(
+                    url: WebLinkBuilder.current().profile(
+                      did: profile.did,
+                      handle: profile.handle,
+                    ),
+                    useIconButton: true,
+                    color: AppColors.textPrimary,
+                    tooltip: 'Share Profile',
+                  ),
+                if (profileProvider.isOwnProfile)
+                  IconButton(
+                    icon: const Icon(Icons.menu),
+                    onPressed: () => _showMenuSheet(context),
+                    tooltip: 'Menu',
+                  ),
+              ],
               flexibleSpace: LayoutBuilder(
                 builder: (context, constraints) {
                   // Calculate collapse progress (0 = expanded, 1 = collapsed).

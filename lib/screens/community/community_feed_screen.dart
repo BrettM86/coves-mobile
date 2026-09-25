@@ -23,6 +23,7 @@ import '../../utils/display_utils.dart';
 import '../../utils/error_messages.dart';
 import '../../utils/pagination_scroll_listener.dart';
 import '../../utils/responsive_utils.dart';
+import '../../utils/web_link_builder.dart';
 import '../../widgets/community_avatar.dart';
 import '../../widgets/community_header.dart';
 import '../../widgets/icons/app_icons.dart';
@@ -360,6 +361,10 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
       );
     }
 
+    // Null for the one frame that precedes the load: the header renders
+    // without a community, and there is nothing to share yet.
+    final community = _community;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
@@ -383,11 +388,17 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
               ),
               actions: [
                 _buildSubscribeButton(),
-                const ShareButton(
-                  useIconButton: true,
-                  color: AppColors.textPrimary,
-                  tooltip: 'Share Community',
-                ),
+                if (community != null)
+                  ShareButton(
+                    url: WebLinkBuilder.current().community(
+                      did: community.did,
+                      name: community.name,
+                      origin: community.origin,
+                    ),
+                    useIconButton: true,
+                    color: AppColors.textPrimary,
+                    tooltip: 'Share Community',
+                  ),
               ],
               flexibleSpace: LayoutBuilder(
                 builder: (context, constraints) {

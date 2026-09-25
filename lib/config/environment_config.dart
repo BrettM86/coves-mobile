@@ -14,11 +14,17 @@ class EnvironmentConfig {
   const EnvironmentConfig({
     required this.environment,
     required this.apiUrl,
+    required this.webUrl,
     required this.handleResolverUrl,
     required this.plcDirectoryUrl,
   });
   final Environment environment;
   final String apiUrl;
+
+  /// Origin of the web client, used to build shareable links. This is the
+  /// address a link recipient opens in a browser, not an endpoint this app
+  /// calls, so it can differ from [apiUrl].
+  final String webUrl;
   final String handleResolverUrl;
   final String plcDirectoryUrl;
 
@@ -27,6 +33,7 @@ class EnvironmentConfig {
   static const production = EnvironmentConfig(
     environment: Environment.production,
     apiUrl: 'https://coves.social',
+    webUrl: 'https://coves.social',
     handleResolverUrl:
         'https://bsky.social/xrpc/com.atproto.identity.resolveHandle',
     plcDirectoryUrl: 'https://plc.directory',
@@ -46,9 +53,15 @@ class EnvironmentConfig {
   /// localhost directly without port forwarding.
   ///
   /// Note: For physical devices not connected via USB, use ngrok URLs instead
+  ///
+  /// Note: webUrl uses 127.0.0.1 where apiUrl uses localhost, even though both
+  /// reach the same Caddy proxy. The local frontend canonicalises itself to
+  /// 127.0.0.1 so OAuth cookies are scoped to a single host, and a shared link
+  /// that opens on the other spelling lands on a signed-out session.
   static const local = EnvironmentConfig(
     environment: Environment.local,
     apiUrl: 'http://localhost:8080',
+    webUrl: 'http://127.0.0.1:8080',
     handleResolverUrl:
         'http://localhost:3001/xrpc/com.atproto.identity.resolveHandle',
     plcDirectoryUrl: 'http://localhost:3002',

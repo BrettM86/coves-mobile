@@ -12,8 +12,11 @@ import '../providers/community_subscription_provider.dart';
 import '../providers/vote_provider.dart';
 import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
+import '../utils/copy_link.dart';
 import '../utils/display_utils.dart';
 import '../utils/error_messages.dart';
+import '../utils/post_web_link.dart';
+import '../utils/web_link_builder.dart';
 import 'animated_vote_count.dart';
 import 'block_action_helpers.dart';
 import 'icons/animated_heart_icon.dart';
@@ -50,11 +53,17 @@ class _PostCardActionsState extends State<PostCardActions> {
   bool get showCommentButton => widget.showCommentButton;
   VoidCallback? get onDeleted => widget.onDeleted;
 
+  /// The post's link on the web client, shared and copied from here. Null
+  /// when the post's at-URI yields no canonical URL.
+  String? get _postWebUrl => post.post.webUrl(WebLinkBuilder.current());
+
   Future<void> _handleMenuAction(BuildContext context, String action) async {
     final communityDid = post.post.community.did;
     final communityName = post.post.community.name;
 
-    if (action == 'subscribe') {
+    if (action == 'copyLink') {
+      await copyLinkToClipboard(context, _postWebUrl);
+    } else if (action == 'subscribe') {
       // Check authentication - subscribe requires sign-in
       final authProvider = context.read<AuthProvider>();
       if (!authProvider.isAuthenticated) {
@@ -425,6 +434,13 @@ class _PostCardActionsState extends State<PostCardActions> {
                         ),
                       ),
                       menuChildren: [
+                        // Copy link needs no account: a link is public.
+                        MenuItemButton(
+                          onPressed: () =>
+                              _handleMenuAction(context, 'copyLink'),
+                          leadingIcon: const Icon(Icons.link, size: 20),
+                          child: const Text('Copy link'),
+                        ),
                         MenuItemButton(
                           onPressed: isPending
                               ? null
@@ -532,7 +548,7 @@ class _PostCardActionsState extends State<PostCardActions> {
             ),
 
             // Share button
-            const ShareButton(tooltip: 'Share post'),
+            ShareButton(url: _postWebUrl, tooltip: 'Share post'),
           ],
         ),
 

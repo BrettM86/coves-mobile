@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../constants/threading_colors.dart';
 import '../models/comment.dart';
+import '../models/post.dart';
 import 'comment_card.dart';
 
 /// Comment thread widget for displaying comments and their nested replies
@@ -38,10 +39,15 @@ class CommentThread extends StatelessWidget {
     this.onDelete,
     this.focusedCommentUri,
     this.focusedCommentKey,
+    this.parentPost,
     super.key,
   });
 
   final ThreadViewComment thread;
+
+  /// The post these comments belong to, when the surface showing them has it
+  /// loaded. Supplies what a comment permalink needs.
+  final PostView? parentPost;
   final int depth;
   final int maxDepth;
   final DateTime? currentTime;
@@ -134,6 +140,7 @@ class CommentThread extends StatelessWidget {
                 onDelete: onDelete,
                 focusedCommentUri: focusedCommentUri,
                 focusedCommentKey: focusedCommentKey,
+                parentPost: parentPost,
               );
             }).toList(),
           )
@@ -157,6 +164,7 @@ class CommentThread extends StatelessWidget {
             collapsedCount: collapsedCount,
             onDelete: onDelete,
             isHighlighted: isFocused,
+            parentPost: parentPost,
           ),
         ),
 

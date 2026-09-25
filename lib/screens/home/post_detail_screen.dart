@@ -11,8 +11,11 @@ import '../../providers/comments_provider.dart';
 import '../../providers/vote_provider.dart';
 import '../../services/comments_provider_cache.dart';
 import '../../utils/community_handle_utils.dart';
+import '../../utils/copy_link.dart';
 import '../../utils/error_messages.dart';
+import '../../utils/post_web_link.dart';
 import '../../utils/responsive_utils.dart';
+import '../../utils/web_link_builder.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/comments_header.dart';
 import '../../widgets/community_avatar.dart';
@@ -587,6 +590,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
+  /// The post's link on the web client, shared and copied from here. Null
+  /// when the post's at-URI yields no canonical URL.
+  String? get _postWebUrl => widget.post.post.webUrl(WebLinkBuilder.current());
+
   /// Handle menu action selection
   Future<void> _handleMenuAction(String action) async {
     // Haptic feedback is non-essential, silently fail if unsupported
@@ -598,28 +605,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
     switch (action) {
       case 'copy_link':
-        final postUri = widget.post.post.uri;
-        try {
-          await Clipboard.setData(ClipboardData(text: postUri));
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Link copied to clipboard'),
-                behavior: SnackBarBehavior.floating,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
-        } on PlatformException {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Failed to copy link to clipboard'),
-                behavior: SnackBarBehavior.floating,
-                backgroundColor: AppColors.primary,
-              ),
-            );
-          }
+        if (mounted) {
+          await copyLinkToClipboard(context, _postWebUrl);
         }
       case 'report':
         await _handleReport();
@@ -911,6 +898,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           ancestors: ancestors,
           onReply: _handleCommentReply,
           commentsProvider: _commentsProvider,
+          parentPost: widget.post.post,
         ),
       ),
     );
@@ -978,7 +966,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     elevation: 0,
                     pinned: true,
                     actions: [
-                      const ShareButton(
+                      ShareButton(
+                        url: _postWebUrl,
                         useIconButton: true,
                         color: AppColors.textPrimary,
                       ),
@@ -1132,6 +1121,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               ),
                               focusedCommentUri: widget.focusCommentUri,
                               focusedCommentKey: _focusedCommentKey,
+                              parentPost: widget.post.post,
                             ),
                           );
                         },
@@ -1192,9 +1182,14 @@ class _CommentItem extends StatelessWidget {
     this.onDelete,
     this.focusedCommentUri,
     this.focusedCommentKey,
+    this.parentPost,
   });
 
   final ThreadViewComment comment;
+
+  /// The post these comments belong to. Supplies what a comment permalink
+  /// needs.
+  final PostView? parentPost;
   final ValueNotifier<DateTime?> currentTimeNotifier;
   final void Function(ThreadViewComment)? onCommentTap;
   final Set<String> collapsedComments;
@@ -1225,6 +1220,7 @@ class _CommentItem extends StatelessWidget {
           onDelete: onDelete,
           focusedCommentUri: focusedCommentUri,
           focusedCommentKey: focusedCommentKey,
+          parentPost: parentPost,
         );
       },
     );
