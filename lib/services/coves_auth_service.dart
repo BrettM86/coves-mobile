@@ -9,6 +9,7 @@ import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import '../config/environment_config.dart';
 import '../config/oauth_config.dart';
 import '../models/coves_session.dart';
+import 'coves_http.dart';
 import 'retry_interceptor.dart';
 
 /// Thrown when the user backs out of the OAuth flow without completing it:
@@ -131,14 +132,7 @@ class CovesAuthService {
   Future<void> initialize() async {
     // Use injected Dio (set in the constructor, for testing) or create one
     if (_dio == null) {
-      final dio = Dio(
-        BaseOptions(
-          baseUrl: EnvironmentConfig.current.apiUrl,
-          // Shorter timeout with retries for mobile network resilience
-          connectTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 30),
-        ),
-      );
+      final dio = createCovesDio();
       // Add retry interceptor for transient network errors
       // Critical for token refresh - don't sign out user on transient failure
       dio.interceptors.add(

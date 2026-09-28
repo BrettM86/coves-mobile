@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
+import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/multi_feed_provider.dart';
+import '../../utils/pagination_scroll_listener.dart';
 import '../../widgets/feed_page.dart';
 import '../../widgets/icons/app_icons.dart';
 
@@ -131,20 +133,11 @@ class FeedScreenState extends State<FeedScreen> {
   }
 
   /// Load initial feed based on authentication
+  ///
+  /// Reuses a page-one load that startup already has in flight (or just
+  /// finished) instead of refetching it.
   void _loadInitialFeed() {
-    final provider = context.read<MultiFeedProvider>();
-    final isAuthenticated = context.read<AuthProvider>().isAuthenticated;
-
-    // Load the current feed
-    provider.loadFeed(provider.currentFeedType, refresh: true);
-
-    // Preload the other feed if authenticated
-    if (isAuthenticated) {
-      final otherFeed = provider.currentFeedType == FeedType.discover
-          ? FeedType.forYou
-          : FeedType.discover;
-      provider.loadFeed(otherFeed, refresh: true);
-    }
+    context.read<MultiFeedProvider>().loadInitialFeeds();
   }
 
   /// Get or create scroll controller for a feed type
@@ -170,7 +163,7 @@ class FeedScreenState extends State<FeedScreen> {
       context.read<MultiFeedProvider>().saveScrollPosition(type, position);
 
       // Trigger pagination when near bottom (with 100ms throttle per feed)
-      if (position >= controller.position.maxScrollExtent - 200) {
+      if (isNearScrollEnd(controller.position)) {
         final now = DateTime.now();
         final lastTime = _lastPaginationTime[type];
         if (lastTime == null || now.difference(lastTime).inMilliseconds > 100) {
@@ -420,23 +413,53 @@ class FeedScreenState extends State<FeedScreen> {
   }
 
   /// Build a FeedPage widget with all required state from provider
+  ///
+  /// Selects only this feed's render state, so a notification about the
+  /// other feed (its loads, a feed swipe via setCurrentFeed) doesn't
+  /// rebuild this page and every PostCard it has built. Each page loads
+  /// with two notifications and both pages stay alive in the PageView, so
+  /// a plain Consumer rebuilt both lists for every load of either one.
+  /// `posts` is always replaced, never mutated, so identity is enough.
   Widget _buildFeedPage(FeedType feedType, bool isAuthenticated) {
-    return Consumer<MultiFeedProvider>(
-      builder: (context, provider, _) {
+    return Selector<
+      MultiFeedProvider,
+      (List<FeedViewPost>, bool, bool, bool, String?, String?, DateTime?)
+    >(
+      selector: (_, provider) {
         final state = provider.getState(feedType);
+        return (
+          state.posts,
+          state.isLoading,
+          state.isLoadingMore,
+          state.hasMore,
+          state.error,
+          state.loadMoreError,
+          provider.currentTime,
+        );
+      },
+      builder: (context, selected, _) {
+        final (
+          posts,
+          isLoading,
+          isLoadingMore,
+          hasMore,
+          error,
+          loadMoreError,
+          currentTime,
+        ) = selected;
+        final provider = context.read<MultiFeedProvider>();
 
         // Handle error: treat null and empty string as no error
-        final error = state.error;
         final hasError = error != null && error.isNotEmpty;
 
         return FeedPage(
           feedType: feedType,
-          posts: state.posts,
-          isLoading: state.isLoading,
-          isLoadingMore: state.isLoadingMore,
-          hasMore: state.hasMore,
+          posts: posts,
+          isLoading: isLoading,
+          isLoadingMore: isLoadingMore,
+          hasMore: hasMore,
           error: hasError ? error : null,
-          loadMoreError: state.loadMoreError,
+          loadMoreError: loadMoreError,
           scrollController: _getOrCreateScrollController(feedType),
           onRefresh: () => provider.loadFeed(feedType, refresh: true),
           onRetry: () => provider.retry(feedType),
@@ -445,7 +468,7 @@ class FeedScreenState extends State<FeedScreen> {
             ..loadMore(feedType),
           onRetryLoadMore: () => provider.retryLoadMore(feedType),
           isAuthenticated: isAuthenticated,
-          currentTime: provider.currentTime,
+          currentTime: currentTime,
         );
       },
     );

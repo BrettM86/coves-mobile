@@ -9,6 +9,7 @@ import '../models/post.dart';
 import '../services/streamable_service.dart';
 import '../utils/community_handle_utils.dart';
 import '../utils/date_time_utils.dart';
+import '../utils/image_decode_size.dart';
 import 'bluesky_post_card.dart';
 import 'community_avatar.dart';
 import 'external_link_bar.dart';
@@ -651,6 +652,8 @@ class _LinkThumbnail extends StatelessWidget {
         imageUrl: thumb,
         width: double.infinity,
         height: height,
+        // Link thumbnails can be full-size originals from the linked site.
+        memCacheWidth: fullWidthDecodeWidth(context),
         fit: BoxFit.cover,
         // Disable fade animation to prevent scroll jitter from height changes
         fadeInDuration: Duration.zero,

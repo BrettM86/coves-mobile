@@ -204,6 +204,67 @@ void main() {
     expect(calls, 1);
   });
 
+  group('default viewport-based threshold', () {
+    // With no pixel threshold the trigger sits kPaginationPrefetchViewports
+    // viewport heights before the end, so the next page is requested while
+    // the user is still reading instead of at the loading footer.
+    double defaultTrigger() {
+      return controller.position.viewportDimension *
+          kPaginationPrefetchViewports;
+    }
+
+    testWidgets('isNearScrollEnd is true exactly at the trigger distance', (
+      tester,
+    ) async {
+      await pumpList(tester);
+      expect(controller.position.viewportDimension, greaterThan(0));
+
+      controller.jumpTo(bottomMinus(defaultTrigger()));
+
+      expect(isNearScrollEnd(controller.position), isTrue);
+    });
+
+    testWidgets('isNearScrollEnd is false beyond the trigger distance', (
+      tester,
+    ) async {
+      await pumpList(tester);
+
+      controller.jumpTo(bottomMinus(defaultTrigger() + 1));
+
+      expect(isNearScrollEnd(controller.position), isFalse);
+    });
+
+    testWidgets('an explicit threshold overrides the viewport default', (
+      tester,
+    ) async {
+      await pumpList(tester);
+
+      controller.jumpTo(bottomMinus(defaultTrigger()));
+
+      expect(isNearScrollEnd(controller.position, threshold: 200), isFalse);
+    });
+
+    testWidgets('a listener without a threshold uses the viewport default', (
+      tester,
+    ) async {
+      await pumpList(tester);
+      final listener = PaginationScrollListener(
+        controller: controller,
+        onLoadMore: () => calls++,
+        clock: clock.now,
+      )..attach();
+      addTearDown(listener.dispose);
+
+      controller.jumpTo(bottomMinus(defaultTrigger() + 1));
+      await tester.pump();
+      expect(calls, 0);
+
+      controller.jumpTo(bottomMinus(defaultTrigger()));
+      await tester.pump();
+      expect(calls, 1);
+    });
+  });
+
   group('checkNow', () {
     // Regression: the profile screen used to trigger pagination from its
     // item builder, which auto-loaded when a short first page did not fill

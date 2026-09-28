@@ -47,10 +47,7 @@ extension CommentViewWebLink on CommentView {
   /// post it is not on, which is worse than no link: the surface handed over
   /// the wrong post, and a reader following the link would land somewhere the
   /// comment does not exist.
-  String? webUrl(
-    WebLinkBuilder linkBuilder, {
-    required PostView parentPost,
-  }) {
+  String? webUrl(WebLinkBuilder linkBuilder, {required PostView parentPost}) {
     if (post.uri != parentPost.uri) {
       _reportUnbuildableWebLink('Comment under the wrong parent post', uri);
       return null;

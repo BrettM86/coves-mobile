@@ -156,6 +156,9 @@ class SensitiveImagePlaceholder extends StatelessWidget {
                         scale: 1.2,
                         child: CachedNetworkImage(
                           imageUrl: image.thumb,
+                          // It is blurred beyond recognition anyway; a tiny
+                          // decode keeps the hidden image cheap.
+                          memCacheWidth: 64,
                           fit: BoxFit.cover,
                           fadeInDuration: Duration.zero,
                           fadeOutDuration: Duration.zero,

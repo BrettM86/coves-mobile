@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/post.dart';
+import '../../utils/image_decode_size.dart';
 import '../fullscreen_video_player.dart';
 import 'media_format.dart';
 import 'media_surface.dart';
@@ -57,6 +58,7 @@ class NativeVideoEmbed extends StatelessWidget {
           : CachedNetworkImage(
               imageUrl: thumbnail,
               width: double.infinity,
+              memCacheWidth: fullWidthDecodeWidth(context),
               fit: BoxFit.cover,
               // Disable fade animation to prevent scroll jitter
               fadeInDuration: Duration.zero,

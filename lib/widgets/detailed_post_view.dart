@@ -6,6 +6,7 @@ import '../constants/app_colors.dart';
 import '../models/post.dart';
 import '../services/streamable_service.dart';
 import '../utils/date_time_utils.dart';
+import '../utils/image_decode_size.dart';
 import '../utils/url_display.dart';
 import '../utils/url_launcher.dart';
 import 'bluesky_post_card.dart';
@@ -554,6 +555,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                   imageUrl: embed.thumb!,
                   width: double.infinity,
                   height: 220,
+                  memCacheWidth: fullWidthDecodeWidth(context),
                   fit: BoxFit.cover,
                   fadeInDuration: Duration.zero,
                   fadeOutDuration: Duration.zero,

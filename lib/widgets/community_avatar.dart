@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
 import '../utils/display_utils.dart';
+import '../utils/image_decode_size.dart';
 
 /// Shape variant for the community avatar.
 enum CommunityAvatarShape {
@@ -75,9 +76,12 @@ class CommunityAvatar extends StatelessWidget {
       return fallback;
     }
 
+    final decodeWidth = decodeWidthFor(context, size);
+
     if (shape == CommunityAvatarShape.roundedRect) {
       return CachedNetworkImage(
         imageUrl: avatarUrl!,
+        memCacheWidth: decodeWidth,
         // Disable fade animation to prevent scroll jitter, same as the
         // circle path and UserAvatar.
         fadeInDuration: Duration.zero,
@@ -87,7 +91,13 @@ class CommunityAvatar extends StatelessWidget {
           height: size,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(borderRadius),
-            image: DecorationImage(image: imageProvider, fit: BoxFit.cover),
+            // imageBuilder hands over the un-resized provider; wrap it the
+            // same way memCacheWidth does so the painted image is the
+            // small decode already in the cache, not a full-size one.
+            image: DecorationImage(
+              image: ResizeImage(imageProvider, width: decodeWidth),
+              fit: BoxFit.cover,
+            ),
           ),
         ),
         placeholder: (context, url) =>
@@ -107,6 +117,7 @@ class CommunityAvatar extends StatelessWidget {
         imageUrl: avatarUrl!,
         width: size,
         height: size,
+        memCacheWidth: decodeWidth,
         fit: BoxFit.cover,
         fadeInDuration: Duration.zero,
         fadeOutDuration: Duration.zero,

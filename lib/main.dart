@@ -81,50 +81,21 @@ Future<void> main() async {
 /// binding rejects. Mirrors the [createRouter] @visibleForTesting pattern.
 @visibleForTesting
 Future<Widget> bootstrapCovesApp() async {
-  // Initialize auth provider
+  // The three startup reads are independent (secure storage for the
+  // session, shared_preferences for the two acceptance flags), so run them
+  // concurrently instead of paying for each one before the first frame.
   final authProvider = AuthProvider();
-  try {
-    await authProvider.initialize();
-  } on Exception catch (error, stackTrace) {
-    // Log initialization failure but continue - user can retry login
-    await Sentry.captureException(
-      error,
-      stackTrace: stackTrace,
-      withScope: (scope) {
-        scope.setTag('phase', 'auth_initialization');
-      },
-    );
-  }
-
-  // Initialize EULA acceptance provider
-  // Note: initialize() handles errors internally (fail-closed design)
   final eulaProvider = EulaProvider();
-  try {
-    await eulaProvider.initialize();
-  } on Exception catch (error, stackTrace) {
-    await Sentry.captureException(
-      error,
-      stackTrace: stackTrace,
-      withScope: (scope) {
-        scope.setTag('phase', 'eula_initialization');
-      },
-    );
-  }
-
-  // Initialize community guidelines acceptance provider
-  // Note: initialize() handles errors internally (fail-closed design)
   final communityGuidelinesProvider = CommunityGuidelinesProvider();
-  try {
-    await communityGuidelinesProvider.initialize();
-  } on Exception catch (error, stackTrace) {
-    await Sentry.captureException(
-      error,
-      stackTrace: stackTrace,
-      withScope: (scope) {
-        scope.setTag('phase', 'community_guidelines_initialization');
-      },
-    );
-  }
+  await Future.wait([
+    _initializeGuarded(authProvider.initialize, phase: 'auth_initialization'),
+    // Note: initialize() handles errors internally (fail-closed design)
+    _initializeGuarded(eulaProvider.initialize, phase: 'eula_initialization'),
+    _initializeGuarded(
+      communityGuidelinesProvider.initialize,
+      phase: 'community_guidelines_initialization',
+    ),
+  ]);
 
   // Single app-wide Coves API client (one Dio stack / connection pool).
   // Constructed once here and injected everywhere — providers via
@@ -157,88 +128,67 @@ Future<Widget> bootstrapCovesApp() async {
     signOutHandler: authProvider.signOut,
   );
 
+  // The feed stack is built here rather than lazily in the provider tree so
+  // a restored session can start fetching its feeds before the first frame:
+  // the request then overlaps runApp, the router redirect and the shell's
+  // first layout instead of starting after them. All four live for the
+  // whole app, like the API client above. Built after auth init so the
+  // subscription provider's auth listener doesn't see the restore.
+  final voteProvider = VoteProvider(
+    voteService: voteService,
+    authProvider: authProvider,
+  );
+  final subscriptionProvider = CommunitySubscriptionProvider(
+    authProvider: authProvider,
+    apiService: apiService,
+  );
+  // One hydrator for every fetch path that seeds viewer state (votes,
+  // community subscriptions) from a response.
+  final hydrator = ViewerStateHydrator(
+    authProvider: authProvider,
+    voteProvider: voteProvider,
+    subscriptionProvider: subscriptionProvider,
+  );
+  final feedProvider = MultiFeedProvider(
+    authProvider,
+    apiService: apiService,
+    hydrator: hydrator,
+  );
+  // Only a signed-in user whose acceptances are done lands on /feed
+  // directly; everyone else sees a gate or the landing screen first.
+  if (authProvider.isAuthenticated &&
+      eulaProvider.hasAccepted &&
+      communityGuidelinesProvider.hasAccepted) {
+    feedProvider.loadInitialFeeds();
+  }
+
   return MultiProvider(
     providers: [
       ChangeNotifierProvider.value(value: authProvider),
       ChangeNotifierProvider.value(value: eulaProvider),
       ChangeNotifierProvider.value(value: communityGuidelinesProvider),
-      ChangeNotifierProvider(
-        create: (_) =>
-            VoteProvider(voteService: voteService, authProvider: authProvider),
-      ),
+      ChangeNotifierProvider.value(value: voteProvider),
       // Expose the shared API client so screens/widgets can context.read it
       Provider<CovesApiService>.value(value: apiService),
       // Expose the shared comment service for per-screen profile providers
       Provider<CommentService>.value(value: commentService),
-      ChangeNotifierProvider(
-        create: (_) => CommunitySubscriptionProvider(
-          authProvider: authProvider,
-          apiService: apiService,
-        ),
-      ),
+      ChangeNotifierProvider.value(value: subscriptionProvider),
       ChangeNotifierProvider(
         create: (_) =>
             BlockProvider(apiService: apiService, authProvider: authProvider),
       ),
-      // One hydrator for every fetch path that seeds viewer state (votes,
-      // community subscriptions) from a response.
-      //
-      // Registered AFTER VoteProvider and CommunitySubscriptionProvider
-      // because it reads both, and BEFORE the consumers below that read it
-      // in their `create`. Safe to capture the notifiers once: both are
-      // plain ChangeNotifierProvider(create:) instances, created once and
-      // never replaced, and every consumer proxy returns `previous ?? ...`
-      // so the `vote` and `subscription` arguments its `update` receives
-      // are discarded.
-      Provider<ViewerStateHydrator>(
-        create: (context) => ViewerStateHydrator(
-          authProvider: authProvider,
-          voteProvider: context.read<VoteProvider>(),
-          subscriptionProvider: context.read<CommunitySubscriptionProvider>(),
-        ),
-      ),
-      ChangeNotifierProxyProvider3<
-        AuthProvider,
-        VoteProvider,
-        CommunitySubscriptionProvider,
-        MultiFeedProvider
-      >(
-        create: (context) => MultiFeedProvider(
-          authProvider,
-          apiService: apiService,
-          hydrator: context.read<ViewerStateHydrator>(),
-        ),
-        update: (context, auth, vote, subscription, previous) {
-          // Reuse existing provider to maintain state across rebuilds
-          return previous ??
-              MultiFeedProvider(
-                auth,
-                apiService: apiService,
-                hydrator: context.read<ViewerStateHydrator>(),
-              );
-        },
-      ),
+      Provider<ViewerStateHydrator>.value(value: hydrator),
+      ChangeNotifierProvider.value(value: feedProvider),
       // CommentsProviderCache manages per-post CommentsProvider instances
       // with LRU eviction and sign-out cleanup
-      ProxyProvider2<AuthProvider, VoteProvider, CommentsProviderCache>(
-        create: (context) => CommentsProviderCache(
+      Provider<CommentsProviderCache>(
+        create: (_) => CommentsProviderCache(
           authProvider: authProvider,
-          voteProvider: context.read<VoteProvider>(),
+          voteProvider: voteProvider,
           commentService: commentService,
           apiService: apiService,
-          hydrator: context.read<ViewerStateHydrator>(),
+          hydrator: hydrator,
         ),
-        update: (context, auth, vote, previous) {
-          // Reuse existing cache
-          return previous ??
-              CommentsProviderCache(
-                authProvider: auth,
-                voteProvider: vote,
-                commentService: commentService,
-                apiService: apiService,
-                hydrator: context.read<ViewerStateHydrator>(),
-              );
-        },
         dispose: (_, cache) => cache.dispose(),
       ),
       // StreamableService for video embeds
@@ -255,6 +205,25 @@ Future<Widget> bootstrapCovesApp() async {
     ],
     child: const CovesApp(),
   );
+}
+
+/// Runs one startup initializer, reporting (not rethrowing) its failure so
+/// the others and app start still proceed - the user can retry login.
+Future<void> _initializeGuarded(
+  Future<void> Function() initialize, {
+  required String phase,
+}) async {
+  try {
+    await initialize();
+  } on Exception catch (error, stackTrace) {
+    await Sentry.captureException(
+      error,
+      stackTrace: stackTrace,
+      withScope: (scope) {
+        scope.setTag('phase', phase);
+      },
+    );
+  }
 }
 
 class CovesApp extends StatelessWidget {

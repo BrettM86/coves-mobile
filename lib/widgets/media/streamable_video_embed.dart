@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../constants/app_colors.dart';
 import '../../models/post.dart';
 import '../../services/streamable_service.dart';
+import '../../utils/image_decode_size.dart';
 import '../../utils/url_launcher.dart';
 import '../fullscreen_video_player.dart';
 import 'media_surface.dart';
@@ -159,6 +160,7 @@ class _StreamableVideoEmbedState extends State<StreamableVideoEmbed> {
       imageUrl: thumb,
       width: double.infinity,
       height: widget.height,
+      memCacheWidth: fullWidthDecodeWidth(context),
       fit: BoxFit.cover,
       // Disable fade animation to prevent scroll jitter from height changes
       fadeInDuration: Duration.zero,

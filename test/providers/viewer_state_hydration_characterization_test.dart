@@ -126,6 +126,7 @@ void main() {
 
     when(mockAuthProvider.isAuthenticated).thenReturn(true);
     when(mockAuthProvider.did).thenReturn('did:plc:me');
+    when(mockAuthProvider.restoredSessionRecoveryCount).thenReturn(0);
     when(mockAuthProvider.getAccessToken())
         .thenAnswer((_) async => 'test-token');
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
 import '../utils/display_utils.dart';
+import '../utils/image_decode_size.dart';
 
 /// Shared user/author avatar widget with CachedNetworkImage and fallback.
 ///
@@ -66,6 +67,7 @@ class UserAvatar extends StatelessWidget {
         imageUrl: avatarUrl!,
         width: size,
         height: size,
+        memCacheWidth: decodeWidthFor(context, size),
         fit: BoxFit.cover,
         // Disable fade animation to prevent scroll jitter
         fadeInDuration: Duration.zero,

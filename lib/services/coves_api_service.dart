@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
-import '../config/environment_config.dart';
 import '../models/comment.dart';
 import '../models/community.dart';
 import '../models/post.dart';
@@ -11,6 +10,7 @@ import '../models/post_get_result.dart';
 import '../models/user_profile.dart';
 import 'api_exceptions.dart';
 import 'auth_interceptor.dart';
+import 'coves_http.dart';
 import 'log_redaction.dart';
 import 'retry_interceptor.dart';
 
@@ -38,17 +38,7 @@ class CovesApiService {
     Future<void> Function()? signOutHandler,
     Dio? dio,
   }) {
-    _dio =
-        dio ??
-        Dio(
-          BaseOptions(
-            baseUrl: EnvironmentConfig.current.apiUrl,
-            // Shorter timeout with retries for mobile network resilience
-            connectTimeout: const Duration(seconds: 10),
-            receiveTimeout: const Duration(seconds: 30),
-            headers: {'Content-Type': 'application/json'},
-          ),
-        );
+    _dio = dio ?? createCovesDio(headers: {'Content-Type': 'application/json'});
 
     // Add retry interceptor FIRST for transient network errors
     // (connection timeouts, mobile network flakiness)

@@ -7,6 +7,7 @@ import '../models/bluesky_post.dart';
 import '../models/post.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/display_utils.dart';
+import '../utils/image_decode_size.dart';
 import '../utils/url_launcher.dart';
 import 'image_viewer.dart';
 import 'media/media_surface.dart';
@@ -395,6 +396,7 @@ class BlueskyPostCard extends StatelessWidget {
                 aspectRatio: 1200 / 630, // Standard OG image ratio
                 child: CachedNetworkImage(
                   imageUrl: embed.thumb!,
+                  memCacheWidth: fullWidthDecodeWidth(context),
                   fit: BoxFit.cover,
                   // Disable fade animation to prevent scroll jitter
                   fadeInDuration: Duration.zero,

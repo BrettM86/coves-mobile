@@ -13,6 +13,7 @@ import '../../services/comments_provider_cache.dart';
 import '../../utils/community_handle_utils.dart';
 import '../../utils/copy_link.dart';
 import '../../utils/error_messages.dart';
+import '../../utils/pagination_scroll_listener.dart';
 import '../../utils/post_web_link.dart';
 import '../../utils/responsive_utils.dart';
 import '../../utils/web_link_builder.dart';
@@ -113,6 +114,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   // ScrollController created lazily; explicit comment focus overrides
   // restoration.
   late ScrollController _scrollController;
+  // Borrows _scrollController; throttles the load-more trigger.
+  late PaginationScrollListener _paginationListener;
   final GlobalKey _commentsHeaderKey = GlobalKey();
 
   // Cached provider from CommentsProviderCache
@@ -218,6 +221,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       initialScrollOffset: initialScrollOffset,
     );
     _scrollController.addListener(_onScroll);
+    _paginationListener = PaginationScrollListener(
+      controller: _scrollController,
+      onLoadMore: _onLoadMore,
+    )..attach();
 
     if (kDebugMode && initialScrollOffset > 0) {
       debugPrint(
@@ -307,6 +314,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         }
       }
     }
+    _paginationListener.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -465,23 +473,26 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
-  /// Handle scroll for pagination
+  /// Save scroll position to provider on every scroll event
   void _onScroll() {
     // Don't interact with disposed provider
     if (_providerInvalidated) {
       return;
     }
 
-    // Save scroll position to provider on every scroll event
     if (_scrollController.hasClients) {
       _commentsProvider.scrollPosition = _scrollController.position.pixels;
     }
+  }
 
-    // Load more comments when near bottom
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
-      _commentsProvider.loadMoreComments();
+  /// Load more comments when near bottom (fired by [_paginationListener])
+  void _onLoadMore() {
+    // Don't interact with disposed provider
+    if (_providerInvalidated) {
+      return;
     }
+
+    _commentsProvider.loadMoreComments();
   }
 
   /// Handle pull-to-refresh
@@ -930,6 +941,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         final error = commentsProvider.error;
         final comments = commentsProvider.comments;
         final isLoadingMore = commentsProvider.isLoadingMore;
+        final loadMoreError = commentsProvider.loadMoreError;
 
         // Loading state (only show full-screen loader for initial load)
         if (isLoading && comments.isEmpty) {
@@ -1084,6 +1096,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 const InlineLoading(),
                               );
                             }
+                            if (loadMoreError != null) {
+                              return ResponsiveUtils.wrapForTablet(
+                                context,
+                                InlineError(
+                                  message: getErrorMessage(loadMoreError),
+                                  onRetry: commentsProvider.retryLoadMore,
+                                ),
+                              );
+                            }
                             if (error != null) {
                               return ResponsiveUtils.wrapForTablet(
                                 context,
@@ -1128,7 +1149,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         childCount:
                             1 +
                             comments.length +
-                            (isLoadingMore || error != null ? 1 : 0),
+                            (isLoadingMore ||
+                                    loadMoreError != null ||
+                                    error != null
+                                ? 1
+                                : 0),
                       ),
                     ),
                   ),

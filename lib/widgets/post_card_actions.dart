@@ -613,19 +613,25 @@ class _PostCardActionsState extends State<PostCardActions> {
             ],
 
             // Vote group
-            Consumer<VoteProvider>(
-              builder: (context, voteProvider, child) {
-                final isLiked = voteProvider.isLiked(post.post.uri);
-                final voteState = voteProvider.getVoteState(post.post.uri);
-                final isDownvoted =
-                    voteState != null &&
-                    voteState.direction == 'down' &&
-                    !voteState.deleted;
-                final isPending = voteProvider.isPending(post.post.uri);
-                final adjustedScore = voteProvider.getAdjustedScore(
-                  post.post.uri,
-                  post.post.stats.score,
+            // Selects this post's vote state only: VoteProvider notifies on
+            // every vote anywhere, and a plain Consumer rebuilt the vote row
+            // of every card on screen (and in the kept-alive tabs) for it.
+            Selector<VoteProvider, (bool, bool, bool, int)>(
+              selector: (_, voteProvider) {
+                final uri = post.post.uri;
+                final voteState = voteProvider.getVoteState(uri);
+                return (
+                  voteProvider.isLiked(uri),
+                  voteState != null &&
+                      voteState.direction == 'down' &&
+                      !voteState.deleted,
+                  voteProvider.isPending(uri),
+                  voteProvider.getAdjustedScore(uri, post.post.stats.score),
                 );
+              },
+              builder: (context, vote, child) {
+                final (isLiked, isDownvoted, isPending, adjustedScore) = vote;
+                final voteProvider = context.read<VoteProvider>();
                 final neutralColor = AppColors.textPrimary.withValues(
                   alpha: 0.6,
                 );

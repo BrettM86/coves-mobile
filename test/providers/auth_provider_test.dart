@@ -139,6 +139,178 @@ void main() {
         verify(mockAuthService.refreshToken()).called(1);
       });
 
+      test('should bump restoredSessionRecoveryCount when a rejected '
+          'restored session is recovered by refresh', () async {
+        const refreshedSession = CovesSession(
+          token: 'refreshed_sealed_token',
+          did: 'did:plc:test123',
+          sessionId: 'session123',
+          handle: 'test.user',
+        );
+
+        final refreshGate = Completer<CovesSession>();
+        when(mockAuthService.validateSession())
+            .thenAnswer((_) async => SessionValidationResult.invalid);
+        when(mockAuthService.refreshToken())
+            .thenAnswer((_) => refreshGate.future);
+
+        await authProvider.initialize();
+        await pumpEventQueue();
+        expect(authProvider.restoredSessionRecoveryCount, 0);
+
+        final countsSeenByListeners = <int>[];
+        authProvider.addListener(
+          () => countsSeenByListeners.add(
+            authProvider.restoredSessionRecoveryCount,
+          ),
+        );
+        refreshGate.complete(refreshedSession);
+        await pumpEventQueue();
+
+        // Same DID before and after, so listeners can only tell the
+        // anonymous-served reads apart through this counter.
+        expect(authProvider.did, 'did:plc:test123');
+        expect(authProvider.restoredSessionRecoveryCount, 1);
+        expect(countsSeenByListeners, [1]);
+      });
+
+      for (final result in [
+        SessionValidationResult.valid,
+        SessionValidationResult.indeterminate,
+      ]) {
+        test('should not bump restoredSessionRecoveryCount when validation '
+            'is $result', () async {
+          when(mockAuthService.validateSession())
+              .thenAnswer((_) async => result);
+
+          await authProvider.initialize();
+          await pumpEventQueue();
+
+          expect(authProvider.restoredSessionRecoveryCount, 0);
+        });
+      }
+
+      test('should not bump restoredSessionRecoveryCount when the refresh '
+          'after a rejected probe fails transiently', () async {
+        when(mockAuthService.validateSession())
+            .thenAnswer((_) async => SessionValidationResult.invalid);
+        when(mockAuthService.refreshToken())
+            .thenThrow(Exception('Token refresh failed: 503'));
+
+        await authProvider.initialize();
+        await pumpEventQueue();
+
+        expect(authProvider.restoredSessionRecoveryCount, 0);
+      });
+
+      group('when a 401 on another startup request refreshes first', () {
+        const refreshedSession = CovesSession(
+          token: 'refreshed_sealed_token',
+          did: 'did:plc:test123',
+          sessionId: 'session123',
+          handle: 'test.user',
+        );
+
+        test('should bump restoredSessionRecoveryCount once, and the rejected '
+            'probe that resolves afterwards should not refresh '
+            'again', () async {
+          final validationGate = Completer<SessionValidationResult>();
+          when(mockAuthService.validateSession())
+              .thenAnswer((_) => validationGate.future);
+          when(mockAuthService.refreshToken())
+              .thenAnswer((_) async => refreshedSession);
+
+          await authProvider.initialize();
+
+          // The auth interceptor's refresh after a timeline 401.
+          final refreshed = await authProvider.refreshToken();
+
+          expect(refreshed, isTrue);
+          expect(authProvider.did, 'did:plc:test123');
+          expect(authProvider.restoredSessionRecoveryCount, 1);
+
+          validationGate.complete(SessionValidationResult.invalid);
+          await pumpEventQueue();
+
+          expect(authProvider.session?.token, 'refreshed_sealed_token');
+          expect(authProvider.restoredSessionRecoveryCount, 1);
+          verify(mockAuthService.refreshToken()).called(1);
+        });
+
+        for (final probeAdoptsFirst in [true, false]) {
+          test('should bump restoredSessionRecoveryCount once when the probe '
+              'and the interceptor share one refresh (probe adopts it '
+              '${probeAdoptsFirst ? 'first' : 'second'})', () async {
+            final refreshGate = Completer<CovesSession>();
+            final validationGate = Completer<SessionValidationResult>();
+            when(mockAuthService.validateSession())
+                .thenAnswer((_) => validationGate.future);
+            // The service shares one in-flight refresh between callers.
+            when(mockAuthService.refreshToken())
+                .thenAnswer((_) => refreshGate.future);
+
+            await authProvider.initialize();
+
+            Future<bool>? interceptorRefresh;
+            if (!probeAdoptsFirst) {
+              interceptorRefresh = authProvider.refreshToken();
+            }
+            validationGate.complete(SessionValidationResult.invalid);
+            await pumpEventQueue();
+            interceptorRefresh ??= authProvider.refreshToken();
+
+            final countsSeenByListeners = <int>[];
+            authProvider.addListener(
+              () => countsSeenByListeners.add(
+                authProvider.restoredSessionRecoveryCount,
+              ),
+            );
+            refreshGate.complete(refreshedSession);
+            expect(await interceptorRefresh, isTrue);
+            await pumpEventQueue();
+
+            expect(authProvider.session?.token, 'refreshed_sealed_token');
+            expect(authProvider.restoredSessionRecoveryCount, 1);
+            expect(countsSeenByListeners.last, 1);
+          });
+        }
+
+        test('should not bump restoredSessionRecoveryCount when the refresh '
+            'lands after the probe accepted the restored token', () async {
+          final refreshGate = Completer<CovesSession>();
+          final validationGate = Completer<SessionValidationResult>();
+          when(mockAuthService.validateSession())
+              .thenAnswer((_) => validationGate.future);
+          when(mockAuthService.refreshToken())
+              .thenAnswer((_) => refreshGate.future);
+
+          await authProvider.initialize();
+          final interceptorRefresh = authProvider.refreshToken();
+
+          validationGate.complete(SessionValidationResult.valid);
+          await pumpEventQueue();
+          refreshGate.complete(refreshedSession);
+
+          expect(await interceptorRefresh, isTrue);
+          expect(authProvider.session?.token, 'refreshed_sealed_token');
+          expect(authProvider.restoredSessionRecoveryCount, 0);
+        });
+
+        test('should not bump restoredSessionRecoveryCount for a routine '
+            'refresh after the probe accepted the restored token', () async {
+          when(mockAuthService.validateSession())
+              .thenAnswer((_) async => SessionValidationResult.valid);
+          when(mockAuthService.refreshToken())
+              .thenAnswer((_) async => refreshedSession);
+
+          await authProvider.initialize();
+          await pumpEventQueue();
+
+          expect(await authProvider.refreshToken(), isTrue);
+          expect(authProvider.restoredSessionRecoveryCount, 0);
+        });
+      });
+
       test('should sign out when the backend definitively rejects the token '
           'and the refresh 401s (dead session)', () async {
         when(mockAuthService.validateSession())
@@ -435,6 +607,9 @@ void main() {
 
         expect(result, true);
         expect(authProvider.session?.token, 'new_sealed_token');
+        // A routine refresh is not a restored-session recovery: nothing was
+        // served anonymously, so feeds must not refetch.
+        expect(authProvider.restoredSessionRecoveryCount, 0);
       });
 
       test('should sign out when refresh is definitively rejected '

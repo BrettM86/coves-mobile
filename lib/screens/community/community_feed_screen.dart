@@ -196,11 +196,10 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     _loadFeed();
   }
 
+  // The feed is fetched by identifier, not from the loaded community, so
+  // the two requests run side by side instead of back to back.
   Future<void> _initializeAndLoad() async {
-    if (_community == null) {
-      await _loadCommunity();
-    }
-    await _loadFeed();
+    await Future.wait([if (_community == null) _loadCommunity(), _loadFeed()]);
   }
 
   Future<void> _loadCommunity() async {
@@ -224,6 +223,10 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
           _community = community;
           _isLoadingCommunity = false;
         });
+
+        // A feed page that landed behind the full-screen loader or error
+        // had no scroll view to measure; the feed appears only now.
+        _scheduleViewportFillCheck();
 
         // Seed subscription state from this community's viewer data.
         //
@@ -329,8 +332,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   }
 
   Future<void> _onRefresh() async {
-    await _loadCommunity();
-    await _loadFeed();
+    await Future.wait([_loadCommunity(), _loadFeed()]);
   }
 
   @override

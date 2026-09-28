@@ -708,19 +708,24 @@ class _CommentCardState extends State<CommentCard> {
 
   /// Builds the action buttons row (menu and vote controls)
   Widget _buildActionButtons(BuildContext context) {
-    return Consumer<VoteProvider>(
-      builder: (context, voteProvider, child) {
-        final isLiked = voteProvider.isLiked(comment.uri);
-        final voteState = voteProvider.getVoteState(comment.uri);
-        final isDownvoted =
-            voteState != null &&
-            voteState.direction == 'down' &&
-            !voteState.deleted;
-        final isPending = voteProvider.isPending(comment.uri);
-        final adjustedScore = voteProvider.getAdjustedScore(
-          comment.uri,
-          comment.stats.score,
+    // Selects this comment's vote state only, so a vote elsewhere in the
+    // thread doesn't rebuild every comment's action row.
+    return Selector<VoteProvider, (bool, bool, bool, int)>(
+      selector: (_, voteProvider) {
+        final uri = comment.uri;
+        final voteState = voteProvider.getVoteState(uri);
+        return (
+          voteProvider.isLiked(uri),
+          voteState != null &&
+              voteState.direction == 'down' &&
+              !voteState.deleted,
+          voteProvider.isPending(uri),
+          voteProvider.getAdjustedScore(uri, comment.stats.score),
         );
+      },
+      builder: (context, vote, child) {
+        final (isLiked, isDownvoted, isPending, adjustedScore) = vote;
+        final voteProvider = context.read<VoteProvider>();
         final neutralColor = AppColors.textPrimary.withValues(alpha: 0.6);
         final downvoteLabel = isDownvoted
             ? 'Remove downvote'

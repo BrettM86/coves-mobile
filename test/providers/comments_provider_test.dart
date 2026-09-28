@@ -616,6 +616,138 @@ void main() {
       // Providers now always have a post URI at construction time
     });
 
+    group('load-more error guard', () {
+      // Regression: the post detail scroll trigger calls loadMoreComments on
+      // every near-bottom scroll tick. A failing page used to be retried
+      // back to back during an outage because nothing stopped the trigger.
+      late int firstPageCalls;
+      late int nextPageCalls;
+      late bool failNextPage;
+
+      setUp(() {
+        firstPageCalls = 0;
+        nextPageCalls = 0;
+        failNextPage = true;
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+          ),
+        ).thenAnswer((invocation) async {
+          final cursor = invocation.namedArguments[#cursor] as String?;
+          if (cursor == null) {
+            firstPageCalls++;
+            return CommentsResponse(
+              post: {},
+              comments: [_createMockThreadComment('comment1')],
+              cursor: 'cursor-1',
+            );
+          }
+          nextPageCalls++;
+          if (failNextPage) {
+            throw Exception('Network error');
+          }
+          return CommentsResponse(
+            post: {},
+            comments: [_createMockThreadComment('comment2')],
+          );
+        });
+      });
+
+      test('a failed page lands on loadMoreError, not error', () async {
+        await commentsProvider.loadComments(refresh: true);
+        await commentsProvider.loadMoreComments();
+
+        expect(commentsProvider.loadMoreError, contains('Network error'));
+        expect(commentsProvider.error, isNull);
+        expect(commentsProvider.isLoadingMore, isFalse);
+        expect(commentsProvider.hasMore, isTrue);
+        expect(commentsProvider.comments.length, 1);
+      });
+
+      test('loadMoreComments is a no-op while loadMoreError is set', () async {
+        await commentsProvider.loadComments(refresh: true);
+        await commentsProvider.loadMoreComments();
+        expect(nextPageCalls, 1);
+
+        await commentsProvider.loadMoreComments();
+        await commentsProvider.loadMoreComments();
+
+        expect(nextPageCalls, 1);
+        expect(commentsProvider.loadMoreError, isNotNull);
+      });
+
+      test('retryLoadMore clears the error and fetches the page', () async {
+        await commentsProvider.loadComments(refresh: true);
+        await commentsProvider.loadMoreComments();
+        failNextPage = false;
+
+        await commentsProvider.retryLoadMore();
+
+        expect(nextPageCalls, 2);
+        expect(commentsProvider.loadMoreError, isNull);
+        expect(commentsProvider.comments.length, 2);
+        expect(commentsProvider.hasMore, isFalse);
+      });
+
+      test(
+        'retryLoadMore re-arms the guard when the page fails again',
+        () async {
+          await commentsProvider.loadComments(refresh: true);
+          await commentsProvider.loadMoreComments();
+
+          await commentsProvider.retryLoadMore();
+          await commentsProvider.loadMoreComments();
+
+          expect(nextPageCalls, 2);
+          expect(commentsProvider.loadMoreError, isNotNull);
+        },
+      );
+
+      test('refresh clears loadMoreError and re-enables pagination', () async {
+        await commentsProvider.loadComments(refresh: true);
+        await commentsProvider.loadMoreComments();
+        expect(commentsProvider.loadMoreError, isNotNull);
+
+        await commentsProvider.refreshComments();
+
+        expect(commentsProvider.loadMoreError, isNull);
+        expect(firstPageCalls, 2);
+
+        failNextPage = false;
+        await commentsProvider.loadMoreComments();
+
+        expect(nextPageCalls, 2);
+        expect(commentsProvider.comments.length, 2);
+      });
+
+      test('a sort change clears loadMoreError', () async {
+        await commentsProvider.loadComments(refresh: true);
+        await commentsProvider.loadMoreComments();
+        expect(commentsProvider.loadMoreError, isNotNull);
+
+        await commentsProvider.setSortOption('new');
+
+        expect(commentsProvider.loadMoreError, isNull);
+        expect(firstPageCalls, 2);
+      });
+
+      test('retry clears loadMoreError', () async {
+        await commentsProvider.loadComments(refresh: true);
+        await commentsProvider.loadMoreComments();
+        expect(commentsProvider.loadMoreError, isNotNull);
+
+        await commentsProvider.retry();
+
+        expect(commentsProvider.loadMoreError, isNull);
+        expect(firstPageCalls, 2);
+      });
+    });
+
     group('retry', () {
       test('should retry after error', () async {
         // Simulate error

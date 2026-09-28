@@ -8,6 +8,7 @@ import '../constants/app_colors.dart';
 import '../models/user_profile.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/display_utils.dart';
+import '../utils/image_decode_size.dart';
 import 'user_avatar.dart';
 
 /// Collapsing profile header displaying the banner with the avatar and
@@ -109,7 +110,7 @@ class ProfileHeader extends StatelessWidget {
               left: 0,
               right: 0,
               height: bannerBottom,
-              child: _buildBannerImage(),
+              child: _buildBannerImage(context),
             ),
             // Scrim so app bar icons stay legible over any banner
             Positioned(
@@ -146,10 +147,12 @@ class ProfileHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildBannerImage() {
+  Widget _buildBannerImage(BuildContext context) {
     if (profile?.banner != null && profile!.banner!.isNotEmpty) {
       return CachedNetworkImage(
         imageUrl: profile!.banner!,
+        // Banners are uploaded at full resolution; decode at screen width.
+        memCacheWidth: fullWidthDecodeWidth(context),
         fit: BoxFit.cover,
         // Disable fade animation to prevent scroll jitter
         fadeInDuration: Duration.zero,

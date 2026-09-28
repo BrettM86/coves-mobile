@@ -1,7 +1,23 @@
 import 'package:flutter/widgets.dart';
 
-/// Fires [onLoadMore] when a scroll view gets within [threshold] pixels of
-/// its bottom, at most once per [throttle] window.
+/// How many viewport heights before the end of a list the next page is
+/// requested. A fixed 200px trigger fired only once the user was already at
+/// the loading footer, so a normal fling through a 15-post page stalled on
+/// a spinner every time; starting ~1.5 screens early lets the request land
+/// while the user is still reading.
+const double kPaginationPrefetchViewports = 1.5;
+
+/// Whether [position] is close enough to its end to request the next page:
+/// within [threshold] pixels when given, otherwise within
+/// [kPaginationPrefetchViewports] viewport heights.
+bool isNearScrollEnd(ScrollPosition position, {double? threshold}) {
+  final trigger =
+      threshold ?? position.viewportDimension * kPaginationPrefetchViewports;
+  return position.pixels >= position.maxScrollExtent - trigger;
+}
+
+/// Fires [onLoadMore] when a scroll view gets near its bottom (see
+/// [isNearScrollEnd]), at most once per [throttle] window.
 ///
 /// The listener borrows an externally owned [controller]: it attaches and
 /// detaches, and never disposes it. Callers own the lifecycle —
@@ -14,7 +30,7 @@ class PaginationScrollListener {
   PaginationScrollListener({
     required this.controller,
     required this.onLoadMore,
-    this.threshold = 200,
+    this.threshold,
     this.throttle = const Duration(milliseconds: 100),
     this._clock = DateTime.now,
   });
@@ -25,8 +41,9 @@ class PaginationScrollListener {
   /// Called when the viewport nears the bottom.
   final VoidCallback onLoadMore;
 
-  /// How close to the bottom (in pixels) counts as "near".
-  final double threshold;
+  /// How close to the bottom (in pixels) counts as "near". Null means
+  /// [kPaginationPrefetchViewports] viewport heights.
+  final double? threshold;
 
   /// Minimum gap between two callbacks. Scroll notifications arrive per
   /// frame; without this a single flick fires a burst of load requests.
@@ -82,7 +99,7 @@ class PaginationScrollListener {
     }
 
     final position = controller.position;
-    if (position.pixels < position.maxScrollExtent - threshold) {
+    if (!isNearScrollEnd(position, threshold: threshold)) {
       return;
     }
 

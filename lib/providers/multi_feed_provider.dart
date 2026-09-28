@@ -45,6 +45,7 @@ class MultiFeedProvider with ChangeNotifier {
              subscriptionProvider: subscriptionProvider,
            ) {
     _authDid = _authProvider.did;
+    _restoredSessionRecoveryCount = _authProvider.restoredSessionRecoveryCount;
 
     // Feed responses contain viewer state and cannot cross identities.
     _authProvider.addListener(_onAuthChanged);
@@ -58,6 +59,9 @@ class MultiFeedProvider with ChangeNotifier {
 
     final isAuthenticated = _authProvider.isAuthenticated;
     final authDid = _authProvider.did;
+    final recoveryCount = _authProvider.restoredSessionRecoveryCount;
+    final isRecovery = _restoredSessionRecoveryCount != recoveryCount;
+    _restoredSessionRecoveryCount = recoveryCount;
 
     if (_authDid != authDid) {
       FeedType.values.forEach(_invalidateRequests);
@@ -73,6 +77,16 @@ class MultiFeedProvider with ChangeNotifier {
     }
 
     _authDid = authDid;
+
+    // Same DID, but every load so far went out with the rejected restored
+    // token and came back anonymous, without this viewer's votes or
+    // subscriptions. Throw those loads away (including ones still in
+    // flight) and fetch again with the recovered token. Feeds nobody has
+    // loaded yet stay unloaded: a gate screen may still be up.
+    if (isRecovery && _feedStates.isNotEmpty) {
+      resetAll();
+      loadInitialFeeds();
+    }
   }
 
   final AuthProvider _authProvider;
@@ -85,6 +99,7 @@ class MultiFeedProvider with ChangeNotifier {
   final ViewerStateHydrator _hydrator;
 
   String? _authDid;
+  int _restoredSessionRecoveryCount = 0;
   bool _isDisposed = false;
 
   // Per-feed state storage
@@ -229,6 +244,53 @@ class MultiFeedProvider with ChangeNotifier {
     final state = getState(type);
     if (state.posts.isNotEmpty && _timeUpdateTimer == null) {
       startTimeUpdates();
+    }
+  }
+
+  /// A page-one refresh this recent is reused instead of refetched when a
+  /// screen asks for its initial feeds.
+  static const Duration initialLoadReuseWindow = Duration(seconds: 30);
+
+  /// Load page one of the current feed and, when signed in, preload the
+  /// other one.
+  ///
+  /// A feed whose page-one refresh is already in flight, or landed within
+  /// [initialLoadReuseWindow], is left alone: startup kicks this off before
+  /// the first frame, and the feed screen asks again once it mounts. A plain
+  /// `loadFeed(refresh: true)` there would bump the request generation and
+  /// throw the in-flight prefetch away.
+  void loadInitialFeeds() {
+    if (_isDisposed) {
+      return;
+    }
+
+    // A screen's auth listener can run before this provider's, so apply an
+    // auth change it hasn't seen yet first; otherwise feeds loaded for the
+    // previous identity or token would count as fresh.
+    if (_authDid != _authProvider.did ||
+        _restoredSessionRecoveryCount !=
+            _authProvider.restoredSessionRecoveryCount) {
+      _onAuthChanged();
+    }
+
+    final otherType = _currentFeedType == FeedType.discover
+        ? FeedType.forYou
+        : FeedType.discover;
+    final types = [
+      _currentFeedType,
+      if (_authProvider.isAuthenticated) otherType,
+    ];
+    for (final type in types) {
+      final state = getState(type);
+      final lastRefresh = state.lastRefreshTime;
+      final isFresh =
+          lastRefresh != null &&
+          _clock().difference(lastRefresh) < initialLoadReuseWindow &&
+          state.error == null;
+      if (state.isLoading || isFresh) {
+        continue;
+      }
+      unawaited(loadFeed(type, refresh: true));
     }
   }
 
@@ -385,9 +447,7 @@ class MultiFeedProvider with ChangeNotifier {
         loadMoreError: null,
         isLoading: false,
         isLoadingMore: false,
-        lastRefreshTime: refresh
-            ? DateTime.now()
-            : currentState.lastRefreshTime,
+        lastRefreshTime: refresh ? _clock() : currentState.lastRefreshTime,
       );
 
       if (kDebugMode) {

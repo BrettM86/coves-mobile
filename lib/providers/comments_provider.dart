@@ -91,6 +91,9 @@ class CommentsProvider with ChangeNotifier {
   bool _isLoadingMore = false;
   bool _isQuietLoading = false;
   String? _error;
+  // Pagination failures land here, never on [_error] (which drives the
+  // full-screen error). While set, [loadMoreComments] is a no-op.
+  String? _loadMoreError;
   String? _cursor;
   bool _hasMore = true;
 
@@ -146,6 +149,9 @@ class CommentsProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   String? get error => _error;
+
+  /// Pagination error - the list footer's error channel.
+  String? get loadMoreError => _loadMoreError;
   bool get hasMore => _hasMore;
   String get sort => _sort;
   String? get timeframe => _timeframe;
@@ -284,6 +290,7 @@ class CommentsProvider with ChangeNotifier {
           _isLoading = true;
         }
         _error = null;
+        _loadMoreError = null;
         _pendingRefresh = false; // Clear any pending refresh
       } else {
         _isLoadingMore = true;
@@ -339,7 +346,11 @@ class CommentsProvider with ChangeNotifier {
       if (_isDisposed) {
         return;
       }
-      _error = e.toString();
+      if (refresh) {
+        _error = e.toString();
+      } else {
+        _loadMoreError = e.toString();
+      }
       if (kDebugMode) {
         debugPrint('❌ Failed to fetch comments: $e');
       }
@@ -372,11 +383,28 @@ class CommentsProvider with ChangeNotifier {
   }
 
   /// Load more comments (pagination)
+  ///
+  /// A no-op while a page is in flight, once the thread has ended, or while
+  /// a [loadMoreError] is showing - the scroll trigger fires on every scroll
+  /// tick, and without that last guard a failing page is retried
+  /// continuously while the user sits at the bottom of the thread. The
+  /// footer's Retry goes through [retryLoadMore]; a refresh (including a
+  /// sort change) clears the error too.
   Future<void> loadMoreComments() async {
-    if (!_hasMore || _isLoadingMore) {
+    if (!_hasMore || _isLoadingMore || _loadMoreError != null) {
       return;
     }
     await loadComments();
+  }
+
+  /// The footer's Retry: clears the pagination error that
+  /// [loadMoreComments] treats as a stop sign, then fetches the page again.
+  Future<void> retryLoadMore() async {
+    if (_loadMoreError != null) {
+      _loadMoreError = null;
+      _safeNotifyListeners();
+    }
+    await loadMoreComments();
   }
 
   /// Load more replies for a specific comment ("Load more replies" button)

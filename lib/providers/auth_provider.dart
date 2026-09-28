@@ -26,6 +26,10 @@ class AuthProvider with ChangeNotifier {
   bool _isAuthenticated = false;
   bool _isLoading = true;
   String? _error;
+  int _restoredSessionRecoveryCount = 0;
+  // The restored token until the startup probe accepts it or a refresh
+  // replaces it; null once it is settled or when nothing was restored.
+  String? _unverifiedRestoredToken;
 
   // Getters
   CovesSession? get session => _session;
@@ -34,6 +38,19 @@ class AuthProvider with ChangeNotifier {
   String? get error => _error;
   String? get did => _session?.did;
   String? get handle => _session?.handle;
+
+  /// Bumped once when a refresh replaces the restored session's token before
+  /// the startup probe accepted it, keeping the same DID. Either refresh
+  /// caller counts: the probe after a rejected verdict, or [refreshToken]
+  /// driven by a 401 from another startup request.
+  ///
+  /// Reads sent with the rejected token were served anonymously (the read
+  /// endpoints are OptionalAuth, so a dead token degrades to anonymous
+  /// instead of failing), which means any viewer state they carried is
+  /// wrong. Listeners holding such reads refetch when this changes.
+  /// Refreshes of a session the probe accepted, or of a new sign-in, leave
+  /// it alone.
+  int get restoredSessionRecoveryCount => _restoredSessionRecoveryCount;
 
   /// Get the current access token (sealed token)
   ///
@@ -68,6 +85,7 @@ class AuthProvider with ChangeNotifier {
 
       if (restoredSession != null) {
         _session = restoredSession;
+        _unverifiedRestoredToken = restoredSession.token;
         _isAuthenticated = true;
 
         if (kDebugMode) {
@@ -131,6 +149,12 @@ class AuthProvider with ChangeNotifier {
       }
 
       if (result != SessionValidationResult.invalid) {
+        // Reads sent with this token were authenticated, so a refresh that
+        // lands after this verdict (say, a 401 on a request racing the
+        // probe) is treated as a later, ordinary expiry. Indeterminate also
+        // settles it: keeping the window open could reset the feeds on the
+        // first routine refresh, long after startup.
+        _unverifiedRestoredToken = null;
         if (kDebugMode) {
           if (result == SessionValidationResult.valid) {
             print('Restored session validated against /api/me');
@@ -152,8 +176,7 @@ class AuthProvider with ChangeNotifier {
           // Signed out / re-logged-in mid-refresh; verdict is stale.
           return;
         }
-        _session = refreshedSession;
-        notifyListeners();
+        _adoptRefreshedSession(refreshedSession);
         if (kDebugMode) {
           print('Restored session refreshed after rejected probe');
         }
@@ -288,8 +311,7 @@ class AuthProvider with ChangeNotifier {
         // Signed out while the refresh was in flight - don't resurrect.
         return false;
       }
-      _session = refreshedSession;
-      notifyListeners();
+      _adoptRefreshedSession(refreshedSession);
 
       if (kDebugMode) {
         print('Token refreshed successfully');
@@ -318,6 +340,22 @@ class AuthProvider with ChangeNotifier {
       }
       return false;
     }
+  }
+
+  // The probe and [refreshToken] can await the same shared refresh; whichever
+  // adopts it first replaces the restored token and bumps the count, and the
+  // other finds the token already replaced. Sign-out and re-login change the
+  // token too, so they end the window without a bump.
+  void _adoptRefreshedSession(CovesSession refreshedSession) {
+    final recoversRestoredSession =
+        _unverifiedRestoredToken != null &&
+        _session?.token == _unverifiedRestoredToken;
+    _session = refreshedSession;
+    if (recoversRestoredSession) {
+      _unverifiedRestoredToken = null;
+      _restoredSessionRecoveryCount++;
+    }
+    notifyListeners();
   }
 
   // Only called after a definitive refresh rejection; never for network errors.

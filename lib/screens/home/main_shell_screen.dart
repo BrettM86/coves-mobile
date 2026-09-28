@@ -23,6 +23,12 @@ class _MainShellScreenState extends State<MainShellScreen> {
   /// Tab index of the Create Post composer in the IndexedStack.
   static const int _createTabIndex = 2;
 
+  /// Tabs that have been shown at least once. A tab is built on first visit
+  /// and then kept alive in the IndexedStack, so the Communities and Profile
+  /// tabs don't fire their requests at startup, competing with the feed the
+  /// user is actually looking at.
+  final Set<int> _visitedTabs = {0};
+
   /// Whether the composer currently holds unsaved input (reported by
   /// CreatePostScreen). Used to decide if system back must be intercepted.
   bool _composeHasDraft = false;
@@ -42,21 +48,27 @@ class _MainShellScreenState extends State<MainShellScreen> {
       _feedScreenKey.currentState?.scrollToTop();
       return;
     }
-    setState(() {
-      _selectedIndex = index;
-    });
+    _selectTab(index);
   }
 
   void _onCommunitiesTap() {
-    setState(() {
-      _selectedIndex = 1; // Switch to communities tab
-    });
+    _selectTab(1); // Switch to communities tab
   }
 
   void _onNavigateToFeed() {
+    _selectTab(0); // Switch to feed tab
+  }
+
+  void _selectTab(int index) {
     setState(() {
-      _selectedIndex = 0; // Switch to feed tab
+      _selectedIndex = index;
+      _visitedTabs.add(index);
     });
+  }
+
+  /// Returns [tab] once it has been visited, a placeholder before that.
+  Widget _lazyTab(int index, Widget tab) {
+    return _visitedTabs.contains(index) ? tab : const SizedBox.shrink();
   }
 
   @override
@@ -66,20 +78,27 @@ class _MainShellScreenState extends State<MainShellScreen> {
     final body = IndexedStack(
       index: _selectedIndex,
       children: [
-        FeedScreen(key: _feedScreenKey, onSearchTap: _onCommunitiesTap),
-        const CommunitiesScreen(),
-        CreatePostScreen(
-          onNavigateToFeed: _onNavigateToFeed,
-          onDirtyChanged: _onComposeDirtyChanged,
+        _lazyTab(
+          0,
+          FeedScreen(key: _feedScreenKey, onSearchTap: _onCommunitiesTap),
         ),
-        const NotificationsScreen(),
-        const ProfileScreen(),
+        _lazyTab(1, const CommunitiesScreen()),
+        _lazyTab(
+          _createTabIndex,
+          CreatePostScreen(
+            onNavigateToFeed: _onNavigateToFeed,
+            onDirtyChanged: _onComposeDirtyChanged,
+          ),
+        ),
+        _lazyTab(3, const NotificationsScreen()),
+        _lazyTab(4, const ProfileScreen()),
       ],
     );
     // Guard the magic constant: _createTabIndex couples this children list,
     // the back-guard in _wrapWithBackGuard, and the "plus" nav item indices.
     assert(
-      body.children[_createTabIndex] is CreatePostScreen,
+      !_visitedTabs.contains(_createTabIndex) ||
+          body.children[_createTabIndex] is CreatePostScreen,
       '_createTabIndex must point at CreatePostScreen in the IndexedStack',
     );
 

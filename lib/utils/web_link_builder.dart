@@ -194,8 +194,7 @@ class WebLinkBuilder {
     String authority, {
     required String? did,
     String? handle,
-  }) =>
-      (did == authority ? _usableHandle(handle) : null) ?? authority;
+  }) => (did == authority ? _usableHandle(handle) : null) ?? authority;
 
   /// The handle when it is present, resolvable, and a hostname the web's
   /// handle matcher accepts, null otherwise, so the caller falls back to the
@@ -231,8 +230,9 @@ class WebLinkBuilder {
   /// interior hyphens, at most 63 characters. No dots — a dotted value is a
   /// handle — and no underscores: the AppView resolves names with the same
   /// rule, so either would only build a URL it rejects.
-  static final RegExp _communityNamePattern =
-      RegExp(r'^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$');
+  static final RegExp _communityNamePattern = RegExp(
+    r'^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$',
+  );
 
   /// An at-URI authority must be a DID, `did:<method>:<identifier>`. The
   /// AppView only ever emits DID authorities; a handle there would name a

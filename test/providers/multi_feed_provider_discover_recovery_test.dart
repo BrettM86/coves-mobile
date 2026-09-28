@@ -72,6 +72,7 @@ class _Harness {
     if (this.authProvider case final MockAuthProvider mockAuthProvider) {
       when(mockAuthProvider.isAuthenticated).thenReturn(true);
       when(mockAuthProvider.did).thenReturn('did:plc:viewer');
+      when(mockAuthProvider.restoredSessionRecoveryCount).thenReturn(0);
     }
 
     when(
