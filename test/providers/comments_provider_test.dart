@@ -130,12 +130,15 @@ void main() {
             limit: anyNamed('limit'),
             cursor: anyNamed('cursor'),
           ),
-        ).thenThrow(Exception('Network error'));
+        ).thenThrow(NetworkException('Network error'));
 
         await commentsProvider.loadComments(refresh: true);
 
-        expect(commentsProvider.error, isNotNull);
-        expect(commentsProvider.error, contains('Network error'));
+        // error holds the user-facing message, not the raw exception text
+        expect(
+          commentsProvider.error,
+          'No connection. Please check your internet.',
+        );
         expect(commentsProvider.isLoading, false);
         expect(commentsProvider.comments.isEmpty, true);
       });
@@ -281,51 +284,6 @@ void main() {
       // Note: "reset state when loading different post" test removed
       // Providers are now immutable per post - use CommentsProviderCache
       // to get separate providers for different posts
-
-      test('should not load when already loading', () async {
-        final response = CommentsResponse(
-          post: {},
-          comments: [_createMockThreadComment('comment1')],
-          cursor: 'cursor',
-        );
-
-        when(
-          mockApiService.getComments(
-            postUri: anyNamed('postUri'),
-            sort: anyNamed('sort'),
-            timeframe: anyNamed('timeframe'),
-            depth: anyNamed('depth'),
-            limit: anyNamed('limit'),
-            cursor: anyNamed('cursor'),
-          ),
-        ).thenAnswer((_) async {
-          await Future.delayed(const Duration(milliseconds: 100));
-          return response;
-        });
-
-        // Start first load
-        final firstFuture = commentsProvider.loadComments(refresh: true);
-
-        // Try to load again while still loading - should schedule a refresh
-        await commentsProvider.loadComments(refresh: true);
-
-        await firstFuture;
-        // Wait a bit for the pending refresh to execute
-        await Future.delayed(const Duration(milliseconds: 200));
-
-        // Should have called API twice - once for initial load, once for
-        // pending refresh
-        verify(
-          mockApiService.getComments(
-            postUri: anyNamed('postUri'),
-            sort: anyNamed('sort'),
-            timeframe: anyNamed('timeframe'),
-            depth: anyNamed('depth'),
-            limit: anyNamed('limit'),
-            cursor: anyNamed('cursor'),
-          ),
-        ).called(2);
-      });
 
       test(
         'should initialize vote state from viewer data when authenticated',
@@ -649,7 +607,7 @@ void main() {
           }
           nextPageCalls++;
           if (failNextPage) {
-            throw Exception('Network error');
+            throw NetworkException('Network error');
           }
           return CommentsResponse(
             post: {},
@@ -662,7 +620,10 @@ void main() {
         await commentsProvider.loadComments(refresh: true);
         await commentsProvider.loadMoreComments();
 
-        expect(commentsProvider.loadMoreError, contains('Network error'));
+        expect(
+          commentsProvider.loadMoreError,
+          'No connection. Please check your internet.',
+        );
         expect(commentsProvider.error, isNull);
         expect(commentsProvider.isLoadingMore, isFalse);
         expect(commentsProvider.hasMore, isTrue);

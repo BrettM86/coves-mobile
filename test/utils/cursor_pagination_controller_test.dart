@@ -852,6 +852,168 @@ void main() {
     });
   });
 
+  group('replaceItems', () {
+    test('exposes the replacement as a new unmodifiable list and notifies '
+        'once', () async {
+      final controller = build();
+      addTearDown(controller.dispose);
+
+      await loadFirstPage(controller, cursor: 'C1');
+      final before = controller.items;
+
+      var notifications = 0;
+      controller
+        ..addListener(() => notifications++)
+        ..replaceItems(<String>['a', 'b-with-replies']);
+
+      expect(controller.items, <String>['a', 'b-with-replies']);
+      expect(identical(controller.items, before), isFalse);
+      // Widgets that captured the old list still see what they rendered.
+      expect(before, <String>['a', 'b']);
+      expect(() => controller.items.add('x'), throwsUnsupportedError);
+      expect(notifications, 1);
+    });
+
+    test('does not alias the caller\'s list', () async {
+      final controller = build();
+      addTearDown(controller.dispose);
+
+      await loadFirstPage(controller, cursor: 'C1');
+
+      final replacement = <String>['a', 'b-with-replies'];
+      controller.replaceItems(replacement);
+      replacement.add('late mutation');
+
+      expect(controller.items, <String>['a', 'b-with-replies']);
+    });
+
+    test('keeps cursor, hasMore, errors and loading flags', () async {
+      final controller = build();
+      addTearDown(controller.dispose);
+
+      await loadFirstPage(controller, cursor: 'C1');
+
+      controller.replaceItems(<String>['a', 'b-with-replies']);
+
+      expect(controller.cursor, 'C1');
+      expect(controller.hasMore, isTrue);
+      expect(controller.error, isNull);
+      expect(controller.loadMoreError, isNull);
+      expect(controller.isLoading, isFalse);
+      expect(controller.isLoadingMore, isFalse);
+    });
+
+    test('keeps a footer error and a first-page error', () async {
+      final controller = build();
+      addTearDown(controller.dispose);
+
+      await loadFirstPage(controller, cursor: 'C1');
+      final failedRefresh = controller.refresh();
+      fetcher.fail(1, NetworkFailure());
+      await failedRefresh;
+      final failedLoadMore = controller.loadMore();
+      fetcher.fail(2, Exception('page 2 exploded'));
+      await failedLoadMore;
+      final error = controller.error;
+      final loadMoreError = controller.loadMoreError;
+      expect(error, isNotNull);
+      expect(loadMoreError, isNotNull);
+
+      controller.replaceItems(<String>['a', 'b-with-replies']);
+
+      expect(controller.items, <String>['a', 'b-with-replies']);
+      expect(controller.error, error);
+      expect(controller.loadMoreError, loadMoreError);
+      expect(controller.cursor, 'C1');
+    });
+
+    test('does not invalidate a load-more already in flight', () async {
+      // A reply-subtree merge rewrites the tree while the next top-level
+      // page is still loading; that page must still land on the merged tree.
+      final controller = build();
+      addTearDown(controller.dispose);
+
+      await loadFirstPage(controller, cursor: 'C1');
+
+      final loadingMore = controller.loadMore();
+      expect(controller.isLoadingMore, isTrue);
+      expect(fetcher.requestedCursors.last, 'C1');
+
+      controller.replaceItems(<String>['a', 'b-with-replies']);
+      expect(controller.isLoadingMore, isTrue);
+
+      fetcher.complete(1, page(<String>['c', 'd'], cursor: 'C2'));
+      await loadingMore;
+
+      expect(controller.items, <String>['a', 'b-with-replies', 'c', 'd']);
+      expect(controller.cursor, 'C2');
+      expect(controller.isLoadingMore, isFalse);
+      expect(controller.loadMoreError, isNull);
+    });
+  });
+
+  group('clearError', () {
+    test('clears the first-page error and notifies', () async {
+      final controller = build();
+      addTearDown(controller.dispose);
+
+      await loadFirstPage(controller, cursor: 'C1');
+      final failed = controller.refresh();
+      fetcher.fail(1, NetworkFailure());
+      await failed;
+      expect(controller.error, isNotNull);
+
+      var notifications = 0;
+      controller
+        ..addListener(() => notifications++)
+        ..clearError();
+
+      expect(controller.error, isNull);
+      expect(notifications, 1);
+      expect(controller.items, <String>['a', 'b']);
+      expect(controller.cursor, 'C1');
+      expect(controller.loadMoreError, isNull);
+    });
+
+    test('leaves a footer error in place', () async {
+      final controller = build();
+      addTearDown(controller.dispose);
+
+      await loadFirstPage(controller, cursor: 'C1');
+      final failedRefresh = controller.refresh();
+      fetcher.fail(1, NetworkFailure());
+      await failedRefresh;
+      final failedLoadMore = controller.loadMore();
+      fetcher.fail(2, Exception('page 2 exploded'));
+      await failedLoadMore;
+      final loadMoreError = controller.loadMoreError;
+      expect(controller.error, isNotNull);
+      expect(loadMoreError, isNotNull);
+
+      controller.clearError();
+
+      expect(controller.error, isNull);
+      expect(controller.loadMoreError, loadMoreError);
+      expect(controller.items, <String>['a', 'b']);
+      expect(controller.cursor, 'C1');
+    });
+
+    test('does not notify when there is no error', () async {
+      final controller = build();
+      addTearDown(controller.dispose);
+
+      await loadFirstPage(controller, cursor: 'C1');
+
+      var notifications = 0;
+      controller
+        ..addListener(() => notifications++)
+        ..clearError();
+
+      expect(controller.error, isNull);
+      expect(notifications, 0);
+    });
+  });
+
   group('error reporting', () {
     test('a throwing errorMapper falls back to the error text', () async {
       // A mapper that throws used to wedge the controller: the message was

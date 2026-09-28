@@ -258,6 +258,35 @@ class CursorPaginationController<T> extends ChangeNotifier {
     _notify();
   }
 
+  /// Swap in a rewritten list of the loaded items, for tree-shaped items
+  /// whose rows change in place (e.g. merging a fetched reply subtree into
+  /// its parent comment).
+  ///
+  /// Leaves the cursor, both errors, the loading flags and the generation
+  /// alone: the server-side page boundaries have not moved, and a load-more
+  /// already in flight still appends to the replacement when it lands.
+  /// With `idOf`, the replacement must keep the same ids in the same order:
+  /// the cursor still points past these rows, so adding, dropping or
+  /// reordering them would desync the list from the server's pages.
+  void replaceItems(List<T> items) {
+    assert(
+      _idOf == null ||
+          listEquals(items.map(_idOf).toList(), _items.map(_idOf).toList()),
+      'replaceItems must keep the same ids in the same order',
+    );
+    _items = List<T>.unmodifiable(items);
+    _notify();
+  }
+
+  /// Dismiss the first-page error without touching anything else.
+  void clearError() {
+    if (_error == null) {
+      return;
+    }
+    _error = null;
+    _notify();
+  }
+
   /// A request is stale when the controller is gone or a newer generation
   /// has taken over. Stale results are dropped whole: no state, no error,
   /// no hydration hook.

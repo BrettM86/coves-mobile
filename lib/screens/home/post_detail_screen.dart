@@ -952,7 +952,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         if (error != null && comments.isEmpty) {
           return FullScreenError(
             title: 'Failed to load comments',
-            message: getErrorMessage(error),
+            message: error,
             onRetry: commentsProvider.retry,
           );
         }
@@ -1096,11 +1096,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 const InlineLoading(),
                               );
                             }
+                            // A load-more error wins over a refresh error,
+                            // as in PaginatedSliverList. A refresh error only
+                            // reaches here with comments on screen.
                             if (loadMoreError != null) {
                               return ResponsiveUtils.wrapForTablet(
                                 context,
                                 InlineError(
-                                  message: getErrorMessage(loadMoreError),
+                                  message: loadMoreError,
                                   onRetry: commentsProvider.retryLoadMore,
                                 ),
                               );
@@ -1109,12 +1112,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               return ResponsiveUtils.wrapForTablet(
                                 context,
                                 InlineError(
-                                  message: getErrorMessage(error),
-                                  onRetry: () {
-                                    commentsProvider
-                                      ..clearError()
-                                      ..loadMoreComments();
-                                  },
+                                  message: error,
+                                  onRetry: commentsProvider.refreshComments,
                                 ),
                               );
                             }

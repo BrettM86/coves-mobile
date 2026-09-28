@@ -2,6 +2,7 @@ import 'dart:async' show Completer, Timer, unawaited;
 
 import 'package:characters/characters.dart';
 import 'package:flutter/foundation.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../models/comment.dart';
 import '../models/comment_thread_tree.dart';
@@ -10,8 +11,23 @@ import '../services/api_exceptions.dart';
 import '../services/comment_service.dart';
 import '../services/coves_api_service.dart';
 import '../services/viewer_state_hydrator.dart';
+import '../utils/cursor_pagination_controller.dart';
+import '../utils/error_messages.dart';
 import 'auth_provider.dart';
 import 'vote_provider.dart';
+
+/// What a refresh is for, which decides how its loading and failure show.
+enum _RefreshKind {
+  /// Shows as loading; a failure lands on [CommentsProvider.error].
+  normal,
+
+  /// Never shows as loading (createComment's indexing retries).
+  quiet,
+
+  /// Shows as loading; a failure is reported only through
+  /// [CommentsProvider.setSortOption]'s return value.
+  sortChange,
+}
 
 /// Comments Provider
 ///
@@ -45,7 +61,23 @@ class CommentsProvider with ChangeNotifier {
              voteProvider: voteProvider,
            ),
        _indexingRetryDelays =
-           indexingRetryDelays ?? _defaultIndexingRetryDelays;
+           indexingRetryDelays ?? _defaultIndexingRetryDelays {
+    // The controller owns the top-level comments, cursor, loading flags and
+    // both error channels; this provider projects them through its getters.
+    _controller = CursorPaginationController<ThreadViewComment>(
+      fetchPage: _fetchCommentsPage,
+      onPageLoaded: _hydrateCommentVotes,
+      // error and loadMoreError are rendered as-is, so map the thrown object
+      // to its user-facing message while its type is still known.
+      errorMapper: getErrorMessage,
+      // Server-side cursor drift hands back overlapping pages; the thread
+      // list keys its rows by this same URI.
+      idOf: (thread) => thread.comment.uri,
+      onUnexpectedError: _reportUnexpected,
+    )..addListener(_onControllerChanged);
+  }
+
+  late final CursorPaginationController<ThreadViewComment> _controller;
 
   /// Maximum comment length in characters (matches backend limit)
   /// Note: This counts Unicode grapheme clusters, so emojis count correctly
@@ -78,26 +110,30 @@ class CommentsProvider with ChangeNotifier {
   final String _postUri;
   final String _postCid;
 
-  // Comment state
-  List<ThreadViewComment> _comments = [];
-
   /// The current thread as a value tree, for lookup and node replacement.
   ///
-  /// Cheap to build per use: [CommentThreadTree] wraps [_comments] by
+  /// Cheap to build per use: [CommentThreadTree] wraps [comments] by
   /// reference instead of copying it.
-  CommentThreadTree get _tree => CommentThreadTree(_comments);
+  CommentThreadTree get _tree => CommentThreadTree(_controller.items);
 
-  bool _isLoading = false;
-  bool _isLoadingMore = false;
-  bool _isQuietLoading = false;
-  String? _error;
-  // Pagination failures land here, never on [_error] (which drives the
-  // full-screen error). While set, [loadMoreComments] is a no-op.
-  String? _loadMoreError;
-  String? _cursor;
-  bool _hasMore = true;
+  // The most recently started refresh: its number, the sort it fetches,
+  // and its kind. Set only when a refresh starts, so an older refresh
+  // landing never changes it.
+  ({int number, String sort, _RefreshKind kind}) _latestRefresh = (
+    number: 0,
+    sort: 'hot',
+    kind: _RefreshKind.normal,
+  );
 
-  // Bumped whenever the whole tree is replaced (refresh/sort change/delete).
+  // The number of the last refresh that failed while it was current.
+  // Superseded refreshes never get here: their results are dropped whole.
+  int? _failedRefreshRequest;
+
+  // The controller's first-page loading flag as of its previous
+  // notification, so [_onControllerChanged] can tell when a refresh lands.
+  bool _wasLoadingFirstPage = false;
+
+  // Bumped whenever a whole-tree refresh lands (refresh/sort change/delete).
   // In-flight subtree fetches capture it at start and discard their response
   // if it changed, so a stale subtree is never merged into a newer tree.
   int _treeGeneration = 0;
@@ -126,8 +162,11 @@ class CommentsProvider with ChangeNotifier {
   String _sort = 'hot';
   String? _timeframe;
 
-  // Flag to track if a refresh should be scheduled after current load
-  bool _pendingRefresh = false;
+  // The sort of the comments actually displayed. [sort] reverts to it when
+  // the current refresh fails, and pagination and reply fetches always use
+  // it so a cursor travels with the sort that produced it. It changes only
+  // when a refresh lands, together with [_treeGeneration].
+  String _loadedSort = 'hot';
 
   // Time update mechanism for periodic UI refreshes
   Timer? _timeUpdateTimer;
@@ -145,14 +184,18 @@ class CommentsProvider with ChangeNotifier {
   // Getters
   String get postUri => _postUri;
   String get postCid => _postCid;
-  List<ThreadViewComment> get comments => _comments;
-  bool get isLoading => _isLoading;
-  bool get isLoadingMore => _isLoadingMore;
-  String? get error => _error;
+  List<ThreadViewComment> get comments => _controller.items;
 
-  /// Pagination error - the list footer's error channel.
-  String? get loadMoreError => _loadMoreError;
-  bool get hasMore => _hasMore;
+  /// First-page load in flight. A quiet refresh never shows as loading.
+  bool get isLoading =>
+      _controller.isLoading && _latestRefresh.kind != _RefreshKind.quiet;
+  bool get isLoadingMore => _controller.isLoadingMore;
+  String? get error => _controller.error;
+
+  /// Pagination error for the list footer; never drives the full-screen
+  /// error.
+  String? get loadMoreError => _controller.loadMoreError;
+  bool get hasMore => _controller.hasMore;
   String get sort => _sort;
   String? get timeframe => _timeframe;
   ValueNotifier<DateTime?> get currentTimeNotifier => _currentTimeNotifier;
@@ -266,113 +309,108 @@ class CommentsProvider with ChangeNotifier {
   /// - [quiet]: When refreshing, don't flip [isLoading] (no full-list loading
   ///   flicker). Used for background retries while waiting for the AppView to
   ///   index a newly created comment.
+  ///
+  /// A refresh supersedes anything in flight, including another refresh.
+  /// Never throws; failures land on [error] (refresh) or [loadMoreError]
+  /// (pagination). A no-op once disposed.
   Future<void> loadComments({bool refresh = false, bool quiet = false}) async {
-    // If already loading, schedule a refresh to happen after current load
-    if (_isLoading || _isLoadingMore || _isQuietLoading) {
-      if (refresh) {
-        _pendingRefresh = true;
-        if (kDebugMode) {
-          debugPrint(
-            '⏳ Load in progress - scheduled refresh for after completion',
-          );
-        }
-      }
+    if (_isDisposed) {
+      return;
+    }
+    if (!refresh) {
+      await _controller.loadMore();
       return;
     }
 
-    try {
-      if (refresh) {
-        if (quiet) {
-          // Internal re-entrancy guard only - not exposed via isLoading, so
-          // the UI keeps showing the current tree while we refresh behind it.
-          _isQuietLoading = true;
-        } else {
-          _isLoading = true;
-        }
-        _error = null;
-        _loadMoreError = null;
-        _pendingRefresh = false; // Clear any pending refresh
-      } else {
-        _isLoadingMore = true;
-      }
-      _safeNotifyListeners();
+    await _refresh(quiet ? _RefreshKind.quiet : _RefreshKind.normal);
+  }
 
-      if (kDebugMode) {
-        debugPrint('📡 Fetching comments: sort=$_sort, postUri=$_postUri');
-      }
+  /// Refresh [sort] from the first page and return this refresh's request
+  /// number (compare it with [_failedRefreshRequest]).
+  ///
+  /// Only this method may call the controller's refresh, retry or reset:
+  /// [_onControllerChanged] treats every fall of the controller's
+  /// first-page loading flag without an error as [_latestRefresh] landing,
+  /// so a first-page load started anywhere else would be credited to it.
+  Future<int> _refresh(_RefreshKind kind) async {
+    final request = _latestRefresh.number + 1;
+    _latestRefresh = (number: request, sort: _sort, kind: kind);
+    if (kDebugMode) {
+      debugPrint('📡 Fetching comments: sort=$_sort, postUri=$_postUri');
+    }
+    await _controller.refresh();
+    return request;
+  }
 
-      final response = await _apiService.getComments(
-        postUri: _postUri,
-        sort: _sort,
-        timeframe: _timeframe,
-        cursor: refresh ? null : _cursor,
-      );
+  Future<CursorPage<ThreadViewComment>> _fetchCommentsPage(
+    String? cursor,
+  ) async {
+    final response = await _apiService.getComments(
+      postUri: _postUri,
+      sort: cursor == null ? _latestRefresh.sort : _loadedSort,
+      timeframe: _timeframe,
+      cursor: cursor,
+    );
+    return CursorPage(items: response.comments, cursor: response.cursor);
+  }
 
-      if (_isDisposed) {
+  /// Apply viewer vote state from the page that just landed. The controller
+  /// hands over only its fresh (deduplicated) comments, and nothing for a
+  /// stale or disposed response.
+  Future<void> _hydrateCommentVotes(List<ThreadViewComment> newItems) async {
+    _hydrator.hydrateCommentTree(newItems);
+  }
+
+  /// Everything the pagination controller swallows: fetch failures the UI
+  /// already reports, vote-hydration failures it does not, and failures of
+  /// superseded requests. Typed [ApiException]s are the expected,
+  /// user-presentable failures and are skipped, as in UserProfileProvider.
+  void _reportUnexpected(Object error, StackTrace stackTrace) {
+    if (error is ApiException) {
+      return;
+    }
+    unawaited(Sentry.captureException(error, stackTrace: stackTrace));
+  }
+
+  void _onControllerChanged() {
+    // The first-page flag only falls when the current refresh settles: with
+    // no error when its page reached the controller, with the error set when
+    // it failed. A superseded refresh never touches the controller's state.
+    final refreshSettled = _wasLoadingFirstPage && !_controller.isLoading;
+    _wasLoadingFirstPage = _controller.isLoading;
+
+    if (refreshSettled && _controller.error != null) {
+      _failedRefreshRequest = _latestRefresh.number;
+      // The displayed comments are still the loaded sort's.
+      _sort = _loadedSort;
+      if (_latestRefresh.kind == _RefreshKind.sortChange) {
+        // setSortOption reports this failure through its return value (the
+        // screen's snackbar), so the error is cleared before any listener
+        // sees it. clearError re-enters this method, which forwards the
+        // notification with the error already gone.
+        _controller.clearError();
         return;
       }
-
-      // Only update state after successful fetch
-      if (refresh) {
-        _comments = response.comments;
-        _lastRefreshTime = DateTime.now();
-        // The whole tree was replaced - invalidate in-flight subtree fetches
-        // so they don't merge stale data into the new tree.
-        _treeGeneration++;
-      } else {
-        // Create new list instance to trigger rebuilds
-        _comments = [..._comments, ...response.comments];
-      }
-
-      _cursor = response.cursor;
-      _hasMore = response.cursor != null;
-      _error = null;
-
+    } else if (refreshSettled) {
+      _loadedSort = _latestRefresh.sort;
+      _lastRefreshTime = DateTime.now();
+      // The whole tree was replaced - invalidate in-flight subtree fetches
+      // so they don't merge stale data into the new tree.
+      _treeGeneration++;
       if (kDebugMode) {
-        debugPrint('✅ Comments loaded: ${_comments.length} comments total');
-      }
-
-      // Apply viewer vote state from the comments response. Safe for
-      // comments already on screen (a duplicate across pages keeps its
-      // optimistic vote), so refresh and pagination share one path - on
-      // refresh _comments is response.comments anyway.
-      _hydrator.hydrateCommentTree(response.comments);
-
-      // Start time updates when comments are loaded
-      if (_comments.isNotEmpty && _timeUpdateTimer == null) {
-        startTimeUpdates();
-      }
-    } on Exception catch (e) {
-      if (_isDisposed) {
-        return;
-      }
-      if (refresh) {
-        _error = e.toString();
-      } else {
-        _loadMoreError = e.toString();
-      }
-      if (kDebugMode) {
-        debugPrint('❌ Failed to fetch comments: $e');
-      }
-    } finally {
-      if (!_isDisposed) {
-        _isLoading = false;
-        _isLoadingMore = false;
-        _isQuietLoading = false;
-        _safeNotifyListeners();
-
-        // If a refresh was scheduled during this load, execute it now
-        if (_pendingRefresh) {
-          if (kDebugMode) {
-            debugPrint('🔄 Executing pending refresh');
-          }
-          _pendingRefresh = false;
-          // Schedule refresh without awaiting to avoid blocking
-          // This is intentional - we want the refresh to happen asynchronously
-          unawaited(loadComments(refresh: true));
-        }
+        debugPrint(
+          '✅ Comments loaded: ${_controller.items.length} comments total',
+        );
       }
     }
+    // Any landing can bring the first comments (e.g. a next page after an
+    // empty first page), not just a refresh.
+    if (!_isDisposed &&
+        _controller.items.isNotEmpty &&
+        _timeUpdateTimer == null) {
+      startTimeUpdates();
+    }
+    _safeNotifyListeners();
   }
 
   /// Refresh comments (pull-to-refresh)
@@ -384,27 +422,23 @@ class CommentsProvider with ChangeNotifier {
 
   /// Load more comments (pagination)
   ///
-  /// A no-op while a page is in flight, once the thread has ended, or while
-  /// a [loadMoreError] is showing - the scroll trigger fires on every scroll
-  /// tick, and without that last guard a failing page is retried
-  /// continuously while the user sits at the bottom of the thread. The
-  /// footer's Retry goes through [retryLoadMore]; a refresh (including a
-  /// sort change) clears the error too.
+  /// A no-op while a load is in flight, at the end of the thread, or while
+  /// [loadMoreError] is set, or once disposed; the footer's Retry goes
+  /// through [retryLoadMore].
   Future<void> loadMoreComments() async {
-    if (!_hasMore || _isLoadingMore || _loadMoreError != null) {
+    if (_isDisposed) {
       return;
     }
-    await loadComments();
+    await _controller.loadMore();
   }
 
-  /// The footer's Retry: clears the pagination error that
-  /// [loadMoreComments] treats as a stop sign, then fetches the page again.
+  /// The footer's Retry: clears [loadMoreError] and fetches the same page
+  /// again. A no-op once disposed.
   Future<void> retryLoadMore() async {
-    if (_loadMoreError != null) {
-      _loadMoreError = null;
-      _safeNotifyListeners();
+    if (_isDisposed) {
+      return;
     }
-    await loadMoreComments();
+    await _controller.retryLoadMore();
   }
 
   /// Load more replies for a specific comment ("Load more replies" button)
@@ -424,8 +458,8 @@ class CommentsProvider with ChangeNotifier {
   /// Returns null when the server returned no/mismatched subtree (the
   /// node's hasMore/cursor are cleared on an empty response so the UI stops
   /// offering a load-more that can never succeed), when the response became
-  /// stale (tree refreshed or sort changed mid-flight), or when the
-  /// provider was disposed.
+  /// stale (a whole-tree refresh landed mid-flight), or when the provider
+  /// was disposed.
   ///
   /// Throws [ArgumentError] for a malformed comment URI (programmer error).
   /// Throws ApiException/AuthenticationException on network or auth errors.
@@ -461,11 +495,12 @@ class CommentsProvider with ChangeNotifier {
     String commentUri,
     String rkey,
   ) async {
-    // Capture staleness markers before the fetch: if the tree is wholesale
-    // replaced (refresh/delete) or the sort changes while we're in flight,
-    // this response no longer belongs to what's on screen.
+    // Capture the tree generation before the fetch: if the tree is wholesale
+    // replaced (refresh/sort change/delete) while we're in flight, this
+    // response no longer belongs to what's on screen. A sort change still in
+    // flight does not make it stale - the fetch uses the loaded sort, which
+    // only changes when a refresh lands and bumps the generation.
     final startGeneration = _treeGeneration;
-    final startSort = _sort;
 
     // Pass the stored cursor (if any) so a node with more than one page of
     // direct replies advances through pages instead of refetching page 1.
@@ -479,7 +514,7 @@ class CommentsProvider with ChangeNotifier {
     try {
       final response = await _apiService.getComments(
         postUri: _postUri,
-        sort: _sort,
+        sort: _loadedSort,
         timeframe: _timeframe,
         parentRkey: rkey,
         cursor: requestCursor,
@@ -489,11 +524,11 @@ class CommentsProvider with ChangeNotifier {
         return null;
       }
 
-      if (_treeGeneration != startGeneration || _sort != startSort) {
+      if (_treeGeneration != startGeneration) {
         if (kDebugMode) {
           debugPrint(
             '⚠️ loadMoreReplies: discarding stale subtree for $rkey '
-            '(tree refreshed or sort changed mid-flight)',
+            '(tree refreshed mid-flight)',
           );
         }
         return null;
@@ -514,7 +549,7 @@ class CommentsProvider with ChangeNotifier {
             hasMore: false,
             repliesCursor: null,
           );
-          _comments = _tree.replaceNode(cleared).tree.nodes;
+          _controller.replaceItems(_tree.replaceNode(cleared).tree.nodes);
         }
         return null;
       }
@@ -543,7 +578,7 @@ class CommentsProvider with ChangeNotifier {
 
       final merge = _tree.replaceNode(subtree);
       if (merge.replaced) {
-        _comments = merge.tree.nodes;
+        _controller.replaceItems(merge.tree.nodes);
       } else {
         // The walk changed nothing. Usually that means the node is not in
         // the top-level tree at all (e.g. below the depth cap, when the
@@ -587,38 +622,26 @@ class CommentsProvider with ChangeNotifier {
 
   /// Change sort order
   ///
-  /// Updates the sort option and triggers a refresh of comments.
-  /// Available options: 'hot', 'top', 'new'
+  /// Updates the sort option and refreshes comments with it, superseding
+  /// anything in flight. Available options: 'hot', 'top', 'new'
   ///
-  /// Returns true if sort change succeeded, false if reload failed.
-  /// On failure, reverts to previous sort option.
+  /// Returns false only when this sort change is still the current request
+  /// and its refresh failed. Then [sort] reverts to the sort of the
+  /// comments on screen and [error] stays null, so the return value (the
+  /// screen's snackbar) is the only report of the failure. A sort change
+  /// superseded by a newer refresh or sort change returns true and reverts
+  /// nothing; the newer request decides the outcome. Once disposed it
+  /// changes nothing and returns true.
   Future<bool> setSortOption(String newSort) async {
-    if (_sort == newSort) {
+    if (_isDisposed || _sort == newSort) {
       return true;
     }
 
-    final previousSort = _sort;
     _sort = newSort;
     _safeNotifyListeners();
 
-    // Reload comments with new sort
-    try {
-      await loadComments(refresh: true);
-      return true;
-    } on Exception catch (e) {
-      if (_isDisposed) {
-        return false;
-      }
-      // Revert to previous sort option on failure
-      _sort = previousSort;
-      _safeNotifyListeners();
-
-      if (kDebugMode) {
-        debugPrint('Failed to apply sort option: $e');
-      }
-
-      return false;
-    }
+    final request = await _refresh(_RefreshKind.sortChange);
+    return _failedRefreshRequest != request;
   }
 
   /// Vote on a comment
@@ -866,22 +889,14 @@ class CommentsProvider with ChangeNotifier {
   }
 
   /// Retry loading after error
-  Future<void> retry() async {
-    _error = null;
-    await loadComments(refresh: true);
-  }
-
-  /// Clear error
-  void clearError() {
-    _error = null;
-    _safeNotifyListeners();
-  }
+  Future<void> retry() => loadComments(refresh: true);
 
   @override
   void dispose() {
     _isDisposed = true;
     // Stop time updates and cancel timer (also sets value to null)
     stopTimeUpdates();
+    _controller.dispose();
     // Dispose the ValueNotifier last
     _currentTimeNotifier.dispose();
     super.dispose();
