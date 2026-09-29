@@ -43,11 +43,7 @@ void main() {
     test('local match ignores the port in the web URL', () {
       const local = WebLinkBuilder(webUrl: 'http://127.0.0.1:8080');
       expect(
-        local.community(
-          did: communityDid,
-          name: 'Gaming',
-          origin: '127.0.0.1',
-        ),
+        local.community(did: communityDid, name: 'Gaming', origin: '127.0.0.1'),
         'http://127.0.0.1:8080/c/gaming',
       );
     });
@@ -87,19 +83,12 @@ void main() {
     const didLink = 'https://coves.social/c/did%3Aplc%3Acommunity456';
 
     test('null origin falls back to the DID', () {
-      expect(
-        production.community(did: communityDid, name: 'Gaming'),
-        didLink,
-      );
+      expect(production.community(did: communityDid, name: 'Gaming'), didLink);
     });
 
     test('blank origin falls back to the DID', () {
       expect(
-        production.community(
-          did: communityDid,
-          name: 'Gaming',
-          origin: '   ',
-        ),
+        production.community(did: communityDid, name: 'Gaming', origin: '   '),
         didLink,
       );
     });
@@ -435,13 +424,13 @@ void main() {
     // at://<authority>/<collection>/<rkey> yields a link, so a malformed
     // record URI is never turned into a URL that points somewhere wrong.
     String? postLinkFor(String postUri) => production.post(
-          postUri: postUri,
-          authorDid: 'did:plc:author123',
-          authorHandle: 'alice.coves.social',
-          communityDid: communityDid,
-          communityName: 'Gaming',
-          communityOrigin: 'coves.social',
-        );
+      postUri: postUri,
+      authorDid: 'did:plc:author123',
+      authorHandle: 'alice.coves.social',
+      communityDid: communityDid,
+      communityName: 'Gaming',
+      communityOrigin: 'coves.social',
+    );
 
     test('an https URL is not an at-URI', () {
       expect(
@@ -556,7 +545,8 @@ void main() {
     const commentUri =
         'at://did:plc:commenter789/social.coves.community.comment/3kcmt001';
     const commenterDid = 'did:plc:commenter789';
-    const didPermalink = 'https://coves.social/c/gaming/post/'
+    const didPermalink =
+        'https://coves.social/c/gaming/post/'
         'alice.coves.social/3kabcxyz/comment/'
         'did%3Aplc%3Acommenter789/3kcmt001';
 
@@ -721,8 +711,7 @@ void main() {
           commentUri: commentUri,
           commenterDid: commenterDid,
           commenterHandle: 'bob.coves.social',
-          postUri:
-              'https://did:plc:author123/social.coves.community.postv2/3kabcxyz',
+          postUri: 'https://did:plc:author123/social.coves.community.postv2/3kabcxyz',
           postAuthorDid: postAuthorDid,
           postAuthorHandle: postAuthorHandle,
           communityDid: communityDid,
@@ -875,11 +864,9 @@ void main() {
 
   group('WebLinkBuilder.current', () {
     test('builds against the current environment web origin', () {
-      expect(
-        WebLinkBuilder.current().webUrl,
-        EnvironmentConfig.current.webUrl,
-      );
-      // Under `flutter test` the current environment is production.
+      expect(WebLinkBuilder.current().webUrl, EnvironmentConfig.current.webUrl);
+      // Under `flutter test` the current environment is the test
+      // environment, which keeps the production web origin for links.
       expect(WebLinkBuilder.current().webUrl, 'https://coves.social');
     });
 

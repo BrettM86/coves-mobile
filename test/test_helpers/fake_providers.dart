@@ -80,15 +80,23 @@ class FakeSubscriptionProvider extends CommunitySubscriptionProvider {
   Future<void> loadSubscribedCommunities() async {}
 }
 
-/// An API service with no token, for providers that require one but whose
-/// requests are never expected to resolve in a widget test.
+/// A real [CovesApiService] with no token, for providers that require one.
+///
+/// Under `testWidgets` the binding's HttpOverrides answers every request
+/// with a synthetic 400; under plain `test()` requests go to the closed
+/// loopback port of `EnvironmentConfig.test`. Either way a missed mock never
+/// reaches production, but only an assertion on the resulting error state
+/// fails the test, so tests that exercise a fetch must inject a mocked
+/// service.
 CovesApiService tokenlessApiService() =>
     CovesApiService(tokenGetter: () async => null);
 
 /// The full provider set a `PostCard` needs to build.
 ///
-/// Pass a `streamableService` to inject a Dio-mocked service; otherwise a
-/// real one is supplied that is never exercised.
+/// The API services supplied are [tokenlessApiService]s. Pass a
+/// `streamableService` to inject a Dio-mocked one; otherwise a real
+/// [StreamableService] is supplied, which talks to api.streamable.com
+/// regardless of `EnvironmentConfig`, so tests must not trigger it.
 List<SingleChildWidget> postCardProviders({
   required AuthProvider auth,
   StreamableService? streamableService,

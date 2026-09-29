@@ -12,9 +12,10 @@ void main() {
   late MockDio mockDio;
   late MockFlutterSecureStorage mockStorage;
 
-  // Storage key is environment-specific to prevent token reuse across dev/prod
-  // Tests run in production environment by default
-  const storageKey = 'coves_session_production';
+  // Storage key is environment-specific to prevent token reuse across dev/prod.
+  // A literal, so these tests also pin that the flutter test runner never
+  // reads or writes the production session key.
+  const storageKey = 'coves_session_test';
 
   setUp(() {
     CovesAuthService.resetInstance();

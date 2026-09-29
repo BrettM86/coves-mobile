@@ -92,9 +92,9 @@ void main() {
   testWidgets('share button dispatches the post web link exactly once', (
     tester,
   ) async {
-    // The expected URL assumes the production web origin; `flutter test`
-    // passes no ENVIRONMENT/flavor define, so the config defaults there.
-    expect(EnvironmentConfig.current.isProduction, isTrue);
+    // The expected URL assumes the production web origin, which the test
+    // environment keeps for share links even though its API is non-routable.
+    expect(EnvironmentConfig.current.webUrl, 'https://coves.social');
 
     await tester.pumpWidget(createTestWidget(authorOwnedPost()));
 

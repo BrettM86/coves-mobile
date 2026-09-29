@@ -10,8 +10,11 @@ fixes any bugs found, and commits the fixes.
 - **One QA agent drives the emulator at a time.** Never run two
   emulator-driving agents in parallel; read-only code-audit agents may run
   alongside.
-- **Local backend only.** `flutter run --flavor dev` alone still talks to
-  PRODUCTION — always pass `--dart-define=ENVIRONMENT=local`.
+- **Local backend only.** Run with `--flavor dev --dart-define=ENVIRONMENT=local`.
+  The flavor alone selects local on Android, but the define is what works on
+  iOS (no flavors) and wins over the flavor. An unrecognized value (e.g.
+  `ENVIRONMENT=dev`) stops the app at startup rather than falling back to
+  production.
 - **Test account**: handle `mari.local.coves.dev`, password `password`.
 - **Verify before fixing**: reproduce the bug on the emulator, fix it, then
   re-run the same steps to confirm the fix.

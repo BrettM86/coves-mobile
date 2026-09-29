@@ -34,9 +34,9 @@ void main() {
   group('CovesAuthService - Environment Isolation', () {
     test('should use environment-specific storage keys', () {
       // This test documents the expected storage key format
-      // The actual environment is determined at compile time via --dart-define
-      // In tests without specific environment configuration, it defaults to
-      // production
+      // The environment comes from compile-time defines or flavor; with
+      // neither set, host-side `flutter test` selects the test environment
+      // at runtime (FLUTTER_TEST), never production
       final currentEnv = EnvironmentConfig.current.environment.name;
       final expectedKey = 'coves_session_$currentEnv';
 
@@ -44,12 +44,8 @@ void main() {
       expect(expectedKey, contains('coves_session_'));
       expect(expectedKey, contains(currentEnv));
 
-      // For production environment (default in tests)
-      if (currentEnv == 'production') {
-        expect(expectedKey, 'coves_session_production');
-      } else if (currentEnv == 'local') {
-        expect(expectedKey, 'coves_session_local');
-      }
+      expect(currentEnv, 'test');
+      expect(expectedKey, 'coves_session_test');
     });
 
     test('should isolate sessions between environments', () async {
@@ -171,19 +167,13 @@ void main() {
       verifyNever(mockStorage.delete(key: 'coves_session'));
     });
 
-    test('should document storage key format for both environments', () {
-      // This test serves as documentation for the storage key format
-      // Production key
-      expect('coves_session_production', 'coves_session_production');
-
-      // Local development key
-      expect('coves_session_local', 'coves_session_local');
-
-      // This ensures:
-      // 1. Production tokens are stored in 'coves_session_production'
-      // 2. Local dev tokens are stored in 'coves_session_local'
-      // 3. Switching between prod/dev builds doesn't cause token conflicts
-      // 4. Each environment maintains its own session independently
+    test('should pin the environment names used in session keys', () {
+      // Each name is persisted as the secure-storage session key
+      // 'coves_session_<name>'. Renaming an Environment value orphans the
+      // stored session and signs every user of that environment out.
+      expect(Environment.production.name, 'production');
+      expect(Environment.local.name, 'local');
+      expect(Environment.test.name, 'test');
     });
   });
 }

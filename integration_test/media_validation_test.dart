@@ -8,8 +8,11 @@
 //     #view embed, and a video whose blob is a jpeg so playback fails into
 //     the error state by design)
 //
-// Run on a booted simulator:
-//   flutter test integration_test/media_validation_test.dart -d <device-id>
+// Run on a booted simulator, selecting the local backend (iOS has no
+// flavors, so --flavor dev is Android-only):
+// flutter test integration_test/media_validation_test.dart \
+//   -d <device-id> --dart-define=ENVIRONMENT=local
+import 'package:coves_flutter/config/environment_config.dart';
 import 'package:coves_flutter/main.dart' as app;
 import 'package:coves_flutter/widgets/post_card.dart';
 import 'package:flutter/material.dart';
@@ -49,6 +52,12 @@ void main() {
   testWidgets('native media embeds render end-to-end against live backend', (
     tester,
   ) async {
+    expect(
+      EnvironmentConfig.current.isLocal,
+      isTrue,
+      reason: 'Run with --dart-define=ENVIRONMENT=local.',
+    );
+
     // Pre-accept the EULA and community guidelines gates so the app boots
     // straight to the landing screen.
     SharedPreferences.setMockInitialValues({
