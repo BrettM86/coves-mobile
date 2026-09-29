@@ -13,7 +13,7 @@ import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
 import '../../services/comments_provider_cache.dart';
-import '../../utils/facet_detector.dart';
+import '../../utils/rich_text_composer.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/post_card.dart';
 
@@ -254,8 +254,8 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
       return;
     }
 
-    final content = _textController.text.trim();
-    if (content.isEmpty) {
+    final composed = composeRichText(_textController.text);
+    if (composed.content.isEmpty) {
       return;
     }
 
@@ -268,10 +268,7 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     });
 
     try {
-      // Detect link facets in the content
-      final facets = FacetDetector.detectLinks(content);
-
-      await widget.onSubmit(content, facets);
+      await widget.onSubmit(composed.content, composed.facets ?? const []);
       // Clear draft on success (widget.commentsProvider, not context.read —
       // the provider is not an ancestor of this pushed route)
       widget.commentsProvider.clearDraft(

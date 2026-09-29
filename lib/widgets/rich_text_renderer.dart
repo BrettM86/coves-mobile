@@ -1,5 +1,4 @@
 import 'dart:collection';
-import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -9,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../constants/app_colors.dart';
 import '../models/facet.dart';
 import '../utils/url_launcher.dart';
+import '../utils/utf8_offsets.dart';
 
 /// A reusable widget for rendering text with rich text facets.
 ///
@@ -211,33 +211,9 @@ class _RichTextRendererState extends State<RichTextRenderer> {
   }
 
   /// Converts facet byte ranges to char ranges, dropping invalid facets
-  ///
-  /// The text is UTF-8 encoded once and every needed byte offset is resolved
-  /// in a single cumulative walk over the bytes (instead of re-encoding the
-  /// whole text per facet endpoint, which was O(facets x textLength)).
   List<_ResolvedFacet> _resolveFacets() {
     final text = widget.text;
-    final bytes = utf8.encode(text);
-
-    // Collect the byte offsets we need (sorted, deduplicated), skipping
-    // facets that are trivially invalid.
-    final offsets = SplayTreeSet<int>();
-    for (final facet in widget.facets!) {
-      final byteStart = facet.index.byteStart;
-      final byteEnd = facet.index.byteEnd;
-      if (byteStart < 0 || byteEnd <= byteStart || byteEnd > bytes.length) {
-        continue; // logged in the resolution loop below
-      }
-      offsets
-        ..add(byteStart)
-        ..add(byteEnd);
-    }
-
-    final charIndexAt = _charIndexForByteOffsets(
-      bytes,
-      offsets.toList(),
-      text.length,
-    );
+    final offsets = Utf8Offsets(text);
 
     final resolved = <_ResolvedFacet>[];
     for (final facet in widget.facets!) {
@@ -256,29 +232,28 @@ class _RichTextRendererState extends State<RichTextRenderer> {
 
       // Strict: a facet extending past the text's UTF-8 length is malformed
       // and is dropped, not clamped to the text end.
-      if (byteEnd > bytes.length) {
+      if (byteEnd > offsets.byteLength) {
         if (kDebugMode) {
           debugPrint(
             'RichTextRenderer: Skipping facet with byte range '
-            '[$byteStart, $byteEnd) past text byte length ${bytes.length}',
+            '[$byteStart, $byteEnd) past text byte length '
+            '${offsets.byteLength}',
           );
         }
         continue;
       }
 
-      // -1 means the offset splits a multi-byte UTF-8 sequence
-      final charStart = charIndexAt[byteStart] ?? -1;
-      final charEnd = charIndexAt[byteEnd] ?? -1;
-
-      if (charStart < 0 ||
-          charEnd < 0 ||
-          charStart >= text.length ||
-          charEnd <= charStart) {
+      // Both offsets are within 0..byteLength here, so a null index means the
+      // offset splits a multi-byte UTF-8 sequence. Byte-to-char mapping is
+      // increasing, so the resolved indices satisfy
+      // 0 <= charStart < charEnd <= text.length.
+      final charStart = offsets.charIndexOf(byteStart);
+      final charEnd = offsets.charIndexOf(byteEnd);
+      if (charStart == null || charEnd == null) {
         if (kDebugMode) {
           debugPrint(
-            'RichTextRenderer: Skipping facet with out-of-bounds '
-            'char indices [$charStart, $charEnd) for text length '
-            '${text.length}',
+            'RichTextRenderer: Skipping facet with byte range '
+            '[$byteStart, $byteEnd) that splits a multi-byte character',
           );
         }
         continue;
@@ -291,60 +266,6 @@ class _RichTextRendererState extends State<RichTextRenderer> {
 
     resolved.sort((a, b) => a.charStart.compareTo(b.charStart));
     return resolved;
-  }
-
-  /// Resolves each byte offset in [offsets] (sorted ascending, all within
-  /// `0..bytes.length`) to its UTF-16 char index, in one walk over [bytes].
-  ///
-  /// Offsets landing mid-way through a multi-byte UTF-8 sequence map to -1
-  /// (matching FacetDetector.byteIndexToCharIndex's failure result); an
-  /// offset equal to `bytes.length` maps to [textLength].
-  static Map<int, int> _charIndexForByteOffsets(
-    List<int> bytes,
-    List<int> offsets,
-    int textLength,
-  ) {
-    final map = <int, int>{};
-    var oi = 0;
-    var byteIndex = 0;
-    var charIndex = 0;
-
-    while (oi < offsets.length && byteIndex < bytes.length) {
-      while (oi < offsets.length && offsets[oi] == byteIndex) {
-        map[offsets[oi]] = charIndex;
-        oi++;
-      }
-      if (oi >= offsets.length) {
-        break;
-      }
-
-      // Advance one code point using the UTF-8 lead byte
-      final lead = bytes[byteIndex];
-      final seqLen = lead < 0x80
-          ? 1
-          : lead < 0xE0
-          ? 2
-          : lead < 0xF0
-          ? 3
-          : 4;
-      final next = byteIndex + seqLen;
-
-      // Offsets inside the sequence would split a code point: unresolvable
-      while (oi < offsets.length && offsets[oi] < next) {
-        map[offsets[oi]] = -1;
-        oi++;
-      }
-
-      // Code points >= U+10000 (4-byte sequences) are surrogate pairs in
-      // UTF-16 and count as 2 code units
-      charIndex += seqLen == 4 ? 2 : 1;
-      byteIndex = next;
-    }
-
-    for (; oi < offsets.length; oi++) {
-      map[offsets[oi]] = offsets[oi] == bytes.length ? textLength : -1;
-    }
-    return map;
   }
 
   /// Extracts block-level facets with ranges extended to line boundaries

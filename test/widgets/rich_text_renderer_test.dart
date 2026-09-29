@@ -2164,6 +2164,122 @@ void main() {
       expect(span.semanticsLabel, isNull);
     });
   });
+
+  group('RichTextRenderer - Byte Offsets Inside Multi-Byte Characters', () {
+    /// Each content run as its text plus whether it renders as a link
+    List<(String?, bool)> runs(WidgetTester tester) {
+      final richText = tester.widget<RichText>(find.byType(RichText));
+      return [
+        for (final span in _getContentSpans(richText).cast<TextSpan>())
+          (
+            span.text,
+            span.recognizer != null &&
+                span.style?.decoration == TextDecoration.underline,
+          ),
+      ];
+    }
+
+    testWidgets('facet starting inside a 4-byte emoji is dropped while other '
+        'links still render', (tester) async {
+      const text = 'Hi 👋 there https://a.com end';
+      final emojiStart = _byteLen('Hi ');
+
+      // Every offset strictly inside the emoji's 4-byte sequence
+      for (final inside in [1, 2, 3]) {
+        await tester.pumpWidget(
+          _wrapInMaterialApp(
+            RichTextRenderer(
+              text: text,
+              facets: [
+                _createLinkFacet(
+                  byteStart: emojiStart + inside,
+                  byteEnd: _byteLen('Hi 👋 there'),
+                  uri: 'https://broken.example',
+                ),
+                _createLinkFacetFromText(
+                  fullText: text,
+                  linkText: 'https://a.com',
+                  uri: 'https://a.com',
+                ),
+              ],
+            ),
+          ),
+        );
+
+        expect(runs(tester), [
+          ('Hi 👋 there ', false),
+          ('https://a.com', true),
+          (' end', false),
+        ], reason: 'byteStart $inside bytes into the emoji');
+      }
+    });
+
+    testWidgets('facet ending inside a 2-byte or 3-byte character is dropped '
+        'while other links still render', (tester) async {
+      const text = 'café € https://b.com';
+      final euroStart = _byteLen('café ');
+      final brokenFacets = [
+        // Ends 1 byte into é
+        _createLinkFacet(
+          byteStart: 0,
+          byteEnd: _byteLen('caf') + 1,
+          uri: 'https://broken.example',
+        ),
+        // Ends 1 and 2 bytes into €
+        for (final inside in [1, 2])
+          _createLinkFacet(
+            byteStart: 0,
+            byteEnd: euroStart + inside,
+            uri: 'https://broken.example',
+          ),
+      ];
+
+      for (final broken in brokenFacets) {
+        await tester.pumpWidget(
+          _wrapInMaterialApp(
+            RichTextRenderer(
+              text: text,
+              facets: [
+                broken,
+                _createLinkFacetFromText(
+                  fullText: text,
+                  linkText: 'https://b.com',
+                  uri: 'https://b.com',
+                ),
+              ],
+            ),
+          ),
+        );
+
+        expect(runs(tester), [
+          ('café € ', false),
+          ('https://b.com', true),
+        ], reason: 'byteEnd ${broken.index.byteEnd}');
+      }
+    });
+
+    testWidgets('facet ending exactly at the byte length of text whose last '
+        'character is multi-byte renders through the end', (tester) async {
+      const text = 'tap here 👋';
+
+      await tester.pumpWidget(
+        _wrapInMaterialApp(
+          RichTextRenderer(
+            text: text,
+            facets: [
+              _createLinkFacet(
+                byteStart: _byteLen('tap '),
+                byteEnd: _byteLen(text),
+                uri: 'https://c.com',
+              ),
+            ],
+          ),
+        ),
+      );
+
+      expect(runs(tester), [('tap ', false), ('here 👋', true)]);
+    });
+  });
 }
 
 /// Helper to create a facet with arbitrary features over a substring

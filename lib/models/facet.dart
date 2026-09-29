@@ -587,10 +587,15 @@ class RichTextFacet {
   }
 }
 
-/// Client-side caps mirroring the backend sanitizer's MaxFacets and
-/// MaxFeaturesPerFacet. Old pre-sanitizer federated records can exceed the
-/// backend caps, so we enforce them here too to keep rendering bounded.
-const int _maxFacets = 200;
+/// The most facets a record may carry, mirroring the backend's
+/// richtext.MaxFacets
+///
+/// The composer emits no more than this, and parsing enforces it too because
+/// old pre-sanitizer federated records can exceed the backend cap.
+const int maxFacetsPerRecord = 200;
+
+/// Client-side cap mirroring the backend sanitizer's MaxFeaturesPerFacet, kept
+/// so old pre-sanitizer federated records still render bounded
 const int _maxFeaturesPerFacet = 20;
 
 /// Parse facets from a record's 'facets' field
@@ -611,10 +616,11 @@ List<RichTextFacet>? parseFacetsFromRecord(Object? record) {
   }
   final parsed = <RichTextFacet>[];
   for (final entry in facets.whereType<Map<String, dynamic>>()) {
-    if (parsed.length >= _maxFacets) {
+    if (parsed.length >= maxFacetsPerRecord) {
       if (kDebugMode) {
         debugPrint(
-          '⚠️ Truncating facets to first $_maxFacets (backend MaxFacets cap)',
+          '⚠️ Truncating facets to first $maxFacetsPerRecord '
+          '(backend MaxFacets cap)',
         );
       }
       break;

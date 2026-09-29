@@ -1,4 +1,5 @@
 import 'package:coves_flutter/models/community.dart';
+import 'package:coves_flutter/models/facet.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/screens/home/create_post_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
@@ -536,6 +537,74 @@ void main() {
           labels: anyNamed('labels'),
         ),
       ).called(1);
+    });
+
+    // Reuses the fixture above: the stubbed createPost still throws after
+    // recording its arguments, so the screen never navigates away
+    group('body link facets', () {
+      Future<void> submitWithBody(WidgetTester tester, String body) async {
+        await tester.pumpWidget(createTestWidget());
+        await tester.pumpAndSettle();
+
+        await selectCommunity(tester);
+
+        await tester.enterText(
+          find.widgetWithText(TextField, 'What are your thoughts?'),
+          body,
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.widgetWithText(TextButton, 'Post'));
+        await tester.pumpAndSettle();
+      }
+
+      /// Returns the (content, facets) arguments of the single createPost call
+      (Object?, Object?) captureContentAndFacets() {
+        final captured = verify(
+          mockApiService.createPost(
+            community: anyNamed('community'),
+            title: anyNamed('title'),
+            content: captureAnyNamed('content'),
+            facets: captureAnyNamed('facets'),
+            embed: anyNamed('embed'),
+            langs: anyNamed('langs'),
+            labels: anyNamed('labels'),
+          ),
+        ).captured;
+        expect(captured, hasLength(2), reason: 'createPost called once');
+        return (captured[0], captured[1]);
+      }
+
+      testWidgets('submits trimmed content with the scheme-prefixed link as '
+          'one byte-range link facet', (tester) async {
+        await submitWithBody(tester, '  see Https://a.com  ');
+
+        final (content, facets) = captureContentAndFacets();
+        expect(content, 'see Https://a.com');
+        expect(facets, isA<List<RichTextFacet>>());
+        // One string per facet: its byte range and every feature it carries,
+        // so a wrong uri, wrong range, extra feature or extra facet all fail
+        String describeFeature(FacetFeature feature) =>
+            feature is LinkFacetFeature ? 'link ${feature.uri}' : feature.type;
+        String describeFacet(RichTextFacet facet) {
+          final range = '[${facet.index.byteStart},${facet.index.byteEnd})';
+          return '$range ${facet.features.map(describeFeature).toList()}';
+        }
+
+        final described = (facets! as List<RichTextFacet>)
+            .map(describeFacet)
+            .toList();
+        expect(described, ['[4,17) [link https://a.com]']);
+      });
+
+      testWidgets('submits null facets when the body has no scheme-prefixed '
+          'link', (tester) async {
+        await submitWithBody(tester, '  just words, e.g. node.js  ');
+
+        final (content, facets) = captureContentAndFacets();
+        expect(content, 'just words, e.g. node.js');
+        expect(facets, isNull);
+      });
     });
   });
 }

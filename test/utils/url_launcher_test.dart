@@ -67,7 +67,7 @@ void main() {
       });
 
       // An allowed scheme with no authority is not a web link. The model
-      // layer (_isRenderableMediaUrl) and FacetDetector already reject these;
+      // layer (_isRenderableMediaUrl) and composeRichText already reject these;
       // the launcher is the outbound edge and must agree, or a hostile record
       // can hand the platform a scheme-only uri that resolves per-OS.
       test('blocks http: with an opaque path and no host', () async {

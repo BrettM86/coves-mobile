@@ -8,7 +8,7 @@ import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
-import '../../utils/facet_detector.dart';
+import '../../utils/rich_text_composer.dart';
 import '../../utils/url_policy.dart';
 import '../compose/community_picker_screen.dart';
 import 'post_detail_screen.dart';
@@ -212,11 +212,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         labels = const SelfLabels(values: [SelfLabel(val: 'nsfw')]);
       }
 
-      // Detect link facets in the body content
-      final bodyContent = _bodyController.text.trim();
-      final facets = bodyContent.isNotEmpty
-          ? FacetDetector.detectLinks(bodyContent)
-          : null;
+      final body = composeRichText(_bodyController.text);
 
       // Create post
       final response = await apiService.createPost(
@@ -224,8 +220,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         title: _titleController.text.trim().isNotEmpty
             ? _titleController.text.trim()
             : null,
-        content: bodyContent.isNotEmpty ? bodyContent : null,
-        facets: facets,
+        content: body.content.isNotEmpty ? body.content : null,
+        facets: body.facets,
         embed: embed,
         langs: [_language],
         labels: labels,
@@ -236,6 +232,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         final optimisticPost = _buildOptimisticPost(
           response: response,
           authProvider: authProvider,
+          content: body.content,
         );
 
         // Reset form first
@@ -294,6 +291,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   FeedViewPost _buildOptimisticPost({
     required CreatePostResponse response,
     required AuthProvider authProvider,
+    required String content,
   }) {
     // Extract rkey from AT-URI (at://did/collection/rkey)
     final uriParts = response.uri.split('/');
@@ -343,7 +341,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         createdAt: now,
         indexedAt: now,
         record: PostRecord(
-          content: _bodyController.text.trim(),
+          content: content,
           title: _titleController.text.trim().isNotEmpty
               ? _titleController.text.trim()
               : null,

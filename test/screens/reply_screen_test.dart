@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:coves_flutter/models/comment.dart';
+import 'package:coves_flutter/models/facet.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
@@ -260,6 +262,62 @@ void main() {
         commentsProvider.getDraft(parentUri: comment.comment.uri),
         'Saved by system back',
       );
+    });
+  });
+
+  group('ReplyScreen link facets', () {
+    testWidgets('submits trimmed content with exactly the scheme-prefixed '
+        'links as UTF-8 byte-range link facets', (tester) async {
+      final comment = createComment('at://did:plc:author/comment/1');
+      final submissions = <(String, List<RichTextFacet>)>[];
+      await pumpBase(tester);
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) async {
+          submissions.add((content, facets));
+        },
+      );
+
+      await tester.enterText(
+        find.byType(TextField),
+        '  Https://en.wikipedia.org/wiki/Foo_(bar), see e.g. node.js 👋 '
+        '"https://a.com/x".  ',
+      );
+      await tester.pump();
+      await tester.tap(find.text('Send'));
+      await tester.pumpAndSettle();
+
+      const expectedContent =
+          'Https://en.wikipedia.org/wiki/Foo_(bar), see e.g. node.js 👋 '
+          '"https://a.com/x".';
+      // Expected second range comes from the literal content, measured in
+      // UTF-8 bytes (the emoji before it is 4 bytes but 2 UTF-16 units)
+      const secondLink = 'https://a.com/x';
+      final secondStart = utf8
+          .encode(
+            expectedContent.substring(0, expectedContent.indexOf(secondLink)),
+          )
+          .length;
+      final secondEnd = secondStart + utf8.encode(secondLink).length;
+
+      expect(submissions, hasLength(1));
+      final (content, facets) = submissions.single;
+      expect(content, expectedContent);
+      // One string per facet: its byte range and every feature it carries,
+      // so a wrong uri, wrong range, extra feature or extra facet all fail
+      String describeFeature(FacetFeature feature) =>
+          feature is LinkFacetFeature ? 'link ${feature.uri}' : feature.type;
+      String describeFacet(RichTextFacet facet) {
+        final range = '[${facet.index.byteStart},${facet.index.byteEnd})';
+        return '$range ${facet.features.map(describeFeature).toList()}';
+      }
+
+      final described = facets.map(describeFacet).toList();
+      expect(described, [
+        '[0,39) [link https://en.wikipedia.org/wiki/Foo_(bar)]',
+        '[$secondStart,$secondEnd) [link https://a.com/x]',
+      ]);
     });
   });
 }
