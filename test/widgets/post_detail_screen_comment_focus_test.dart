@@ -37,6 +37,9 @@ void main() {
   late List<String?> requests;
   Completer<CommentsResponse>? refresh;
   Completer<CommentsResponse>? subtreeFetch;
+  // First-page responses consumed in order before falling back to [refresh].
+  late List<Completer<CommentsResponse>> firstPages;
+  Completer<CommentsResponse>? nextPage;
   var failSubtree = false;
 
   ThreadViewComment thread(String rkey, {List<ThreadViewComment>? replies}) {
@@ -57,8 +60,11 @@ void main() {
     );
   }
 
-  CommentsResponse response(List<ThreadViewComment> items) =>
-      CommentsResponse(post: null, comments: items);
+  CommentsResponse response(
+    List<ThreadViewComment> items, {
+    String? cursor,
+  }) =>
+      CommentsResponse(post: null, comments: items, cursor: cursor);
 
   ThreadViewComment targetAtDepth(int depth) {
     var nested = target;
@@ -88,6 +94,8 @@ void main() {
     requests = [];
     refresh = null;
     subtreeFetch = null;
+    firstPages = [];
+    nextPage = null;
     failSubtree = false;
     target = thread('target');
     threads = [
@@ -104,6 +112,7 @@ void main() {
       parentRkey: anyNamed('parentRkey'),
     )).thenAnswer((invocation) async {
       final parent = invocation.namedArguments[#parentRkey] as String?;
+      final cursor = invocation.namedArguments[#cursor] as String?;
       requests.add(parent);
       if (parent != null) {
         if (failSubtree) {
@@ -112,6 +121,12 @@ void main() {
         return subtreeFetch == null
             ? response([target])
             : await subtreeFetch!.future;
+      }
+      if (cursor != null) {
+        return nextPage == null ? response([]) : await nextPage!.future;
+      }
+      if (firstPages.isNotEmpty) {
+        return firstPages.removeAt(0).future;
       }
       return refresh == null ? response(threads) : await refresh!.future;
     });
@@ -321,5 +336,100 @@ void main() {
     expect(find.byType(FocusedThreadScreen), findsNothing);
     expect(find.text(failureMessage), findsOneWidget);
     expect(requests.whereType<String>(), contains('target'));
+  });
+
+  group('focused revisit while the cached thread is still loading', () {
+    // The target was posted after the thread was cached, so only the
+    // refresh the focused revisit starts can put it in the tree. A focus
+    // attempt against the cached tree would miss it and fall back to
+    // fetching the target's subtree. It lands below the first viewport, so
+    // seeing it proves the focus scroll ran.
+    late List<ThreadViewComment> cachedThreads;
+    late List<ThreadViewComment> refreshedThreads;
+
+    setUp(() {
+      cachedThreads = List.generate(80, (index) => thread('filler-$index'));
+      refreshedThreads = [
+        ...cachedThreads.take(40),
+        target,
+        ...cachedThreads.skip(40),
+      ];
+    });
+
+    Future<void> cacheVisitWithMorePages(WidgetTester tester) async {
+      firstPages.add(
+        Completer<CommentsResponse>()
+          ..complete(response(cachedThreads, cursor: 'page-2')),
+      );
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+      comments = cache.peekProvider(postUri)!;
+      expect(comments.hasMore, isTrue);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      requests.clear();
+    }
+
+    Future<void> reopenFocusedAndLand(WidgetTester tester) async {
+      final focusedRefresh = Completer<CommentsResponse>();
+      firstPages.add(focusedRefresh);
+      await tester.pumpWidget(app(focusCommentUri: target.comment.uri));
+      expect(identical(cache.peekProvider(postUri), comments), isTrue);
+      // The first frame runs the post-frame focus attempt.
+      await tester.pump();
+      focusedRefresh.complete(response(refreshedThreads));
+      for (var frame = 0; frame < 100; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+    }
+
+    void expectFocusedInRefreshedTree(WidgetTester tester) {
+      expect(
+        requests.whereType<String>(),
+        isEmpty,
+        reason: 'the refreshed tree holds the target; no subtree fetch',
+      );
+      expect(find.byType(FocusedThreadScreen), findsNothing);
+      expect(find.text(failureMessage), findsNothing);
+      expect(position(tester).pixels, greaterThan(0));
+      expect(find.text(targetContent).hitTestable(), findsOneWidget);
+    }
+
+    testCachedVisit('with a load-more in flight', (tester) async {
+      await cacheVisitWithMorePages(tester);
+      nextPage = Completer<CommentsResponse>();
+      unawaited(comments.loadMoreComments());
+      expect(comments.isLoadingMore, isTrue);
+
+      await reopenFocusedAndLand(tester);
+
+      expectFocusedInRefreshedTree(tester);
+      nextPage!.complete(response([thread('late-page')]));
+      await tester.pump();
+      expect(
+        comments.comments.length,
+        refreshedThreads.length,
+        reason: 'the superseded next page must not append',
+      );
+    });
+
+    testCachedVisit('with a quiet refresh in flight', (tester) async {
+      await cacheVisitWithMorePages(tester);
+      final quietRefresh = Completer<CommentsResponse>();
+      firstPages.add(quietRefresh);
+      unawaited(comments.loadComments(refresh: true, quiet: true));
+      expect(comments.isLoading, isFalse);
+
+      await reopenFocusedAndLand(tester);
+
+      expectFocusedInRefreshedTree(tester);
+      quietRefresh.complete(response(cachedThreads));
+      await tester.pump();
+      expect(
+        find.text(targetContent).hitTestable(),
+        findsOneWidget,
+        reason: 'the superseded quiet response must not replace the tree',
+      );
+    });
   });
 }
