@@ -161,6 +161,10 @@ resolves to flutter_web_auth_2's `CallbackActivity` (the only `social.coves`
 filter) and leaves the app where it was. Reaching a post by link from a flow
 needs a VIEW intent filter on `MainActivity`, which is an app change.
 
+Flows that need this deep link fired first are tagged `standalone` and run on
+their own: `f5_empty_profile`, `c6_comment_focus_missing` and
+`c7_comment_focus_malformed`. Each flow's header has its exact command.
+
 ### 7. Reaching fixtures in Maestro flows
 
 Don't scroll the Discover feed to find a fixture. The backend integration
@@ -265,6 +269,11 @@ still use the top of Discover.
    the correct depth and it appears in both the focused view and the full
    thread; back returns to the parent thread at the right position; deep-link
    cold-load into a focused thread doesn't crash.
+9. **Comment focus by deep link** (`?comment=<uri>`): a target outside the
+   initial tree opens as a focused thread over the post detail, and back
+   returns to the post (`c6_comment_focus_missing`); a malformed target keeps
+   the post detail up with a "Couldn't find that comment" snackbar
+   (`c7_comment_focus_malformed`). Both are standalone flows (playbook §6).
 
 **Static checks**: `flutter test test/widgets test/services`.
 
@@ -284,6 +293,9 @@ still use the top of Discover.
 4. Join → button state flips, feed reflects membership; leave → reverts.
 5. See-all screen paginates; admin panel opens without crash (if accessible).
 6. Community chips/tappable-community navigate correctly from feed posts.
+7. Create a community from the admin panel: a 17-character name shows
+   "Name must be 16 characters or less" and is not sent; a 16-character
+   name is created.
 
 **Static checks**: `flutter test test/screens test/widgets`.
 
