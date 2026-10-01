@@ -3,11 +3,16 @@
 # Requires a signed-in mari session (mari has authored posts).
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - tapOn: "Me"
@@ -21,10 +26,14 @@ appId: social.coves.dev
 - assertVisible: "[\\s\\S]*\\d+ Comments[\\s\\S]*"
 - assertVisible: "[\\s\\S]*\\d+ Memberships[\\s\\S]*"
 - takeScreenshot: build/maestro/f1_profile_header
-# Posts tab content: mari's authored posts render
-- extendedWaitUntil:
-    visible: "QA E1 post[\\s\\S]*"
-    timeout: 15000
+# Posts tab content: mari's authored posts render. e1 adds a "QA E1 post"
+# per suite run, but newer non-e1 posts can sit above the latest one, so
+# scroll to it instead of asserting it in place.
+- scrollUntilVisible:
+    element:
+      text: "QA E1 post[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
 - takeScreenshot: build/maestro/f1_profile_posts
 # Return to the home feed to keep suite state predictable
 - tapOn: "Home"

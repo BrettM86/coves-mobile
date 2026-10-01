@@ -3,11 +3,16 @@
 # scrolling, so it does not depend on specific seeded content.
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - extendedWaitUntil:
     visible: "Feed post in [\\s\\S]*"
     timeout: 15000
@@ -19,15 +24,25 @@ appId: social.coves.dev
           start: 50%, 80%
           end: 50%, 20%
           duration: 400
+# Let the fling settle before reading the anchor: copying while the list
+# is still moving records a card that has scrolled on by the time the tabs
+# switch back.
+- waitForAnimationToEnd:
+    timeout: 5000
 # Remember the second fully-visible post card (the top one may be partially
 # clipped). NOTE: regex literals inside evalScript break Maestro's ${}
 # parser, so compare copied text with == instead of assertVisible-by-regex.
+# Keep only the first line: the second is the relative age ("11m"), which
+# can tick over while the tabs switch.
 - copyTextFrom:
     text: "Feed post in [\\s\\S]*"
     index: 1
-- evalScript: ${output.anchor = maestro.copiedText}
-# Switch to For You (mari is subscribed to nothing -> empty state; either
-# posts or the empty state is acceptable, crash/blank is not)
+- evalScript: ${output.anchor = maestro.copiedText.split('\n')[0]}
+# guard: the anchor is a real card label, so the membership check below
+# can't pass on empty values
+- assertTrue: ${output.anchor.indexOf('Feed post in ') == 0}
+# Switch to For You (posts or the empty state, depending on mari's
+# subscriptions, are both acceptable; crash/blank is not)
 - tapOn: "For You feed[\\s\\S]*"
 - extendedWaitUntil:
     visible: "No posts yet|Feed post in [\\s\\S]*"
@@ -39,8 +54,21 @@ appId: social.coves.dev
 - extendedWaitUntil:
     visible: "Feed post in [\\s\\S]*"
     timeout: 10000
+# The anchor may sit one card higher or lower than before (the header can
+# collapse or re-expand, clipping a card in or out of the top of the tree),
+# so accept it among the first three cards. A reset to the top of the feed
+# would show none of them: the anchor was three screens down.
+- copyTextFrom:
+    text: "Feed post in [\\s\\S]*"
+    index: 0
+- evalScript: ${output.seen0 = maestro.copiedText.split('\n')[0]}
 - copyTextFrom:
     text: "Feed post in [\\s\\S]*"
     index: 1
-- assertTrue: ${maestro.copiedText == output.anchor}
+- evalScript: ${output.seen1 = maestro.copiedText.split('\n')[0]}
+- copyTextFrom:
+    text: "Feed post in [\\s\\S]*"
+    index: 2
+- evalScript: ${output.seen2 = maestro.copiedText.split('\n')[0]}
+- assertTrue: ${[output.seen0, output.seen1, output.seen2].indexOf(output.anchor) >= 0}
 - takeScreenshot: build/maestro/b5_discover_scroll_retained

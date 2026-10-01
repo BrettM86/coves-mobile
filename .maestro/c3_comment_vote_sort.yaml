@@ -4,23 +4,23 @@
 # comments used to verify the New sort).
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
-- extendedWaitUntil:
-    visible: "Feed post in [\\s\\S]*"
-    timeout: 30000
-- scrollUntilVisible:
-    element:
-      text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
-    direction: DOWN
-    timeout: 60000
-    centerElement: true
-- tapOn:
-    text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
-    index: 0
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+# Reach the fixture through !science post search, not the flooded Discover
+# feed (docs/QA_LOOP.md "Reaching fixtures")
+- runFlow:
+    file: subflows/open_science_post.yaml
+    env:
+      QUERY: "NASA delays"
+      TITLE: "NASA delays .*Swift telescope.*"
 - extendedWaitUntil:
     visible: "NASA delays[\\s\\S]*"
     timeout: 15000
@@ -29,29 +29,29 @@ appId: social.coves.dev
 # --- Comment voting ---
 - scrollUntilVisible:
     element:
-      text: "Like comment[\\s\\S]*"
+      text: "[\\s\\S]*Upvote comment[\\s\\S]*"
     direction: DOWN
     timeout: 30000
 # Normalize: un-like any comment likes left over from a previous run
 - repeat:
     while:
-      visible: "Unlike comment[\\s\\S]*"
+      visible: "[\\s\\S]*Remove upvote[\\s\\S]*"
     commands:
       - tapOn:
-          text: "Unlike comment[\\s\\S]*"
+          text: "[\\s\\S]*Remove upvote[\\s\\S]*"
           index: 0
-- assertNotVisible: "Unlike comment[\\s\\S]*"
+- assertNotVisible: "[\\s\\S]*Remove upvote[\\s\\S]*"
 # Like the first visible comment — optimistic flip
 - tapOn:
-    text: "Like comment[\\s\\S]*"
+    text: "[\\s\\S]*Upvote comment[\\s\\S]*"
     index: 0
-- assertVisible: "Unlike comment[\\s\\S]*"
+- assertVisible: "[\\s\\S]*Remove upvote[\\s\\S]*"
 - takeScreenshot: build/maestro/c3_comment_liked
 # Un-like again
 - tapOn:
-    text: "Unlike comment[\\s\\S]*"
+    text: "[\\s\\S]*Remove upvote[\\s\\S]*"
     index: 0
-- assertNotVisible: "Unlike comment[\\s\\S]*"
+- assertNotVisible: "[\\s\\S]*Remove upvote[\\s\\S]*"
 # --- Comment sort: Hot -> New ---
 - scrollUntilVisible:
     element:

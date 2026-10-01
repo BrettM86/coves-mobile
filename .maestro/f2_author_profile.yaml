@@ -4,11 +4,16 @@
 # posts currently top the Discover feed.
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - retry:

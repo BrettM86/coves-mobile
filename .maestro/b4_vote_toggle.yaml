@@ -4,28 +4,33 @@
 # deterministic.
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - extendedWaitUntil:
     visible: "Feed post in [\\s\\S]*"
     timeout: 15000
 # Normalize: un-like every liked post currently on screen
 - repeat:
     while:
-      visible: "Unlike post[\\s\\S]*"
+      visible: "[\\s\\S]*Remove upvote[\\s\\S]*"
     commands:
       - tapOn:
-          text: "Unlike post[\\s\\S]*"
+          text: "[\\s\\S]*Remove upvote[\\s\\S]*"
           index: 0
-- assertNotVisible: "Unlike post[\\s\\S]*"
+- assertNotVisible: "[\\s\\S]*Remove upvote[\\s\\S]*"
 # Like the topmost post — optimistic UI must flip immediately
 - tapOn:
-    text: "Like post[\\s\\S]*"
+    text: "[\\s\\S]*Upvote post[\\s\\S]*"
     index: 0
-- assertVisible: "Unlike post[\\s\\S]*"
+- assertVisible: "[\\s\\S]*Remove upvote[\\s\\S]*"
 - takeScreenshot: build/maestro/b4_liked_optimistic
 # Pull-to-refresh: the like must survive a server round-trip
 - swipe:
@@ -33,14 +38,14 @@ appId: social.coves.dev
     end: 50%, 80%
     duration: 400
 - extendedWaitUntil:
-    visible: "Unlike post[\\s\\S]*"
+    visible: "[\\s\\S]*Remove upvote[\\s\\S]*"
     timeout: 15000
 - takeScreenshot: build/maestro/b4_liked_after_refresh
 # Un-like and confirm it also survives a refresh
 - tapOn:
-    text: "Unlike post[\\s\\S]*"
+    text: "[\\s\\S]*Remove upvote[\\s\\S]*"
     index: 0
-- assertNotVisible: "Unlike post[\\s\\S]*"
+- assertNotVisible: "[\\s\\S]*Remove upvote[\\s\\S]*"
 - swipe:
     start: 50%, 30%
     end: 50%, 80%
@@ -48,5 +53,5 @@ appId: social.coves.dev
 - extendedWaitUntil:
     visible: "Feed post in [\\s\\S]*"
     timeout: 15000
-- assertNotVisible: "Unlike post[\\s\\S]*"
+- assertNotVisible: "[\\s\\S]*Remove upvote[\\s\\S]*"
 - takeScreenshot: build/maestro/b4_unliked_after_refresh

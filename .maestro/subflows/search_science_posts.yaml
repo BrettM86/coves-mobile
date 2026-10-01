@@ -1,0 +1,17 @@
+# Subflow: run a !science community post search and wait for a result, so
+# no feed scrolling is involved.
+# Params (runFlow env):
+#   QUERY - words typed into the community search (submitted with Enter)
+#   TITLE - regex for the result's title node; must NOT also match QUERY
+#           itself, because the search field shows QUERY as its text
+# Precondition: signed in as mari, app on any bottom-nav tab.
+# Ends on the search results with the TITLE result visible.
+appId: social.coves.dev
+---
+- runFlow: open_science_community.yaml
+- tapOn: "Search posts"
+- inputText: ${QUERY}
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: ${TITLE}
+    timeout: 20000

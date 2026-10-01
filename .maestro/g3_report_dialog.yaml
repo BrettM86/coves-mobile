@@ -8,24 +8,25 @@
 # NASA aggregator post (reporting is hidden on the viewer's own posts).
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
-- extendedWaitUntil:
-    visible: "Feed post in [\\s\\S]*"
-    timeout: 30000
-# Open the NASA post detail (only one "More options" menu lives there,
-# so the report entry point is unambiguous).
-- scrollUntilVisible:
-    element:
-      text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
-    direction: DOWN
-    timeout: 20000
-- tapOn:
-    text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
-    index: 0
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+# Reach the fixture through !science post search, not the flooded Discover
+# feed (docs/QA_LOOP.md "Reaching fixtures")
+- runFlow:
+    file: subflows/open_science_post.yaml
+    env:
+      QUERY: "NASA delays"
+      TITLE: "NASA delays .*Swift telescope.*"
+# On the detail screen only one "More options" menu exists, so the report
+# entry point is unambiguous.
 - extendedWaitUntil:
     visible: "NASA delays[\\s\\S]*"
     timeout: 15000
@@ -50,7 +51,8 @@ appId: social.coves.dev
 - tapOn: "Cancel"
 - assertNotVisible: "Why are you reporting this?"
 - assertVisible: "NASA delays[\\s\\S]*"
+# back returns to the community search results
 - back
 - extendedWaitUntil:
-    visible: "Discover feed.*"
+    visible: "Close search"
     timeout: 15000

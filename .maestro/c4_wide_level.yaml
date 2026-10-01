@@ -16,22 +16,23 @@
 # Assumes a signed-in session (suite order: after a1/b-flows).
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
-- extendedWaitUntil:
-    visible: "Feed post in [\\s\\S]*"
-    timeout: 30000
-- scrollUntilVisible:
-    element:
-      text: "Feed post in [\\s\\S]*QA deep chain fixture[\\s\\S]*"
-    direction: DOWN
-    timeout: 30000
-- tapOn:
-    text: "Feed post in [\\s\\S]*QA deep chain fixture[\\s\\S]*"
-    index: 0
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+# Reach the fixture through !science post search, not the flooded Discover
+# feed (docs/QA_LOOP.md "Reaching fixtures")
+- runFlow:
+    file: subflows/open_science_post.yaml
+    env:
+      QUERY: "deep chain fixture"
+      TITLE: "QA deep chain fixture"
 - extendedWaitUntil:
     visible: "QA deep chain fixture[\\s\\S]*"
     timeout: 15000
@@ -42,14 +43,20 @@ appId: social.coves.dev
     direction: DOWN
     timeout: 30000
 # --- Wide level: capped at 5 of 10, newest-first ---
+# Newest three are the topup replies 10/09/08. Reach 09 while scrolling DOWN
+# toward 06: centering on 06 afterwards can push 09 just above the viewport
+# on a 1080x2400 screen, so an in-place assert there was flaky.
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*wide reply 09 of 10 \\(topup\\)[\\s\\S]*"
+    direction: DOWN
+    timeout: 60000
 - scrollUntilVisible:
     element:
       text: "[\\s\\S]*wide reply 06 of 7[\\s\\S]*"
     direction: DOWN
     timeout: 60000
     centerElement: true
-# Newest three are the topup replies 10/09/08
-- assertVisible: "[\\s\\S]*wide reply 09 of 10 \\(topup\\)[\\s\\S]*"
 # The capped tail (01..05) is NOT rendered yet
 - assertNotVisible: "[\\s\\S]*wide reply 01 of 7[\\s\\S]*"
 - takeScreenshot: build/maestro/c4_wide_capped
@@ -57,9 +64,17 @@ appId: social.coves.dev
 - tapOn:
     text: "Load more replies"
     index: 0
+# The loaded siblings render in place BELOW 06; on a 1080x2400 screen 02
+# lands one card under the viewport, so scroll to it rather than asserting
+# it in place. The first sibling doubles as the load-complete wait.
 - extendedWaitUntil:
-    visible: "[\\s\\S]*wide reply 02 of 7[\\s\\S]*"
+    visible: "[\\s\\S]*wide reply 05 of 7[\\s\\S]*"
     timeout: 20000
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*wide reply 02 of 7[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
 - scrollUntilVisible:
     element:
       text: "[\\s\\S]*wide reply 01 of 7[\\s\\S]*"

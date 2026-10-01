@@ -41,7 +41,14 @@ appId: social.coves.dev
 - extendedWaitUntil:
     visible: "Welcome back"
     timeout: 15000
-- tapOn: "alice.bsky.social"
+# Let the dialog finish animating in: a tap read from a stale tree can land
+# on the dialog's own "Sign in" button with an empty handle.
+- waitForAnimationToEnd:
+    timeout: 5000
+# The handle field's label is its hint, plus the validation error once one
+# has shown ("alice.bsky.social, Please enter your handle"), so match a
+# prefix rather than the exact hint.
+- tapOn: "alice\\.bsky\\.social.*"
 - inputText: "mari.local.coves.dev"
 - hideKeyboard
 - tapOn: "Sign in"
@@ -49,14 +56,16 @@ appId: social.coves.dev
 - extendedWaitUntil:
     visible: "Password"
     timeout: 30000
-- tapOn: "Password"
-- inputText: "password"
-- hideKeyboard
-# The web page has a "Sign in" heading and a "Sign in" button; the button is
-# the last match in the tree.
+# "Password" matches both the field's label and the input's hint; the input
+# is the match nearest the "Make visible" toggle beside it.
 - tapOn:
-    text: "Sign in"
-    index: 1
+    text: "Password"
+    leftOf: "Make visible"
+- inputText: "password"
+# Submit with the keyboard. "Sign in" matches the page heading, the submit
+# button, the WebView and Chrome's title bar, and their tree order changes
+# between Chrome versions, so an index-based tap on it is not stable.
+- pressKey: Enter
 # Consent page
 - extendedWaitUntil:
     visible: "Authorize"

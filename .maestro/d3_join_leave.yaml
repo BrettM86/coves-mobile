@@ -7,26 +7,23 @@
 # membership effects, not counts.
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
-- waitForAnimationToEnd:
-    timeout: 5000
-# Open the science community from a post's community handle
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
 - retry:
     maxRetries: 2
     commands:
+      - launchApp:
+          stopApp: true
       - extendedWaitUntil:
-          visible: "Feed post in [\\s\\S]*"
-          timeout: 15000
-      - tapOn:
-          text: "!science@coves.social"
-          index: 0
-      - extendedWaitUntil:
-          visible: "[\\s\\S]*Science[\\s\\S]*"
-          timeout: 15000
+          visible: "Discover feed.*"
+          timeout: 30000
+# Open !science from mari's profile, not a Discover post: the Discover
+# feed is flooded by backend integration posts (docs/QA_LOOP.md
+# "Reaching fixtures").
+- runFlow: subflows/open_science_community.yaml
+- extendedWaitUntil:
+    visible: "[\\s\\S]*Science[\\s\\S]*"
+    timeout: 15000
 - extendedWaitUntil:
     visible: "Join|Joined"
     timeout: 15000
@@ -47,7 +44,9 @@ appId: social.coves.dev
 - takeScreenshot: build/maestro/d3_joined
 # Membership effect: For You now carries the community's posts.
 # Retry with pull-to-refresh to absorb firehose indexing lag.
+# back returns to mari's profile; go Home for the For You tab
 - back
+- tapOn: "Home"
 - extendedWaitUntil:
     visible: "Discover feed.*"
     timeout: 15000

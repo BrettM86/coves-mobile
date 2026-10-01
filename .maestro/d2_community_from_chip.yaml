@@ -1,32 +1,27 @@
-# Section D — checks 3 + 6: tapping a post's community handle in the home
-# feed navigates to that community's feed screen; the header (avatar, display
+# Section D — checks 3 + 6: tapping a post card's community handle (on
+# mari's profile; the Discover feed is flooded) navigates to that community's
+# feed screen; the header (avatar, display
 # name, handle, subscriber/member stats), Feed/About tabs, and sort chips all
 # render; the About tab shows stats and info. Assumes a signed-in session.
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
-# Let the semantics tree settle after the splash (see a1 flow note), then
-# retry the tap in case the first read hit a stale/empty tree.
-- waitForAnimationToEnd:
-    timeout: 5000
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
 - retry:
     maxRetries: 2
     commands:
+      - launchApp:
+          stopApp: true
       - extendedWaitUntil:
-          visible: "Feed post in [\\s\\S]*"
-          timeout: 15000
-      # The community handle row inside the post card is its own tappable node
-      - tapOn:
-          text: "!science@coves.social"
-          index: 0
-      # Community feed screen header renders (display name + stats)
-      - extendedWaitUntil:
-          visible: "[\\s\\S]*Science[\\s\\S]*"
-          timeout: 15000
+          visible: "Discover feed.*"
+          timeout: 30000
+# Open !science from mari's profile, not a Discover post: the Discover
+# feed is flooded by backend integration posts (docs/QA_LOOP.md
+# "Reaching fixtures").
+- runFlow: subflows/open_science_community.yaml
+- extendedWaitUntil:
+    visible: "[\\s\\S]*Science[\\s\\S]*"
+    timeout: 15000
 - assertVisible: "[\\s\\S]*Subscribers[\\s\\S]*"
 - assertVisible: "[\\s\\S]*About[\\s\\S]*"
 - assertVisible: "[\\s\\S]*Hot[\\s\\S]*"
@@ -41,17 +36,13 @@ appId: social.coves.dev
     direction: DOWN
     timeout: 60000
 - takeScreenshot: build/maestro/d2_community_feed
-# Scroll back up so the Feed/About tab bar is on screen again
-- repeat:
-    times: 3
-    commands:
-      - swipe:
-          start: 50%, 30%
-          end: 50%, 80%
-          duration: 300
-- extendedWaitUntil:
-    visible: "About"
-    timeout: 10000
+# Scroll back up until the Feed/About tab bar is on screen again (a fixed
+# number of swipes stops short once more posts sit above NASA)
+- scrollUntilVisible:
+    element:
+      text: "About"
+    direction: UP
+    timeout: 30000
 # About tab: description/stats/info sections render
 - tapOn: "About"
 - extendedWaitUntil:
@@ -64,7 +55,8 @@ appId: social.coves.dev
 - extendedWaitUntil:
     visible: "[\\s\\S]*Hot[\\s\\S]*"
     timeout: 10000
+# back returns to mari's profile
 - back
 - extendedWaitUntil:
-    visible: "Discover feed.*"
+    visible: "Edit Profile"
     timeout: 15000

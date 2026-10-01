@@ -7,11 +7,16 @@
 # in-app Back arrow, not `- back`, inside the admin panel.
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 # Let the semantics tree settle after the splash (see a1 flow note)
 - waitForAnimationToEnd:
     timeout: 5000
@@ -39,8 +44,10 @@ appId: social.coves.dev
 - extendedWaitUntil:
     visible: "Select Community"
     timeout: 15000
+# Rows show "<Display name>\n!<name>@<origin>" (community origin handle
+# format; the old "@c-<name>..." handle is no longer displayed)
 - extendedWaitUntil:
-    visible: "[\\s\\S]*@c-[\\s\\S]*"
+    visible: "[\\s\\S]*![a-z0-9-]+@[a-z0-9.-]+[\\s\\S]*"
     timeout: 15000
 - takeScreenshot: build/maestro/d1_admin_profilepic
 # In-app back arrow (labeled "Back") returns to the menu

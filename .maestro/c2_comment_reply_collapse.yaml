@@ -18,18 +18,13 @@ appId: social.coves.dev
       - extendedWaitUntil:
           visible: "Discover feed.*"
           timeout: 30000
-- extendedWaitUntil:
-    visible: "Feed post in [\\s\\S]*"
-    timeout: 30000
-- scrollUntilVisible:
-    element:
-      text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
-    direction: DOWN
-    timeout: 60000
-    centerElement: true
-- tapOn:
-    text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
-    index: 0
+# Reach the fixture through !science post search, not the flooded Discover
+# feed (docs/QA_LOOP.md "Reaching fixtures")
+- runFlow:
+    file: subflows/open_science_post.yaml
+    env:
+      QUERY: "NASA delays"
+      TITLE: "NASA delays .*Swift telescope.*"
 - extendedWaitUntil:
     visible: "NASA delays[\\s\\S]*"
     timeout: 15000

@@ -1,7 +1,7 @@
 # Section H — checks 2 + 3 (render halves): rich text facets and link bars.
-# - Feed: post-card external link bars render with an "Open link to <domain>
-#   in external browser" semantics label (ExternalLinkBar) — the aggregator
-#   posts guarantee at least one is always present.
+# - Post card (in the !science search results): the external link bar
+#   renders with an "Open link to <domain> in external browser" semantics
+#   label (ExternalLinkBar).
 # - NASA aggregator post detail: body facets render as individual tappable
 #   link nodes ("[dawn.com]" etc. — RichTextRenderer creates one semantics
 #   node per recognizer span) and the detail link bar shows the source URL.
@@ -10,27 +10,36 @@
 # Assumes a signed-in session.
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+# The NASA card is reached through the !science post search: the Discover
+# feed is flooded by backend integration posts that carry no links
+# (docs/QA_LOOP.md "Reaching fixtures").
+- runFlow:
+    file: subflows/search_science_posts.yaml
+    env:
+      QUERY: "NASA delays"
+      TITLE: "NASA delays .*Swift telescope.*"
+# --- post-card external link bar (favicon + domain, labeled button) ---
 - extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
-# --- feed-card external link bar (favicon + domain, labeled button) ---
-- scrollUntilVisible:
-    element:
-      text: "Open link to [\\s\\S]* in external browser[\\s\\S]*"
-    direction: DOWN
-    timeout: 30000
+    visible: "Open link to kite\\.kagi\\.com in external browser[\\s\\S]*"
+    timeout: 15000
 - takeScreenshot: build/maestro/h2_feed_linkbar
 # --- NASA post: rich text facets ---
-- scrollUntilVisible:
-    element:
-      text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
-    direction: DOWN
-    timeout: 30000
 - tapOn:
-    text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
+    text: "NASA delays .*Swift telescope.*"
     index: 0
+- extendedWaitUntil:
+    notVisible: "Close search"
+    timeout: 15000
 - extendedWaitUntil:
     visible: "NASA delays[\\s\\S]*"
     timeout: 15000
@@ -44,7 +53,7 @@ appId: social.coves.dev
 - takeScreenshot: build/maestro/h2_nasa_facets
 - back
 - extendedWaitUntil:
-    visible: "Discover feed.*"
+    visible: "Close search"
     timeout: 15000
 # (The two-bar case — external URL bar + source domain bar on one detail,
 #  seeded Telegraph post — sits ~45 posts deep with no scheme intent filter

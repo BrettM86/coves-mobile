@@ -21,22 +21,23 @@
 # Assumes a signed-in session (suite order: after c4).
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
-- extendedWaitUntil:
-    visible: "Feed post in [\\s\\S]*"
-    timeout: 30000
-- scrollUntilVisible:
-    element:
-      text: "Feed post in [\\s\\S]*QA deep chain fixture[\\s\\S]*"
-    direction: DOWN
-    timeout: 30000
-- tapOn:
-    text: "Feed post in [\\s\\S]*QA deep chain fixture[\\s\\S]*"
-    index: 0
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+# Reach the fixture through !science post search, not the flooded Discover
+# feed (docs/QA_LOOP.md "Reaching fixtures")
+- runFlow:
+    file: subflows/open_science_post.yaml
+    env:
+      QUERY: "deep chain fixture"
+      TITLE: "QA deep chain fixture"
 - extendedWaitUntil:
     visible: "QA deep chain fixture[\\s\\S]*"
     timeout: 15000
@@ -50,13 +51,17 @@ appId: social.coves.dev
 - tapOn:
     text: "Load more replies"
     index: 0
-# Since keyed siblings (ee09a95-era ValueKeys) preserve the scroll anchor,
-# freshly loaded earlier siblings render ABOVE the viewport - scroll up to
-# them instead of expecting them to appear in place.
+# The loaded siblings render in place BELOW 06 (05..01), so scroll DOWN to
+# them. Scrolling UP here never finds them and runs into the top of the
+# thread, where the overscroll fires pull-to-refresh and resets the loaded
+# replies. 05 doubles as the load-complete wait.
+- extendedWaitUntil:
+    visible: "[\\s\\S]*wide reply 05 of 7[\\s\\S]*"
+    timeout: 20000
 - scrollUntilVisible:
     element:
       text: "[\\s\\S]*wide reply 02 of 7[\\s\\S]*"
-    direction: UP
+    direction: DOWN
     timeout: 30000
 # --- Chain depth 01: load-more continues the chain past the tombstones ---
 - scrollUntilVisible:

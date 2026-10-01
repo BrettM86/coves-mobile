@@ -12,11 +12,17 @@
 # deletes the characters before the cursor, leaving a remnant.
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+# Cold start can flake on stale semantics (the 2026-09-29 sweep saw the feed
+# on screen while the wait timed out) — retry the launch once, same pattern
+# as c1/b6/b7.
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - evalScript: ${output.f3 = String(Date.now())}
@@ -67,11 +73,16 @@ appId: social.coves.dev
     timeout: 15000
 - takeScreenshot: build/maestro/f3_saved
 # --- Full restart: kill and relaunch ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - tapOn: "Me"

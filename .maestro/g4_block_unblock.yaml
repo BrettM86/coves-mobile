@@ -14,11 +14,11 @@
 # profile-menu Unblock surface were verified in the 2026-07-19 re-verify
 # run (see docs/QA_LOOP_LOG.md).
 #
-# Target: the seeded test-aggregator posts. "Rubin Observatory" is the
-# SECOND aggregator post, so once it is on screen the surrounding cards
-# are all aggregator-authored; "Post options" index 1 belongs to one of
-# them (index 0 can be a partially-visible card above). The menu-content
-# assertion guards against opening the wrong card's menu.
+# Target: the seeded test-aggregator "Rubin Observatory" post, reached
+# through the !science post search (the Discover feed is flooded by backend
+# integration posts; docs/QA_LOOP.md "Reaching fixtures"). The search
+# returns that one card, so "Post options" index 0 is unambiguous; the
+# menu-content assertion still guards against opening the wrong menu.
 appId: social.coves.dev
 ---
 # Cold start can flake on stale semantics when the previous flow ended on
@@ -31,24 +31,16 @@ appId: social.coves.dev
       - extendedWaitUntil:
           visible: "Discover feed.*"
           timeout: 30000
-- extendedWaitUntil:
-    visible: "Feed post in [\\s\\S]*"
-    timeout: 30000
-# centerElement keeps the Rubin card mid-screen so the cards above and
-# below ("NASA delays", "US heat dome") are aggregator-authored too —
-# QA seed posts accumulating above the aggregator section otherwise shift
-# which card owns "Post options" index 1 (observed 2026-07-19 round 2).
-- scrollUntilVisible:
-    element:
-      text: "Feed post in [\\s\\S]*Rubin Observatory[\\s\\S]*"
-    direction: DOWN
-    timeout: 60000
-    centerElement: true
+- runFlow:
+    file: subflows/search_science_posts.yaml
+    env:
+      QUERY: "Rubin Observatory"
+      TITLE: "Rubin Observatory starts.*"
 - waitForAnimationToEnd:
     timeout: 3000
 - tapOn:
     text: "Post options"
-    index: 1
+    index: 0
 # Guard: only proceed if this menu belongs to a test-aggregator card.
 - extendedWaitUntil:
     visible: "Block @test-aggregator.local.coves.dev"
@@ -67,7 +59,7 @@ appId: social.coves.dev
 # must now offer Unblock (optimistic block state).
 - tapOn:
     text: "Post options"
-    index: 1
+    index: 0
 - extendedWaitUntil:
     visible: "Unblock @test-aggregator.local.coves.dev"
     timeout: 10000
@@ -78,18 +70,13 @@ appId: social.coves.dev
     visible: "Unblocked @test-aggregator.local.coves.dev"
     timeout: 15000
 - takeScreenshot: build/maestro/g4_unblocked_snackbar
-# Restored end state: refresh and confirm aggregator content is present.
-- swipe:
-    start: "50%, 25%"
-    end: "50%, 75%"
-- waitForAnimationToEnd:
-    timeout: 10000
+# Restored end state: submit the search again and confirm the aggregator's
+# post is still returned.
+- tapOn: "Close search"
+- tapOn: "Search posts"
+- inputText: "Rubin Observatory"
+- pressKey: Enter
 - extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 15000
-- scrollUntilVisible:
-    element:
-      text: "Feed post in [\\s\\S]*NASA delays[\\s\\S]*"
-    direction: DOWN
-    timeout: 60000
+    visible: "Rubin Observatory starts.*"
+    timeout: 20000
 - takeScreenshot: build/maestro/g4_feed_restored

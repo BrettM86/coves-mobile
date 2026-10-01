@@ -1,0 +1,32 @@
+# Subflow: open the !science community feed WITHOUT scrolling the Discover
+# feed. The backend integration tier writes thousands of throwaway posts to
+# the shared dev PDS (see docs/QA_LOOP.md "Reaching fixtures"), which bury
+# every QA fixture in Discover. mari's own profile only lists mari's posts,
+# and mari always has live !science posts, so its community chip is a
+# stable entry point.
+# Precondition: signed in as mari, app on any bottom-nav tab.
+# Ends on the !science community Feed tab.
+appId: social.coves.dev
+---
+- waitForAnimationToEnd:
+    timeout: 5000
+# stale-semantics flake guard on the first tap after a launch
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Me"
+      - extendedWaitUntil:
+          visible: "[\\s\\S]*@mari.local.coves.dev[\\s\\S]*"
+          timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "!science@coves.social"
+    direction: DOWN
+    timeout: 60000
+- tapOn:
+    text: "!science@coves.social"
+    index: 0
+- extendedWaitUntil:
+    visible: "Search posts"
+    timeout: 15000
+- assertVisible: "[\\s\\S]*Subscribers[\\s\\S]*"

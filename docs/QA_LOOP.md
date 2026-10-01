@@ -54,6 +54,13 @@ flutter run --flavor dev --dart-define=ENVIRONMENT=local
 # (run in background; hot reload with `r` is unavailable non-interactively —
 #  rebuild or use `flutter run --machine` if needed)
 ```
+`flutter run` wipes app data. To keep the signed-in session and legal-gate
+acceptances, build and install over the existing app instead, then re-run
+the `adb reverse` loop above:
+```bash
+flutter build apk --debug --flavor dev --dart-define=ENVIRONMENT=local
+adb install -r build/app/outputs/flutter-apk/app-dev-debug.apk
+```
 
 ### Native dependency checks
 
@@ -112,7 +119,11 @@ appId: social.coves.dev
 - takeScreenshot: scratch/a2_logged_in
 ```
 Maestro reads Flutter's accessibility tree and can also drive native UI
-(OAuth browser tab, permission dialogs). If a widget isn't findable, add a
+(OAuth browser tab, permission dialogs). On the PDS sign-in page in the
+Chrome custom tab, "Sign in" matches the WebView, the heading, the submit
+button and Chrome's title bar, in an order that changes between Chrome
+versions: submit the form with `pressKey: Enter` from the password field
+(see `a1_login_session`) rather than tapping "Sign in" by index. If a widget isn't findable, add a
 `Semantics` label/tooltip to it in the app — that's a legitimate a11y fix,
 commit it as one.
 
@@ -145,6 +156,44 @@ adb shell am start -n social.coves.dev/social.coves.MainActivity \
   -a android.intent.action.VIEW \
   -d 'social.coves:///post/<percent-encoded at:// URI>'   # note THREE slashes
 ```
+Maestro `openLink` cannot do this: it fires an implicit VIEW intent, which
+resolves to flutter_web_auth_2's `CallbackActivity` (the only `social.coves`
+filter) and leaves the app where it was. Reaching a post by link from a flow
+needs a VIEW intent filter on `MainActivity`, which is an app change.
+
+### 7. Reaching fixtures in Maestro flows
+
+Don't scroll the Discover feed to find a fixture. The backend integration
+tier (`make test-integration` in `~/Code/coves`) creates its PDS accounts,
+communities and posts on the shared dev PDS (`tests/testkit/testkit.go`
+defaults `PDS_URL` to `http://localhost:3001`). The dev AppView indexes them
+from the firehose into `coves_dev`, so one run adds about a thousand
+"a valid post" / "submission N" posts to Discover and buries every fixture.
+
+Flows reach fixtures through two subflows in `.maestro/subflows/` (Maestro
+runs only top-level files in `.maestro/`, so subflows never run on their own):
+
+- `open_science_community.yaml` opens `!science` from a post card on mari's
+  own profile (Me tab). That list holds only mari's posts, and mari always
+  has live `!science` posts.
+- `search_science_posts.yaml` (env `QUERY`, `TITLE`) submits `QUERY` in the
+  community's post search and waits for `TITLE`. `open_science_post.yaml`
+  then taps it to open the detail screen, and `back` returns to the
+  results. `TITLE` must not match `QUERY`, because the search field shows
+  `QUERY` as its text.
+
+The permanent fixtures, all in `!science` and returned as the single result
+of their query:
+
+| Fixture | QUERY | TITLE | Used by |
+|---|---|---|---|
+| QA deep chain fixture (mari) | `deep chain fixture` | `QA deep chain fixture` | c4, c5 |
+| NASA delays $30 million ... (test-aggregator) | `NASA delays` | `NASA delays .*Swift telescope.*` | b7, c1, c2, c3, e4, g3, h2 |
+| Rubin Observatory starts ... (test-aggregator) | `Rubin Observatory` | `Rubin Observatory starts.*` | g4 |
+
+No seed script creates these; they were made by hand in July 2026 and live
+in the dev PDS and `coves_dev`. Flows that need only "some post" (b1-b5, f2)
+still use the top of Discover.
 
 ---
 

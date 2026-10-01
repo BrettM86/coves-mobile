@@ -1,6 +1,7 @@
 # Section B — check 6 (added round 2): For You populates after subscribing to a
-# community with content (science) and empties gracefully after
-# unsubscribing. Ends unsubscribed (suite assumption).
+# community with content (science) and drops its posts after unsubscribing
+# (the empty state when it was the only subscription). Ends unsubscribed
+# from science.
 appId: social.coves.dev
 ---
 # Cold start can flake on stale semantics when the previous flow ended on
@@ -13,20 +14,13 @@ appId: social.coves.dev
       - extendedWaitUntil:
           visible: "Discover feed.*"
           timeout: 30000
-- waitForAnimationToEnd:
-    timeout: 5000
-- retry:
-    maxRetries: 2
-    commands:
-      - extendedWaitUntil:
-          visible: "Feed post in [\\s\\S]*"
-          timeout: 15000
-      - tapOn:
-          text: "!science@coves.social"
-          index: 0
-      - extendedWaitUntil:
-          visible: "[\\s\\S]*Science[\\s\\S]*"
-          timeout: 15000
+# Open !science from mari's profile, not a Discover post: the Discover
+# feed is flooded by backend integration posts (docs/QA_LOOP.md
+# "Reaching fixtures").
+- runFlow: subflows/open_science_community.yaml
+- extendedWaitUntil:
+    visible: "[\\s\\S]*Science[\\s\\S]*"
+    timeout: 15000
 - extendedWaitUntil:
     visible: "Join|Joined"
     timeout: 15000
@@ -39,7 +33,9 @@ appId: social.coves.dev
 - extendedWaitUntil:
     visible: "Joined"
     timeout: 15000
+# back returns to mari's profile; go Home for the For You tab
 - back
+- tapOn: "Home"
 - extendedWaitUntil:
     visible: "Discover feed.*"
     timeout: 15000
@@ -78,7 +74,11 @@ appId: social.coves.dev
     visible: "Discover feed.*|For You feed[\\s\\S]*"
     timeout: 15000
 - tapOn: "For You feed[\\s\\S]*"
-# For You must empty gracefully — empty state, not a crash/blank
+# For You must drop the community's posts: the empty state when science was
+# the only subscription, otherwise the remaining communities' posts with no
+# !science card. mari has also been subscribed to !news since a manual
+# walkthrough on 2026-09-10, and this flow doesn't change other
+# subscriptions, so it can't assume an empty feed.
 - retry:
     maxRetries: 4
     commands:
@@ -87,9 +87,9 @@ appId: social.coves.dev
           end: 50%, 80%
           duration: 400
       - extendedWaitUntil:
-          visible: "No posts yet"
+          visible: "No posts yet|Feed post in [\\s\\S]*"
           timeout: 10000
-- assertNotVisible: "Feed post in [\\s\\S]*"
+      - assertNotVisible: "!science@coves.social"
 - takeScreenshot: build/maestro/b6_foryou_empty_after_unsub
 # Leave the app back on Discover
 - tapOn: "Discover feed[\\s\\S]*"

@@ -1,0 +1,18 @@
+# Subflow: open a !science fixture post's detail screen through the
+# community's post search (see search_science_posts.yaml for QUERY/TITLE).
+# Precondition: signed in as mari, app on any bottom-nav tab.
+# Ends on the post detail screen; `back` returns to the search results.
+appId: social.coves.dev
+---
+- runFlow:
+    file: search_science_posts.yaml
+    env:
+      QUERY: ${QUERY}
+      TITLE: ${TITLE}
+- tapOn:
+    text: ${TITLE}
+    index: 0
+# The search field is gone once the detail screen covers the results.
+- extendedWaitUntil:
+    notVisible: "Close search"
+    timeout: 15000
