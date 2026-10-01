@@ -485,8 +485,8 @@ sealed class PostEmbed {
           post: BlueskyPostEmbed.fromJson(json),
           data: json,
         );
-        // Broader than FormatException: BlueskyPostEmbed casts `resolved`
-        // to a Map, so a hostile record raises a TypeError instead.
+        // Broader than FormatException: a defensive backstop for any
+        // non-FormatException error left in BlueskyPostEmbed parsing.
       } on Object catch (e) {
         if (kDebugMode) {
           debugPrint('PostEmbed: unparseable $embedType embed: $e');

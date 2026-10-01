@@ -26,10 +26,20 @@ class BlueskyExternalEmbed {
 
     return BlueskyExternalEmbed(
       uri: uri,
-      title: json['title'] as String?,
-      description: json['description'] as String?,
-      thumb: json['thumb'] as String?,
+      title: _optionalString(json, 'title'),
+      description: _optionalString(json, 'description'),
+      thumb: _optionalString(json, 'thumb'),
     );
+  }
+
+  /// Reads an optional string field, throwing [FormatException] when the
+  /// field is present but not a string.
+  static String? _optionalString(Map<String, dynamic> json, String key) {
+    final value = json[key];
+    if (value != null && value is! String) {
+      throw FormatException('Invalid $key field in BlueskyExternalEmbed');
+    }
+    return value as String?;
   }
 
   /// URL of the external link
@@ -126,6 +136,24 @@ class BlueskyPostResult {
       );
     }
 
+    final authorDid = author['did'];
+    if (authorDid is! String) {
+      throw const FormatException(
+        'Missing or invalid author.did field in BlueskyPostResult',
+      );
+    }
+
+    final authorHandle = author['handle'];
+    if (authorHandle is! String) {
+      throw const FormatException(
+        'Missing or invalid author.handle field in BlueskyPostResult',
+      );
+    }
+
+    // Optional author fields of the wrong type degrade to null.
+    final authorDisplayName = author['displayName'];
+    final authorAvatar = author['avatar'];
+
     final text = json['text'];
     if (text == null || text is! String) {
       throw const FormatException(
@@ -179,24 +207,35 @@ class BlueskyPostResult {
 
     // Parse optional external embed
     BlueskyExternalEmbed? embed;
-    if (json['embed'] != null) {
+    final rawEmbed = json['embed'];
+    if (rawEmbed is Map<String, dynamic>) {
       try {
-        embed = BlueskyExternalEmbed.fromJson(
-          json['embed'] as Map<String, dynamic>,
-        );
+        embed = BlueskyExternalEmbed.fromJson(rawEmbed);
       } on FormatException catch (e) {
         if (kDebugMode) {
           debugPrint('BlueskyPostResult: Failed to parse embed: $e');
         }
         // Leave embed as null
       }
+    } else if (rawEmbed != null && kDebugMode) {
+      debugPrint('BlueskyPostResult: Dropped embed: not a map');
     }
+
+    // Optional fields of the wrong type degrade to null. A map-shaped
+    // quotedPost is still parsed strictly, so its FormatException propagates.
+    final quotedPost = json['quotedPost'];
+    final message = json['message'];
 
     return BlueskyPostResult(
       uri: uri,
       cid: cid,
       createdAt: createdAt,
-      author: AuthorView.fromJson(author),
+      author: AuthorView(
+        did: authorDid,
+        handle: authorHandle,
+        displayName: authorDisplayName is String ? authorDisplayName : null,
+        avatar: authorAvatar is String ? authorAvatar : null,
+      ),
       text: text,
       replyCount: replyCount,
       repostCount: repostCount,
@@ -204,15 +243,11 @@ class BlueskyPostResult {
       hasMedia: hasMedia,
       mediaCount: mediaCount,
       images: _parseImages(json['images']),
-      quotedPost: json['quotedPost'] != null
-          ? BlueskyPostResult.fromJson(
-              _withAuthorPlaceholder(
-                json['quotedPost'] as Map<String, dynamic>,
-              ),
-            )
+      quotedPost: quotedPost is Map<String, dynamic>
+          ? BlueskyPostResult.fromJson(_withAuthorPlaceholder(quotedPost))
           : null,
       unavailable: unavailable,
-      message: json['message'] as String?,
+      message: message is String ? message : null,
       embed: embed,
     );
   }
@@ -386,11 +421,10 @@ class BlueskyPostEmbed {
     // Try to parse resolved post, but handle gracefully if it fails
     // (e.g., deleted posts may have partial data without author)
     BlueskyPostResult? resolved;
-    if (json['resolved'] != null) {
+    final rawResolved = json['resolved'];
+    if (rawResolved is Map<String, dynamic>) {
       try {
-        resolved = BlueskyPostResult.fromJson(
-          json['resolved'] as Map<String, dynamic>,
-        );
+        resolved = BlueskyPostResult.fromJson(rawResolved);
       } on FormatException catch (e) {
         if (kDebugMode) {
           debugPrint(
@@ -400,6 +434,8 @@ class BlueskyPostEmbed {
         }
         // Leave resolved as null - UI will show unavailable card
       }
+    } else if (rawResolved != null && kDebugMode) {
+      debugPrint('BlueskyPostEmbed: Dropped resolved post: not a map');
     }
 
     return BlueskyPostEmbed(uri: uri, cid: cid, resolved: resolved);

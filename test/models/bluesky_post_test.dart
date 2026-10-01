@@ -1,3 +1,4 @@
+import 'package:coves_flutter/constants/embed_types.dart';
 import 'package:coves_flutter/models/bluesky_post.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1560,6 +1561,206 @@ void main() {
           ),
         );
       });
+    });
+  });
+
+  group('wrong-typed optional fields', () {
+    // A resolved Bluesky post that is otherwise valid but whose optional
+    // fields arrive with the wrong JSON types. The optional fields must
+    // degrade to null; the quote card must survive.
+    /// An otherwise-valid post; [overrides] replaces or adds top-level keys.
+    Map<String, dynamic> postJson([Map<String, dynamic> overrides = const {}]) {
+      return {
+        'uri': 'at://did:plc:parent/app.bsky.feed.post/p1',
+        'cid': 'bafyparentcid',
+        'text': 'Parent post text',
+        'createdAt': '2026-09-01T12:00:00Z',
+        'author': {'did': 'did:plc:parent', 'handle': 'parent.bsky.social'},
+        'replyCount': 0,
+        'repostCount': 0,
+        'likeCount': 0,
+        'mediaCount': 0,
+        'hasMedia': false,
+        'unavailable': false,
+        ...overrides,
+      };
+    }
+
+    Map<String, dynamic> embedJson() {
+      return {
+        r'$type': EmbedTypes.postView,
+        'post': {
+          'uri': 'at://did:plc:parent/app.bsky.feed.post/p1',
+          'cid': 'bafyparentcid',
+        },
+        'resolved': postJson({
+          'embed': 'not a map',
+          'message': 42,
+          'quotedPost': 'not a map',
+        }),
+      };
+    }
+
+    test('BlueskyPostResult.fromJson nulls an embed that is not a map', () {
+      final json = postJson({'embed': 'not a map'});
+
+      expect(() => BlueskyPostResult.fromJson(json), returnsNormally);
+
+      final result = BlueskyPostResult.fromJson(json);
+      expect(result.text, 'Parent post text');
+      expect(result.embed, isNull);
+    });
+
+    test('BlueskyPostResult.fromJson nulls a message that is not a string', () {
+      final json = postJson({'message': 42});
+
+      expect(() => BlueskyPostResult.fromJson(json), returnsNormally);
+
+      final result = BlueskyPostResult.fromJson(json);
+      expect(result.text, 'Parent post text');
+      expect(result.message, isNull);
+    });
+
+    test('BlueskyPostResult.fromJson keeps the parent when quotedPost is not '
+        'a map', () {
+      final json = postJson({'quotedPost': 'not a map'});
+
+      expect(() => BlueskyPostResult.fromJson(json), returnsNormally);
+
+      final result = BlueskyPostResult.fromJson(json);
+      expect(result.text, 'Parent post text');
+      expect(result.quotedPost, isNull);
+    });
+
+    for (final field in ['title', 'description', 'thumb']) {
+      test('BlueskyPostResult.fromJson drops the link card when embed.$field '
+          'is not a string', () {
+        final json = postJson({
+          'embed': {'uri': 'https://example.com/article', field: 42},
+        });
+
+        expect(() => BlueskyPostResult.fromJson(json), returnsNormally);
+
+        final result = BlueskyPostResult.fromJson(json);
+        expect(result.text, 'Parent post text');
+        expect(result.embed, isNull);
+      });
+    }
+
+    test('BlueskyPostResult.fromJson still rejects an available quote with '
+        'no author', () {
+      final quotedPost = postJson({
+        'uri': 'at://did:plc:quoted/app.bsky.feed.post/q1',
+      })..remove('author');
+
+      expect(
+        () => BlueskyPostResult.fromJson(postJson({'quotedPost': quotedPost})),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('PostEmbed.fromJson keeps the quote card and nulls the bad '
+        'optional fields', () {
+      final embed = PostEmbed.fromJson(embedJson());
+
+      expect(embed, isA<QuotePostEmbed>());
+      final resolved = embed.blueskyPost!.resolved;
+      expect(resolved, isNotNull);
+      expect(resolved!.text, 'Parent post text');
+      expect(resolved.embed, isNull);
+      expect(resolved.message, isNull);
+      expect(resolved.quotedPost, isNull);
+    });
+
+    test('BlueskyPostEmbed.fromJson returns normally and nulls the bad '
+        'optional fields', () {
+      final json = embedJson();
+
+      expect(() => BlueskyPostEmbed.fromJson(json), returnsNormally);
+
+      final resolved = BlueskyPostEmbed.fromJson(json).resolved;
+      expect(resolved, isNotNull);
+      expect(resolved!.text, 'Parent post text');
+      expect(resolved.embed, isNull);
+      expect(resolved.message, isNull);
+      expect(resolved.quotedPost, isNull);
+    });
+
+    Map<String, dynamic> quoteEmbedJson(Map<String, dynamic> resolved) {
+      return {
+        r'$type': EmbedTypes.postView,
+        'post': {
+          'uri': 'at://did:plc:parent/app.bsky.feed.post/p1',
+          'cid': 'bafyparentcid',
+        },
+        'resolved': resolved,
+      };
+    }
+
+    test('PostEmbed.fromJson keeps the quote card and nulls author fields '
+        'that are not strings', () {
+      final embed = PostEmbed.fromJson(
+        quoteEmbedJson(
+          postJson({
+            'author': {
+              'did': 'd',
+              'handle': 'h',
+              'displayName': 42,
+              'avatar': 7,
+            },
+          }),
+        ),
+      );
+
+      expect(embed, isA<QuotePostEmbed>());
+      final resolved = embed.blueskyPost!.resolved;
+      expect(resolved, isNotNull);
+      expect(resolved!.author.did, 'd');
+      expect(resolved.author.handle, 'h');
+      expect(resolved.author.displayName, isNull);
+      expect(resolved.author.avatar, isNull);
+    });
+
+    test('PostEmbed.fromJson keeps the quote card unresolved when the '
+        'author has no handle', () {
+      final embed = PostEmbed.fromJson(
+        quoteEmbedJson(
+          postJson({
+            'author': {'did': 'd'},
+          }),
+        ),
+      );
+
+      expect(embed, isA<QuotePostEmbed>());
+      expect(embed.blueskyPost!.resolved, isNull);
+    });
+
+    test('BlueskyPostResult.fromJson throws FormatException when the author '
+        'did is not a string', () {
+      expect(
+        () => BlueskyPostResult.fromJson(
+          postJson({
+            'author': {'did': 42, 'handle': 'h'},
+          }),
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('BlueskyPostResult.fromJson keeps a nested quotedPost whose author '
+        'displayName is not a string', () {
+      final quotedPost = postJson({
+        'uri': 'at://did:plc:quoted/app.bsky.feed.post/q1',
+        'author': {'did': 'did:plc:quoted', 'handle': 'q', 'displayName': 42},
+      });
+
+      final result = BlueskyPostResult.fromJson(
+        postJson({'quotedPost': quotedPost}),
+      );
+
+      expect(result.quotedPost, isNotNull);
+      expect(result.quotedPost!.author.handle, 'q');
+      expect(result.quotedPost!.author.displayName, isNull);
     });
   });
 }

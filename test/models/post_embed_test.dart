@@ -850,7 +850,8 @@ void main() {
       expect(embed, isA<UnknownPostEmbed>());
     });
 
-    test('degrades a quote embed whose resolved post is not a map', () {
+    test('keeps a quote card with no resolved post when resolved is not a '
+        'map', () {
       late PostEmbed embed;
 
       expect(
@@ -863,9 +864,13 @@ void main() {
           'resolved': 'not-a-map',
         }),
         returnsNormally,
-        reason: '`resolved as Map` throws TypeError past on FormatException',
       );
-      expect(embed, isA<UnknownPostEmbed>());
+      expect(
+        embed,
+        isA<QuotePostEmbed>(),
+        reason: 'a non-map resolved degrades to an unavailable quote card',
+      );
+      expect((embed as QuotePostEmbed).post.resolved, isNull);
     });
   });
 
