@@ -382,8 +382,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
       // Missing or not displayable (e.g. collapsed / past the depth cutoff):
       // fetch its subtree and present it focused, with this thread underneath.
+      final generationBeforeFetch = provider.treeGeneration;
       final subtree = await provider.loadMoreReplies(targetUri);
       if (!mounted || _providerInvalidated) {
+        return;
+      }
+      if (subtree == null && provider.treeGeneration != generationBeforeFetch) {
+        // A whole-tree refresh landed mid-flight and the subtree was
+        // discarded as stale, not missing. The refresh's notification fired
+        // while this attempt held _focusInProgress, so re-arm and retry
+        // against the refreshed tree once the finally below releases it.
+        _focusPending = true;
+        WidgetsBinding.instance
+          ..addPostFrameCallback((_) => _tryFocusComment())
+          // A post-frame callback does not schedule a frame by itself.
+          ..ensureVisualUpdate();
         return;
       }
       if (subtree == null) {
@@ -921,15 +934,20 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     try {
       await _commentsProvider.loadMoreReplies(thread.comment.uri);
     } on Exception {
-      if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Failed to load replies. Please try again.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      _showLoadRepliesFailed(messenger);
     }
+  }
+
+  void _showLoadRepliesFailed(ScaffoldMessengerState messenger) {
+    if (!mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Failed to load replies. Please try again.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   /// Build main content area

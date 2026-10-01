@@ -1,0 +1,32 @@
+# Section C — comment focus on a target that is NOT in the initial tree:
+# `/post/<uri>?comment=<uri>` for "chain depth 11 (mari)" on the QA deep
+# chain fixture post. The initial fetch never contains it (its ancestor
+# chain sits behind the sibling cap under chain depth 01), so the screen
+# fetches the comment's subtree via loadMoreReplies and opens it as a
+# focused thread, with the post detail underneath.
+# NOT in config.yaml's flowsOrder: MainActivity has no VIEW intent filter,
+# so the deep link must be fired via adb BEFORE running this flow (this flow
+# intentionally has no launchApp). Signed-in session assumed:
+#   adb shell am force-stop social.coves.dev
+#   adb shell am start -n social.coves.dev/social.coves.MainActivity \
+#     -a android.intent.action.VIEW \
+#     -d 'social.coves:///post/at%3A%2F%2Fdid%3Aplc%3A7qijxb47zixbu3xqgdmruaui%2Fsocial.coves.community.post%2F3mr2pxaxgq422?comment=at%3A%2F%2Fdid%3Aplc%3Anhlkh772rwxylrbz5kyvuj2a%2Fsocial.coves.community.comment%2F3mr2pytdfqe22'
+# The `standalone` tag is excluded in config.yaml.
+appId: social.coves.dev
+tags:
+  - standalone
+---
+# Focused thread opens rooted at depth 11 with its replies below
+- extendedWaitUntil:
+    visible: "[\\s\\S]*chain depth 12 \\(agg\\)[\\s\\S]*"
+    timeout: 45000
+- assertVisible: "[\\s\\S]*chain depth 11 \\(mari\\)[\\s\\S]*"
+- assertNotVisible: "Couldn't find that comment[\\s\\S]*"
+- takeScreenshot: build/maestro/c6_focus_missing_opened
+# Back lands on the post detail that was underneath
+- back
+- extendedWaitUntil:
+    visible: "QA deep chain fixture[\\s\\S]*"
+    timeout: 15000
+- assertNotVisible: "[\\s\\S]*chain depth 12 \\(agg\\)[\\s\\S]*"
+- takeScreenshot: build/maestro/c6_focus_missing_back

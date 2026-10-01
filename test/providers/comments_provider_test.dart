@@ -2129,10 +2129,17 @@ void main() {
         },
       );
 
-      test('should throw ArgumentError for a malformed comment URI', () {
+      test('should throw MalformedCommentUriException for a malformed comment '
+          'URI', () {
         expect(
           () => commentsProvider.loadMoreReplies('no-slashes'),
-          throwsArgumentError,
+          throwsA(
+            isA<MalformedCommentUriException>().having(
+              (e) => e.commentUri,
+              'commentUri',
+              'no-slashes',
+            ),
+          ),
         );
         expect(commentsProvider.loadingMoreReplies, isEmpty);
       });

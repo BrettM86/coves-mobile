@@ -10,6 +10,8 @@
 # prerequisite adb push recipe in that flow's header comment).
 # f5_empty_profile is NOT in the order: it needs an adb-fired deep link
 # first (MainActivity has no VIEW intent filter) — see its header comment.
+# c6_comment_focus_missing and c7_comment_focus_malformed are NOT in the
+# order for the same reason: each needs its adb-fired post deep link first.
 # h1_video_post needs emulator internet access and a live Streamable clip
 # (see its header); it seeds one video post per run, like e1 does.
 # g1_legal_gates is NOT in the order: it launches with clearState (fresh
@@ -17,7 +19,7 @@
 # stateful flow depends on. Run it standalone, then a1_login_session —
 # see its header comment.
 # NOTE (2026-07-19 round 2): flows absent from flowsOrder STILL RUN at the
-# end of a workspace run — f5 and g1 are therefore tagged `standalone` and
+# end of a workspace run — f5, g1, c6 and c7 are therefore tagged `standalone` and
 # excluded here. Tag any future precursor-dependent flow the same way.
 excludeTags:
   - standalone

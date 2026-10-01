@@ -247,15 +247,20 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
         setState(() => _thread = _thread.replaceDescendant(subtree));
       }
     } on Exception {
-      if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Failed to load replies. Please try again.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      _showLoadRepliesFailed(messenger);
     }
+  }
+
+  void _showLoadRepliesFailed(ScaffoldMessengerState messenger) {
+    if (!mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Failed to load replies. Please try again.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   /// Delete a comment, then refresh both the full thread and this subtree

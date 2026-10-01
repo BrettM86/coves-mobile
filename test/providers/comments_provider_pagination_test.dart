@@ -887,6 +887,85 @@ void main() {
       },
     );
 
+    test('a reply fetch requested after a refresh lands is not handed the '
+        'stale in-flight fetch', () async {
+      await loadThreadWithParent();
+
+      final (staleSubtree, staleRequest) = await startParentSubtreeFetch();
+      final generationBeforeRefresh = commentsProvider.treeGeneration;
+
+      final refresh = commentsProvider.refreshComments();
+      await pumpEventQueue();
+      final refreshRequest = requests.last;
+      expect(refreshRequest.parentRkey, isNull);
+      refreshRequest.response.complete(
+        threads(<ThreadViewComment>[
+          thread(parentUri, hasMore: true),
+        ], cursor: 'CR'),
+      );
+      await refresh;
+      expect(displayedUris(), <String>[parentUri]);
+      expect(commentsProvider.treeGeneration, isNot(generationBeforeRefresh));
+
+      // Asked for against the refreshed tree while the old fetch is
+      // still in flight.
+      final freshSubtree = commentsProvider.loadMoreReplies(parentUri);
+      await pumpEventQueue();
+
+      staleRequest.response.complete(subtreeWithReply());
+      expect(
+        await staleSubtree,
+        isNull,
+        reason: 'the first caller asked about the replaced tree',
+      );
+      await pumpEventQueue();
+
+      final parentRequests = requests
+          .where((request) => request.parentRkey == 'parent')
+          .toList();
+      expect(
+        parentRequests,
+        hasLength(2),
+        reason:
+            'the second caller needs a fetch against the refreshed tree, '
+            'not the stale one it would have shared',
+      );
+      expect(
+        commentsProvider.loadingMoreReplies,
+        contains(parentUri),
+        reason:
+            'the stale fetch settling must not clear the fresh fetch entry, '
+            'or the spinner disappears while the fresh request still runs',
+      );
+      expect(
+        identical(commentsProvider.loadMoreReplies(parentUri), freshSubtree),
+        isTrue,
+        reason:
+            'a repeat tap while the fresh fetch runs must share it, '
+            'not start a duplicate fetch',
+      );
+      await pumpEventQueue();
+      expect(
+        requests.where((request) => request.parentRkey == 'parent'),
+        hasLength(2),
+        reason: 'the repeat tap must not issue a duplicate request',
+      );
+      parentRequests.last.response.complete(subtreeWithReply());
+
+      final merged = await freshSubtree;
+      await pumpEventQueue();
+      expect(merged, isNotNull);
+      expect(merged!.comment.uri, parentUri);
+      expect(parentReplyUris(), <String>[replyUri]);
+      expect(
+        commentsProvider.loadingMoreReplies,
+        isEmpty,
+        reason:
+            'the fresh fetch settling must clear its entry, '
+            'or the spinner never stops',
+      );
+    });
+
     test(
       'a subtree fetch is not invalidated by the next page landing',
       () async {

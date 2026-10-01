@@ -1,0 +1,27 @@
+# Section C — comment focus with a malformed target: `?comment=` is a
+# comment AT-URI with no record key. loadMoreReplies rejects it with
+# MalformedCommentUriException before any request; the post detail must
+# stay up and show the "Couldn't find that comment" snackbar, not crash.
+# NOT in config.yaml's flowsOrder: MainActivity has no VIEW intent filter,
+# so the deep link must be fired via adb BEFORE running this flow (this flow
+# intentionally has no launchApp). Signed-in session assumed:
+#   adb shell am force-stop social.coves.dev
+#   adb shell am start -n social.coves.dev/social.coves.MainActivity \
+#     -a android.intent.action.VIEW \
+#     -d 'social.coves:///post/at%3A%2F%2Fdid%3Aplc%3A7qijxb47zixbu3xqgdmruaui%2Fsocial.coves.community.post%2F3mr2pxaxgq422?comment=at%3A%2F%2Fdid%3Aplc%3Anhlkh772rwxylrbz5kyvuj2a%2Fsocial.coves.community.comment%2F'
+# The `standalone` tag is excluded in config.yaml.
+appId: social.coves.dev
+tags:
+  - standalone
+---
+- extendedWaitUntil:
+    visible: "Couldn't find that comment[\\s\\S]*"
+    timeout: 45000
+- takeScreenshot: build/maestro/c7_focus_malformed_snackbar
+# Still on the post detail, which remains usable
+- assertVisible: "[\\s\\S]*QA deep chain fixture[\\s\\S]*"
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*chain depth 01 \\(mari\\)[\\s\\S]*"
+    direction: DOWN
+    timeout: 60000

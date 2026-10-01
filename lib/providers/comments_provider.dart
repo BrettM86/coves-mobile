@@ -29,6 +29,23 @@ enum _RefreshKind {
   sortChange,
 }
 
+/// Thrown by [CommentsProvider.loadMoreReplies] for a comment AT-URI with no
+/// record key, so it never reaches the API.
+///
+/// An [Exception] rather than an [ArgumentError] so screens can handle it
+/// with their `on Exception` branches without catching every [Error] (such
+/// as [RangeError]) that should reach Sentry instead.
+class MalformedCommentUriException implements Exception {
+  const MalformedCommentUriException(this.commentUri);
+
+  /// The rejected comment URI.
+  final String commentUri;
+
+  @override
+  String toString() =>
+      'MalformedCommentUriException: malformed comment AT-URI: $commentUri';
+}
+
 /// Comments Provider
 ///
 /// Manages comment state and fetching logic for a specific post.
@@ -141,10 +158,14 @@ class CommentsProvider with ChangeNotifier {
   // Collapsed thread state - stores URIs of collapsed comments
   final Set<String> _collapsedComments = {};
 
-  // In-flight "load more replies" subtree fetches, keyed by comment URI.
-  // Duplicate calls for the same URI get the existing future back so every
-  // caller receives the real result instead of null.
-  final Map<String, Future<ThreadViewComment?>> _loadingMoreReplies = {};
+  // In-flight "load more replies" subtree fetches, keyed by comment URI,
+  // with the tree generation each one started under. Duplicate calls for the
+  // same URI under the same generation get the existing future back so every
+  // caller receives the real result instead of null. A call after a refresh
+  // landed replaces the entry with a fresh fetch instead of joining the
+  // stale one, whose result would be discarded.
+  final Map<String, ({Future<ThreadViewComment?> future, int generation})>
+  _loadingMoreReplies = {};
 
   /// Saved scroll offset. Passive state; updates do not notify listeners.
   double scrollPosition = 0;
@@ -206,6 +227,13 @@ class CommentsProvider with ChangeNotifier {
   Set<String> get loadingMoreReplies =>
       Set.unmodifiable(_loadingMoreReplies.keys);
   DateTime? get lastRefreshTime => _lastRefreshTime;
+
+  /// Changes whenever a whole-tree refresh lands. A caller that sees
+  /// [loadMoreReplies] return null can compare this against the value it
+  /// read before the call: a change means a refresh landed while its fetch
+  /// was in flight and the subtree was discarded as stale, not that the
+  /// comment was missing.
+  int get treeGeneration => _treeGeneration;
 
   /// Get draft text for a specific parent URI
   ///
@@ -453,20 +481,23 @@ class CommentsProvider with ChangeNotifier {
   ///
   /// Returns the merged subtree so callers (e.g. the focused thread screen)
   /// can render it even when the node is no longer present in the top-level
-  /// tree. If a fetch for the same comment is already in flight, the
-  /// EXISTING future is returned, so every caller gets the real result.
+  /// tree. If a fetch for the same comment is already in flight and started
+  /// against the current tree, the EXISTING future is returned, so every
+  /// caller gets the real result. If it started before a whole-tree refresh
+  /// landed, a fresh fetch against the current tree is issued instead; the
+  /// stale fetch still settles with null for its own callers.
   /// Returns null when the server returned no/mismatched subtree (the
   /// node's hasMore/cursor are cleared on an empty response so the UI stops
   /// offering a load-more that can never succeed), when the response became
   /// stale (a whole-tree refresh landed mid-flight), or when the provider
   /// was disposed.
   ///
-  /// Throws [ArgumentError] for a malformed comment URI (programmer error).
+  /// Throws [MalformedCommentUriException] for a comment URI with no rkey.
   /// Throws ApiException/AuthenticationException on network or auth errors.
   Future<ThreadViewComment?> loadMoreReplies(String commentUri) {
     final inFlight = _loadingMoreReplies[commentUri];
-    if (inFlight != null) {
-      return inFlight;
+    if (inFlight != null && inFlight.generation == _treeGeneration) {
+      return inFlight.future;
     }
 
     // rkey is the last path segment of the comment AT-URI. Note: Uri.parse
@@ -474,26 +505,26 @@ class CommentsProvider with ChangeNotifier {
     final segments = commentUri.split('/');
     final rkey = segments.length > 1 ? segments.last : '';
     if (rkey.isEmpty) {
-      throw ArgumentError.value(
-        commentUri,
-        'commentUri',
-        'malformed comment AT-URI',
-      );
+      throw MalformedCommentUriException(commentUri);
     }
 
     // Register the in-flight future BEFORE starting the work: the fetch can
     // fail synchronously, and _doLoadMoreReplies' cleanup must always run
     // after the map entry exists or the entry would leak forever.
     final completer = Completer<ThreadViewComment?>();
-    _loadingMoreReplies[commentUri] = completer.future;
+    _loadingMoreReplies[commentUri] = (
+      future: completer.future,
+      generation: _treeGeneration,
+    );
     _safeNotifyListeners();
-    completer.complete(_doLoadMoreReplies(commentUri, rkey));
+    completer.complete(_doLoadMoreReplies(commentUri, rkey, completer.future));
     return completer.future;
   }
 
   Future<ThreadViewComment?> _doLoadMoreReplies(
     String commentUri,
     String rkey,
+    Future<ThreadViewComment?> registeredFuture,
   ) async {
     // Capture the tree generation before the fetch: if the tree is wholesale
     // replaced (refresh/sort change/delete) while we're in flight, this
@@ -612,9 +643,14 @@ class CommentsProvider with ChangeNotifier {
 
       return subtree;
     } finally {
-      if (!_isDisposed) {
-        // Map.remove returns the (already-settled) future; nothing to await.
-        unawaited(_loadingMoreReplies.remove(commentUri));
+      // Remove only this fetch's own entry: a stale fetch must not remove
+      // the fresh fetch that replaced it after a refresh.
+      if (!_isDisposed &&
+          identical(
+            _loadingMoreReplies[commentUri]?.future,
+            registeredFuture,
+          )) {
+        _loadingMoreReplies.remove(commentUri);
         _safeNotifyListeners();
       }
     }
