@@ -57,6 +57,7 @@ FeedViewPost buildFeedPost({
   String? vote,
   String? voteUri,
   CommunityRefViewerState? communityViewer,
+  String community = communityDid,
   int score = 0,
 }) {
   return FeedViewPost(
@@ -66,7 +67,7 @@ FeedViewPost buildFeedPost({
       rkey: uri.split('/').last,
       author: AuthorView(did: 'did:plc:author', handle: 'test.user'),
       community: CommunityRef(
-        did: communityDid,
+        did: community,
         name: 'testcove',
         viewer: communityViewer,
       ),
@@ -462,46 +463,112 @@ void main() {
     });
   });
 
-  group('profile posts hydration - votes only (UserProfileProvider)', () {
-    test('C6 applies votes but never subscriptions, even though the feed '
-        'carries community viewer state and the subscription surface is '
-        'fully wired', () async {
+  group('profile posts hydration - votes and subscriptions '
+      '(UserProfileProvider)', () {
+    test('C6 applies both votes and subscriptions from the community viewer '
+        'state the author feed carries', () async {
       final subscriptions = newSubscriptionProvider();
-      // Deliberately wired for BOTH votes and subscriptions, and handed to
-      // the profile provider directly: "no subscription seeded" below can
-      // then only come from the traversal this surface chose, never from a
-      // dependency that happened to be missing.
+      // Wired for BOTH votes and subscriptions and handed to the profile
+      // provider directly, the way the app injects it.
       final hydrator = ViewerStateHydrator(
         authProvider: mockAuthProvider,
         voteProvider: voteProvider,
         subscriptionProvider: subscriptions,
       );
 
-      final posts = [
-        buildFeedPost(
-          uri: postUriA,
-          vote: 'up',
-          voteUri: voteUri,
-          communityViewer: CommunityRefViewerState(subscribed: true),
+      stubAuthorPostsPages([
+        TimelineResponse(
+          feed: [
+            buildFeedPost(
+              uri: postUriA,
+              vote: 'up',
+              voteUri: voteUri,
+              communityViewer: CommunityRefViewerState(subscribed: true),
+            ),
+          ],
         ),
-      ];
-      stubAuthorPostsPages([TimelineResponse(feed: posts)]);
+      ]);
+
+      // The community has not been seen on any other surface.
+      expect(subscriptions.isSubscribed(communityDid), false);
 
       final profile = await newProfileProvider(hydrator: hydrator);
       await profile.loadPosts(refresh: true);
 
+      expect(profile.postsState.error, isNull);
+      expect(profile.postsState.posts.map((item) => item.post.uri), [postUriA]);
       expect(voteProvider.isLiked(postUriA), true);
-      // DIVERGENCE (D1): profile posts hydrate votes only. If this ever
-      // starts passing subscriptions through, that is a behaviour change.
-      expect(subscriptions.isSubscribed(communityDid), false);
-
-      // Positive control: the SAME hydrator over the SAME posts through the
-      // votes-and-subscriptions traversal does seed. So the assertion above
-      // is about which traversal the profile surface picks - not about an
-      // unwired provider or an input that says nothing.
-      hydrator.hydrateFeed(posts);
+      expect(voteProvider.getVoteState(postUriA)?.uri, voteUri);
+      // Profile posts seed subscriptions through the same path as every
+      // other feed surface, so the post card's Subscribe/Unsubscribe menu
+      // item reflects the seeded state. This only has an effect once the
+      // AppView includes viewer.subscribed on the post communityRef; it does
+      // not today, so this fixture is synthetic.
       expect(subscriptions.isSubscribed(communityDid), true);
     });
+
+    test(
+      'C6b load-more seeds subscriptions for newly delivered posts while a '
+      'cursor-drift duplicate cannot overwrite an earlier snapshot',
+      () async {
+        const communityX = 'did:plc:community-x';
+        const communityY = 'did:plc:community-y';
+        final subscriptions = newSubscriptionProvider();
+        final hydrator = ViewerStateHydrator(
+          authProvider: mockAuthProvider,
+          voteProvider: voteProvider,
+          subscriptionProvider: subscriptions,
+        );
+
+        stubAuthorPostsPages([
+          TimelineResponse(
+            feed: [
+              buildFeedPost(
+                uri: postUriA,
+                community: communityX,
+                communityViewer: CommunityRefViewerState(subscribed: true),
+              ),
+            ],
+            cursor: 'page-2',
+          ),
+          TimelineResponse(
+            feed: [
+              // Cursor drift re-delivers post A with a stale "not subscribed"
+              // snapshot for X. Deduplication drops it before hydration.
+              buildFeedPost(
+                uri: postUriA,
+                community: communityX,
+                communityViewer: CommunityRefViewerState(subscribed: false),
+              ),
+              // A genuinely new post in a community no surface has seen.
+              buildFeedPost(
+                uri: postUriB,
+                community: communityY,
+                communityViewer: CommunityRefViewerState(subscribed: true),
+              ),
+            ],
+          ),
+        ]);
+
+        final profile = await newProfileProvider(hydrator: hydrator);
+        await profile.loadPosts(refresh: true);
+
+        expect(profile.postsState.posts.map((item) => item.post.uri), [
+          postUriA,
+        ]);
+        expect(subscriptions.isSubscribed(communityY), false);
+
+        await profile.loadMorePosts();
+
+        expect(profile.postsState.error, isNull);
+        expect(profile.postsState.posts.map((item) => item.post.uri), [
+          postUriA,
+          postUriB,
+        ]);
+        expect(subscriptions.isSubscribed(communityY), true);
+        expect(subscriptions.isSubscribed(communityX), true);
+      },
+    );
 
     test('C5 profile posts load without hydrating when no vote provider is '
         'wired', () async {

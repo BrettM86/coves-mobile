@@ -135,28 +135,17 @@ class ViewerStateHydrator {
 
   /// Votes *and* community subscriptions for a page of feed items.
   ///
-  /// Serves site 1 ([MultiFeedProvider]'s discover/for-you fetch) and site 2
-  /// (the community feed screen's page hook).
+  /// Serves site 1 ([MultiFeedProvider]'s discover/for-you fetch), site 2
+  /// (the community feed screen's page hook) and site 3 (profile posts).
   ///
   /// Which items reach this method is the caller's call and is NOT the same
-  /// everywhere: site 1 passes the raw response feed, site 2 passes the
-  /// pagination controller's deduplicated new items. That divergence (D3) is
-  /// load bearing on cursor drift and must stay with the callers.
+  /// everywhere: site 1 passes the raw response feed, sites 2 and 3 pass
+  /// the pagination controller's deduplicated new items. That divergence
+  /// (D3) is load bearing on cursor drift and must stay with the callers.
   void hydrateFeed(Iterable<FeedViewPost> feed) {
     _hydrateFeedVotes(feed);
     _hydrateFeedSubscriptions(feed);
   }
-
-  /// Votes only for a page of feed items, leaving community subscriptions
-  /// untouched even though `post.community.viewer.subscribed` is right there
-  /// in the same payload.
-  ///
-  /// Serves site 3 (profile posts). This method exists to preserve
-  /// divergence D1: profile posts have never seeded subscriptions. Keeping
-  /// it separate from [hydrateFeed] makes that a visible decision instead of
-  /// an accident of which provider happened to be wired in.
-  void hydrateFeedVotesOnly(Iterable<FeedViewPost> feed) =>
-      _hydrateFeedVotes(feed);
 
   /// The vote snapshot on a single cold-loaded post.
   ///

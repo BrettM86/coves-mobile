@@ -46,7 +46,7 @@ class UserProfileProvider with ChangeNotifier {
     // the screens already read.
     _postsController = CursorPaginationController<FeedViewPost>(
       fetchPage: _fetchPostsPage,
-      onPageLoaded: _hydratePostVotes,
+      onPageLoaded: _hydratePostViewerState,
       errorMapper: _postsErrorMessage,
       // Server-side cursor drift hands back overlapping pages; the list
       // keys its rows by this same URI and asserts on duplicates.
@@ -95,10 +95,10 @@ class UserProfileProvider with ChangeNotifier {
   static String? _signedInDid(AuthProvider authProvider) =>
       authProvider.isAuthenticated ? authProvider.did : null;
 
-  /// Seeds vote state from each page this provider loads. Injected app-wide
-  /// (where it also carries a subscription provider, which this surface
-  /// deliberately never uses - see [_hydratePostVotes]); when omitted, built
-  /// from the raw vote provider this constructor still accepts.
+  /// Seeds vote and community-subscription state from each page this
+  /// provider loads. Injected app-wide (where it carries both providers);
+  /// when omitted, built from the raw vote provider this constructor still
+  /// accepts, so only votes are seeded.
   final ViewerStateHydrator _hydrator;
 
   final CommentService _commentService;
@@ -375,18 +375,19 @@ class UserProfileProvider with ChangeNotifier {
     );
   }
 
-  /// Apply viewer vote state so a liked post shows a lit heart even when
-  /// the profile is its first surface this session.
+  /// Seed viewer vote state so a liked post shows a lit heart even when the
+  /// profile is its first surface this session.
   ///
-  /// Votes ONLY: these feed items carry `community.viewer.subscribed` too,
-  /// and this surface has never seeded it. `hydrateFeedVotesOnly` keeps that
-  /// a deliberate choice even when the injected hydrator does know about
-  /// subscriptions.
+  /// This also seeds community subscription state from
+  /// `post.community.viewer.subscribed`, but the AppView does not send
+  /// `viewer` on a post's `communityRef` today, so that part does nothing
+  /// yet. Once the AppView sends it, the post card's Subscribe/Unsubscribe
+  /// menu item will reflect it.
   ///
   /// The controller hands over only the deduplicated new items, so a
   /// cursor-drift duplicate's stale snapshot never lands here.
-  Future<void> _hydratePostVotes(List<FeedViewPost> newPosts) async {
-    _hydrator.hydrateFeedVotesOnly(newPosts);
+  Future<void> _hydratePostViewerState(List<FeedViewPost> newPosts) async {
+    _hydrator.hydrateFeed(newPosts);
   }
 
   String _postsErrorMessage(Object error) {

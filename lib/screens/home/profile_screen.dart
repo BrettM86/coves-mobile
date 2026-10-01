@@ -56,10 +56,8 @@ class ProfileScreen extends StatelessWidget {
         apiService: context.read<CovesApiService>(),
         commentService: context.read<CommentService>(),
         profileCache: context.read<ProfileCache>(),
-        // Fully wired, subscriptions included: this surface calls
-        // hydrateFeedVotesOnly, so "profile posts never seed
-        // subscriptions" is a property of the call, not of a missing
-        // provider.
+        // Fully wired, subscriptions included: profile posts seed both
+        // votes and community subscriptions through hydrateFeed.
         hydrator: context.read<ViewerStateHydrator>(),
       ),
       child: _ProfileView(actor: actor),

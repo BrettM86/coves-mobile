@@ -6,7 +6,7 @@
 // and subscriptions, or a null provider would throw mid-fetch.
 //
 // The call-site tests cover a few of these combinations incidentally. This
-// file covers the whole grid on purpose: 7 methods x {signed in, signed out}
+// file covers the whole grid on purpose: 6 methods x {signed in, signed out}
 // x {provider wired, provider null}.
 //
 // Asserted with verify / verifyZeroInteractions on mocks, because the
@@ -127,7 +127,6 @@ void main() {
   /// Every method, keyed by name, so the grid below stays one line each.
   final invocations = <String, void Function(ViewerStateHydrator)>{
     'hydrateFeed': (h) => h.hydrateFeed(feed),
-    'hydrateFeedVotesOnly': (h) => h.hydrateFeedVotesOnly(feed),
     'hydratePost': (h) => h.hydratePost(buildPost()),
     'hydrateComments': (h) => h.hydrateComments(comments),
     'hydrateCommentTree': (h) => h.hydrateCommentTree(tree),
@@ -174,21 +173,6 @@ void main() {
         ),
       ).called(1);
       expect(subscriptions.seeds, [(did: communityDid, subscribed: true)]);
-    });
-
-    test('hydrateFeedVotesOnly hands over the vote and NOT the '
-        'subscription', () {
-      buildHydrator(authenticated: true).hydrateFeedVotesOnly(feed);
-
-      verify(
-        mockVoteProvider.applyServerVoteState(
-          postUri: postUri,
-          voteDirection: 'up',
-          voteUri: voteUri,
-        ),
-      ).called(1);
-      // Divergence D1, asserted at the source rather than through a caller.
-      expect(subscriptions.seeds, isEmpty);
     });
 
     test('hydratePost hands over the single post vote', () {
