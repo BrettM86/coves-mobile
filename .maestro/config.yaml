@@ -40,6 +40,8 @@ executionOrder:
     - c4_wide_level
     - c5_deep_chain_focused
     - d1_admin_panel
+    # d5 runs right after d1 because it reuses d1's signed-in admin session.
+    - d5_create_community_name_length
     - d2_community_from_chip
     - d3_join_leave
     - e1_create_post

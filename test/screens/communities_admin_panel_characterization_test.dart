@@ -154,15 +154,13 @@ void main() {
       expect(find.text('Name is required'), findsNothing);
     });
 
-    testWidgets('A2 a name longer than 63 characters is rejected', (
-      tester,
-    ) async {
+    testWidgets('A2 a 17-character name is rejected', (tester) async {
       await openCreateForm(tester);
-      await fillForm(tester, name: 'a' * 64);
+      await fillForm(tester, name: 'a' * 17);
 
       await tapCreate(tester);
 
-      expect(find.text('Name must be 63 characters or less'), findsOneWidget);
+      expect(find.text('Name must be 16 characters or less'), findsOneWidget);
       verifyNever(
         mockApiService.createCommunity(
           name: anyNamed('name'),

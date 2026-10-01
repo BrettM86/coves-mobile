@@ -8,11 +8,24 @@ library;
 
 /// Validates and normalizes a community name.
 abstract final class CommunityNameValidator {
+  /// Prefix the community handle puts before the name: the handle's first
+  /// label is `<handlePrefix><name>`.
+  static const String handlePrefix = 'c-';
+
+  /// Longest first handle label the PDS accepts, in characters.
+  ///
+  /// The stock PDS rejects a handle whose part before the first dot is
+  /// longer than 18 characters with `InvalidHandle: Handle too long`. The
+  /// backend documents the same cap in `tests/testkit/fixtures.go`
+  /// (`MaxIDLength`). It is far tighter than the 63-octet DNS label limit,
+  /// so it is the one that binds.
+  static const int pdsHandleLabelMaxLength = 18;
+
   /// Longest accepted name, in characters.
   ///
-  /// A DNS label may not exceed 63 octets, and the name becomes the
-  /// `c-<name>` portion of the community handle.
-  static const int maxLength = 63;
+  /// The name shares the handle's first label with [handlePrefix], so its
+  /// budget is [pdsHandleLabelMaxLength] minus the prefix length.
+  static const int maxLength = pdsHandleLabelMaxLength - handlePrefix.length;
 
   /// DNS-valid community names: lowercase alphanumerics, interior hyphens.
   ///

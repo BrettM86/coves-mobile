@@ -82,10 +82,11 @@ class _CreateCommunityFormState extends State<CreateCommunityForm> {
   /// from what is actually sent.
   String get _handlePreview {
     final name = CommunityNameValidator.normalize(_nameController.text);
+    const prefix = CommunityNameValidator.handlePrefix;
     if (name.isEmpty) {
-      return '@c-{name}.coves.social';
+      return '@$prefix{name}.coves.social';
     }
-    return '@c-$name.coves.social';
+    return '@$prefix$name.coves.social';
   }
 
   // LISTENING IS NOT OWNING.

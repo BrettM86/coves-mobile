@@ -1,0 +1,105 @@
+# Section D — check 7 (admin panel, Create Community name length): the
+# community handle's first label is c-<name>, and the PDS caps that label at
+# 18 characters, so the client caps the name at 16 (18 minus the "c-" prefix).
+# - A 17-character name is rejected on submit with
+#   "Name must be 16 characters or less" and no request is sent.
+# - A 16-character name passes client validation, is submitted, and the PDS
+#   accepts it: the admin panel shows the "Community created" snackbar.
+# Assumes a signed-in admin session (a1_login_session as mari). Names are
+# unique per run (qa + epoch millis), so each run creates one throwaway
+# community.
+# NOTE: never use hideKeyboard in the admin panel — Maestro implements it as
+# a BACK press, which switches the shell to the Home tab (see d1). The
+# single-line fields are filled last and closed with Enter instead.
+# NOTE: no selector matches field values or positional indexes. The submit
+# button is anchored below the "Description" label (form order: heading,
+# Name, handle preview, Display Name, Description, button), and the name
+# field below its "Name (unique identifier)" label.
+appId: social.coves.dev
+---
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as d1).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+# Let the semantics tree settle after the splash (see a1 flow note)
+- waitForAnimationToEnd:
+    timeout: 5000
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Communities"
+      - extendedWaitUntil:
+          visible: "Admin Tools"
+          timeout: 15000
+- tapOn: "Create Community[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Display Name"
+    timeout: 10000
+# 17 characters: "qa" + 13-digit epoch millis + 2 x's
+- evalScript: ${output.d5Name = 'qa' + Date.now() + 'xx'}
+- tapOn: "Global news and current events from around the world"
+- inputText: "QA d5 name-length check"
+- tapOn: "World News"
+- inputText: "QA d5 name length"
+- tapOn: "worldnews"
+- inputText: ${output.d5Name}
+- pressKey: Enter
+- takeScreenshot: build/maestro/d5_17_filled
+# Submit the 17-character name: rejected client-side. "Create Community"
+# also matches the app bar title and the page heading, both above the
+# Description label; only the button is below it.
+- scrollUntilVisible:
+    element:
+      text: "Create Community"
+      below: "Description"
+    direction: DOWN
+- tapOn:
+    text: "Create Community"
+    below: "Description"
+- extendedWaitUntil:
+    visible: "Name must be 16 characters or less"
+    timeout: 10000
+- assertNotVisible: "Community created.*"
+- assertNotVisible: "Failed to create community.*"
+- takeScreenshot: build/maestro/d5_17_rejected
+# Replace with a 16-character name: passes client validation, is submitted
+# and created. A plain tap can drop the cursor anywhere in the text, so an
+# eraseText there would not reliably shorten it (see f3). A long press
+# selects the whole name (one word, no separators); "Select all" is tapped
+# only if the toolbar offers it, since Flutter hides it when the selection
+# already covers the text.
+- evalScript: ${output.d5Name16 = output.d5Name.slice(0, 16)}
+- scrollUntilVisible:
+    element: "Name \\(unique identifier\\)"
+    direction: UP
+- longPressOn:
+    below: "Name \\(unique identifier\\)"
+- runFlow:
+    when:
+      visible: "Select all"
+    commands:
+      - tapOn: "Select all"
+- eraseText
+- inputText: ${output.d5Name16}
+- pressKey: Enter
+- assertNotVisible: "Name must be 16 characters or less"
+- scrollUntilVisible:
+    element:
+      text: "Create Community"
+      below: "Description"
+    direction: DOWN
+- tapOn:
+    text: "Create Community"
+    below: "Description"
+- extendedWaitUntil:
+    visible: "Community created.*"
+    timeout: 30000
+- assertNotVisible: "Failed to create community.*"
+- assertNotVisible: "Name must be 16 characters or less"
+- takeScreenshot: build/maestro/d5_16_created
