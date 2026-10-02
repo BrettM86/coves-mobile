@@ -31,6 +31,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/fake_providers.dart';
 import '../test_helpers/test_mocks.dart';
 
 class _FakeAuthProvider extends AuthProvider {
@@ -245,6 +246,7 @@ void main() {
             ),
             ChangeNotifierProvider<BlockProvider>.value(value: blocks),
             Provider<StreamableService>(create: (_) => StreamableService()),
+            unloadedMultiFeedProvider(auth: auth, apiService: mockApiService),
           ],
           child: const MaterialApp(
             home: CommunityFeedScreen(identifier: communityHandle),

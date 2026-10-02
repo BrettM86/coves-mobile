@@ -11,6 +11,7 @@ import '../../models/post.dart';
 import '../../models/user_profile.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/block_provider.dart';
+import '../../providers/multi_feed_provider.dart';
 import '../../providers/user_profile_provider.dart';
 import '../../services/comment_service.dart';
 import '../../services/coves_api_service.dart';
@@ -83,12 +84,18 @@ class _ProfileViewState extends State<_ProfileView> {
   final ScrollController _scrollController = ScrollController();
   late final PaginationScrollListener _paginationListener;
 
+  // App-wide home feeds, which stay alive beside the Profile tab and under a
+  // pushed profile: a post deleted here must leave them too. Read once, since
+  // a delete can finish after this screen has closed.
+  late final MultiFeedProvider _multiFeedProvider;
+
   // One pending post-frame "does the content fill the viewport?" check.
   bool _viewportFillCheckScheduled = false;
 
   @override
   void initState() {
     super.initState();
+    _multiFeedProvider = context.read<MultiFeedProvider>();
     // Pagination is driven by the scroll position, not by the item builder:
     // triggering a load from build() re-enters the provider mid-frame.
     _paginationListener = PaginationScrollListener(
@@ -628,7 +635,13 @@ class _ProfileViewState extends State<_ProfileView> {
         ),
       ),
       itemBuilder: (context, feedViewPost, index) {
-        final postCard = PostCard(post: feedViewPost);
+        final postCard = PostCard(
+          post: feedViewPost,
+          onDeleted: () {
+            profileProvider.removePost(feedViewPost.post.uri);
+            _multiFeedProvider.removePost(feedViewPost.post.uri);
+          },
+        );
 
         // Constrain width on tablets for better readability
         if (ResponsiveUtils.isTablet(context)) {

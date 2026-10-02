@@ -26,6 +26,7 @@ import 'package:provider/provider.dart';
 // Shared generated mockito mocks (real provider types) so the
 // Consumer<AuthProvider>/Consumer<VoteProvider> lookups inside CommentCard
 // resolve correctly.
+import '../test_helpers/fake_providers.dart';
 import '../test_helpers/test_mocks.dart';
 
 /// A `LinkSharer` that records dispatches instead of opening a native sheet.
@@ -142,12 +143,13 @@ void main() {
     // where the parent post reached the card.
     when(mockAuthProvider.isAuthenticated).thenReturn(false);
     when(mockAuthProvider.did).thenReturn(null);
+    // Read by the app-wide MultiFeedProvider the profile screen resolves.
+    when(mockAuthProvider.restoredSessionRecoveryCount).thenReturn(0);
     when(mockVoteProvider.isLiked(any)).thenReturn(false);
     when(mockVoteProvider.getVoteState(any)).thenReturn(null);
     when(mockVoteProvider.isPending(any)).thenReturn(false);
-    when(mockVoteProvider.getAdjustedScore(any, any)).thenAnswer(
-      (invocation) => invocation.positionalArguments[1] as int,
-    );
+    when(mockVoteProvider.getAdjustedScore(any, any))
+        .thenAnswer((invocation) => invocation.positionalArguments[1] as int);
     blockProvider = BlockProvider(
       apiService: mockApiService,
       authProvider: mockAuthProvider,
@@ -507,9 +509,7 @@ void main() {
 
   group('profile comment list has no post to share under', () {
     setUp(() {
-      when(
-        mockApiService.getProfile(actor: anyNamed('actor')),
-      ).thenAnswer(
+      when(mockApiService.getProfile(actor: anyNamed('actor'))).thenAnswer(
         (_) async => UserProfile(
           did: 'did:plc:commenter789',
           handle: 'bob.coves.social',
@@ -563,6 +563,10 @@ void main() {
               dispose: (_, cache) => cache.dispose(),
             ),
             Provider<LinkSharer>.value(value: linkSharer),
+            unloadedMultiFeedProvider(
+              auth: mockAuthProvider,
+              apiService: mockApiService,
+            ),
           ],
           child: MaterialApp(
             theme: AppTheme.dark,

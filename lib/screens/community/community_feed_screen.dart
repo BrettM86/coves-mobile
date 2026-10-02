@@ -13,6 +13,7 @@ import '../../models/community.dart';
 import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/community_subscription_provider.dart';
+import '../../providers/multi_feed_provider.dart';
 import '../../providers/vote_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
@@ -64,6 +65,11 @@ const int _maxSearchQueryBytes = 500;
 class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   // Shared app-wide API client (owned by main.dart) — do not dispose here
   late final CovesApiService _apiService;
+
+  // App-wide home feeds, which stay alive under this screen: a post deleted
+  // here must leave them too. Read once, since a delete can finish after
+  // this screen has closed.
+  late final MultiFeedProvider _multiFeedProvider;
   final ScrollController _scrollController = ScrollController();
 
   // Tab state
@@ -105,6 +111,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   void initState() {
     super.initState();
     _apiService = context.read<CovesApiService>();
+    _multiFeedProvider = context.read<MultiFeedProvider>();
     _community = widget.community;
 
     _feedController = CursorPaginationController<FeedViewPost>(
@@ -920,7 +927,16 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
       endOfFeedWidget: _buildEndOfFeed(),
       emptyWidget: _buildEmptyPostsState(),
       itemBuilder: (context, post, index) {
-        final postCard = PostCard(post: post, currentTime: _currentTime);
+        final postCard = PostCard(
+          post: post,
+          currentTime: _currentTime,
+          onDeleted: () {
+            _feedController.removeWhere(
+              (feedPost) => feedPost.post.uri == post.post.uri,
+            );
+            _multiFeedProvider.removePost(post.post.uri);
+          },
+        );
 
         // Constrain width on tablets for better readability
         if (ResponsiveUtils.isTablet(context)) {

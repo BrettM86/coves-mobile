@@ -550,6 +550,21 @@ class UserProfileProvider with ChangeNotifier {
     }
   }
 
+  /// Remove the post with [uri] from the loaded posts without refetching,
+  /// e.g. after the author deletes it from its card.
+  ///
+  /// Every other part of the posts state (cursor, loading flags, errors) is
+  /// kept, and a load-more already in flight still appends its page. Notifies
+  /// only when the post was loaded. A no-op after [dispose]: the screen that
+  /// owns this provider can close while the delete is in flight.
+  void removePost(String uri) {
+    if (_disposed) {
+      return;
+    }
+    // The controller notifies, which re-projects _postsState.
+    _postsController.removeWhere((feedPost) => feedPost.post.uri == uri);
+  }
+
   /// Clear current profile and reset state
   void clearProfile() {
     _profileLoadGeneration++;

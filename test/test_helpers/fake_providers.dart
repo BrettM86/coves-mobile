@@ -1,6 +1,7 @@
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/community_subscription_provider.dart';
+import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
@@ -126,11 +127,27 @@ List<SingleChildWidget> postCardProviders({
   ];
 }
 
+/// The app-wide [MultiFeedProvider] registration for a test that pumps a
+/// community or profile screen, which also removes a post its author deletes
+/// from the home feeds, but never shows those feeds.
+///
+/// Real, and never loaded, so it makes no requests.
+SingleChildWidget unloadedMultiFeedProvider({
+  required AuthProvider auth,
+  required CovesApiService apiService,
+}) {
+  return ChangeNotifierProvider<MultiFeedProvider>(
+    create: (_) => MultiFeedProvider(auth, apiService: apiService),
+  );
+}
+
 /// The app-level dependencies a `ProfileScreen` resolves, mirroring the
 /// registrations in main.dart.
 ///
 /// Each ProfileScreen builds and owns its own UserProfileProvider from
-/// these, so no UserProfileProvider is provided here.
+/// these, so no UserProfileProvider is provided here. The app-wide
+/// [MultiFeedProvider] is a real one that nothing loads unless a home
+/// `FeedScreen` is also pumped, so it makes no requests on its own.
 List<SingleChildWidget> profileScreenProviders({
   required AuthProvider auth,
   required CovesApiService apiService,
@@ -152,6 +169,13 @@ List<SingleChildWidget> profileScreenProviders({
       create: (context) => ViewerStateHydrator(
         authProvider: auth,
         voteProvider: context.read<VoteProvider>(),
+      ),
+    ),
+    ChangeNotifierProvider<MultiFeedProvider>(
+      create: (context) => MultiFeedProvider(
+        auth,
+        apiService: apiService,
+        hydrator: context.read<ViewerStateHydrator>(),
       ),
     ),
     Provider<StreamableService>.value(value: StreamableService()),

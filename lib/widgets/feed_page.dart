@@ -37,6 +37,7 @@ class FeedPage extends StatefulWidget {
     required this.currentTime,
     this.loadMoreError,
     this.onRetryLoadMore,
+    this.onPostDeleted,
     super.key,
   });
 
@@ -52,6 +53,9 @@ class FeedPage extends StatefulWidget {
   final VoidCallback onRetry;
   final VoidCallback onClearErrorAndLoadMore;
   final VoidCallback? onRetryLoadMore;
+
+  /// Called with a post's URI after its author deletes it from this page.
+  final ValueChanged<String>? onPostDeleted;
   final bool isAuthenticated;
   final DateTime? currentTime;
 
@@ -210,6 +214,9 @@ class _FeedPageState extends State<FeedPage>
             }
 
             final post = widget.posts[index];
+            // Captured now so the delete callback does not read this State
+            // after the card (or the page) has left the tree.
+            final onPostDeleted = widget.onPostDeleted;
             final authorName =
                 post.post.author.displayName ?? post.post.author.handle;
 
@@ -226,7 +233,13 @@ class _FeedPageState extends State<FeedPage>
                     '$authorName. '
                     '${post.post.title ?? ""}',
                 button: true,
-                child: PostCard(post: post, currentTime: widget.currentTime),
+                child: PostCard(
+                  post: post,
+                  currentTime: widget.currentTime,
+                  onDeleted: onPostDeleted == null
+                      ? null
+                      : () => onPostDeleted(post.post.uri),
+                ),
               ),
             );
 

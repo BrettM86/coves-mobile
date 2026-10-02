@@ -467,6 +467,7 @@ class FeedScreenState extends State<FeedScreen> {
             ..clearError(feedType)
             ..loadMore(feedType),
           onRetryLoadMore: () => provider.retryLoadMore(feedType),
+          onPostDeleted: provider.removePost,
           isAuthenticated: isAuthenticated,
           currentTime: currentTime,
         );

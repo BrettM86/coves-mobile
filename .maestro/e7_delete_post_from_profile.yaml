@@ -1,0 +1,113 @@
+# Section E — check 7: deleting a post from the Me (profile) tab also removes
+# its card from the Home feed, which the shell keeps alive. Creates its own
+# timestamped post (same path as e6), brings its card on screen in the home
+# Discover feed, deletes it from the profile posts list, then returns to Home
+# and checks the Discover card is gone with no pull-to-refresh.
+# Only ever deletes the post this flow created: the menu tap is the "Post
+# options" button nearest below the unique title, and the flow then checks
+# that title is gone from the profile.
+# Assumes a signed-in session.
+# NOTE: never use hideKeyboard on the compose screen — Maestro implements it
+# as a BACK press, which the shell's dirty-draft guard redirects to Home.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+# --- create the post this flow will delete ---
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Create"
+      - extendedWaitUntil:
+          visible: "Create Post"
+          timeout: 15000
+- tapOn: "Select a community"
+- extendedWaitUntil:
+    visible: "Post to"
+    timeout: 15000
+- tapOn: "Search for a community"
+- inputText: "scien"
+- extendedWaitUntil:
+    visible: "Science[\\s\\S]*"
+    timeout: 15000
+- tapOn: "Science[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Create Post"
+    timeout: 15000
+- evalScript: ${output.e7Title = 'QA E7 delete ' + Date.now()}
+- tapOn: "Title"
+- inputText: ${output.e7Title}
+- tapOn: "What are your thoughts?"
+- inputText: "Created and deleted by the Section E delete-from-profile flow."
+- tapOn: "Post"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*${output.e7Title}[\\s\\S]*"
+    timeout: 20000
+# --- bring its card on screen in the home Discover feed ---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- retry:
+    maxRetries: 4
+    commands:
+      - swipe:
+          start: 50%, 30%
+          end: 50%, 80%
+          duration: 400
+      - extendedWaitUntil:
+          visible: "Feed post in [\\s\\S]*${output.e7Title}[\\s\\S]*"
+          timeout: 10000
+- scrollUntilVisible:
+    element:
+      text: "Feed post in [\\s\\S]*${output.e7Title}[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: build/maestro/e7_home_before_delete
+# --- delete it from the Me tab's posts list ---
+- tapOn: "Me"
+- scrollUntilVisible:
+    element:
+      text: "${output.e7Title}"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: build/maestro/e7_profile_before_delete
+- tapOn:
+    text: "Post options"
+    below:
+      text: "${output.e7Title}"
+- extendedWaitUntil:
+    visible: "Delete post"
+    timeout: 10000
+- tapOn: "Delete post"
+- extendedWaitUntil:
+    visible: "Delete Post"
+    timeout: 10000
+- tapOn: "Delete"
+- extendedWaitUntil:
+    visible: "Post deleted"
+    timeout: 15000
+- extendedWaitUntil:
+    notVisible: "${output.e7Title}"
+    timeout: 5000
+# --- back on Home, the Discover card is gone without a refresh ---
+- tapOn: "Home"
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000
+- extendedWaitUntil:
+    notVisible: "Feed post in [\\s\\S]*${output.e7Title}[\\s\\S]*"
+    timeout: 5000
+- takeScreenshot: build/maestro/e7_home_after_delete

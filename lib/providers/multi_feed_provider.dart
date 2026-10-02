@@ -427,9 +427,13 @@ class MultiFeedProvider with ChangeNotifier {
       // an un-deduped append would render a second PostCard (and trip the
       // duplicate-key assertion in debug builds). Mirrors
       // CursorPaginationController's `idOf` guard.
+      //
+      // A load-more page is appended to the feed's posts as they are now,
+      // not to the pre-request snapshot, so a removePost that ran while the
+      // page was in flight stays applied.
       final existing = replacePosts
           ? const <FeedViewPost>[]
-          : currentState.posts;
+          : getState(type).posts;
       final newPosts = [
         ...existing,
         ..._withoutDuplicates(response.feed, existing),
@@ -655,6 +659,37 @@ class MultiFeedProvider with ChangeNotifier {
     final currentState = getState(type);
     _feedStates[type] = currentState.copyWith(error: null);
     notifyListeners();
+  }
+
+  /// Remove the post with [uri] from every loaded feed without refetching,
+  /// e.g. after the author deletes it.
+  ///
+  /// Each affected feed gets a new posts list; every other part of its state
+  /// is kept. Notifies once when any feed held the post, and not at all
+  /// otherwise.
+  void removePost(String uri) {
+    if (_isDisposed) {
+      return;
+    }
+
+    var removedAny = false;
+    for (final type in FeedType.values) {
+      final state = _feedStates[type];
+      if (state == null) {
+        continue;
+      }
+      final remainingPosts = state.posts
+          .where((feedPost) => feedPost.post.uri != uri)
+          .toList();
+      if (remainingPosts.length != state.posts.length) {
+        _feedStates[type] = state.copyWith(posts: remainingPosts);
+        removedAny = true;
+      }
+    }
+
+    if (removedAny) {
+      notifyListeners();
+    }
   }
 
   /// Reset feed state for a specific feed

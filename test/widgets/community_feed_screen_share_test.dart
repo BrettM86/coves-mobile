@@ -75,9 +75,8 @@ void main() {
   }
 
   void stubCommunity(CommunityView view) {
-    when(
-      mockApiService.getCommunity(community: anyNamed('community')),
-    ).thenAnswer((_) async => view);
+    when(mockApiService.getCommunity(community: anyNamed('community')))
+        .thenAnswer((_) async => view);
   }
 
   /// An empty first page with no cursor: the feed never pages on its own and
@@ -119,6 +118,7 @@ void main() {
         ChangeNotifierProvider<BlockProvider>.value(value: blocks),
         Provider<StreamableService>(create: (_) => StreamableService()),
         Provider<LinkSharer>.value(value: linkSharer),
+        unloadedMultiFeedProvider(auth: auth, apiService: mockApiService),
       ],
       child: const CommunityFeedScreen(identifier: communityDid),
     );
@@ -204,9 +204,8 @@ void main() {
       // Never completes: the screen stays in its loading state, and the feed
       // load that follows it never starts.
       final pending = Completer<CommunityView>();
-      when(
-        mockApiService.getCommunity(community: anyNamed('community')),
-      ).thenAnswer((_) => pending.future);
+      when(mockApiService.getCommunity(community: anyNamed('community')))
+          .thenAnswer((_) => pending.future);
 
       final auth = SignedInAuthProvider();
       addTearDown(auth.dispose);
@@ -227,9 +226,8 @@ void main() {
     testWidgets('offers no share button when the community failed to load', (
       tester,
     ) async {
-      when(
-        mockApiService.getCommunity(community: anyNamed('community')),
-      ).thenThrow(NotFoundException('Community not found'));
+      when(mockApiService.getCommunity(community: anyNamed('community')))
+          .thenThrow(NotFoundException('Community not found'));
       stubEmptyFeed();
 
       await pumpCommunityFeed(tester);

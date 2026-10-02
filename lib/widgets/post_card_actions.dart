@@ -245,20 +245,15 @@ class _PostCardActionsState extends State<PostCardActions> {
       // Shared app-wide API client (owned by main.dart) — do not dispose
       final apiService = context.read<CovesApiService>();
 
+      // Captured before the request: the card can leave the tree (scrolled
+      // off-screen) while it is in flight, and the owner must still hear
+      // about a successful delete.
+      final notifyDeleted = onDeleted;
+
+      var deleted = false;
       try {
         await apiService.deletePost(uri: post.post.uri);
-
-        if (context.mounted) {
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Post deleted'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-
-          // Notify parent to handle post removal from feed
-          onDeleted?.call();
-        }
+        deleted = true;
       } on NetworkException catch (e) {
         if (kDebugMode) {
           debugPrint('Network error deleting post: $e');
@@ -319,6 +314,22 @@ class _PostCardActionsState extends State<PostCardActions> {
         if (mounted) {
           setState(() => _isDeleting = false);
         }
+      }
+
+      // Outside the try so an error thrown by the callback is not reported
+      // as a failed delete.
+      if (deleted) {
+        if (context.mounted) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Post deleted'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+
+        // Notify parent to handle post removal from feed
+        notifyDeleted?.call();
       }
     }
   }

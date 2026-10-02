@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/fake_providers.dart';
 import '../test_helpers/test_mocks.dart';
 
 /// A `LinkSharer` that records dispatches instead of opening a native sheet.
@@ -40,8 +41,7 @@ class RecordingLinkSharer implements LinkSharer {
 void main() {
   // Literals, never produced by the code under test.
   const otherProfileUrl = 'https://coves.social/profile/alice.coves.social';
-  const didProfileUrl =
-      'https://coves.social/profile/did%3Aplc%3Aauthor123';
+  const didProfileUrl = 'https://coves.social/profile/did%3Aplc%3Aauthor123';
   const ownProfileUrl = 'https://coves.social/profile/viewer.coves.social';
 
   const otherDid = 'did:plc:author123';
@@ -64,6 +64,8 @@ void main() {
     // Signed in as a third party by default; the signed-out group overrides.
     when(mockAuthProvider.isAuthenticated).thenReturn(true);
     when(mockAuthProvider.did).thenReturn(viewerDid);
+    // Read by the app-wide MultiFeedProvider the profile screen resolves.
+    when(mockAuthProvider.restoredSessionRecoveryCount).thenReturn(0);
 
     blockProvider = BlockProvider(
       apiService: mockApiService,
@@ -86,9 +88,8 @@ void main() {
 
   /// Answers `getProfile` with [profile].
   void stubProfile(UserProfile profile) {
-    when(
-      mockApiService.getProfile(actor: anyNamed('actor')),
-    ).thenAnswer((_) async => profile);
+    when(mockApiService.getProfile(actor: anyNamed('actor')))
+        .thenAnswer((_) async => profile);
   }
 
   Widget profileApp(String? actor) {
@@ -110,6 +111,10 @@ void main() {
           dispose: (_, cache) => cache.dispose(),
         ),
         Provider<LinkSharer>.value(value: linkSharer),
+        unloadedMultiFeedProvider(
+          auth: mockAuthProvider,
+          apiService: mockApiService,
+        ),
       ],
       child: MaterialApp(
         theme: AppTheme.dark,
@@ -231,9 +236,8 @@ void main() {
     ) async {
       // Never completes: the screen stays in its loading state.
       final pending = Completer<UserProfile>();
-      when(
-        mockApiService.getProfile(actor: anyNamed('actor')),
-      ).thenAnswer((_) => pending.future);
+      when(mockApiService.getProfile(actor: anyNamed('actor')))
+          .thenAnswer((_) => pending.future);
 
       addTearDown(() async {
         await tester.pumpWidget(
@@ -256,9 +260,8 @@ void main() {
     testWidgets('offers no share button when the profile failed to load', (
       tester,
     ) async {
-      when(
-        mockApiService.getProfile(actor: anyNamed('actor')),
-      ).thenThrow(NotFoundException('User not found'));
+      when(mockApiService.getProfile(actor: anyNamed('actor')))
+          .thenThrow(NotFoundException('User not found'));
 
       await pumpProfile(tester, actor: otherDid);
 

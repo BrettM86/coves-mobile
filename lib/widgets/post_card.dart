@@ -63,6 +63,7 @@ class PostCard extends StatefulWidget {
     this.embedHeight = 180,
     this.titleFontSize = 16,
     this.titleFontWeight = FontWeight.w400,
+    this.onDeleted,
     super.key,
   });
 
@@ -81,6 +82,7 @@ class PostCard extends StatefulWidget {
   final double embedHeight;
   final double titleFontSize;
   final FontWeight titleFontWeight;
+  final VoidCallback? onDeleted;
 
   @override
   State<PostCard> createState() => _PostCardState();
@@ -132,6 +134,7 @@ class _PostCardState extends State<PostCard> {
       concealed:
           widget.post.post.isSensitive && _revealedUri != widget.post.post.uri,
       onToggleReveal: _toggleReveal,
+      onDeleted: widget.onDeleted,
     );
   }
 }
@@ -157,6 +160,7 @@ class _PostCardContent extends StatelessWidget {
     required this.titleFontWeight,
     required this.concealed,
     required this.onToggleReveal,
+    required this.onDeleted,
   });
 
   final FeedViewPost post;
@@ -181,6 +185,8 @@ class _PostCardContent extends StatelessWidget {
 
   /// Flips the card's reveal state.
   final VoidCallback onToggleReveal;
+
+  final VoidCallback? onDeleted;
 
   void _navigateToDetail(BuildContext context) {
     // Navigate to post detail screen
@@ -409,7 +415,11 @@ class _PostCardContent extends StatelessWidget {
 
             // Action buttons row
             if (showActions)
-              PostCardActions(post: post, showCommentButton: showCommentButton),
+              PostCardActions(
+                post: post,
+                showCommentButton: showCommentButton,
+                onDeleted: onDeleted,
+              ),
           ],
         ),
       ),

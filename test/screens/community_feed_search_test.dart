@@ -115,6 +115,7 @@ void main() {
           ),
           ChangeNotifierProvider<BlockProvider>.value(value: blocks),
           Provider<StreamableService>(create: (_) => StreamableService()),
+          unloadedMultiFeedProvider(auth: auth, apiService: mockApiService),
         ],
         child: const CommunityFeedScreen(identifier: communityDid),
       ),

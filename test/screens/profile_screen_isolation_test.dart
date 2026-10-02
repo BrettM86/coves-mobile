@@ -223,6 +223,7 @@ void main() {
             create: (_) => ProfileCache(authProvider),
             dispose: (_, cache) => cache.dispose(),
           ),
+          unloadedMultiFeedProvider(auth: authProvider, apiService: apiService),
         ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
       ),

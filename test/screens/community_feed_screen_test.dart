@@ -78,6 +78,7 @@ void main() {
           ),
           ChangeNotifierProvider<BlockProvider>.value(value: blocks),
           Provider<StreamableService>(create: (_) => StreamableService()),
+          unloadedMultiFeedProvider(auth: auth, apiService: mockApiService),
         ],
         child: const CommunityFeedScreen(identifier: communityDid),
       ),
@@ -136,9 +137,8 @@ void main() {
       'pages on once the community loads', (tester) async {
     final community = Completer<CommunityView>();
     final firstPage = Completer<TimelineResponse>();
-    when(
-      mockApiService.getCommunity(community: anyNamed('community')),
-    ).thenAnswer((_) => community.future);
+    when(mockApiService.getCommunity(community: anyNamed('community')))
+        .thenAnswer((_) => community.future);
     stubShortFeed(firstPage);
 
     await pumpFeedScreen(tester);
@@ -165,19 +165,18 @@ void main() {
       'failed pages on once a retry loads the community', (tester) async {
     final firstPage = Completer<TimelineResponse>();
     var communityAttempts = 0;
-    when(
-      mockApiService.getCommunity(community: anyNamed('community')),
-    ).thenAnswer((_) async {
-      communityAttempts++;
-      if (communityAttempts == 1) {
-        throw ApiException('Server error', statusCode: 500);
-      }
-      return CommunityView(
-        did: communityDid,
-        name: communityHandle,
-        displayName: 'Test Cove',
-      );
-    });
+    when(mockApiService.getCommunity(community: anyNamed('community')))
+        .thenAnswer((_) async {
+          communityAttempts++;
+          if (communityAttempts == 1) {
+            throw ApiException('Server error', statusCode: 500);
+          }
+          return CommunityView(
+            did: communityDid,
+            name: communityHandle,
+            displayName: 'Test Cove',
+          );
+        });
     stubShortFeed(firstPage);
 
     await pumpFeedScreen(tester);
