@@ -254,10 +254,12 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
       return;
     }
 
-    final composed = composeRichText(_textController.text);
+    final submittedText = _textController.text;
+    final composed = composeRichText(submittedText);
     if (composed.content.isEmpty) {
       return;
     }
+    final parentUri = widget.comment?.comment.uri;
 
     // Add haptic feedback before submission
     await HapticFeedback.lightImpact();
@@ -267,15 +269,19 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
       _isSubmitting = true;
     });
 
+    // The text leaves the draft slot for the duration of the send, so a
+    // composer reopened mid-send starts empty instead of inviting a duplicate
+    // post; a failed send puts it back (widget.commentsProvider, not
+    // context.read — the provider is not an ancestor of this pushed route)
+    widget.commentsProvider.clearDraft(parentUri: parentUri);
+
+    var succeeded = false;
     try {
       await widget.onSubmit(composed.content, composed.facets ?? const []);
-      // Clear draft on success (widget.commentsProvider, not context.read —
-      // the provider is not an ancestor of this pushed route)
-      widget.commentsProvider.clearDraft(
-        parentUri: widget.comment?.comment.uri,
-      );
-      // Pop screen after successful submission
-      if (mounted) {
+      succeeded = true;
+      // After a user back the route is animating out and no longer current;
+      // pop() would then remove the screen below
+      if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
         Navigator.of(context).pop();
       }
     } on Exception catch (e) {
@@ -288,10 +294,23 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
             behavior: SnackBarBehavior.floating,
           ),
         );
-        // Reset loading state on error
-        setState(() {
-          _isSubmitting = false;
-        });
+      }
+    } finally {
+      if (!succeeded) {
+        // A newer draft saved while this send was in flight wins. If a
+        // composer reopened during the send is still open when this send
+        // fails and is closed afterwards, its text overwrites this one.
+        if (widget.commentsProvider.getDraft(parentUri: parentUri).isEmpty) {
+          widget.commentsProvider.saveDraft(
+            submittedText,
+            parentUri: parentUri,
+          );
+        }
+        if (mounted) {
+          setState(() {
+            _isSubmitting = false;
+          });
+        }
       }
     }
   }
@@ -335,8 +354,11 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   }
 
   void _handleCancel() {
-    // Save draft before closing (if text is not empty)
-    _saveDraft();
+    // Save draft before closing (if text is not empty), except while a send
+    // is in flight: _handleSubmit owns the draft slot then
+    if (!_isSubmitting) {
+      _saveDraft();
+    }
     Navigator.of(context).pop();
   }
 
@@ -355,11 +377,11 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     // _ContextPreview)
     return ChangeNotifierProvider.value(
       value: widget.commentsProvider,
-      // System back / predictive back must save the draft just like the
-      // app-bar Cancel button. Never save in dispose() instead: after a
-      // successful submit the controller still holds the submitted text and
-      // a dispose-save would resurrect the just-cleared draft — hence the
-      // !_isSubmitting guard (submit pops while _isSubmitting is true).
+      // System back / predictive back saves the draft just like the app-bar
+      // Cancel button. Not while a send is in flight: _handleSubmit owns the
+      // draft slot then and restores the text itself on failure. Never save
+      // in dispose() instead: after a successful submit the controller still
+      // holds the sent text.
       child: PopScope(
         onPopInvokedWithResult: (didPop, result) {
           if (didPop && !_isSubmitting) {

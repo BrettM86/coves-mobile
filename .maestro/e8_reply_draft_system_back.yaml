@@ -1,0 +1,64 @@
+# Section E — check 8 (variant of check 4, e4_reply_draft): leaving the reply
+# composer with the system back button instead of Cancel saves the draft;
+# reopening the composer on the same post restores it.
+# System back saves the draft through PopScope, just like Cancel. While a
+# send is in flight the text is taken out of the draft slot (a composer
+# reopened mid-send starts empty) and a failed send puts it back; those
+# in-flight cases are pinned by host widget tests in
+# test/screens/reply_screen_test.dart, because a mid-flight send can't be
+# forced reliably on a device.
+# Uses the first feed post rather than a named seed post, and creates no
+# content: drafts live in memory only, and the flow ends with Cancel.
+# NOTE: never use hideKeyboard here — Maestro implements it as a BACK press
+# on Android.
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 30000
+- tapOn:
+    text: "Feed post in [\\s\\S]*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Comment"
+    timeout: 15000
+# --- open composer, type, leave with system back ---
+- evalScript: ${output.e8Draft = 'QA e8 back draft ' + Date.now()}
+- tapOn: "Comment"
+- extendedWaitUntil:
+    visible: "Send comment[\\s\\S]*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- inputText: ${output.e8Draft}
+# First back closes the keyboard if open, else pops the composer. Settle the
+# exit transition so a closing composer can't draw a back that pops post detail.
+- back
+- waitForAnimationToEnd:
+    timeout: 5000
+- runFlow:
+    when:
+      visible: "Send comment[\\s\\S]*"
+    commands:
+      - back
+- extendedWaitUntil:
+    notVisible: "Send comment[\\s\\S]*"
+    timeout: 15000
+# --- reopen: draft restored ---
+- tapOn: "Comment"
+- extendedWaitUntil:
+    visible: "Send comment[\\s\\S]*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "[\\s\\S]*${output.e8Draft}[\\s\\S]*"
+- takeScreenshot: build/maestro/e8_draft_restored_after_back
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    notVisible: "Send comment[\\s\\S]*"
+    timeout: 15000

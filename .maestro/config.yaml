@@ -51,6 +51,7 @@ executionOrder:
     - e5_kill_mid_compose
     - e6_delete_post_from_feed
     - e7_delete_post_from_profile
+    - e8_reply_draft_system_back
     - f1_own_profile
     - f2_author_profile
     - f3_edit_profile_persist

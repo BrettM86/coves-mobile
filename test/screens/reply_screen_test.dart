@@ -265,6 +265,353 @@ void main() {
     });
   });
 
+  group('ReplyScreen draft when system back interrupts an in-flight send', () {
+    final sendPill = find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics && widget.properties.label == 'Send comment',
+    );
+
+    /// Taps Send and pumps a bounded number of frames: the in-flight spinner
+    /// animates indefinitely, so pumpAndSettle would time out. Two frames
+    /// cover the awaited (mocked) haptic call, the setState, and the rebuild.
+    Future<void> tapSendAndPumpUntilInFlight(WidgetTester tester) async {
+      await tester.tap(find.text('Send'));
+      await tester.pump();
+      await tester.pump();
+    }
+
+    void expectSendInFlight() {
+      expect(find.text('Send'), findsNothing);
+      expect(
+        find.descendant(
+          of: sendPill,
+          matching: find.byType(CircularProgressIndicator),
+        ),
+        findsOneWidget,
+      );
+    }
+
+    /// System back, then pumps past the reverse page transition (longer than
+    /// any default Material transition) so the reply route is removed and
+    /// its State disposed before the send settles
+    Future<void> systemBackAndFinishTransition(WidgetTester tester) async {
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+    }
+
+    testWidgets('send fails after the screen was popped: reopening restores '
+        'the typed text', (tester) async {
+      final comment = createComment('at://did:plc:author/comment/1');
+      final submitCompleter = Completer<void>();
+      String? submittedContent;
+      await pumpBase(tester);
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) {
+          submittedContent = content;
+          return submitCompleter.future;
+        },
+      );
+
+      await tester.enterText(find.byType(TextField), 'Reply that must survive');
+      await tester.pump();
+      await tapSendAndPumpUntilInFlight(tester);
+
+      expect(submittedContent, 'Reply that must survive');
+      expectSendInFlight();
+
+      final replyState = tester.state(find.byType(ReplyScreen));
+      await systemBackAndFinishTransition(tester);
+
+      expect(find.text('base route'), findsOneWidget);
+      expect(find.byType(ReplyScreen), findsNothing);
+      expect(replyState.mounted, isFalse);
+
+      submitCompleter.completeError(Exception('network unreachable'));
+      await tester.pump();
+
+      await pushReply(tester, comment: comment);
+
+      final textField = tester.widget<TextField>(find.byType(TextField));
+      expect(textField.controller!.text, 'Reply that must survive');
+      expect(
+        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        'Reply that must survive',
+      );
+    });
+
+    testWidgets('send succeeds after the screen was popped: the sent text is '
+        'never left in the draft', (tester) async {
+      final comment = createComment('at://did:plc:author/comment/1');
+      final submitCompleter = Completer<void>();
+      String? submittedContent;
+      await pumpBase(tester);
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) {
+          submittedContent = content;
+          return submitCompleter.future;
+        },
+      );
+
+      await tester.enterText(
+        find.byType(TextField),
+        'Fresh reply sent before back',
+      );
+      await tester.pump();
+      await tapSendAndPumpUntilInFlight(tester);
+
+      expect(submittedContent, 'Fresh reply sent before back');
+      expectSendInFlight();
+
+      final replyState = tester.state(find.byType(ReplyScreen));
+      await systemBackAndFinishTransition(tester);
+
+      expect(find.text('base route'), findsOneWidget);
+      expect(find.byType(ReplyScreen), findsNothing);
+      expect(replyState.mounted, isFalse);
+      // The text being sent must not sit in the draft slot during the send
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+
+      submitCompleter.complete();
+      await tester.pump();
+
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+
+      await pushReply(tester, comment: comment);
+
+      final reopenedField = tester.widget<TextField>(find.byType(TextField));
+      expect(reopenedField.controller!.text, isEmpty);
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+    });
+
+    testWidgets('successful send without a user pop clears the restored '
+        'draft: reopening shows an empty field', (tester) async {
+      final comment = createComment('at://did:plc:author/comment/1');
+      commentsProvider.saveDraft(
+        'Previously saved draft',
+        parentUri: comment.comment.uri,
+      );
+      String? submittedContent;
+      await pumpBase(tester);
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) async {
+          submittedContent = content;
+        },
+      );
+
+      final restoredField = tester.widget<TextField>(find.byType(TextField));
+      expect(restoredField.controller!.text, 'Previously saved draft');
+
+      await tester.tap(find.text('Send'));
+      await tester.pumpAndSettle();
+
+      expect(submittedContent, 'Previously saved draft');
+      // The submit path popped the screen itself
+      expect(find.text('base route'), findsOneWidget);
+      expect(find.byType(ReplyScreen), findsNothing);
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+
+      await pushReply(tester, comment: comment);
+
+      final reopenedField = tester.widget<TextField>(find.byType(TextField));
+      expect(reopenedField.controller!.text, isEmpty);
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+    });
+
+    testWidgets('reopening the composer while the send is in flight shows an '
+        'empty field', (tester) async {
+      final comment = createComment('at://did:plc:author/comment/1');
+      final submitCompleter = Completer<void>();
+      await pumpBase(tester);
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) => submitCompleter.future,
+      );
+
+      await tester.enterText(find.byType(TextField), 'Reply still sending');
+      await tester.pump();
+      await tapSendAndPumpUntilInFlight(tester);
+      expectSendInFlight();
+
+      await systemBackAndFinishTransition(tester);
+      expect(find.text('base route'), findsOneWidget);
+
+      await pushReply(tester, comment: comment);
+
+      // A prefilled field here would invite sending the same reply twice
+      expect(submitCompleter.isCompleted, isFalse);
+      final reopenedField = tester.widget<TextField>(find.byType(TextField));
+      expect(reopenedField.controller!.text, isEmpty);
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+
+      // Settle the first send so nothing is left pending
+      submitCompleter.complete();
+      await tester.pump();
+    });
+
+    testWidgets('Cancel during an in-flight send leaves the draft empty; a '
+        'failed send restores the text', (tester) async {
+      final comment = createComment('at://did:plc:author/comment/1');
+      final submitCompleter = Completer<void>();
+      await pumpBase(tester);
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) => submitCompleter.future,
+      );
+
+      await tester.enterText(find.byType(TextField), 'Cancelled mid-send');
+      await tester.pump();
+      await tapSendAndPumpUntilInFlight(tester);
+      expectSendInFlight();
+
+      final replyState = tester.state(find.byType(ReplyScreen));
+      await tester.tap(find.text('Cancel'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+
+      expect(find.text('base route'), findsOneWidget);
+      expect(replyState.mounted, isFalse);
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+
+      submitCompleter.completeError(Exception('network unreachable'));
+      await tester.pump();
+
+      expect(
+        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        'Cancelled mid-send',
+      );
+    });
+
+    testWidgets('a newer draft saved by a second composer survives the first '
+        'send succeeding', (tester) async {
+      final comment = createComment('at://did:plc:author/comment/1');
+      final submitCompleter = Completer<void>();
+      await pumpBase(tester);
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) => submitCompleter.future,
+      );
+
+      await tester.enterText(find.byType(TextField), 'First reply in flight');
+      await tester.pump();
+      await tapSendAndPumpUntilInFlight(tester);
+      expectSendInFlight();
+      await systemBackAndFinishTransition(tester);
+
+      // Composer B: write a newer draft and leave
+      await pushReply(tester, comment: comment);
+      await tester.enterText(find.byType(TextField), 'Newer draft');
+      await tester.pump();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(
+        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        'Newer draft',
+      );
+
+      submitCompleter.complete();
+      await tester.pump();
+
+      expect(
+        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        'Newer draft',
+      );
+      await pushReply(tester, comment: comment);
+      final reopenedField = tester.widget<TextField>(find.byType(TextField));
+      expect(reopenedField.controller!.text, 'Newer draft');
+    });
+
+    testWidgets('a newer draft saved by a second composer survives the first '
+        'send failing', (tester) async {
+      final comment = createComment('at://did:plc:author/comment/1');
+      final submitCompleter = Completer<void>();
+      await pumpBase(tester);
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) => submitCompleter.future,
+      );
+
+      await tester.enterText(find.byType(TextField), 'First reply in flight');
+      await tester.pump();
+      await tapSendAndPumpUntilInFlight(tester);
+      expectSendInFlight();
+      await systemBackAndFinishTransition(tester);
+
+      // Composer B: write a newer draft and leave
+      await pushReply(tester, comment: comment);
+      await tester.enterText(find.byType(TextField), 'Newer draft');
+      await tester.pump();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      submitCompleter.completeError(Exception('network unreachable'));
+      await tester.pump();
+
+      // The failed send must not overwrite the newer draft with its text
+      expect(
+        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        'Newer draft',
+      );
+      await pushReply(tester, comment: comment);
+      final reopenedField = tester.widget<TextField>(find.byType(TextField));
+      expect(reopenedField.controller!.text, 'Newer draft');
+    });
+
+    testWidgets('send succeeding during the back transition does not also pop '
+        'the route below', (tester) async {
+      final comment = createComment('at://did:plc:author/comment/1');
+      final submitCompleter = Completer<void>();
+      await pumpBase(tester);
+      // A middle route stands in for post detail, so a second pop is visible
+      unawaited(
+        navigatorKey.currentState!.push(
+          MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('post detail route')),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) => submitCompleter.future,
+      );
+
+      await tester.enterText(find.byType(TextField), 'Reply sent during back');
+      await tester.pump();
+      await tapSendAndPumpUntilInFlight(tester);
+      expectSendInFlight();
+
+      final replyState = tester.state(find.byType(ReplyScreen));
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      // Mid exit transition: the send must complete inside this window
+      expect(replyState.mounted, isTrue);
+
+      submitCompleter.complete();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+
+      expect(find.byType(ReplyScreen), findsNothing);
+      expect(find.text('post detail route'), findsOneWidget);
+      expect(find.text('base route'), findsNothing);
+    });
+  });
+
   group('ReplyScreen link facets', () {
     testWidgets('submits trimmed content with exactly the scheme-prefixed '
         'links as UTF-8 byte-range link facets', (tester) async {
