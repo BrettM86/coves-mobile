@@ -240,19 +240,16 @@ class _CommunitiesDiscoveryScreenState
       if (!mounted) {
         return;
       }
-      final query = _searchController.text.trim().toLowerCase();
+      final query = _normalizedSearchText;
 
       if (query.isEmpty) {
-        setState(() {
-          _searchQuery = '';
-          _searchResults = [];
-        });
+        _clearSearch();
         return;
       }
 
       // Load full list on first search if not already loaded
       if (!_hasLoadedFullList && !_isLoadingFullList) {
-        _loadFullCommunityList(query);
+        _loadFullCommunityList();
         return;
       }
 
@@ -260,10 +257,10 @@ class _CommunitiesDiscoveryScreenState
     });
   }
 
-  Future<void> _loadFullCommunityList(String query) async {
+  Future<void> _loadFullCommunityList() async {
     setState(() {
       _isLoadingFullList = true;
-      _searchQuery = query;
+      _searchQuery = _normalizedSearchText;
     });
 
     try {
@@ -276,7 +273,7 @@ class _CommunitiesDiscoveryScreenState
         setState(() {
           _isLoadingFullList = false;
         });
-        _applySearchFilter(query);
+        _applyCurrentSearchText();
       }
     } on Exception catch (e, stackTrace) {
       if (kDebugMode) {
@@ -296,7 +293,7 @@ class _CommunitiesDiscoveryScreenState
           _isLoadingFullList = false;
           _isUsingPartialData = true;
         });
-        _applySearchFilter(query);
+        _applyCurrentSearchText();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -306,6 +303,27 @@ class _CommunitiesDiscoveryScreenState
           ),
         );
       }
+    }
+  }
+
+  String get _normalizedSearchText =>
+      _searchController.text.trim().toLowerCase();
+
+  void _clearSearch() {
+    setState(() {
+      _searchQuery = '';
+      _searchResults = [];
+    });
+  }
+
+  /// Applies what is in the search field now. The user may have edited or
+  /// cleared it while the full-list fetch was in flight.
+  void _applyCurrentSearchText() {
+    final query = _normalizedSearchText;
+    if (query.isEmpty) {
+      _clearSearch();
+    } else {
+      _applySearchFilter(query);
     }
   }
 
@@ -609,7 +627,7 @@ class _CommunitiesDiscoveryScreenState
               if (_isUsingPartialData) ...[
                 const SizedBox(width: 6),
                 GestureDetector(
-                  onTap: () => _loadFullCommunityList(_searchQuery),
+                  onTap: _loadFullCommunityList,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 44),
                     child: Center(
