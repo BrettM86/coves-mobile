@@ -267,5 +267,83 @@ void main() {
         '11:59PM · Dec 31, 2030',
       );
     });
+
+    group('UTC input', () {
+      // Wire timestamps end in Z, so DateTime.parse hands the formatter a UTC
+      // value. The expected text is the formatter applied to the same instant
+      // in local time, which keeps these tests valid in any time zone.
+      test('renders a UTC time in local time', () {
+        final utcTime = DateTime.utc(2025, 12, 26, 17, 1);
+        expect(
+          DateTimeUtils.formatFullDateTime(utcTime),
+          DateTimeUtils.formatFullDateTime(utcTime.toLocal()),
+          reason: '"9:01AM · Dec 26, 2025" under America/Los_Angeles',
+        );
+      });
+
+      test('renders the local day, month and year across a year boundary', () {
+        // 03:00Z on January 1 is still December 31 across most of the Americas.
+        final utcTime = DateTime.utc(2025, 1, 1, 3);
+        expect(
+          DateTimeUtils.formatFullDateTime(utcTime),
+          DateTimeUtils.formatFullDateTime(utcTime.toLocal()),
+          reason: '"7:00PM · Dec 31, 2024" under America/Los_Angeles',
+        );
+      });
+    });
+  });
+
+  group('DateTimeUtils.formatJoinedDate', () {
+    test('formats a local date as the month and year', () {
+      expect(
+        DateTimeUtils.formatJoinedDate(DateTime(2025, 1, 15)),
+        'Joined January 2025',
+      );
+    });
+
+    group('UTC input', () {
+      // Wire timestamps end in Z, so DateTime.parse hands the formatter a UTC
+      // value. The expected text is the formatter applied to the same instant
+      // in local time, which keeps these tests valid in any time zone.
+      test('renders the local month across a month boundary', () {
+        // 03:00Z on February 1 is still January 31 across most of the Americas.
+        final utcTime = DateTime.utc(2025, 2, 1, 3);
+        expect(
+          DateTimeUtils.formatJoinedDate(utcTime),
+          DateTimeUtils.formatJoinedDate(utcTime.toLocal()),
+          reason: '"Joined January 2025" under America/Los_Angeles',
+        );
+      });
+
+      test('renders the local year across a year boundary', () {
+        // 03:00Z on January 1 is still December 31 across most of the Americas.
+        final utcTime = DateTime.utc(2025, 1, 1, 3);
+        expect(
+          DateTimeUtils.formatJoinedDate(utcTime),
+          DateTimeUtils.formatJoinedDate(utcTime.toLocal()),
+          reason: '"Joined December 2024" under America/Los_Angeles',
+        );
+      });
+
+      // These build the UTC input from a local wall-clock time, so the
+      // expected text is the same in every zone. They fail if the formatter
+      // reads the UTC fields: the first on hosts behind UTC, the second on
+      // hosts ahead of it.
+      test('renders a UTC instant that is the last evening of January in '
+          'local time', () {
+        expect(
+          DateTimeUtils.formatJoinedDate(DateTime(2025, 1, 31, 23, 30).toUtc()),
+          'Joined January 2025',
+        );
+      });
+
+      test('renders a UTC instant that is the first night of February in '
+          'local time', () {
+        expect(
+          DateTimeUtils.formatJoinedDate(DateTime(2025, 2, 1, 0, 30).toUtc()),
+          'Joined February 2025',
+        );
+      });
+    });
   });
 }

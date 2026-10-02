@@ -38,10 +38,12 @@ class DateTimeUtils {
   ///
   /// Example: "12:01PM · Dec 26, 2025"
   ///
-  /// [dateTime] is the time to format
+  /// [dateTime] is the time to format. The output is in the device's local
+  /// time, whether [dateTime] is UTC or local.
   static String formatFullDateTime(DateTime dateTime) {
-    final hour = dateTime.hour;
-    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final localDateTime = dateTime.toLocal();
+    final hour = localDateTime.hour;
+    final minute = localDateTime.minute.toString().padLeft(2, '0');
     final period = hour >= 12 ? 'PM' : 'AM';
     final hour12 = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
 
@@ -59,10 +61,13 @@ class DateTimeUtils {
       'Nov',
       'Dec',
     ];
-    assert(dateTime.month >= 1 && dateTime.month <= 12, 'Invalid month');
-    final month = months[dateTime.month - 1];
-    final day = dateTime.day;
-    final year = dateTime.year;
+    assert(
+      localDateTime.month >= 1 && localDateTime.month <= 12,
+      'Invalid month',
+    );
+    final month = months[localDateTime.month - 1];
+    final day = localDateTime.day;
+    final year = localDateTime.year;
 
     return '$hour12:$minute$period · $month $day, $year';
   }
@@ -71,8 +76,10 @@ class DateTimeUtils {
   ///
   /// Example: "Joined January 2025"
   ///
-  /// [dateTime] is the account creation date
+  /// [dateTime] is the account creation date. The month and year are in the
+  /// device's local time, whether [dateTime] is UTC or local.
   static String formatJoinedDate(DateTime dateTime) {
+    final localDateTime = dateTime.toLocal();
     const months = [
       'January',
       'February',
@@ -87,8 +94,11 @@ class DateTimeUtils {
       'November',
       'December',
     ];
-    assert(dateTime.month >= 1 && dateTime.month <= 12, 'Invalid month');
-    final month = months[dateTime.month - 1];
-    return 'Joined $month ${dateTime.year}';
+    assert(
+      localDateTime.month >= 1 && localDateTime.month <= 12,
+      'Invalid month',
+    );
+    final month = months[localDateTime.month - 1];
+    return 'Joined $month ${localDateTime.year}';
   }
 }

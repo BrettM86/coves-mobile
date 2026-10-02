@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/models/bluesky_post.dart';
+import 'package:coves_flutter/utils/date_time_utils.dart';
 import 'package:coves_flutter/widgets/bluesky_post_card.dart';
 import 'package:coves_flutter/widgets/image_viewer.dart';
 import 'package:flutter/material.dart';
@@ -70,12 +71,13 @@ Map<String, dynamic> blueskyImageJson({
 
 /// A resolved parent post carrying an image gallery. A null [images] omits the
 /// `images` key entirely, which is what the backend sends for video posts and
-/// for posts with no media.
+/// for posts with no media. [createdAt] is the raw wire timestamp.
 Map<String, dynamic> blueskyImagesJson({
   List<Map<String, dynamic>>? images,
   bool hasMedia = true,
   int? mediaCount,
   Map<String, dynamic>? quotedPost,
+  String createdAt = '2026-09-01T12:00:00Z',
 }) {
   return <String, dynamic>{
     'post': <String, dynamic>{
@@ -86,7 +88,7 @@ Map<String, dynamic> blueskyImagesJson({
       'uri': 'at://did:plc:parent/app.bsky.feed.post/p1',
       'cid': 'bafyparentcid',
       'text': postText,
-      'createdAt': '2026-09-01T12:00:00Z',
+      'createdAt': createdAt,
       'author': <String, dynamic>{
         'did': 'did:plc:parent',
         'handle': authorHandle,
@@ -368,6 +370,44 @@ void main() {
           (widget) => widget is Text && (widget.data ?? '').startsWith('@'),
         ),
         findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('BlueskyPostCard timestamp in local time', () {
+    testWidgets('shows a UTC wire timestamp in the device time zone, not as '
+        'UTC wall-clock time', (tester) async {
+      useMediaSizedSurface(tester);
+
+      // The backend sends createdAt with a Z suffix, so the parsed model value
+      // is a UTC DateTime, exactly as in production.
+      final embed = BlueskyPostEmbed.fromJson(
+        blueskyImagesJson(hasMedia: false, createdAt: '2025-12-26T17:01:00Z'),
+      );
+
+      await tester.pumpWidget(blueskyCardHarness(embed));
+      await tester.pump();
+
+      // "9:01AM · Dec 26, 2025" under America/Los_Angeles.
+      final localText = DateTimeUtils.formatFullDateTime(
+        DateTime.utc(2025, 12, 26, 17, 1).toLocal(),
+      );
+      const utcWallClockText = '5:01PM · Dec 26, 2025';
+
+      // In a zone whose offset is zero at this instant the two texts coincide
+      // and there is no wrong text to rule out.
+      if (localText != utcWallClockText) {
+        expect(
+          find.text(utcWallClockText),
+          findsNothing,
+          reason: 'the UTC wall-clock time must not reach the screen',
+        );
+      }
+      expect(
+        find.text(localText),
+        findsOneWidget,
+        reason: 'the timestamp row shows the post time in the device time zone',
       );
       expect(tester.takeException(), isNull);
     });

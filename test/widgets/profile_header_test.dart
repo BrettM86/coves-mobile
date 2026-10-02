@@ -1,10 +1,12 @@
 import 'package:coves_flutter/models/user_profile.dart';
+import 'package:coves_flutter/utils/date_time_utils.dart';
 import 'package:coves_flutter/widgets/profile_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Geometry regression tests for [ProfileHeader].
+/// Regression tests for [ProfileHeader] geometry and the [ProfileDetails]
+/// joined date.
 ///
 /// The header previously drifted across devices because its height was
 /// hardcoded while its content started below a SafeArea whose top inset
@@ -12,6 +14,9 @@ import 'package:flutter_test/flutter_test.dart';
 /// status-bar inset and where the banner, avatar, and identity block land,
 /// at insets spanning a plain phone (0), a notch (44), and a Dynamic
 /// Island (59).
+///
+/// The file also checks that [ProfileDetails] shows the Joined month in the
+/// device's local time.
 void main() {
   const insets = <double>[0, 20, 44, 59];
 
@@ -23,10 +28,12 @@ void main() {
       );
 
   /// Pumps a profile screen skeleton at [topInset] and returns the tester.
+  /// [detailsProfile] replaces the profile shown by [ProfileDetails].
   Future<void> pumpAt(
     WidgetTester tester,
     double topInset, {
     String handle = 'someone.example.com',
+    UserProfile? detailsProfile,
   }) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 3;
@@ -48,7 +55,9 @@ void main() {
                     ),
                   ),
                   SliverToBoxAdapter(
-                    child: ProfileDetails(profile: buildProfile()),
+                    child: ProfileDetails(
+                      profile: detailsProfile ?? buildProfile(),
+                    ),
                   ),
                   const SliverToBoxAdapter(child: SizedBox(height: 2000)),
                 ],
@@ -292,6 +301,44 @@ void main() {
       // Shrinking happens within the line box reserved at 20pt, so the
       // header's deterministic geometry is unaffected by handle length.
       expect(heights.toSet(), hasLength(1));
+    });
+  });
+
+  group('ProfileDetails joined date in local time', () {
+    testWidgets('shows the join month in the device time zone for a UTC wire '
+        'timestamp next to a month boundary', (tester) async {
+      // 03:00Z on February 1 is still January 31 across most of the
+      // Americas. The profile is parsed from the wire map, so createdAt is a
+      // UTC DateTime exactly as in production.
+      final profile = UserProfile.fromJson(<String, dynamic>{
+        'did': 'did:plc:abcdefghijklmnopqrstuvwx',
+        'handle': 'someone.example.com',
+        'createdAt': '2025-02-01T03:00:00Z',
+      });
+
+      await pumpAt(tester, 44, detailsProfile: profile);
+
+      // "Joined January 2025" under America/Los_Angeles.
+      final localText = DateTimeUtils.formatJoinedDate(
+        DateTime.utc(2025, 2, 1, 3).toLocal(),
+      );
+      const utcWallClockText = 'Joined February 2025';
+
+      // In a zone three or fewer hours behind UTC, or ahead of it, the two
+      // texts coincide and there is no wrong text to rule out.
+      if (localText != utcWallClockText) {
+        expect(
+          find.text(utcWallClockText),
+          findsNothing,
+          reason: 'the UTC wall-clock month must not reach the screen',
+        );
+      }
+      expect(
+        find.text(localText),
+        findsOneWidget,
+        reason: 'the Joined line uses the join month in the device time zone',
+      );
+      expect(tester.takeException(), isNull);
     });
   });
 }
