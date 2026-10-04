@@ -5,6 +5,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import '../constants/app_colors.dart';
 import '../providers/community_subscription_provider.dart';
 import '../services/api_exceptions.dart';
+import '../utils/error_messages.dart';
 
 /// Style variant for the join button.
 enum CommunityJoinButtonStyle {
@@ -62,20 +63,22 @@ class CommunityJoinButton extends StatelessWidget {
     BuildContext context,
     CommunitySubscriptionProvider provider,
   ) async {
+    // Captured before the await: a lazy list can dispose this button while
+    // the request is in flight, and the failure must still be shown.
+    final messenger = ScaffoldMessenger.of(context);
     try {
       await provider.toggleSubscription(communityDid: communityDid);
     } on ApiException catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(ErrorMessage.subscription(e))),
+        );
       }
     } on Exception catch (e, stackTrace) {
       await Sentry.captureException(e, stackTrace: stackTrace);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to update membership. Please try again.'),
-          ),
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(ErrorMessage.subscription(e))),
         );
       }
     }

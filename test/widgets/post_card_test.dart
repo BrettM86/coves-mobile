@@ -4,6 +4,7 @@ import 'package:coves_flutter/constants/app_colors.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
+import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/streamable_service.dart';
 import 'package:coves_flutter/widgets/icons/animated_heart_icon.dart';
 import 'package:coves_flutter/widgets/icons/lucide_icon_painter.dart';
@@ -782,6 +783,56 @@ void main() {
           ),
         ).called(1);
       });
+
+      testWidgets(
+        'rejected upvote shows the server message instead of the vote fallback',
+        (tester) async {
+          final requestOptions = RequestOptions(path: '/xrpc/x');
+          final bannedException = ApiException.fromDioError(
+            DioException(
+              requestOptions: requestOptions,
+              response: Response(
+                requestOptions: requestOptions,
+                statusCode: 403,
+                data: <String, dynamic>{
+                  'error': 'Banned',
+                  'message': 'User is banned from this community',
+                },
+              ),
+              type: DioExceptionType.badResponse,
+            ),
+          );
+          when(
+            mockVoteProvider.toggleVote(
+              postUri: anyNamed('postUri'),
+              postCid: anyNamed('postCid'),
+              direction: anyNamed('direction'),
+            ),
+          ).thenAnswer((_) => Future<bool>.error(bannedException));
+          await pumpVotePost(tester);
+
+          final upvote = upvoteControl('Upvote post');
+          expect(upvote, findsOneWidget);
+          await tester.tap(upvote);
+          await tester.pumpAndSettle();
+
+          verify(
+            mockVoteProvider.toggleVote(postUri: postUri, postCid: postCid),
+          ).called(1);
+          expect(find.byType(SnackBar), findsOneWidget);
+          expect(
+            find.descendant(
+              of: find.byType(SnackBar),
+              matching: find.text('User is banned from this community'),
+            ),
+            findsOneWidget,
+          );
+          expect(
+            find.text('Could not update your vote. Please try again.'),
+            findsNothing,
+          );
+        },
+      );
 
       testWidgets('compact card keeps the comment action without its count', (
         tester,

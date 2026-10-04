@@ -7,6 +7,9 @@ library;
 
 import '../services/api_exceptions.dart';
 
+/// Longest trimmed 4xx server message [getErrorMessage] shows to the user.
+const _maximumServerMessageLength = 200;
+
 /// Converts an exception to a user-friendly error message.
 ///
 /// Uses type-based matching for reliability:
@@ -16,6 +19,11 @@ import '../services/api_exceptions.dart';
 /// - [NotFoundException] → Resource not found
 /// - [ValidationException] → Shows the validation message
 /// - [FederationException] → atProto federation issues
+/// - Other [ApiException] with a 4xx status other than 401 or 404 → Shows the
+///   server's message, trimmed, or the fallback when that message is blank,
+///   is only the machine error code, is the [requestFailedMessageForStatus]
+///   diagnostic that stands in for a body with no message, starts with `<`,
+///   contains a line break, or is longer than 200 characters
 /// - Other [ApiException] → Uses fallback
 /// - Unknown exceptions → Uses fallback
 ///
@@ -60,6 +68,27 @@ String getErrorMessage(Object error, {String? fallback}) {
   }
 
   if (error is ApiException) {
+    final statusCode = error.statusCode;
+    final message = error.message.trim();
+    if (statusCode != null &&
+        statusCode >= 400 &&
+        statusCode <= 499 &&
+        statusCode != 401 &&
+        statusCode != 404 &&
+        message.isNotEmpty &&
+        // A message equal to the error code means the body carried only the
+        // machine code, not a human-readable message.
+        message != error.errorCode &&
+        // A body with no message leaves fromDioError's status diagnostic.
+        message != requestFailedMessageForStatus(statusCode) &&
+        // A plain-text body is used as-is, so a proxy's HTML page or a long
+        // or multi-line body would otherwise render verbatim.
+        !message.startsWith('<') &&
+        !message.contains('\n') &&
+        !message.contains('\r') &&
+        message.length <= _maximumServerMessageLength) {
+      return message;
+    }
     return defaultFallback;
   }
 
@@ -112,10 +141,16 @@ abstract final class ErrorMessage {
   );
 
   /// Error message for subscription operations (join/leave community)
-  static String subscription(Object error) => getErrorMessage(
-    error,
-    fallback: 'Could not update subscription. Please try again.',
-  );
+  ///
+  /// A [NotFoundException] gets the fallback: a leave 404s when the
+  /// subscription isn't indexed yet, and "content removed" copy would wrongly
+  /// imply the community was deleted.
+  static String subscription(Object error) {
+    const fallback = 'Could not update subscription. Please try again.';
+    return error is NotFoundException
+        ? fallback
+        : getErrorMessage(error, fallback: fallback);
+  }
 
   /// Error message for block operations
   static String block(Object error) => getErrorMessage(

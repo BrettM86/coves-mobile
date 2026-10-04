@@ -1,0 +1,51 @@
+# Section B — check 8: a vote the AppView rejects with a 4xx shows the
+# server's own message in the snackbar, not the generic
+# "Could not update your vote. Please try again." fallback.
+#
+# The rejection is real: scripts/exhaust_appview_rate_limit.js spends the
+# loopback client's global rate-limit budget (100 requests per 60-second fixed
+# window) through Caddy, which the emulator reaches over `adb reverse`, so the
+# upvote gets the AppView's 429 plain-text body "Rate limit exceeded. Please try
+# again later."
+#
+# The window opens at the first request after the previous one expired, so a
+# budget spent late in a window can refill before the tap and let the upvote
+# land. The script therefore spends the current window, polls until it resets,
+# and spends the fresh one, which leaves the tap a few seconds into a 60-second
+# window. The script waits up to a minute for that reset, with no input to the
+# device, so the device must stay awake that long. The vote can only land if
+# Maestro takes the rest of that minute to reach the tap; the rejected vote never
+# reaches the server, so no data changes. The budget refills about a minute
+# after the script ends.
+#
+# Tagged standalone: every flow run in the minute after this one would also be
+# rate limited, so it stays out of the ordered workspace run. Needs a signed-in
+# session (a1_login_session) and at least one post on the Discover feed that
+# the account has not upvoted.
+appId: social.coves.dev
+tags:
+  - standalone
+env:
+  PROXY_URL: http://127.0.0.1:8080
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Feed post in [\\s\\S]*"
+    timeout: 15000
+- assertVisible: "[\\s\\S]*Upvote post"
+- runScript: scripts/exhaust_appview_rate_limit.js
+- assertTrue: ${output.rateLimited}
+- tapOn:
+    text: "[\\s\\S]*Upvote post"
+    index: 0
+- extendedWaitUntil:
+    visible: "Rate limit exceeded. Please try again later."
+    timeout: 10000
+- assertNotVisible: "Could not update your vote. Please try again."
+# The optimistic upvote rolls back on the rejection.
+- assertVisible: "[\\s\\S]*Upvote post"
+- takeScreenshot: build/maestro/b8_vote_rejected_message

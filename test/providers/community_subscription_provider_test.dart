@@ -128,13 +128,14 @@ void main() {
     test(
       'rollback: failed toggle reverts, notifies, and unblocks seeds',
       () async {
+        final failure = ApiException('Server error', statusCode: 500);
         when(
           mockApiService.subscribeToCommunity(community: anyNamed('community')),
-        ).thenThrow(ApiException('Server error', statusCode: 500));
+        ).thenThrow(failure);
 
         await expectLater(
           provider.toggleSubscription(communityDid: did),
-          throwsA(isA<ApiException>()),
+          throwsA(same(failure)),
         );
 
         expect(provider.isSubscribed(did), isFalse);

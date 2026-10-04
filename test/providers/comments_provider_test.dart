@@ -1764,6 +1764,7 @@ void main() {
       test('should rethrow exception from CommentService', () async {
         await providerWithCommentService.loadComments(refresh: true);
 
+        final failure = ApiException('Network error');
         when(
           mockCommentService.createComment(
             rootUri: anyNamed('rootUri'),
@@ -1772,18 +1773,12 @@ void main() {
             parentCid: anyNamed('parentCid'),
             content: anyNamed('content'),
           ),
-        ).thenThrow(ApiException('Network error'));
+        ).thenThrow(failure);
 
         expect(
           () =>
               providerWithCommentService.createComment(content: 'Test comment'),
-          throwsA(
-            isA<ApiException>().having(
-              (e) => e.message,
-              'message',
-              contains('Network error'),
-            ),
-          ),
+          throwsA(same(failure)),
         );
       });
 
@@ -2429,6 +2424,7 @@ void main() {
       test('should propagate fetch errors and clear loading state', () async {
         await commentsProvider.loadComments(refresh: true);
 
+        final failure = ApiException('Network error');
         when(
           mockApiService.getComments(
             postUri: anyNamed('postUri'),
@@ -2438,11 +2434,11 @@ void main() {
             limit: anyNamed('limit'),
             parentRkey: argThat(isNotNull, named: 'parentRkey'),
           ),
-        ).thenThrow(ApiException('Network error'));
+        ).thenThrow(failure);
 
         await expectLater(
           commentsProvider.loadMoreReplies(parentUri),
-          throwsA(isA<ApiException>()),
+          throwsA(same(failure)),
         );
         expect(commentsProvider.loadingMoreReplies, isEmpty);
         // Tree is untouched on failure

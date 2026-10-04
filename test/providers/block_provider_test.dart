@@ -111,12 +111,13 @@ void main() {
     test(
       'rollback: failed toggle reverts, notifies, and unblocks seeds',
       () async {
+        final failure = ApiException('Server error', statusCode: 500);
         when(mockApiService.blockUser(actor: anyNamed('actor')))
-            .thenThrow(ApiException('Server error', statusCode: 500));
+            .thenThrow(failure);
 
         await expectLater(
           provider.toggleUserBlock(userDid: userDid),
-          throwsA(isA<ApiException>()),
+          throwsA(same(failure)),
         );
 
         expect(provider.isUserBlocked(userDid), isFalse);
@@ -243,12 +244,13 @@ void main() {
       });
 
       test('failed community toggle reverts and unblocks seeds', () async {
+        final failure = ApiException('Server error', statusCode: 500);
         when(mockApiService.blockCommunity(community: anyNamed('community')))
-            .thenThrow(ApiException('Server error', statusCode: 500));
+            .thenThrow(failure);
 
         await expectLater(
           provider.toggleCommunityBlock(communityDid: communityDid),
-          throwsA(isA<ApiException>()),
+          throwsA(same(failure)),
         );
 
         expect(provider.isCommunityBlocked(communityDid), isFalse);

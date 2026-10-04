@@ -18,6 +18,9 @@
 # install), wiping the legal acceptances AND the signed-in session every
 # stateful flow depends on. Run it standalone, then a1_login_session —
 # see its header comment.
+# b8_vote_rejected_message is NOT in the order: it exhausts the loopback
+# client's AppView rate limit for up to a minute, which would fail every flow
+# run after it. Run it standalone — see its header comment.
 # NOTE (2026-07-19 round 2): flows absent from flowsOrder STILL RUN at the
 # end of a workspace run — f5, g1, c6 and c7 are therefore tagged `standalone` and
 # excluded here. Tag any future precursor-dependent flow the same way.

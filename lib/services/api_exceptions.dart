@@ -96,7 +96,7 @@ class ApiException implements Exception {
         );
       }
       return ApiException(
-        message ?? 'Request failed with status $statusCode',
+        message ?? requestFailedMessageForStatus(statusCode),
         statusCode: statusCode,
         errorCode: errorCode,
         originalError: error,
@@ -213,6 +213,10 @@ class ApiException implements Exception {
   @override
   String toString() => message;
 }
+
+/// Diagnostic [ApiException.fromDioError] sets when a body has no message.
+String requestFailedMessageForStatus(int statusCode) =>
+    'Request failed with status $statusCode';
 
 /// Maps [error] to a typed [ApiException] after logging it in debug builds
 /// (response data is passed through [redactBearerTokens] first).
