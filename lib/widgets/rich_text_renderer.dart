@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../constants/app_colors.dart';
 import '../models/facet.dart';
 import '../utils/url_launcher.dart';
+import '../utils/url_policy.dart';
 import '../utils/utf8_offsets.dart';
 
 /// A reusable widget for rendering text with rich text facets.
@@ -17,7 +18,8 @@ import '../utils/utf8_offsets.dart';
 /// degrade to plain text (the union is open).
 ///
 /// Inline features (styled via merged text spans, overlaps compose):
-/// - Links: primary color, underlined, tappable
+/// - Links: primary color, underlined, tappable; only when the uri passes
+///   [isAllowedWebUrl], otherwise plain text
 /// - Mentions: primary color, tappable (profile or community by DID)
 /// - Bold / italic / strikethrough
 /// - Inline code: monospace with subtle background
@@ -64,7 +66,8 @@ class RichTextRenderer extends StatefulWidget {
   ///
   /// When null, links get the default treatment: theme primary color plus
   /// underline. When provided, this style REPLACES that whole default
-  /// treatment (no underline is added automatically).
+  /// treatment (no underline is added automatically). Links whose uri fails
+  /// [isAllowedWebUrl] get neither and render as plain text.
   final TextStyle? linkStyle;
 
   @override
@@ -763,7 +766,10 @@ class _RichTextRendererState extends State<RichTextRenderer> {
             style = _monospace(style)
                 .copyWith(backgroundColor: AppColors.backgroundTertiary);
           case LinkFacetFeature(uri: final uri):
-            if (uri.isNotEmpty) {
+            // A link the app won't open is never drawn as a link: a non
+            // http(s) or hostless uri renders as plain body text with no
+            // tap target (Bluesky social-app parity)
+            if (isAllowedWebUrl(uri)) {
               if (widget.linkStyle != null) {
                 style = style.merge(widget.linkStyle);
               } else {

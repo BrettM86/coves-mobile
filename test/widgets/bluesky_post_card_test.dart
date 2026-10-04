@@ -77,6 +77,7 @@ Map<String, dynamic> blueskyImagesJson({
   bool hasMedia = true,
   int? mediaCount,
   Map<String, dynamic>? quotedPost,
+  Map<String, dynamic>? embed,
   String createdAt = '2026-09-01T12:00:00Z',
 }) {
   return <String, dynamic>{
@@ -101,6 +102,7 @@ Map<String, dynamic> blueskyImagesJson({
       'unavailable': false,
       'images': ?images,
       'quotedPost': ?quotedPost,
+      'embed': ?embed,
     },
   };
 }
@@ -409,6 +411,118 @@ void main() {
         findsOneWidget,
         reason: 'the timestamp row shows the post time in the device time zone',
       );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('BlueskyPostCard external link preview', () {
+    const postWebUrl = 'https://bsky.app/profile/$authorHandle/post/p1';
+
+    late MockUrlLauncherPlatform mockPlatform;
+
+    setUp(() {
+      mockPlatform = MockUrlLauncherPlatform();
+      UrlLauncherPlatform.instance = mockPlatform;
+    });
+
+    /// Pumps a card whose parent post carries an external link preview for
+    /// [uri]. The preview has no thumbnail, so no network image is involved.
+    Future<void> pumpLinkPreviewCard(WidgetTester tester, String uri) async {
+      useMediaSizedSurface(tester);
+      final embed = BlueskyPostEmbed.fromJson(
+        blueskyImagesJson(
+          hasMedia: false,
+          embed: <String, dynamic>{'uri': uri, 'title': 'Account notice'},
+        ),
+      );
+
+      await tester.pumpWidget(blueskyCardHarness(embed));
+      await tester.pump();
+    }
+
+    /// How many tap handlers inside the card sit above [label]: the card's
+    /// own tap-to-open-the-post, plus the preview's when it has one.
+    int cardTapHandlersAbove(Finder label) {
+      return find
+          .ancestor(
+            of: label,
+            matching: find.descendant(
+              of: find.byType(BlueskyPostCard),
+              matching: find.byWidgetPredicate(
+                (widget) => widget is GestureDetector && widget.onTap != null,
+              ),
+            ),
+          )
+          .evaluate()
+          .length;
+    }
+
+    for (final (description, uri, label) in [
+      ('a non-web scheme', 'ftp://paypal.com/', 'ftp://paypal.com/'),
+      ('a protocol-relative uri', '//paypal.com/login', '//paypal.com/login'),
+      ('a blank uri', '', 'Invalid link'),
+    ]) {
+      testWidgets('a preview for $description is labelled "$label" and has no '
+          'tap of its own', (tester) async {
+        await pumpLinkPreviewCard(tester, uri);
+
+        expect(find.text(label), findsOneWidget);
+        expect(
+          find.text('paypal.com'),
+          findsNothing,
+          reason: 'a host the tap would never open is not shown as the label',
+        );
+        expect(
+          cardTapHandlersAbove(find.text(label)),
+          1,
+          reason: "only the card's own tap sits above the preview",
+        );
+
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+
+        expect(
+          mockPlatform.launchedUrls,
+          <String>[postWebUrl],
+          reason:
+              'the tap falls through to the card, which opens the Bluesky '
+              'post; the preview never tries to open its uri',
+        );
+        expect(find.text('Invalid link format'), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('an https preview shows its host and a tap opens the link', (
+      tester,
+    ) async {
+      const uri = 'https://www.example.com/article?id=7';
+      await pumpLinkPreviewCard(tester, uri);
+
+      expect(find.text('example.com'), findsOneWidget);
+      expect(
+        cardTapHandlersAbove(find.text('example.com')),
+        2,
+        reason: "the preview's own tap sits inside the card's",
+      );
+
+      await tester.tap(find.text('example.com'));
+      await tester.pumpAndSettle();
+
+      expect(mockPlatform.launchedUrls, <String>[
+        uri,
+      ], reason: 'the preview opens its link, and only its link');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('tapping the post text beside a preview still opens the '
+        'Bluesky post', (tester) async {
+      await pumpLinkPreviewCard(tester, 'https://www.example.com/article');
+
+      await tester.tap(find.text(postText));
+      await tester.pumpAndSettle();
+
+      expect(mockPlatform.launchedUrls, <String>[postWebUrl]);
       expect(tester.takeException(), isNull);
     });
   });

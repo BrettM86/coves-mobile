@@ -824,6 +824,8 @@ class ExternalEmbed {
   final String? title;
   final String? description;
   final String? thumb;
+
+  /// Author-declared, unverified; never display as the link's site.
   final String? domain;
   final String? embedType;
   final String? provider;
@@ -860,6 +862,8 @@ class EmbedSource {
 
   final String uri;
   final String? title;
+
+  /// Author-declared, unverified; never display as the link's site.
   final String? domain;
 
   @override

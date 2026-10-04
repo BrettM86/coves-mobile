@@ -9,6 +9,7 @@ import '../utils/date_time_utils.dart';
 import '../utils/image_decode_size.dart';
 import '../utils/url_display.dart';
 import '../utils/url_launcher.dart';
+import '../utils/url_policy.dart';
 import 'bluesky_post_card.dart';
 import 'external_link_bar.dart';
 import 'image_viewer.dart';
@@ -405,6 +406,8 @@ class _DetailedPostViewState extends State<DetailedPostView> {
       return const SizedBox.shrink();
     }
 
+    final isLinkOpenable = isAllowedWebUrl(embed.uri);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -420,9 +423,15 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                 topLeft: Radius.circular(7),
                 topRight: Radius.circular(7),
               ),
+              // Like the link bar below, the images open only a uri a tap
+              // can open.
               child: GestureDetector(
-                onTap: () =>
-                    UrlLauncher.launchExternalUrl(embed.uri, context: context),
+                onTap: isLinkOpenable
+                    ? () => UrlLauncher.launchExternalUrl(
+                        embed.uri,
+                        context: context,
+                      )
+                    : null,
                 child: SizedBox(
                   height: 300,
                   child: PageView.builder(
@@ -457,10 +466,15 @@ class _DetailedPostViewState extends State<DetailedPostView> {
               ),
             ),
 
-            // Link bar with page indicator (bottom of card)
+            // Link bar with page indicator (bottom of card). A uri a tap
+            // cannot open leaves the bar inert: no tap and no arrow.
             GestureDetector(
-              onTap: () =>
-                  UrlLauncher.launchExternalUrl(embed.uri, context: context),
+              onTap: isLinkOpenable
+                  ? () => UrlLauncher.launchExternalUrl(
+                      embed.uri,
+                      context: context,
+                    )
+                  : null,
               child: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: const BoxDecoration(
@@ -472,7 +486,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                 ),
                 child: Row(
                   children: [
-                    Favicon(embed.uri, domain: embed.domain),
+                    Favicon(embed.uri),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -509,12 +523,14 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                       ),
                     ],
 
-                    const SizedBox(width: 8),
-                    Icon(
-                      Icons.open_in_new,
-                      size: 14,
-                      color: AppColors.textPrimary.withValues(alpha: 0.7),
-                    ),
+                    if (isLinkOpenable) ...[
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.open_in_new,
+                        size: 14,
+                        color: AppColors.textPrimary.withValues(alpha: 0.7),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -525,7 +541,9 @@ class _DetailedPostViewState extends State<DetailedPostView> {
     );
   }
 
-  /// Single full-width image with attached link bar
+  /// Single full-width image with attached link bar. The whole card opens the
+  /// link, so a uri a tap cannot open leaves the whole card inert: no tap and
+  /// no arrow.
   Widget _buildSingleImage() {
     final embed = widget.post.post.embed!.external!;
 
@@ -533,10 +551,14 @@ class _DetailedPostViewState extends State<DetailedPostView> {
       return const SizedBox.shrink();
     }
 
+    final isLinkOpenable = isAllowedWebUrl(embed.uri);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: GestureDetector(
-        onTap: () => UrlLauncher.launchExternalUrl(embed.uri, context: context),
+        onTap: isLinkOpenable
+            ? () => UrlLauncher.launchExternalUrl(embed.uri, context: context)
+            : null,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
@@ -589,7 +611,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                 ),
                 child: Row(
                   children: [
-                    Favicon(embed.uri, domain: embed.domain),
+                    Favicon(embed.uri),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -602,12 +624,14 @@ class _DetailedPostViewState extends State<DetailedPostView> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      Icons.open_in_new,
-                      size: 14,
-                      color: AppColors.textPrimary.withValues(alpha: 0.7),
-                    ),
+                    if (isLinkOpenable) ...[
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.open_in_new,
+                        size: 14,
+                        color: AppColors.textPrimary.withValues(alpha: 0.7),
+                      ),
+                    ],
                   ],
                 ),
               ),

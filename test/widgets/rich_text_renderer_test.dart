@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:coves_flutter/constants/app_colors.dart';
 import 'package:coves_flutter/models/facet.dart';
 import 'package:coves_flutter/widgets/rich_text_renderer.dart';
 import 'package:flutter/gestures.dart';
@@ -749,6 +750,177 @@ void main() {
 
       // No crash means recognizers were properly disposed
       expect(find.byType(RichText), findsNothing);
+    });
+  });
+
+  group('RichTextRenderer - Links the App Will Not Open', () {
+    // Bluesky social-app parity: a link facet whose uri fails
+    // isAllowedWebUrl (http/https with a host) is drawn as plain body text
+    // with no tap target, never as a link.
+    const disallowedUris = {
+      'ftp': 'ftp://paypal.com/',
+      'javascript': 'javascript://paypal.com/%0Aalert(1)',
+      'scheme-relative': '//paypal.com/login',
+      'hostless https': 'https:///path',
+    };
+    const text = 'Log in at paypal.com today';
+
+    for (final MapEntry(key: label, value: uri) in disallowedUris.entries) {
+      testWidgets('$label link renders as plain, untappable text', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _wrapInMaterialApp(
+            RichTextRenderer(
+              text: text,
+              facets: [
+                _createLinkFacetFromText(
+                  fullText: text,
+                  linkText: 'paypal.com',
+                  uri: uri,
+                ),
+              ],
+            ),
+          ),
+        );
+
+        final richText = tester.widget<RichText>(find.byType(RichText));
+        final span = _spanWithText(_getContentSpans(richText), 'paypal.com');
+
+        expect(span.style?.color, isNull);
+        expect(span.style?.decoration, isNull);
+        expect(span.recognizer, isNull);
+      });
+
+      testWidgets('$label link does not take the custom linkStyle', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _wrapInMaterialApp(
+            RichTextRenderer(
+              text: text,
+              facets: [
+                _createLinkFacetFromText(
+                  fullText: text,
+                  linkText: 'paypal.com',
+                  uri: uri,
+                ),
+              ],
+              linkStyle: const TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+        );
+
+        final richText = tester.widget<RichText>(find.byType(RichText));
+        final span = _spanWithText(_getContentSpans(richText), 'paypal.com');
+
+        expect(span.style?.color, isNull);
+        expect(span.style?.fontWeight, isNull);
+        expect(span.style?.decoration, isNull);
+        expect(span.recognizer, isNull);
+      });
+    }
+
+    testWidgets('https link keeps link style and launches on tap', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrapInMaterialApp(
+          RichTextRenderer(
+            text: text,
+            facets: [
+              _createLinkFacetFromText(
+                fullText: text,
+                linkText: 'paypal.com',
+                uri: 'https://paypal.com/',
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final richText = tester.widget<RichText>(find.byType(RichText));
+      final span = _spanWithText(_getContentSpans(richText), 'paypal.com');
+
+      expect(span.style?.color, AppColors.textLink);
+      expect(span.style?.decoration, TextDecoration.underline);
+      expect(span.recognizer, isA<TapGestureRecognizer>());
+
+      (span.recognizer! as TapGestureRecognizer).onTap?.call();
+      await tester.pumpAndSettle();
+
+      expect(mockPlatform.launchedUrls, ['https://paypal.com/']);
+    });
+
+    testWidgets('bold on the same facet still applies to a disallowed link', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrapInMaterialApp(
+          RichTextRenderer(
+            text: text,
+            facets: [
+              _facetOver(
+                fullText: text,
+                span: 'paypal.com',
+                features: const [
+                  LinkFacetFeature(uri: 'ftp://paypal.com/'),
+                  BoldFacetFeature(),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final richText = tester.widget<RichText>(find.byType(RichText));
+      final span = _spanWithText(_getContentSpans(richText), 'paypal.com');
+
+      expect(span.style?.fontWeight, FontWeight.w700);
+      expect(span.style?.color, isNull);
+      expect(span.style?.decoration, isNull);
+      expect(span.recognizer, isNull);
+    });
+
+    testWidgets('mention on the same facet keeps its tap over a disallowed '
+        'link', (tester) async {
+      const mentionText = 'hey @alice.test look';
+
+      await tester.pumpWidget(
+        _wrapInRouterApp(
+          RichTextRenderer(
+            text: mentionText,
+            facets: [
+              _facetOver(
+                fullText: mentionText,
+                span: '@alice.test',
+                features: const [
+                  LinkFacetFeature(uri: 'javascript://paypal.com/%0Aalert(1)'),
+                  MentionFacetFeature(did: 'did:plc:abc'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final richText = tester.widget<RichText>(find.byType(RichText));
+      final mention = _spanWithText(_getContentSpans(richText), '@alice.test');
+
+      expect(mention.style?.color, AppColors.coral);
+      expect(mention.style?.fontWeight, FontWeight.w600);
+      expect(mention.style?.decoration, isNull);
+      expect(mention.recognizer, isA<TapGestureRecognizer>());
+
+      (mention.recognizer! as TapGestureRecognizer).onTap?.call();
+      await tester.pumpAndSettle();
+
+      expect(find.text('profile:did:plc:abc'), findsOneWidget);
+      expect(mockPlatform.launchedUrls, isEmpty);
     });
   });
 

@@ -1,28 +1,26 @@
-// Spec for the shared link-display helpers.
+// Spec for the shared link-display helpers in lib/utils/url_display.dart.
 //
-// Three surfaces derive a display domain and a favicon domain from a URL
-// today — external_link_bar.dart, source_link_bar.dart and
-// detailed_post_view.dart (`_formatUrlForDisplay`) — each with its own copy
-// of the parse-and-fall-back dance. One home, two functions.
+// One home for link-display parsing: the link bars, the detail view's link
+// rows and the favicon all derive a domain from a URL here. Three functions:
 //
-// Target API — lib/utils/url_display.dart:
+//   domainOf(url)      the lowercased host of [url], or null when it has none
+//                      (unparseable, relative, or authority-less).
+//   linkLabelOf(uri)   the text a link bar shows for [uri]: its host when a
+//                      tap can open it (isAllowedWebUrl), otherwise the uri
+//                      trimmed of surrounding whitespace, or "Invalid link"
+//                      when the uri is blank.
+//   hostAndPath(url)   [url] without scheme, port, query and fragment:
+//                      `example.com` or `example.com/a/b` when a tap can
+//                      open it; otherwise the same fallback as linkLabelOf.
 //
-//   /// The host of [url], or null when it has none (unparseable, relative,
-//   /// or authority-less). Never throws.
-//   String? domainOf(String url);
-//
-//   /// [url] with the scheme, port, query and fragment stripped:
-//   /// `example.com` or `example.com/a/b`. Returns [url] unchanged when it
-//   /// has no host. Never throws.
-//   String hostAndPath(String url);
-//
-// Callers keep their own precedence rules (the link bars prefer the embed's
-// declared `domain` field and fall back to `domainOf(uri) ?? uri`); these
-// helpers only do the parsing.
-//
-// COMPILE-RED until lib/utils/url_display.dart exists.
+// The label comes from the uri alone, never from the author-declared
+// `domain` field, because a tap opens the uri and the declared domain is
+// record text an author can point at any site. A uri a tap cannot open is
+// labelled by its own text even when it has a host (see the last group).
+// All three take untrusted record data, so none of them throws.
 
 import 'package:coves_flutter/utils/url_display.dart';
+import 'package:coves_flutter/utils/url_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -61,6 +59,51 @@ void main() {
     });
   });
 
+  group('linkLabelOf', () {
+    test('shows the host of the uri, the site a tap opens', () {
+      expect(linkLabelOf('https://evil.example/login'), 'evil.example');
+    });
+
+    test('drops userinfo and port, and lowercases the host', () {
+      expect(
+        linkLabelOf('https://paypal.com@EVIL.Example:8443/login'),
+        'evil.example',
+      );
+    });
+
+    test('shows a hostless uri as written', () {
+      expect(linkLabelOf('https:paypal.com'), 'https:paypal.com');
+    });
+
+    test('shows a malformed uri as written, without throwing', () {
+      expect(linkLabelOf('http://['), 'http://[');
+    });
+
+    test('shows a uri with a host but a scheme a tap cannot open as written, '
+        'not its host', () {
+      expect(linkLabelOf('ftp://paypal.com/'), 'ftp://paypal.com/');
+      expect(linkLabelOf('//paypal.com/login'), '//paypal.com/login');
+    });
+
+    test('trims surrounding whitespace from a hostless uri', () {
+      expect(linkLabelOf('  just-text \t'), 'just-text');
+    });
+
+    test('shows an absolute uri with leading whitespace as the whole trimmed '
+        'uri, not its host, because the untrimmed uri has no host', () {
+      expect(
+        linkLabelOf('  https://example.com/path'),
+        'https://example.com/path',
+      );
+    });
+
+    test('returns "Invalid link" for a blank uri', () {
+      for (final uri in <String>['', '   ', '\t\n']) {
+        expect(linkLabelOf(uri), 'Invalid link', reason: '"$uri"');
+      }
+    });
+  });
+
   group('hostAndPath', () {
     test('returns the bare host when there is no path', () {
       expect(hostAndPath('https://example.com'), 'example.com');
@@ -81,9 +124,13 @@ void main() {
       expect(hostAndPath('http://example.com/a'), 'example.com/a');
     });
 
-    test('returns the input unchanged when there is no host', () {
+    test('returns a uri a tap cannot open trimmed, or "Invalid link" when it '
+        'is blank', () {
       expect(hostAndPath('just-text'), 'just-text');
-      expect(hostAndPath(''), '');
+      expect(hostAndPath('  just-text \t'), 'just-text');
+      expect(hostAndPath('ftp://paypal.com/x'), 'ftp://paypal.com/x');
+      expect(hostAndPath(''), 'Invalid link');
+      expect(hostAndPath('   '), 'Invalid link');
     });
 
     test('never throws on a malformed url', () {
@@ -97,4 +144,86 @@ void main() {
       }
     });
   });
+
+  // The label, the favicon and the tap share one predicate, isAllowedWebUrl.
+  // A uri a tap can open is labelled by the host it opens. A uri a tap
+  // refuses is labelled by its own text, trimmed, or "Invalid link" when
+  // blank, even when Uri finds a host in it: `ftp://paypal.com/` must not
+  // read "paypal.com" on a bar that cannot open PayPal. The favicon half of
+  // this rule is pinned in test/widgets/media/favicon_test.dart.
+  group('a uri is labelled by its host exactly when a tap can open it', () {
+    /// Uris a tap refuses although Uri gives each the host `paypal.com`.
+    const hostedUnopenableUris = <String>[
+      '//paypal.com/login',
+      'ftp://paypal.com/',
+      'httpx://paypal.com',
+      'intent://paypal.com/#Intent;scheme=https;end',
+      'javascript://paypal.com/%0Aalert(1)',
+      'file://paypal.com/x',
+    ];
+
+    const uris = <String>[
+      'https://paypal.com/login',
+      'http://paypal.com',
+      'https://paypal.com@evil.example:8443/login',
+      'https://evil.example ',
+      ...hostedUnopenableUris,
+      ' https://evil.example',
+      '\thttps://evil.example',
+      '\nhttps://evil.example',
+      '//evil.example',
+      'https:paypal.com',
+      'https:///path',
+      'http:foo',
+      'https://',
+      'not a valid url',
+      '',
+      '   ',
+      'javascript:alert(1)',
+      'mailto:a@evil.example',
+      'http://[',
+      '%%%',
+    ];
+
+    test('every hosted unopenable uri does parse to the host paypal.com', () {
+      for (final uri in hostedUnopenableUris) {
+        expect(domainOf(uri), 'paypal.com', reason: '"$uri"');
+        expect(isAllowedWebUrl(uri), isFalse, reason: '"$uri"');
+      }
+    });
+
+    test('linkLabelOf is the host exactly when the uri is launchable, and '
+        'the trimmed uri or "Invalid link" otherwise', () {
+      for (final uri in uris) {
+        expect(
+          linkLabelOf(uri) == domainOf(uri),
+          isAllowedWebUrl(uri),
+          reason: '"$uri" gave "${linkLabelOf(uri)}"',
+        );
+        if (isAllowedWebUrl(uri)) {
+          expect(domainOf(uri), isNotNull, reason: '"$uri"');
+        } else {
+          expect(linkLabelOf(uri), _unopenableLabel(uri), reason: '"$uri"');
+        }
+      }
+    });
+
+    test('hostAndPath starts with the host exactly when the uri is '
+        'launchable, and is the trimmed uri or "Invalid link" otherwise', () {
+      for (final uri in uris) {
+        if (isAllowedWebUrl(uri)) {
+          expect(hostAndPath(uri), startsWith(domainOf(uri)!), reason: uri);
+        } else {
+          expect(hostAndPath(uri), _unopenableLabel(uri), reason: '"$uri"');
+        }
+      }
+    });
+  });
+}
+
+/// What a link a tap cannot open is labelled with: its trimmed text, or
+/// "Invalid link" when that is empty.
+String _unopenableLabel(String uri) {
+  final trimmed = uri.trim();
+  return trimmed.isEmpty ? 'Invalid link' : trimmed;
 }

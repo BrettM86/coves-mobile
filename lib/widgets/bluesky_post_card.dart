@@ -9,6 +9,7 @@ import '../utils/date_time_utils.dart';
 import '../utils/display_utils.dart';
 import '../utils/image_decode_size.dart';
 import '../utils/url_launcher.dart';
+import '../utils/url_policy.dart';
 import 'image_viewer.dart';
 import 'media/media_surface.dart';
 import 'media/native_image_embed.dart';
@@ -375,12 +376,14 @@ class BlueskyPostCard extends StatelessWidget {
     );
   }
 
-  /// Builds the external link embed card (link preview)
+  /// Builds the external link embed card (link preview). A uri a tap cannot
+  /// open leaves the preview inert, so a tap on it reaches the enclosing
+  /// card's own tap-to-open-the-post instead.
   Widget _buildExternalEmbed(BuildContext context, BlueskyExternalEmbed embed) {
     return GestureDetector(
-      onTap: () {
-        UrlLauncher.launchExternalUrl(embed.uri, context: context);
-      },
+      onTap: isAllowedWebUrl(embed.uri)
+          ? () => UrlLauncher.launchExternalUrl(embed.uri, context: context)
+          : null,
       child: Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(

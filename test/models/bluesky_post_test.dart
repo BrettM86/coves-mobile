@@ -879,10 +879,22 @@ void main() {
         expect(embed.domain, 'not-a-valid-url');
       });
 
-      test('handles empty uri', () {
+      test('labels an empty uri "Invalid link"', () {
         final embed = BlueskyExternalEmbed(uri: '');
 
-        expect(embed.domain, '');
+        expect(embed.domain, 'Invalid link');
+      });
+
+      test('returns the uri, not its host, for a non-web scheme', () {
+        final embed = BlueskyExternalEmbed(uri: 'ftp://paypal.com/');
+
+        expect(embed.domain, 'ftp://paypal.com/');
+      });
+
+      test('returns the uri, not its host, for a protocol-relative uri', () {
+        final embed = BlueskyExternalEmbed(uri: '//paypal.com/login');
+
+        expect(embed.domain, '//paypal.com/login');
       });
     });
   });

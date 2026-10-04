@@ -4,6 +4,7 @@
 
 import 'package:flutter/foundation.dart';
 
+import '../utils/url_display.dart';
 import '../utils/url_policy.dart';
 import 'post.dart';
 
@@ -54,18 +55,19 @@ class BlueskyExternalEmbed {
   /// Thumbnail URL
   final String? thumb;
 
-  /// Extract a nice domain from the URL (e.g., "lemonde.fr" from full URL)
+  /// The preview's label: the host without a leading "www." (e.g.
+  /// "lemonde.fr") when [isAllowedWebUrl] accepts [uri], because that is the
+  /// site a tap opens.
+  ///
+  /// Any other uri is one a tap refuses, so it gets [linkLabelOf]'s fallback:
+  /// `ftp://paypal.com/` is shown as written, not as "paypal.com", and a
+  /// blank uri as "Invalid link".
   String get domain {
-    final parsed = Uri.tryParse(uri);
-    if (parsed == null || parsed.host.isEmpty) {
-      return uri;
+    final label = linkLabelOf(uri);
+    if (isAllowedWebUrl(uri) && label.startsWith('www.')) {
+      return label.substring(4);
     }
-    var host = parsed.host;
-    // Remove www. prefix
-    if (host.startsWith('www.')) {
-      host = host.substring(4);
-    }
-    return host;
+    return label;
   }
 }
 
