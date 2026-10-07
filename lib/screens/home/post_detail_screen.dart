@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,10 +8,13 @@ import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../models/comment.dart';
 import '../../models/post.dart';
+import '../../models/post_get_result.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
 import '../../providers/vote_provider.dart';
 import '../../services/comments_provider_cache.dart';
+import '../../services/coves_api_service.dart';
+import '../../services/viewer_state_hydrator.dart';
 import '../../utils/community_handle_utils.dart';
 import '../../utils/copy_link.dart';
 import '../../utils/error_messages.dart';
@@ -50,6 +55,21 @@ bool _isCommentDisplayable(
   }
 
   return comments.any((thread) => visit(thread, 0));
+}
+
+/// Whether [VoteProvider] holds the post's vote state for the signed-in
+/// account, which decides whether the action bar's vote can act.
+enum _PostVoteHydration {
+  /// The post's vote state came for the signed-in account.
+  current,
+
+  /// The signed-in account changed and the post's refetch for it is in
+  /// flight.
+  loading,
+
+  /// The post's refetch for the signed-in account failed. Retry fetches it
+  /// again.
+  failed,
 }
 
 /// Post Detail Screen
@@ -127,6 +147,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   // being finalized and the provider ancestor is already deactivated.
   AuthProvider? _authProvider;
 
+  // The DID this screen last saw. Only a change from a DID to none is a
+  // sign-out; AuthProvider also notifies for a sign-in starting or being
+  // cancelled and for token refreshes, which leave the DID as it was.
+  String? _signedInDid;
+
+  // Counts the DID changes this screen has seen, so a post fetched for one
+  // account is not applied after another change.
+  int _accountChangeGeneration = 0;
+
+  // Voting on the post is disabled unless this is current: a vote request
+  // against another account's vote state can delete the account's vote.
+  _PostVoteHydration _postVoteHydration = _PostVoteHydration.current;
+
   // Track initialization state
   bool _isInitialized = false;
 
@@ -161,40 +194,171 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   /// Listen for auth state changes to handle sign-out
   void _setupAuthListener() {
     _authProvider = context.read<AuthProvider>();
+    _signedInDid = _authProvider!.did;
     _authProvider!.addListener(_onAuthChanged);
   }
 
-  /// Handle auth state changes (specifically sign-out)
+  /// Handle a change of signed-in account: sign-out pops the screen; a
+  /// sign-in or account switch moves it to the thread for the new account
+  /// and refetches the post's vote for that account.
   void _onAuthChanged() {
     if (!mounted) {
       return;
     }
 
-    final authProvider = context.read<AuthProvider>();
+    final previousDid = _signedInDid;
+    final signedInDid = _authProvider!.did;
+    _signedInDid = signedInDid;
+
+    if (previousDid == signedInDid || !_isInitialized || _providerInvalidated) {
+      return;
+    }
+    _accountChangeGeneration++;
+
+    if (signedInDid != null) {
+      _reacquireProvider();
+      unawaited(_refreshPostVote());
+      return;
+    }
 
     // If user signed out while viewing this screen, navigate back
     // The CommentsProviderCache has already disposed our provider
-    if (!authProvider.isAuthenticated &&
-        _isInitialized &&
-        !_providerInvalidated) {
-      _providerInvalidated = true;
+    _providerInvalidated = true;
 
+    if (kDebugMode) {
+      debugPrint('🚪 User signed out - cleaning up PostDetailScreen');
+    }
+
+    // Remove listener from provider (it's disposed but this is safe)
+    try {
+      _commentsProvider.removeListener(_onProviderChanged);
+    } on Exception {
+      // Provider already disposed - expected
+    }
+
+    // Navigate back to feed
+    if (mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
+  /// Move to the cache's provider for the newly signed-in account and load
+  /// its thread.
+  ///
+  /// The cache disposed the old provider and dropped this screen's pin when
+  /// the DID changed, so the pin acquired here is the only one to release.
+  void _reacquireProvider() {
+    _commentsProvider.removeListener(_onProviderChanged);
+    setState(() {
+      _commentsProvider = _commentsCache!.acquireProvider(
+        postUri: widget.post.post.uri,
+        postCid: widget.post.post.cid,
+      );
+    });
+    _commentsProvider.addListener(_onProviderChanged);
+
+    // As on first mount: an optimistic post is not indexed yet.
+    if (!widget.isOptimistic) {
+      _commentsProvider.loadComments(refresh: true);
+    }
+  }
+
+  /// Fetch the post under the newly signed-in session and apply its vote.
+  ///
+  /// The post this screen shows carries the previous session's viewer state
+  /// (none, when it was loaded signed out), and the comments provider
+  /// hydrates only comments. The action bar's vote always sends a create,
+  /// which the server toggles off when the account already voted that way,
+  /// so a tap against the previous session's state can delete the account's
+  /// vote. Voting stays disabled from the DID change (this runs
+  /// synchronously up to the fetch) until the vote for this account lands.
+  ///
+  /// The response is dropped if the screen is gone, signed out, or the DID
+  /// changed again while the request was in flight. On a failed request
+  /// voting stays disabled and Retry is offered.
+  Future<void> _refreshPostVote() async {
+    // As in [_reacquireProvider]: an optimistic post is not indexed yet.
+    if (widget.isOptimistic) {
+      return;
+    }
+    final generation = _accountChangeGeneration;
+    final fetchPost = context.read<CovesApiService>().getPost;
+    final hydrator = ViewerStateHydrator(
+      authProvider: _authProvider!,
+      voteProvider: context.read<VoteProvider>(),
+    );
+    setState(() => _postVoteHydration = _PostVoteHydration.loading);
+
+    bool isSuperseded() =>
+        !mounted ||
+        _providerInvalidated ||
+        generation != _accountChangeGeneration;
+
+    try {
+      final result = await fetchPost(widget.post.post.uri);
+      if (isSuperseded()) {
+        return;
+      }
+      if (result is PostGetSuccess) {
+        // VoteProvider does not notify when it adopts a snapshot, so the
+        // action bar picks the vote up from this rebuild.
+        setState(() {
+          hydrator.hydratePost(result.post);
+          _postVoteHydration = _PostVoteHydration.current;
+        });
+        return;
+      }
       if (kDebugMode) {
-        debugPrint('🚪 User signed out - cleaning up PostDetailScreen');
+        debugPrint(
+          '⚠️ Could not refresh the post vote after an account change: '
+          '${result.runtimeType}',
+        );
       }
-
-      // Remove listener from provider (it's disposed but this is safe)
-      try {
-        _commentsProvider.removeListener(_onProviderChanged);
-      } on Exception {
-        // Provider already disposed - expected
+    } on Exception catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '⚠️ Could not refresh the post vote after an account change: '
+          '${error.runtimeType}',
+        );
       }
-
-      // Navigate back to feed
-      if (mounted) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
+      if (isSuperseded()) {
+        return;
       }
     }
+    _showPostVoteRefreshFailed();
+  }
+
+  /// Keep voting disabled and offer Retry, which fetches the post again.
+  void _showPostVoteRefreshFailed() {
+    setState(() => _postVoteHydration = _PostVoteHydration.failed);
+    // Replaces a failure shown for an earlier account change, whose Retry
+    // would no longer apply.
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text("Couldn't load your vote on this post."),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: AppColors.textPrimary,
+            onPressed: _retryPostVoteRefresh,
+          ),
+        ),
+      );
+  }
+
+  /// Retry the post's refetch, unless a sign-out or a later account change
+  /// has superseded the one that failed, or the screen is gone. A snack bar
+  /// outlives the screen that showed it.
+  void _retryPostVoteRefresh() {
+    if (!mounted ||
+        _providerInvalidated ||
+        _postVoteHydration != _PostVoteHydration.failed) {
+      return;
+    }
+    unawaited(_refreshPostVote());
   }
 
   /// Initialize provider synchronously from cache
@@ -291,8 +455,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     _authProvider = null;
 
     // Release provider pin in cache (prevents LRU eviction disposing an active
-    // provider while this screen is in the navigation stack).
-    if (_isInitialized) {
+    // provider while this screen is in the navigation stack). After a
+    // sign-out the cache has already cleared every pin, so this screen holds
+    // none and a release would consume another owner's.
+    if (_isInitialized && !_providerInvalidated) {
       try {
         _commentsCache?.releaseProvider(widget.post.post.uri);
       } on Exception catch (e) {
@@ -359,6 +525,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     // Captured before the awaits below so the failure toast never touches
     // BuildContext across an async gap.
     final messenger = ScaffoldMessenger.of(context);
+    // A sign-out or account switch during an await disposes [provider], so
+    // the attempt stops rather than call into it or act on its results.
+    bool isAbandoned() =>
+        !mounted ||
+        _providerInvalidated ||
+        !identical(provider, _commentsProvider);
 
     try {
       final isDisplayable = _isCommentDisplayable(
@@ -369,13 +541,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
       if (isDisplayable) {
         final displayed = await _scrollToFocusedComment();
-        if (!mounted || _providerInvalidated || displayed) {
+        if (isAbandoned() || displayed) {
           return;
         }
         if (_scrollController.hasClients) {
           _scrollController.jumpTo(0);
         }
-        if (!mounted || _providerInvalidated) {
+        if (isAbandoned()) {
           return;
         }
       }
@@ -384,7 +556,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       // fetch its subtree and present it focused, with this thread underneath.
       final generationBeforeFetch = provider.treeGeneration;
       final subtree = await provider.loadMoreReplies(targetUri);
-      if (!mounted || _providerInvalidated) {
+      if (isAbandoned()) {
         return;
       }
       if (subtree == null && provider.treeGeneration != generationBeforeFetch) {
@@ -408,7 +580,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       if (kDebugMode) {
         debugPrint('⚠️ Could not focus comment: $e');
       }
-      if (mounted && !_providerInvalidated) {
+      if (!isAbandoned()) {
         _showFocusFailed(messenger);
       }
     } finally {
@@ -710,6 +882,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       return;
     }
 
+    // The action bar's old tap handler stays installed until the frame
+    // after an account change, so check hydration here too.
+    if (!mounted ||
+        _providerInvalidated ||
+        _postVoteHydration != _PostVoteHydration.current) {
+      return;
+    }
+
     final messenger = ScaffoldMessenger.of(context);
 
     // Do not delay VoteProvider's per-subject lock on non-essential haptics.
@@ -755,6 +935,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           post: displayPost,
           isVoted: isVoted,
           isVotePending: isVotePending,
+          votingEnabled: _postVoteHydration == _PostVoteHydration.current,
           onCommentInputTap: _openCommentComposer,
           onCommentCountTap: _scrollToComments,
           onVoteTap: () => _handleVote(voteProvider, direction: 'up'),
@@ -920,7 +1101,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         builder: (context) => FocusedThreadScreen(
           thread: thread,
           ancestors: ancestors,
-          onReply: _handleCommentReply,
           commentsProvider: _commentsProvider,
           parentPost: widget.post.post,
         ),

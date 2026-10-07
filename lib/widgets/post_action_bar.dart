@@ -27,6 +27,7 @@ class PostActionBar extends StatelessWidget {
     this.isVoted = false,
     this.isSaved = false,
     this.isVotePending = false,
+    this.votingEnabled = true,
     super.key,
   });
 
@@ -48,11 +49,17 @@ class PostActionBar extends StatelessWidget {
   final bool isSaved;
   final bool isVotePending;
 
+  /// Whether the vote button acts. False shows it dimmed with its score and
+  /// no tap action, for a post whose vote state the vote provider may not
+  /// hold for the signed-in account.
+  final bool votingEnabled;
+
   @override
   Widget build(BuildContext context) {
     final commentCount = post.post.stats.commentCount;
     final score = post.post.stats.score;
     final neutralColor = AppColors.textPrimary.withValues(alpha: 0.7);
+    final canVote = votingEnabled && !isVotePending;
 
     return Container(
       decoration: const BoxDecoration(
@@ -108,40 +115,45 @@ class PostActionBar extends StatelessWidget {
 
             Semantics(
               button: true,
-              enabled: !isVotePending,
+              enabled: canVote,
               label: isVoted ? 'Remove upvote' : 'Upvote post',
               value: 'Score $score',
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: isVotePending ? null : onVoteTap,
+                onTap: canVote ? onVoteTap : null,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(
                     minWidth: 48,
                     minHeight: 48,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AnimatedHeartIcon(
-                        isLiked: isVoted,
-                        color: neutralColor,
-                        likedColor: AppColors.voteLiked,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 4),
-                      ExcludeSemantics(
-                        child: AnimatedVoteCount(
-                          count: score,
-                          key: ValueKey('vote-count:${post.post.uri}'),
-                          style: TextStyle(
-                            color: isVoted ? AppColors.voteLiked : neutralColor,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
+                  child: Opacity(
+                    opacity: votingEnabled ? 1 : 0.4,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AnimatedHeartIcon(
+                          isLiked: isVoted,
+                          color: neutralColor,
+                          likedColor: AppColors.voteLiked,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 4),
+                        ExcludeSemantics(
+                          child: AnimatedVoteCount(
+                            count: score,
+                            key: ValueKey('vote-count:${post.post.uri}'),
+                            style: TextStyle(
+                              color: isVoted
+                                  ? AppColors.voteLiked
+                                  : neutralColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

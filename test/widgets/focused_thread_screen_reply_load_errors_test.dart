@@ -3,9 +3,9 @@ import 'package:coves_flutter/models/comment.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
-import 'package:coves_flutter/providers/comments_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/focused_thread_screen.dart';
+import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/widgets/loading_error_states.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,7 +31,7 @@ void main() {
   late MockVoteProvider votes;
   late MockCovesApiService api;
   late BlockProvider blocks;
-  late CommentsProvider commentsProvider;
+  late CommentsProviderCache commentsCache;
   // parentRkey of every getComments call, in order (null = whole tree).
   late List<String?> requests;
 
@@ -88,44 +88,52 @@ void main() {
     votes = MockVoteProvider();
     api = MockCovesApiService();
     when(auth.isAuthenticated).thenReturn(false);
+    when(auth.did).thenReturn(null);
     when(votes.isLiked(any)).thenReturn(false);
     when(votes.getVoteState(any)).thenReturn(null);
     when(votes.isPending(any)).thenReturn(false);
     when(votes.getAdjustedScore(any, any))
         .thenAnswer((invocation) => invocation.positionalArguments[1] as int);
     blocks = BlockProvider(apiService: api, authProvider: auth);
-    commentsProvider = CommentsProvider(
-      auth,
-      postUri: postUri,
-      postCid: postCid,
-      apiService: api,
+    // The app-wide cache the screen pins the post's provider in.
+    commentsCache = CommentsProviderCache(
+      authProvider: auth,
       voteProvider: votes,
       commentService: MockCommentService(),
+      apiService: api,
     );
     requests = [];
   });
 
   tearDown(() {
-    commentsProvider.dispose();
+    commentsCache.dispose();
     blocks.dispose();
   });
 
-  Widget app(ThreadViewComment anchor) => MultiProvider(
-    providers: [
-      ChangeNotifierProvider<AuthProvider>.value(value: auth),
-      ChangeNotifierProvider<VoteProvider>.value(value: votes),
-      ChangeNotifierProvider<BlockProvider>.value(value: blocks),
-    ],
-    child: MaterialApp(
-      theme: AppTheme.dark,
-      home: FocusedThreadScreen(
-        thread: anchor,
-        ancestors: const [],
-        onReply: (content, facets, parent) async {},
-        commentsProvider: commentsProvider,
+  Widget app(ThreadViewComment anchor) {
+    // As in the app, the post screen underneath acquires the post's
+    // provider from the cache and hands it to the focused thread.
+    final commentsProvider = commentsCache.acquireProvider(
+      postUri: postUri,
+      postCid: postCid,
+    );
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AuthProvider>.value(value: auth),
+        ChangeNotifierProvider<VoteProvider>.value(value: votes),
+        ChangeNotifierProvider<BlockProvider>.value(value: blocks),
+        Provider<CommentsProviderCache>.value(value: commentsCache),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.dark,
+        home: FocusedThreadScreen(
+          thread: anchor,
+          ancestors: const [],
+          commentsProvider: commentsProvider,
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   testWidgets('load more replies on a nested reply with a malformed URI shows '
       'the failure snackbar without an uncaught error', (tester) async {

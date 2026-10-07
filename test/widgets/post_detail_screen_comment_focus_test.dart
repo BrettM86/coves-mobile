@@ -60,10 +60,7 @@ void main() {
     );
   }
 
-  CommentsResponse response(
-    List<ThreadViewComment> items, {
-    String? cursor,
-  }) =>
+  CommentsResponse response(List<ThreadViewComment> items, {String? cursor}) =>
       CommentsResponse(post: null, comments: items, cursor: cursor);
 
   ThreadViewComment targetAtDepth(int depth) {
@@ -79,6 +76,7 @@ void main() {
     votes = MockVoteProvider();
     api = MockCovesApiService();
     when(auth.isAuthenticated).thenReturn(false);
+    when(auth.did).thenReturn(null);
     when(votes.isLiked(any)).thenReturn(false);
     when(votes.getVoteState(any)).thenReturn(null);
     when(votes.isPending(any)).thenReturn(false);
@@ -102,15 +100,17 @@ void main() {
       target,
       ...List.generate(80, (index) => thread('filler-$index')),
     ];
-    when(api.getComments(
-      postUri: anyNamed('postUri'),
-      sort: anyNamed('sort'),
-      timeframe: anyNamed('timeframe'),
-      depth: anyNamed('depth'),
-      limit: anyNamed('limit'),
-      cursor: anyNamed('cursor'),
-      parentRkey: anyNamed('parentRkey'),
-    )).thenAnswer((invocation) async {
+    when(
+      api.getComments(
+        postUri: anyNamed('postUri'),
+        sort: anyNamed('sort'),
+        timeframe: anyNamed('timeframe'),
+        depth: anyNamed('depth'),
+        limit: anyNamed('limit'),
+        cursor: anyNamed('cursor'),
+        parentRkey: anyNamed('parentRkey'),
+      ),
+    ).thenAnswer((invocation) async {
       final parent = invocation.namedArguments[#parentRkey] as String?;
       final cursor = invocation.namedArguments[#cursor] as String?;
       requests.add(parent);
@@ -133,46 +133,47 @@ void main() {
   });
 
   Widget app({String? focusCommentUri}) => MultiProvider(
-        providers: [
-          ChangeNotifierProvider<AuthProvider>.value(value: auth),
-          ChangeNotifierProvider<VoteProvider>.value(value: votes),
-          ChangeNotifierProvider<BlockProvider>.value(value: blocks),
-          Provider<CommentsProviderCache>.value(value: cache),
-        ],
-        child: MaterialApp(
-          theme: AppTheme.dark,
-          home: PostDetailScreen(
-            focusCommentUri: focusCommentUri,
-            post: FeedViewPost(
-              post: PostView(
-                uri: postUri,
-                cid: postCid,
-                rkey: 'post',
-                author: AuthorView(
-                  did: 'did:plc:author',
-                  handle: 'author.test',
-                ),
-                community: CommunityRef(did: 'did:plc:community', name: 'test'),
-                createdAt: DateTime(2025),
-                indexedAt: DateTime(2025),
-                record: const PostRecord(content: 'Profile navigation post'),
-                stats: PostStats(
-                  upvotes: 0,
-                  downvotes: 0,
-                  score: 0,
-                  commentCount: 81,
-                ),
-              ),
+    providers: [
+      ChangeNotifierProvider<AuthProvider>.value(value: auth),
+      ChangeNotifierProvider<VoteProvider>.value(value: votes),
+      ChangeNotifierProvider<BlockProvider>.value(value: blocks),
+      Provider<CommentsProviderCache>.value(value: cache),
+    ],
+    child: MaterialApp(
+      theme: AppTheme.dark,
+      home: PostDetailScreen(
+        focusCommentUri: focusCommentUri,
+        post: FeedViewPost(
+          post: PostView(
+            uri: postUri,
+            cid: postCid,
+            rkey: 'post',
+            author: AuthorView(did: 'did:plc:author', handle: 'author.test'),
+            community: CommunityRef(did: 'did:plc:community', name: 'test'),
+            createdAt: DateTime(2025),
+            indexedAt: DateTime(2025),
+            record: const PostRecord(content: 'Profile navigation post'),
+            stats: PostStats(
+              upvotes: 0,
+              downvotes: 0,
+              score: 0,
+              commentCount: 81,
             ),
           ),
         ),
-      );
+      ),
+    ),
+  );
 
   ScrollPosition position(WidgetTester tester) => tester
-      .state<ScrollableState>(find.descendant(
-        of: find.byType(CustomScrollView),
-        matching: find.byType(Scrollable),
-      ).first)
+      .state<ScrollableState>(
+        find
+            .descendant(
+              of: find.byType(CustomScrollView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      )
       .position;
 
   void testCachedVisit(
@@ -242,8 +243,9 @@ void main() {
     expect(comments.isLoading, isFalse);
   }
 
-  testCachedVisit('no-focus revisit preserves the cached scroll position',
-      (tester) async {
+  testCachedVisit('no-focus revisit preserves the cached scroll position', (
+    tester,
+  ) async {
     await cacheScrolledVisit(tester);
     await tester.pumpWidget(app());
     await tester.pumpAndSettle();
@@ -254,40 +256,46 @@ void main() {
     expect(requests, isEmpty);
   });
 
-  testCachedVisit('focused revisit reveals an early target above cached scroll',
-      (tester) async {
-    await cacheScrolledVisit(tester);
-    await reopenFocused(tester);
+  testCachedVisit(
+    'focused revisit reveals an early target above cached scroll',
+    (tester) async {
+      await cacheScrolledVisit(tester);
+      await reopenFocused(tester);
 
-    expect(find.byType(FocusedThreadScreen), findsNothing);
-    expect(
-      requests,
-      [null],
-      reason: 'An ordinary in-tree target needs no subtree',
-    );
-    final targetFinder = find.text(targetContent);
-    expect(targetFinder, findsOneWidget);
-    final targetRect = tester.getRect(targetFinder);
-    final viewport = tester.getRect(find.byType(CustomScrollView));
-    final actionBar = tester.getRect(find.byType(PostActionBar));
-    expect(targetRect.top, greaterThanOrEqualTo(viewport.top + kToolbarHeight));
-    expect(targetRect.bottom, lessThanOrEqualTo(actionBar.top));
-    expect(targetFinder.hitTestable(), findsOneWidget);
-  });
+      expect(find.byType(FocusedThreadScreen), findsNothing);
+      expect(requests, [
+        null,
+      ], reason: 'An ordinary in-tree target needs no subtree');
+      final targetFinder = find.text(targetContent);
+      expect(targetFinder, findsOneWidget);
+      final targetRect = tester.getRect(targetFinder);
+      final viewport = tester.getRect(find.byType(CustomScrollView));
+      final actionBar = tester.getRect(find.byType(PostActionBar));
+      expect(
+        targetRect.top,
+        greaterThanOrEqualTo(viewport.top + kToolbarHeight),
+      );
+      expect(targetRect.bottom, lessThanOrEqualTo(actionBar.top));
+      expect(targetFinder.hitTestable(), findsOneWidget);
+    },
+  );
 
-  testCachedVisit('collapsed in-tree target opens the fetched focused subtree',
-      (tester) async {
-    await cacheScrolledVisit(tester, collapsed: true);
-    await reopenFocused(tester);
+  testCachedVisit(
+    'collapsed in-tree target opens the fetched focused subtree',
+    (tester) async {
+      await cacheScrolledVisit(tester, collapsed: true);
+      await reopenFocused(tester);
 
-    expect(comments.isCollapsed(threads.first.comment.uri), isTrue);
-    expect(find.byType(FocusedThreadScreen), findsOneWidget);
-    expect(requests.whereType<String>(), contains('target'));
-    expect(find.text(targetContent).hitTestable(), findsOneWidget);
-  });
+      expect(comments.isCollapsed(threads.first.comment.uri), isTrue);
+      expect(find.byType(FocusedThreadScreen), findsOneWidget);
+      expect(requests.whereType<String>(), contains('target'));
+      expect(find.text(targetContent).hitTestable(), findsOneWidget);
+    },
+  );
 
-  testCachedVisit('collapsed target bypasses the underlying scroll scan',
-      (tester) async {
+  testCachedVisit('collapsed target bypasses the underlying scroll scan', (
+    tester,
+  ) async {
     await cacheScrolledVisit(tester, collapsed: true);
     subtreeFetch = Completer<CommentsResponse>();
     await reopenFocused(tester);
@@ -304,8 +312,9 @@ void main() {
     expect(position(tester).pixels, 0);
   });
 
-  testCachedVisit('target beyond max depth opens the fetched focused subtree',
-      (tester) async {
+  testCachedVisit('target beyond max depth opens the fetched focused subtree', (
+    tester,
+  ) async {
     threads = [
       targetAtDepth(7),
       ...List.generate(80, (index) => thread('filler-$index')),
@@ -327,16 +336,18 @@ void main() {
     expect(position(tester).pixels, 0);
   });
 
-  testCachedVisit('collapsed target fetch failure shows the existing snackbar',
-      (tester) async {
-    await cacheScrolledVisit(tester, collapsed: true);
-    failSubtree = true;
-    await reopenFocused(tester);
+  testCachedVisit(
+    'collapsed target fetch failure shows the existing snackbar',
+    (tester) async {
+      await cacheScrolledVisit(tester, collapsed: true);
+      failSubtree = true;
+      await reopenFocused(tester);
 
-    expect(find.byType(FocusedThreadScreen), findsNothing);
-    expect(find.text(failureMessage), findsOneWidget);
-    expect(requests.whereType<String>(), contains('target'));
-  });
+      expect(find.byType(FocusedThreadScreen), findsNothing);
+      expect(find.text(failureMessage), findsOneWidget);
+      expect(requests.whereType<String>(), contains('target'));
+    },
+  );
 
   group('focused revisit while the cached thread is still loading', () {
     // The target was posted after the thread was cached, so only the

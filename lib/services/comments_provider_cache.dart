@@ -17,7 +17,8 @@ import 'viewer_state_hydrator.dart';
 /// Key features:
 /// - One CommentsProvider per post URI
 /// - LRU eviction (default: 15 most recent posts)
-/// - Sign-out cleanup via AuthProvider listener
+/// - Cleanup on sign-in, sign-out and account switch via AuthProvider
+///   listener
 ///
 /// Usage:
 /// ```dart
@@ -36,8 +37,8 @@ class CommentsProviderCache {
     this._hydrator,
     this.maxSize = 15,
   }) {
-    _wasAuthenticated = _authProvider.isAuthenticated;
-    _authProvider.addListener(_onAuthChanged);
+    _signedInDid = _authProvider.did;
+    _authProvider.addListener(_syncSignedInDid);
   }
 
   final AuthProvider _authProvider;
@@ -65,8 +66,9 @@ class CommentsProviderCache {
   /// provider that is still mounted in the navigation stack.
   final Map<String, int> _refCounts = {};
 
-  /// Track auth state for sign-out detection
-  bool _wasAuthenticated = false;
+  /// DID of the signed-in account the cached threads were loaded for, or
+  /// null while signed out. A change means the viewer changed.
+  String? _signedInDid;
 
   /// Acquire (get or create) a CommentsProvider for a post.
   ///
@@ -77,10 +79,14 @@ class CommentsProviderCache {
   /// If cache is full, evicts the oldest *unreferenced* provider before
   /// creating a new one. If all providers are currently referenced, the cache
   /// may temporarily exceed [maxSize] to avoid disposing active providers.
+  ///
+  /// Never returns a provider cached for a previous signed-in DID, even when
+  /// called from an auth listener that runs before this cache's own.
   CommentsProvider acquireProvider({
     required String postUri,
     required String postCid,
   }) {
+    _syncSignedInDid();
     final provider = _getOrCreateProvider(postUri: postUri, postCid: postCid);
     _refCounts[postUri] = (_refCounts[postUri] ?? 0) + 1;
     return provider;
@@ -194,22 +200,32 @@ class CommentsProviderCache {
     provider?.dispose();
   }
 
-  /// Handle auth state changes - clear all on sign-out
-  void _onAuthChanged() {
-    final isAuthenticated = _authProvider.isAuthenticated;
+  /// Handle auth state changes - clear all when the signed-in DID changes
+  /// (sign-in, sign-out or account switch), including pinned providers.
+  ///
+  /// Cached threads carry the viewer state of the session that loaded them:
+  /// a thread cached while signed out has no votes, and one cached while
+  /// signed in holds that account's. Either way the post must be fetched
+  /// again with the new session. Notifications that keep the same DID, such
+  /// as a token refresh, keep the cache.
+  ///
+  /// Runs as this cache's auth listener and from [acquireProvider]; it
+  /// records the DID it cleared for, so the second run for one change keeps
+  /// the cache.
+  void _syncSignedInDid() {
+    final signedInDid = _authProvider.did;
 
-    // Clear all cached providers on sign-out
-    if (_wasAuthenticated && !isAuthenticated) {
+    if (_signedInDid != signedInDid) {
       if (kDebugMode) {
         debugPrint(
-          '🔒 User signed out - clearing '
+          '🔒 Signed-in account changed - clearing '
           '${_cache.length} cached comment providers',
         );
       }
       clearAll();
     }
 
-    _wasAuthenticated = isAuthenticated;
+    _signedInDid = signedInDid;
   }
 
   /// Clear all cached providers
@@ -226,7 +242,7 @@ class CommentsProviderCache {
 
   /// Dispose and cleanup
   void dispose() {
-    _authProvider.removeListener(_onAuthChanged);
+    _authProvider.removeListener(_syncSignedInDid);
     clearAll();
   }
 }

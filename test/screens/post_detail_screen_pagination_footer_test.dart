@@ -70,6 +70,7 @@ void main() {
     votes = MockVoteProvider();
     api = MockCovesApiService();
     when(auth.isAuthenticated).thenReturn(false);
+    when(auth.did).thenReturn(null);
     when(votes.isLiked(any)).thenReturn(false);
     when(votes.getVoteState(any)).thenReturn(null);
     when(votes.isPending(any)).thenReturn(false);

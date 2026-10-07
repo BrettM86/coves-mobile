@@ -2,10 +2,10 @@ import 'package:coves_flutter/models/comment.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
-import 'package:coves_flutter/providers/comments_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/focused_thread_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
+import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/widgets/comment_card.dart';
 import 'package:coves_flutter/widgets/loading_error_states.dart';
 import 'package:flutter/material.dart';
@@ -28,7 +28,7 @@ void main() {
   late MockCovesApiService mockApiService;
   late MockCommentService mockCommentService;
   late BlockProvider blockProvider;
-  late CommentsProvider commentsProvider;
+  late CommentsProviderCache commentsCache;
 
   setUp(() {
     mockAuthProvider = MockAuthProvider();
@@ -43,24 +43,24 @@ void main() {
     // Signed-out by default: CommentCard hides the actions menu and the
     // vote button renders in the un-liked state.
     when(mockAuthProvider.isAuthenticated).thenReturn(false);
+    when(mockAuthProvider.did).thenReturn(null);
     when(mockVoteProvider.isLiked(any)).thenReturn(false);
     when(mockVoteProvider.getVoteState(any)).thenReturn(null);
     when(mockVoteProvider.isPending(any)).thenReturn(false);
     when(mockVoteProvider.getAdjustedScore(any, any))
         .thenAnswer((invocation) => invocation.positionalArguments[1] as int);
 
-    commentsProvider = CommentsProvider(
-      mockAuthProvider,
-      postUri: postUri,
-      postCid: postCid,
-      apiService: mockApiService,
+    // The app-wide cache the screen pins the post's provider in.
+    commentsCache = CommentsProviderCache(
+      authProvider: mockAuthProvider,
       voteProvider: mockVoteProvider,
       commentService: mockCommentService,
+      apiService: mockApiService,
     );
   });
 
   tearDown(() {
-    commentsProvider.dispose();
+    commentsCache.dispose();
   });
 
   /// Stubs every getComments call. [responder] receives the parentRkey of
@@ -140,20 +140,25 @@ void main() {
   Widget createTestWidget({
     required ThreadViewComment thread,
     List<ThreadViewComment> ancestors = const [],
-    Future<void> Function(String, List<RichTextFacet>, ThreadViewComment)?
-    onReply,
   }) {
+    // As in the app, the post screen underneath acquires the post's
+    // provider from the cache and hands it to the focused thread. Acquired
+    // here rather than in setUp so it belongs to the DID a test stubs.
+    final commentsProvider = commentsCache.acquireProvider(
+      postUri: postUri,
+      postCid: postCid,
+    );
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthProvider>.value(value: mockAuthProvider),
         ChangeNotifierProvider<VoteProvider>.value(value: mockVoteProvider),
         ChangeNotifierProvider<BlockProvider>.value(value: blockProvider),
+        Provider<CommentsProviderCache>.value(value: commentsCache),
       ],
       child: MaterialApp(
         home: FocusedThreadScreen(
           thread: thread,
           ancestors: ancestors,
-          onReply: onReply ?? (content, facets, parent) async {},
           commentsProvider: commentsProvider,
         ),
       ),

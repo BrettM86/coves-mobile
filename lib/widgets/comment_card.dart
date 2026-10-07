@@ -64,6 +64,7 @@ class CommentCard extends StatefulWidget {
     this.onDelete,
     this.isHighlighted = false,
     this.parentPost,
+    this.votingEnabled = true,
     super.key,
   });
 
@@ -94,6 +95,10 @@ class CommentCard extends StatefulWidget {
   /// Tints the card so a comment the user navigated to directly (e.g. from
   /// their profile) stands out from its siblings.
   final bool isHighlighted;
+
+  /// Whether the vote buttons act. False shows them disabled, for a comment
+  /// whose vote state [VoteProvider] may not hold for the signed-in account.
+  final bool votingEnabled;
 
   @override
   State<CommentCard> createState() => _CommentCardState();
@@ -725,6 +730,7 @@ class _CommentCardState extends State<CommentCard> {
       },
       builder: (context, vote, child) {
         final (isLiked, isDownvoted, isPending, adjustedScore) = vote;
+        final canVote = widget.votingEnabled && !isPending;
         final voteProvider = context.read<VoteProvider>();
         final neutralColor = AppColors.textPrimary.withValues(alpha: 0.6);
         final downvoteLabel = isDownvoted
@@ -737,13 +743,13 @@ class _CommentCardState extends State<CommentCard> {
             const Spacer(),
             Semantics(
               button: true,
-              enabled: !isPending,
+              enabled: canVote,
               label: isLiked ? 'Remove upvote' : 'Upvote comment',
               value: 'Score $adjustedScore',
               child: InkWell(
-                onTap: isPending
-                    ? null
-                    : () => _handleVote(context, voteProvider, direction: 'up'),
+                onTap: canVote
+                    ? () => _handleVote(context, voteProvider, direction: 'up')
+                    : null,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(
                     minWidth: 48,
@@ -783,17 +789,17 @@ class _CommentCardState extends State<CommentCard> {
               excludeFromSemantics: true,
               child: Semantics(
                 button: true,
-                enabled: !isPending,
+                enabled: canVote,
                 label: downvoteLabel,
                 value: 'Score $adjustedScore',
                 child: InkWell(
-                  onTap: isPending
-                      ? null
-                      : () => _handleVote(
+                  onTap: canVote
+                      ? () => _handleVote(
                           context,
                           voteProvider,
                           direction: 'down',
-                        ),
+                        )
+                      : null,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
                       minWidth: 48,

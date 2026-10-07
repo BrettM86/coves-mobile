@@ -180,7 +180,7 @@ Future<Widget> bootstrapCovesApp() async {
       Provider<ViewerStateHydrator>.value(value: hydrator),
       ChangeNotifierProvider.value(value: feedProvider),
       // CommentsProviderCache manages per-post CommentsProvider instances
-      // with LRU eviction and sign-out cleanup
+      // with LRU eviction, cleared whenever the signed-in account changes
       Provider<CommentsProviderCache>(
         create: (_) => CommentsProviderCache(
           authProvider: authProvider,

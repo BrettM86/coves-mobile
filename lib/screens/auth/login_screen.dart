@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -132,6 +133,45 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  /// Returns a signed-in user to the route this screen was pushed over, or
+  /// sends them to /feed when there is nothing to return to. The landing
+  /// screen is not a place to return to, so a login pushed over / also goes
+  /// to /feed.
+  ///
+  /// The router's redirect sends a signed-in user on / or /login to /feed,
+  /// but go_router runs it against the base location only, never a route
+  /// pushed over it. A /login reached with go (a cold start) is the base
+  /// location, so the redirect replaces it when auth changes. A /login pushed
+  /// over / is dropped when the redirect replaces / with /feed. A /login
+  /// pushed over any other route is never redirected; only this method
+  /// leaves it.
+  ///
+  /// Does nothing when this route is not current. After the redirect has
+  /// replaced it, that is expected. A route that is still active is covered,
+  /// for example by the handle help dialog, and the signed-in user stays on
+  /// /login; a debug breadcrumb records that case.
+  void _leaveAfterSignIn() {
+    if (!(ModalRoute.isCurrentOf(context) ?? false)) {
+      if (kDebugMode && (ModalRoute.of(context)?.isActive ?? false)) {
+        debugPrint(
+          'LoginScreen: signed in while another route covers the login '
+          'route; not leaving /login',
+        );
+      }
+      return;
+    }
+    final baseLocation = GoRouter.of(context)
+        .routerDelegate
+        .currentConfiguration
+        .uri
+        .path;
+    if (Navigator.of(context).canPop() && baseLocation != '/') {
+      context.pop();
+    } else {
+      context.go('/feed');
+    }
+  }
+
   Future<void> _handleSignIn() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -139,13 +179,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
 
+    var signedIn = false;
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       await authProvider.signIn(_handleController.text.trim());
-
-      if (mounted) {
-        context.go('/feed');
-      }
+      signedIn = true;
     } on SignInCancelledException {
       // The user backed out of the OAuth flow (closed the tab, hit Cancel
       // on the PDS sign-in page, or denied consent). Not an error: no
@@ -249,6 +287,19 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+
+    // Outside the try so a navigation failure is not reported as a failed
+    // sign-in. The router refreshes on the auth change. Wait for the
+    // Navigator to rebuild from that configuration: popping a page built
+    // from the previous one leaves the login route in the router's
+    // configuration, which puts it straight back.
+    if (!signedIn) {
+      return;
+    }
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted) {
+      _leaveAfterSignIn();
     }
   }
 

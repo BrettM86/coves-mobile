@@ -4,7 +4,6 @@ import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/models/user_profile.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
-import 'package:coves_flutter/providers/comments_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/focused_thread_screen.dart';
 import 'package:coves_flutter/screens/home/post_detail_screen.dart';
@@ -386,16 +385,14 @@ void main() {
   });
 
   group('FocusedThreadScreen comment share propagation', () {
-    late CommentsProvider commentsProvider;
+    late CommentsProviderCache commentsCache;
 
     setUp(() {
-      commentsProvider = CommentsProvider(
-        mockAuthProvider,
-        postUri: postUri,
-        postCid: 'cid123',
-        apiService: mockApiService,
+      commentsCache = CommentsProviderCache(
+        authProvider: mockAuthProvider,
         voteProvider: mockVoteProvider,
         commentService: mockCommentService,
+        apiService: mockApiService,
       );
 
       // Entry hydration resolves to an empty subtree: the screen keeps
@@ -416,12 +413,19 @@ void main() {
     });
 
     tearDown(() {
-      commentsProvider.dispose();
+      commentsCache.dispose();
     });
 
     Future<void> pumpFocusedThread(WidgetTester tester) async {
       useTallSurface(tester);
       recordPlatformChannel(tester);
+
+      // As in the app, the post screen underneath acquires the post's
+      // provider from the cache and hands it to the focused thread.
+      final commentsProvider = commentsCache.acquireProvider(
+        postUri: postUri,
+        postCid: 'cid123',
+      );
 
       final anchor = ThreadViewComment(
         comment: topLevelComment(replyCount: 1),
@@ -452,6 +456,7 @@ void main() {
             ChangeNotifierProvider<AuthProvider>.value(value: mockAuthProvider),
             ChangeNotifierProvider<VoteProvider>.value(value: mockVoteProvider),
             ChangeNotifierProvider<BlockProvider>.value(value: blockProvider),
+            Provider<CommentsProviderCache>.value(value: commentsCache),
             Provider<LinkSharer>.value(value: linkSharer),
           ],
           child: MaterialApp(
@@ -459,7 +464,6 @@ void main() {
             home: FocusedThreadScreen(
               thread: anchor,
               ancestors: [ancestor],
-              onReply: (content, facets, parent) async {},
               commentsProvider: commentsProvider,
               parentPost: parentPost(),
             ),
