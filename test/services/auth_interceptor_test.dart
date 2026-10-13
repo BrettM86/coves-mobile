@@ -87,5 +87,104 @@ void main() {
 
       expect(signOutCount, 0);
     });
+
+    test('a non-401 failure on the post-refresh retry reaches the caller '
+        'instead of the original 401', () async {
+      final adapter = _SequencedAdapter([
+        (401, '{"error":"Unauthorized"}'),
+        (500, '{"error":"InternalServerError"}'),
+      ]);
+      dio.httpClientAdapter = adapter;
+      var token = 'token-old';
+      var signOutCount = 0;
+      dio.interceptors.add(
+        createAuthInterceptor(
+          tokenGetter: () async => token,
+          tokenRefresher: () async {
+            token = 'token-new';
+            return true;
+          },
+          signOutHandler: () async {
+            signOutCount++;
+          },
+          serviceName: 'TestService',
+          dio: dio,
+        ),
+      );
+
+      await expectLater(
+        dio.get<Map<String, dynamic>>('/xrpc/test.endpoint'),
+        throwsA(
+          isA<DioException>().having(
+            (e) => e.response?.statusCode,
+            'statusCode',
+            500,
+          ),
+        ),
+      );
+      expect(signOutCount, 0);
+    });
+
+    test('a re-sent request made while signed out carries no Authorization '
+        'header from the previous account', () async {
+      final adapter = _SequencedAdapter([(200, '{}'), (200, '{}')]);
+      dio.httpClientAdapter = adapter;
+      String? token = 'token-A';
+      dio.interceptors.add(
+        createAuthInterceptor(
+          tokenGetter: () async => token,
+          tokenRefresher: () async => false,
+          signOutHandler: () async {},
+          serviceName: 'TestService',
+          dio: dio,
+        ),
+      );
+
+      // First send as account A; its RequestOptions now carry token-A, as
+      // the options RetryInterceptor re-sends via dio.fetch would.
+      final first = await dio.get<Map<String, dynamic>>('/xrpc/test.endpoint');
+      expect(adapter.sentHeaders[0]['Authorization'], 'Bearer token-A');
+
+      // Sign out, then re-send the same options.
+      token = null;
+      expect(first.requestOptions.headers['Authorization'], 'Bearer token-A');
+      await dio.fetch<Map<String, dynamic>>(first.requestOptions);
+
+      expect(adapter.sentHeaders[1], isNot(contains('Authorization')));
+    });
   });
+}
+
+/// Replies with the given (status, body) pairs in order, one per request,
+/// and records each request's outgoing headers as they reach the wire.
+class _SequencedAdapter implements HttpClientAdapter {
+  _SequencedAdapter(this._replies);
+
+  final List<(int, String)> _replies;
+  final List<Map<String, dynamic>> sentHeaders = [];
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<List<int>>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    sentHeaders.add(Map<String, dynamic>.of(options.headers));
+    if (sentHeaders.length > _replies.length) {
+      throw StateError(
+        'unexpected request #${sentHeaders.length} to ${options.path}',
+      );
+    }
+    final (status, body) = _replies[sentHeaders.length - 1];
+    return ResponseBody.fromString(
+      body,
+      status,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
 }

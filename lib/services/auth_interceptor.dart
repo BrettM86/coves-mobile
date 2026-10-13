@@ -46,6 +46,9 @@ InterceptorsWrapper createAuthInterceptor({
           debugPrint('🔐 $serviceName: Adding fresh Authorization header');
         }
       } else {
+        // A re-sent request (e.g. a RetryInterceptor retry of
+        // err.requestOptions) still carries the previous account's token.
+        options.headers.remove('Authorization');
         if (kDebugMode) {
           debugPrint(
             '⚠️ $serviceName: No token available - '
@@ -124,15 +127,10 @@ InterceptorsWrapper createAuthInterceptor({
                 final response = await dio.fetch(error.requestOptions);
                 return handler.resolve(response);
               } on DioException catch (retryError) {
-                // If retry failed with 401 and already retried, we already
-                // signed out in the retry limit check above, so just pass
-                // the error through without signing out again
-                if (retryError.response?.statusCode == 401 &&
-                    retryError.requestOptions.extra['retried'] == true) {
-                  return handler.next(retryError);
-                }
-                // For other errors during retry, rethrow to outer catch
-                rethrow;
+                // The retry's own outcome is what the caller must see. A
+                // second 401 was already signed out by the retry limit
+                // check above (the retry re-entered this handler).
+                return handler.next(retryError);
               }
             }
           }
@@ -147,9 +145,9 @@ InterceptorsWrapper createAuthInterceptor({
             );
           }
         } on Object catch (e) {
-          // Same rule as above: an error here (from the refresher or from
-          // retrying the original request) is not evidence the session is
-          // dead, so never sign out - just propagate. Object, not
+          // Same rule as above: an error from the refresher or token getter
+          // is not evidence the session is dead, so never sign out - just
+          // propagate the original 401. Object, not
           // Exception: a TypeError/StateError from the auth provider must
           // not escape this async handler, or it would bypass the error
           // taxonomy and surface as a misclassified network error instead
