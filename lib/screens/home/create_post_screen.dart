@@ -8,6 +8,7 @@ import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
+import '../../services/mention_resolver.dart';
 import '../../utils/rich_text_composer.dart';
 import '../../utils/url_policy.dart';
 import '../compose/community_picker_screen.dart';
@@ -176,6 +177,16 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       final authProvider = context.read<AuthProvider>();
       // Shared app-wide API client (owned by main.dart)
       final apiService = context.read<CovesApiService>();
+      // The post is built from the form as it was at submit; edits made while
+      // mentions resolve, and a switch of account, must not leak into it
+      final submittingDid = authProvider.did;
+      final community = _selectedCommunity!;
+      final title = _titleController.text.trim().isNotEmpty
+          ? _titleController.text.trim()
+          : null;
+      final language = _language;
+      final isNsfw = _isNsfw;
+      final bodyText = _bodyController.text;
 
       // Build embed if URL is provided
       ExternalEmbedInput? embed;
@@ -198,32 +209,44 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           return;
         }
 
-        embed = ExternalEmbedInput(
-          uri: url,
-          title: _titleController.text.trim().isNotEmpty
-              ? _titleController.text.trim()
-              : null,
-        );
+        embed = ExternalEmbedInput(uri: url, title: title);
       }
 
       // Build labels if NSFW is enabled
       SelfLabels? labels;
-      if (_isNsfw) {
+      if (isNsfw) {
         labels = const SelfLabels(values: [SelfLabel(val: 'nsfw')]);
       }
 
-      final body = composeRichText(_bodyController.text);
+      final body = await resolveMentions(
+        composeRichText(bodyText),
+        ApiMentionResolver(apiService),
+      );
+
+      // The session would now write as another account; keep the form
+      if (authProvider.did != submittingDid) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Your account changed while posting, so nothing was posted',
+              ),
+              backgroundColor: Colors.red[700],
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
 
       // Create post
       final response = await apiService.createPost(
-        community: _selectedCommunity!.did,
-        title: _titleController.text.trim().isNotEmpty
-            ? _titleController.text.trim()
-            : null,
+        community: community.did,
+        title: title,
         content: body.content.isNotEmpty ? body.content : null,
         facets: body.facets,
         embed: embed,
-        langs: [_language],
+        langs: [language],
         labels: labels,
       );
 
@@ -232,7 +255,12 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         final optimisticPost = _buildOptimisticPost(
           response: response,
           authProvider: authProvider,
+          community: community,
+          title: title,
+          embed: embed,
           content: body.content,
+          facets: body.facets,
+          isNsfw: isNsfw,
         );
 
         // Reset form first
@@ -287,35 +315,31 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     });
   }
 
-  /// Build optimistic post for immediate display after creation
+  /// Build optimistic post for immediate display after creation, from the
+  /// values that were sent
   FeedViewPost _buildOptimisticPost({
     required CreatePostResponse response,
     required AuthProvider authProvider,
+    required CommunityView community,
+    required String? title,
+    required ExternalEmbedInput? embed,
     required String content,
+    required List<RichTextFacet>? facets,
+    required bool isNsfw,
   }) {
     // Extract rkey from AT-URI (at://did/collection/rkey)
     final uriParts = response.uri.split('/');
     final rkey = uriParts.isNotEmpty ? uriParts.last : '';
 
     // Build embed if URL was provided
-    PostEmbed? embed;
-    final url = _urlController.text.trim();
-    if (url.isNotEmpty) {
-      embed = ExternalPostEmbed(
+    PostEmbed? postEmbed;
+    if (embed != null) {
+      postEmbed = ExternalPostEmbed(
         type: EmbedTypes.external,
-        external: ExternalEmbed(
-          uri: url,
-          title: _titleController.text.trim().isNotEmpty
-              ? _titleController.text.trim()
-              : null,
-        ),
+        external: ExternalEmbed(uri: embed.uri, title: embed.title),
         data: {
           r'$type': EmbedTypes.external,
-          'external': {
-            'uri': url,
-            if (_titleController.text.trim().isNotEmpty)
-              'title': _titleController.text.trim(),
-          },
+          'external': {'uri': embed.uri, 'title': ?embed.title},
         },
       );
     }
@@ -332,25 +356,24 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           handle: authProvider.handle ?? 'unknown',
         ),
         community: CommunityRef(
-          did: _selectedCommunity!.did,
-          name: _selectedCommunity!.name,
-          origin: _selectedCommunity!.origin,
-          handle: _selectedCommunity!.handle,
-          avatar: _selectedCommunity!.avatar,
+          did: community.did,
+          name: community.name,
+          origin: community.origin,
+          handle: community.handle,
+          avatar: community.avatar,
         ),
         createdAt: now,
         indexedAt: now,
         record: PostRecord(
           content: content,
-          title: _titleController.text.trim().isNotEmpty
-              ? _titleController.text.trim()
-              : null,
+          title: title,
+          facets: facets,
           // Mirror the self-label sent to the API so the author's own post
           // arrives at the detail screen concealed, not exposed until refetch.
-          labels: _isNsfw ? const ['nsfw'] : const [],
+          labels: isNsfw ? const ['nsfw'] : const [],
         ),
         stats: PostStats(upvotes: 0, downvotes: 0, score: 0, commentCount: 0),
-        embed: embed,
+        embed: postEmbed,
         viewer: ViewerState(),
       ),
     );

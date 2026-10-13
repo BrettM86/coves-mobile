@@ -1,14 +1,20 @@
+import 'dart:async';
+
 import 'package:coves_flutter/models/community.dart';
 import 'package:coves_flutter/models/facet.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
+import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/create_post_screen.dart';
+import 'package:coves_flutter/screens/home/post_detail_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
+import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/fake_providers.dart' show postCardProviders;
 import '../test_helpers/test_mocks.dart';
 
 // Fake AuthProvider for testing
@@ -575,6 +581,52 @@ void main() {
         return (captured[0], captured[1]);
       }
 
+      // One string per facet: its byte range and every feature it carries,
+      // so a wrong uri or did, wrong range, extra feature or extra facet all
+      // fail
+      String describeFeature(FacetFeature feature) => switch (feature) {
+        LinkFacetFeature() => 'link ${feature.uri}',
+        MentionFacetFeature() => 'mention ${feature.did}',
+        _ => feature.type,
+      };
+      String describeFacet(RichTextFacet facet) {
+        final range = '[${facet.index.byteStart},${facet.index.byteEnd})';
+        return '$range ${facet.features.map(describeFeature).toList()}';
+      }
+
+      /// Pumps CreatePostScreen with the providers PostDetailScreen resolves,
+      /// with the mocked API last so CreatePostScreen submits through it
+      Future<void> pumpWithPostDetailProviders(WidgetTester tester) async {
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ...postCardProviders(auth: fakeAuthProvider),
+              Provider<CovesApiService>.value(value: mockApiService),
+              Provider<CommentsProviderCache>(
+                create: (context) => CommentsProviderCache(
+                  authProvider: fakeAuthProvider,
+                  voteProvider: context.read<VoteProvider>(),
+                  commentService: MockCommentService(),
+                  apiService: mockApiService,
+                ),
+                dispose: (_, cache) => cache.dispose(),
+              ),
+            ],
+            child: const MaterialApp(home: CreatePostScreen()),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      /// Toggles the NSFW switch while the Post button's spinner animates,
+      /// which pumpAndSettle would wait on forever
+      Future<void> toggleNsfwWhileSubmitting(WidgetTester tester) async {
+        await tester.ensureVisible(find.byType(Switch));
+        await tester.pump();
+        await tester.tap(find.byType(Switch));
+        await tester.pump();
+      }
+
       testWidgets('submits trimmed content with the scheme-prefixed link as '
           'one byte-range link facet', (tester) async {
         await submitWithBody(tester, '  see Https://a.com  ');
@@ -582,15 +634,6 @@ void main() {
         final (content, facets) = captureContentAndFacets();
         expect(content, 'see Https://a.com');
         expect(facets, isA<List<RichTextFacet>>());
-        // One string per facet: its byte range and every feature it carries,
-        // so a wrong uri, wrong range, extra feature or extra facet all fail
-        String describeFeature(FacetFeature feature) =>
-            feature is LinkFacetFeature ? 'link ${feature.uri}' : feature.type;
-        String describeFacet(RichTextFacet facet) {
-          final range = '[${facet.index.byteStart},${facet.index.byteEnd})';
-          return '$range ${facet.features.map(describeFeature).toList()}';
-        }
-
         final described = (facets! as List<RichTextFacet>)
             .map(describeFacet)
             .toList();
@@ -604,6 +647,331 @@ void main() {
         final (content, facets) = captureContentAndFacets();
         expect(content, 'just words, e.g. node.js');
         expect(facets, isNull);
+      });
+
+      testWidgets('resolves a handle mention through the API and submits it '
+          'as a mention facet alongside the link facet', (tester) async {
+        when(mockApiService.resolveHandle(handle: 'alice.coves.social'))
+            .thenAnswer((_) async => 'did:plc:alice');
+
+        await submitWithBody(
+          tester,
+          'hi @alice.coves.social https://example.com',
+        );
+
+        final (content, facets) = captureContentAndFacets();
+        expect(content, 'hi @alice.coves.social https://example.com');
+        final described = (facets! as List<RichTextFacet>)
+            .map(describeFacet)
+            .toList();
+        expect(described, [
+          '[3,22) [mention did:plc:alice]',
+          '[23,42) [link https://example.com]',
+        ]);
+      });
+
+      testWidgets('the optimistic post opened after a successful submit '
+          'carries the mention and link facets that were submitted', (
+        tester,
+      ) async {
+        when(mockApiService.resolveHandle(handle: 'alice.coves.social'))
+            .thenAnswer((_) async => 'did:plc:alice');
+        // Overrides the group's throwing stub so the screen navigates to the
+        // optimistic PostDetailScreen
+        when(
+          mockApiService.createPost(
+            community: anyNamed('community'),
+            title: anyNamed('title'),
+            content: anyNamed('content'),
+            facets: anyNamed('facets'),
+            embed: anyNamed('embed'),
+            langs: anyNamed('langs'),
+            labels: anyNamed('labels'),
+          ),
+        ).thenAnswer(
+          (_) async => const CreatePostResponse(
+            uri: 'at://did:plc:testuser/social.coves.community.post/created',
+            cid: 'created-cid',
+          ),
+        );
+
+        await pumpWithPostDetailProviders(tester);
+        await selectCommunity(tester);
+        await tester.enterText(
+          find.widgetWithText(TextField, 'What are your thoughts?'),
+          'hi @alice.coves.social https://example.com',
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.widgetWithText(TextButton, 'Post'));
+        await tester.pumpAndSettle();
+
+        final detail = tester.widget<PostDetailScreen>(
+          find.byType(PostDetailScreen),
+        );
+        expect(detail.isOptimistic, isTrue);
+        final facets = detail.post.post.record?.facets;
+        expect(facets, isNotNull, reason: 'optimistic post has facets');
+        expect(facets!.map(describeFacet).toList(), [
+          '[3,22) [mention did:plc:alice]',
+          '[23,42) [link https://example.com]',
+        ]);
+      });
+
+      testWidgets('a failed mention lookup blocks the post, shows the error '
+          'and keeps the body', (tester) async {
+        when(mockApiService.resolveHandle(handle: 'alice.coves.social'))
+            .thenAnswer(
+              (_) => Future<String>.error(
+                ServerException('Mention lookup unavailable', statusCode: 503),
+              ),
+            );
+
+        await submitWithBody(tester, 'hi @alice.coves.social');
+
+        verifyCreatePostNeverCalled();
+        expect(
+          find.descendant(
+            of: find.byType(SnackBar),
+            matching: find.textContaining('Mention lookup unavailable'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.widgetWithText(TextField, 'hi @alice.coves.social'),
+          findsOneWidget,
+        );
+      });
+
+      testWidgets('submits the title, community, language and NSFW label the '
+          'form held at submit, not edits made while a mention lookup is '
+          'pending', (tester) async {
+        // A second community to switch to while the lookup is pending
+        when(
+          mockApiService.listCommunities(
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+            sort: anyNamed('sort'),
+            subscribed: anyNamed('subscribed'),
+          ),
+        ).thenAnswer(
+          (_) async => CommunitiesResponse(
+            communities: [
+              CommunityView(
+                did: 'did:plc:community',
+                name: 'testcove',
+                displayName: 'Test Cove',
+              ),
+              CommunityView(
+                did: 'did:plc:othercommunity',
+                name: 'othercove',
+                displayName: 'Other Cove',
+              ),
+            ],
+          ),
+        );
+        final lookup = Completer<String>();
+        when(mockApiService.resolveHandle(handle: 'alice.coves.social'))
+            .thenAnswer((_) => lookup.future);
+
+        await tester.pumpWidget(createTestWidget());
+        await tester.pumpAndSettle();
+        await selectCommunity(tester);
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Title'),
+          'Original title',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextField, 'URL'),
+          'https://example.com/article',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextField, 'What are your thoughts?'),
+          'hi @alice.coves.social',
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.widgetWithText(TextButton, 'Post'));
+        await tester.pump();
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Original title'),
+          'Edited title',
+        );
+        await tester.pump();
+        // Spanish instead of English
+        await tester.ensureVisible(find.text('English'));
+        await tester.pump();
+        await tester.tap(find.text('English'));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        await tester.tap(find.text('Spanish').last);
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        // NSFW on, from off at submit
+        await toggleNsfwWhileSubmitting(tester);
+        // Another community instead of Test Cove
+        await tester.ensureVisible(find.text('Test Cove'));
+        await tester.pump();
+        await tester.tap(find.text('Test Cove'));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        await tester.tap(find.text('Other Cove'));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        lookup.complete('did:plc:alice');
+        await tester.pumpAndSettle();
+
+        final captured = verify(
+          mockApiService.createPost(
+            community: captureAnyNamed('community'),
+            title: captureAnyNamed('title'),
+            content: anyNamed('content'),
+            facets: anyNamed('facets'),
+            embed: anyNamed('embed'),
+            langs: captureAnyNamed('langs'),
+            labels: captureAnyNamed('labels'),
+          ),
+        ).captured;
+        expect(captured, [
+          'did:plc:community',
+          'Original title',
+          ['en'],
+          null,
+        ]);
+      });
+
+      testWidgets('the optimistic post carries the title and NSFW label that '
+          'were sent, not edits made while a mention lookup is pending', (
+        tester,
+      ) async {
+        final lookup = Completer<String>();
+        when(mockApiService.resolveHandle(handle: 'alice.coves.social'))
+            .thenAnswer((_) => lookup.future);
+        // Overrides the group's throwing stub so the screen navigates to the
+        // optimistic PostDetailScreen
+        when(
+          mockApiService.createPost(
+            community: anyNamed('community'),
+            title: anyNamed('title'),
+            content: anyNamed('content'),
+            facets: anyNamed('facets'),
+            embed: anyNamed('embed'),
+            langs: anyNamed('langs'),
+            labels: anyNamed('labels'),
+          ),
+        ).thenAnswer(
+          (_) async => const CreatePostResponse(
+            uri: 'at://did:plc:testuser/social.coves.community.post/created',
+            cid: 'created-cid',
+          ),
+        );
+
+        await pumpWithPostDetailProviders(tester);
+        await selectCommunity(tester);
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Title'),
+          'Original title',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextField, 'What are your thoughts?'),
+          'hi @alice.coves.social',
+        );
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byType(Switch));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byType(Switch));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.widgetWithText(TextButton, 'Post'));
+        await tester.pump();
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Original title'),
+          'Edited title',
+        );
+        await tester.pump();
+        // NSFW off, from on at submit
+        await toggleNsfwWhileSubmitting(tester);
+        lookup.complete('did:plc:alice');
+        await tester.pumpAndSettle();
+
+        final captured = verify(
+          mockApiService.createPost(
+            community: anyNamed('community'),
+            title: captureAnyNamed('title'),
+            content: anyNamed('content'),
+            facets: anyNamed('facets'),
+            embed: anyNamed('embed'),
+            langs: anyNamed('langs'),
+            labels: captureAnyNamed('labels'),
+          ),
+        ).captured;
+        expect(captured, hasLength(2), reason: 'createPost called once');
+        expect(
+          {
+            'title': captured[0],
+            'labels': (captured[1] as SelfLabels?)?.toJson(),
+          },
+          {
+            'title': 'Original title',
+            'labels': {
+              'values': [
+                {'val': 'nsfw'},
+              ],
+            },
+          },
+        );
+        final record = tester
+            .widget<PostDetailScreen>(find.byType(PostDetailScreen))
+            .post
+            .post
+            .record;
+        expect(
+          {'title': record?.title, 'labels': record?.labels},
+          {
+            'title': 'Original title',
+            'labels': ['nsfw'],
+          },
+        );
+      });
+
+      testWidgets('a switch to another account while a mention lookup is '
+          'pending blocks the post and keeps the body', (tester) async {
+        final lookup = Completer<String>();
+        when(mockApiService.resolveHandle(handle: 'alice.coves.social'))
+            .thenAnswer((_) => lookup.future);
+
+        await tester.pumpWidget(createTestWidget());
+        await tester.pumpAndSettle();
+        await selectCommunity(tester);
+        await tester.enterText(
+          find.widgetWithText(TextField, 'What are your thoughts?'),
+          'hi @alice.coves.social',
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.widgetWithText(TextButton, 'Post'));
+        await tester.pump();
+        fakeAuthProvider.setAuthenticated(
+          value: true,
+          did: 'did:plc:otheruser',
+          handle: 'otheruser.coves.social',
+        );
+        await tester.pump();
+        lookup.complete('did:plc:alice');
+        await tester.pumpAndSettle();
+
+        verifyCreatePostNeverCalled();
+        expect(
+          find.descendant(
+            of: find.byType(SnackBar),
+            matching: find.textContaining('Your account changed'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.widgetWithText(TextField, 'hi @alice.coves.social'),
+          findsOneWidget,
+        );
       });
     });
   });

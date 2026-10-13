@@ -9,6 +9,8 @@ import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/comments_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/compose/reply_screen.dart';
+import 'package:coves_flutter/services/api_exceptions.dart';
+import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,6 +44,7 @@ void main() {
 
     // Signed-out rendering keeps CommentCard simple (no action menus)
     when(mockAuthProvider.isAuthenticated).thenReturn(false);
+    when(mockAuthProvider.did).thenReturn('did:plc:testuser');
     when(mockVoteProvider.isLiked(any)).thenReturn(false);
     when(mockVoteProvider.getVoteState(any)).thenReturn(null);
     when(mockVoteProvider.isPending(any)).thenReturn(false);
@@ -104,6 +107,7 @@ void main() {
           ChangeNotifierProvider<AuthProvider>.value(value: mockAuthProvider),
           ChangeNotifierProvider<VoteProvider>.value(value: mockVoteProvider),
           ChangeNotifierProvider<BlockProvider>.value(value: blockProvider),
+          Provider<CovesApiService>.value(value: mockApiService),
         ],
         child: MaterialApp(
           navigatorKey: navigatorKey,
@@ -143,6 +147,16 @@ void main() {
           )
           .first,
     );
+  }
+
+  /// System back, then pumps past the reverse page transition (longer than
+  /// any default Material transition) so the reply route is removed and its
+  /// State disposed before the send settles
+  Future<void> systemBackAndFinishTransition(WidgetTester tester) async {
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
   }
 
   group('ReplyScreen draft round-trip', () {
@@ -289,16 +303,6 @@ void main() {
         ),
         findsOneWidget,
       );
-    }
-
-    /// System back, then pumps past the reverse page transition (longer than
-    /// any default Material transition) so the reply route is removed and
-    /// its State disposed before the send settles
-    Future<void> systemBackAndFinishTransition(WidgetTester tester) async {
-      await tester.binding.handlePopRoute();
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pump();
     }
 
     testWidgets('send fails after the screen was popped: reopening restores '
@@ -665,6 +669,172 @@ void main() {
         '[0,39) [link https://en.wikipedia.org/wiki/Foo_(bar)]',
         '[$secondStart,$secondEnd) [link https://a.com/x]',
       ]);
+    });
+  });
+
+  group('ReplyScreen mention facets', () {
+    testWidgets('resolves a handle mention through the API and submits it as '
+        'a mention facet', (tester) async {
+      when(mockApiService.resolveHandle(handle: 'alice.coves.social'))
+          .thenAnswer((_) async => 'did:plc:alice');
+      final comment = createComment('at://did:plc:author/comment/1');
+      final submissions = <(String, List<RichTextFacet>)>[];
+      await pumpBase(tester);
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) async {
+          submissions.add((content, facets));
+        },
+      );
+
+      await tester.enterText(find.byType(TextField), 'hi @alice.coves.social');
+      await tester.pump();
+      await tester.tap(find.text('Send'));
+      await tester.pumpAndSettle();
+
+      expect(submissions, hasLength(1));
+      final (content, facets) = submissions.single;
+      expect(content, 'hi @alice.coves.social');
+      // One string per facet: its byte range and every feature it carries,
+      // so a wrong did, wrong range, extra feature or extra facet all fail
+      String describeFeature(FacetFeature feature) =>
+          feature is MentionFacetFeature
+          ? 'mention ${feature.did}'
+          : feature.type;
+      String describeFacet(RichTextFacet facet) {
+        final range = '[${facet.index.byteStart},${facet.index.byteEnd})';
+        return '$range ${facet.features.map(describeFeature).toList()}';
+      }
+
+      final described = facets.map(describeFacet).toList();
+      expect(described, ['[3,22) [mention did:plc:alice]']);
+    });
+
+    testWidgets('a failed mention lookup blocks the send, shows the error and '
+        'saves the draft for the parent', (tester) async {
+      when(mockApiService.resolveHandle(handle: 'alice.coves.social'))
+          .thenAnswer(
+            (_) => Future<String>.error(
+              ServerException('Mention lookup unavailable', statusCode: 503),
+            ),
+          );
+      final comment = createComment('at://did:plc:author/comment/1');
+      var submitCalls = 0;
+      await pumpBase(tester);
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) async {
+          submitCalls++;
+        },
+      );
+
+      await tester.enterText(find.byType(TextField), 'hi @alice.coves.social');
+      await tester.pump();
+      await tester.tap(find.text('Send'));
+      await tester.pumpAndSettle();
+
+      expect(submitCalls, 0);
+      expect(
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.textContaining('Mention lookup unavailable'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        'hi @alice.coves.social',
+      );
+    });
+
+    testWidgets('a switch to another account while a mention lookup is '
+        'pending blocks the send and saves the draft for the parent', (
+      tester,
+    ) async {
+      final lookup = Completer<String>();
+      when(mockApiService.resolveHandle(handle: 'alice.coves.social'))
+          .thenAnswer((_) => lookup.future);
+      when(mockAuthProvider.did).thenReturn('did:plc:testuser');
+      final comment = createComment('at://did:plc:author/comment/1');
+      var submitCalls = 0;
+      await pumpBase(tester);
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) async {
+          submitCalls++;
+        },
+      );
+
+      await tester.enterText(find.byType(TextField), 'hi @alice.coves.social');
+      await tester.pump();
+      await tester.tap(find.text('Send'));
+      await tester.pump();
+      await tester.pump();
+      when(mockAuthProvider.did).thenReturn('did:plc:otheruser');
+      lookup.complete('did:plc:alice');
+      await tester.pumpAndSettle();
+
+      expect(submitCalls, 0);
+      expect(
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.textContaining('Your account changed'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        'hi @alice.coves.social',
+      );
+    });
+
+    testWidgets('a mention lookup that fails after system back closed the '
+        'screen shows the error on the screen below and saves the draft for '
+        'the parent', (tester) async {
+      final lookup = Completer<String>();
+      when(mockApiService.resolveHandle(handle: 'alice.coves.social'))
+          .thenAnswer((_) => lookup.future);
+      final comment = createComment('at://did:plc:author/comment/1');
+      var submitCalls = 0;
+      await pumpBase(tester);
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) async {
+          submitCalls++;
+        },
+      );
+
+      await tester.enterText(find.byType(TextField), 'hi @alice.coves.social');
+      await tester.pump();
+      await tester.tap(find.text('Send'));
+      await tester.pump();
+      await tester.pump();
+      await systemBackAndFinishTransition(tester);
+      expect(find.byType(ReplyScreen), findsNothing);
+
+      lookup.completeError(
+        ServerException('Mention lookup unavailable', statusCode: 503),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text('base route'), findsOneWidget);
+      expect(submitCalls, 0);
+      expect(
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.textContaining('Mention lookup unavailable'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        'hi @alice.coves.social',
+      );
     });
   });
 }

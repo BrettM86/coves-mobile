@@ -1,0 +1,63 @@
+# Section E — check 9: a post body with @user and !community mentions submits
+# through the mention lookups and the optimistic post detail renders. The
+# body mentions the signed-in handle (mari, resolves locally), the posting
+# community by bare name, and kai (does not resolve locally, stays plain
+# text). The facets are checked outside Maestro on the PDS record:
+# com.atproto.repo.listRecords?repo=<author did>&collection=
+# social.coves.community.postv2 -> two #mention facets, none for kai.
+# Assumes a signed-in session. Title is timestamped so reruns never collide.
+# NOTE: never use hideKeyboard on the compose screen — Maestro implements it
+# as a BACK press, which the shell's dirty-draft guard redirects to Home.
+appId: social.coves.dev
+---
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Create"
+      - extendedWaitUntil:
+          visible: "Create Post"
+          timeout: 15000
+# --- pick community ---
+- tapOn: "Select a community"
+- extendedWaitUntil:
+    visible: "Post to"
+    timeout: 15000
+- tapOn: "Search for a community"
+# the community the body mentions, so the flow needs only one fixture
+- inputText: "pwq9qke564"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*Write forward[\\s\\S]*"
+    timeout: 15000
+- tapOn: "[\\s\\S]*Write forward[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Create Post"
+    timeout: 15000
+- assertVisible: "[\\s\\S]*Write forward[\\s\\S]*"
+# --- title + body with mentions ---
+- evalScript: ${output.e9Title = 'QA E9 mentions ' + Date.now()}
+- tapOn: "Title"
+- inputText: ${output.e9Title}
+- tapOn: "What are your thoughts?"
+- inputText: "Mentions @mari.local.coves.dev and !pwq9qke564 but not @kai.local.coves.dev"
+- takeScreenshot: build/maestro/e9_filled
+# --- submit: mention lookups run, then the post is created ---
+- tapOn: "Post"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*${output.e9Title}[\\s\\S]*"
+    timeout: 20000
+- takeScreenshot: build/maestro/e9_optimistic_detail
+- back
+- extendedWaitUntil:
+    visible: "Create Post"
+    timeout: 15000
+- assertVisible: "Select a community"

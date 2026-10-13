@@ -404,6 +404,18 @@ class MockCovesApiService extends _i1.Mock implements _i6.CovesApiService {
       ) as _i9.Future<_i4.CommunityView>);
 
   @override
+  _i9.Future<String> resolveHandle({required String? handle}) =>
+      (super.noSuchMethod(
+        Invocation.method(#resolveHandle, [], {#handle: handle}),
+        returnValue: _i9.Future<String>.value(
+          _i12.dummyValue<String>(
+            this,
+            Invocation.method(#resolveHandle, [], {#handle: handle}),
+          ),
+        ),
+      ) as _i9.Future<String>);
+
+  @override
   _i9.Future<_i4.CreatePostResponse> createPost({
     required String? community,
     String? title,

@@ -13,6 +13,8 @@ import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
 import '../../services/comments_provider_cache.dart';
+import '../../services/coves_api_service.dart';
+import '../../services/mention_resolver.dart';
 import '../../utils/rich_text_composer.dart';
 import '../../widgets/comment_thread.dart';
 import '../../widgets/post_card.dart';
@@ -260,6 +262,14 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
       return;
     }
     final parentUri = widget.comment?.comment.uri;
+    // Shared app-wide API client (owned by main.dart), read before any await
+    final mentionResolver = ApiMentionResolver(context.read<CovesApiService>());
+    // The account that started the send; null when there is no AuthProvider
+    final authProvider = _authProvider;
+    final submittingDid = authProvider?.did;
+    // Captured before any await so a failed mention lookup is still reported,
+    // on the screen below, after system back has closed this one
+    final messenger = ScaffoldMessenger.of(context);
 
     // Add haptic feedback before submission
     await HapticFeedback.lightImpact();
@@ -277,7 +287,33 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
 
     var succeeded = false;
     try {
-      await widget.onSubmit(composed.content, composed.facets ?? const []);
+      final ComposedRichText resolved;
+      try {
+        resolved = await resolveMentions(composed, mentionResolver);
+      } on Exception catch (e) {
+        // The parent screens report onSubmit failures themselves, but not
+        // lookup failures, so this is shown even when the screen is gone
+        if (messenger.mounted) {
+          messenger.showSnackBar(_submitFailureSnackBar(e));
+        }
+        return;
+      }
+      // The session would now write as another account; the draft is kept
+      if (_authInvalidated || authProvider?.did != submittingDid) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Your account changed while sending, so nothing was sent',
+              ),
+              backgroundColor: AppColors.primary,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+      await widget.onSubmit(resolved.content, resolved.facets ?? const []);
       succeeded = true;
       // After a user back the route is animating out and no longer current;
       // pop() would then remove the screen below
@@ -287,13 +323,7 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     } on Exception catch (e) {
       // Show error if submission fails
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to submit: $e'),
-            backgroundColor: AppColors.primary,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        messenger.showSnackBar(_submitFailureSnackBar(e));
       }
     } finally {
       if (!succeeded) {
@@ -314,6 +344,12 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
       }
     }
   }
+
+  SnackBar _submitFailureSnackBar(Exception error) => SnackBar(
+    content: Text('Failed to submit: $error'),
+    backgroundColor: AppColors.primary,
+    behavior: SnackBarBehavior.floating,
+  );
 
   void _showComingSoonBanner(String feature) {
     // Cancel any existing timer to prevent multiple banners

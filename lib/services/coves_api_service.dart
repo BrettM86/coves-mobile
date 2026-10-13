@@ -441,6 +441,27 @@ class CovesApiService {
     );
   }
 
+  /// Resolves [handle] to its DID through the AppView's
+  /// com.atproto.identity.resolveHandle.
+  Future<String> resolveHandle({required String handle}) {
+    return _request(
+      operation: 'resolve handle',
+      send: () => _dio.get(
+        '/xrpc/com.atproto.identity.resolveHandle',
+        queryParameters: {'handle': handle},
+      ),
+      parse: (data) {
+        final did = _asJsonMap(data)['did'];
+        if (did is! String) {
+          throw FormatException(
+            'Expected did string but got ${did.runtimeType}',
+          );
+        }
+        return did;
+      },
+    );
+  }
+
   /// Create a new post in a community
   ///
   /// Creates a new post with optional title, content, and embed.
