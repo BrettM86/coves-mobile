@@ -223,11 +223,20 @@ String requestFailedMessageForStatus(int statusCode) =>
 /// [operation] labels the log line, e.g. 'fetch timeline'.
 ApiException mapDioException(DioException error, {required String operation}) {
   if (kDebugMode) {
-    debugPrint('❌ Failed to $operation: ${error.message}');
+    final privateModeration = isPrivateModerationPath(
+      error.requestOptions.path,
+    );
+    debugPrint(
+      privateModeration
+          ? '❌ Failed to $operation'
+          : '❌ Failed to $operation: ${error.message}',
+    );
     if (error.response != null) {
       debugPrint('   Status: ${error.response?.statusCode}');
-      // Response data can echo credentials — redact before printing
-      debugPrint(redactBearerTokens('   Data: ${error.response?.data}'));
+      if (!privateModeration) {
+        // Response data can echo credentials — redact before printing.
+        debugPrint(redactBearerTokens('   Data: ${error.response?.data}'));
+      }
     }
   }
   return ApiException.fromDioError(error);

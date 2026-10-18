@@ -7,6 +7,7 @@ import 'package:coves_flutter/providers/comments_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/post_detail_screen.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/widgets/icons/animated_heart_icon.dart';
 import 'package:coves_flutter/widgets/post_action_bar.dart';
 import 'package:flutter/material.dart';
@@ -108,13 +109,18 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
           ChangeNotifierProvider<AuthProvider>.value(value: mockAuthProvider),
           ChangeNotifierProvider<VoteProvider>.value(value: mockVoteProvider),
           Provider<CommentsProviderCache>.value(value: commentsCache),
         ],
         child: MaterialApp(
           theme: AppTheme.dark,
-          home: PostDetailScreen(post: post(), isOptimistic: true),
+          home: PostDetailScreen(
+            sessionStamp: null,
+            post: post(),
+            isOptimistic: true,
+          ),
         ),
       ),
     );

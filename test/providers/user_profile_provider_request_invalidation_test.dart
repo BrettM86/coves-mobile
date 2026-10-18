@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:coves_flutter/models/user_profile.dart';
 import 'package:coves_flutter/providers/user_profile_provider.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
@@ -49,6 +50,8 @@ void main() {
       apiService: mockApiService,
       commentService: MockCommentService(),
       profileCache: profileCache,
+      postChangeBroadcast: PostChangeBroadcast(),
+      sessionKeyOf: unchangingSessionKey,
     );
     providerDisposed = false;
   });
@@ -259,6 +262,8 @@ void main() {
         apiService: mockApiService,
         commentService: MockCommentService(),
         profileCache: signedOutCache,
+        postChangeBroadcast: PostChangeBroadcast(),
+        sessionKeyOf: unchangingSessionKey,
       );
       addTearDown(() {
         signedOutProvider.dispose();
@@ -374,6 +379,8 @@ void main() {
         apiService: mockApiService,
         commentService: MockCommentService(),
         profileCache: profileCache,
+        postChangeBroadcast: PostChangeBroadcast(),
+        sessionKeyOf: unchangingSessionKey,
       );
       addTearDown(sibling.dispose);
       final refreshedProfileA = UserProfile(

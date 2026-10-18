@@ -15,6 +15,7 @@ import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/viewer_state_hydrator.dart';
 import 'package:coves_flutter/widgets/comment_card.dart';
 import 'package:coves_flutter/widgets/loading_error_states.dart';
@@ -305,6 +306,7 @@ class _FocusedThreadOverPost {
   /// page does, while the pageless focused thread route stays.
   late final postRouteContent = ValueNotifier<Widget>(
     PostDetailScreen(
+      sessionStamp: null,
       post: _feedPost(),
       focusCommentUri: anchorInFirstPage ? null : _commentUri('anchor'),
     ),
@@ -355,6 +357,7 @@ class _FocusedThreadOverPost {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
           ChangeNotifierProvider<AuthProvider>.value(value: auth),
           ChangeNotifierProvider<VoteProvider>.value(value: votes),
           ChangeNotifierProvider<BlockProvider>.value(value: blocks),

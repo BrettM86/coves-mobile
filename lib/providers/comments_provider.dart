@@ -6,6 +6,9 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../models/comment.dart';
 import '../models/comment_thread_tree.dart';
+import '../models/moderation.dart';
+import '../models/moderation_action.dart';
+import '../models/moderation_subject_state.dart';
 import '../models/post.dart';
 import '../services/api_exceptions.dart';
 import '../services/comment_service.dart';
@@ -70,6 +73,7 @@ class CommentsProvider with ChangeNotifier {
     this._commentService,
     List<Duration>? indexingRetryDelays,
     ViewerStateHydrator? hydrator,
+    this._sessionKeyOf,
   }) : _voteProvider = voteProvider,
        _hydrator =
            hydrator ??
@@ -96,12 +100,201 @@ class CommentsProvider with ChangeNotifier {
 
   late final CursorPaginationController<ThreadViewComment> _controller;
 
+  /// The current viewer session's key. Read when a first-page request
+  /// starts, to stamp the thread with the session it was loaded under.
+  /// Deliberately not passed to the pagination controller.
+  final Object? Function()? _sessionKeyOf;
+
+  // The session key the displayed thread was loaded under: the key read when
+  // the first-page request that landed started. Replaced only when a
+  // refresh lands, so a failed refresh keeps the stamp of the data it left
+  // on screen.
+  Object? _sessionStamp;
+
+  /// The session key read when the displayed thread's first page was
+  /// requested; null before any first page landed or without a session key
+  /// source. Admin tools compare it with the current session key.
+  Object? get sessionStamp => _sessionStamp;
+
+  // Comments removed through [markCommentRemoved], keyed by comment URI:
+  // the moderation the placeholder carries and the removal's sequence
+  // number. A response requested before a removal (its sequence is above
+  // the one the request captured) gets that removal's placeholder before it
+  // is merged; a response requested after it reflects the server's own
+  // state and is taken as served. [served] is the server's own placeholder
+  // for the comment once [readBackRemovedComment] adopted it; it then
+  // stands in for the locally built one.
+  final Map<
+    String,
+    ({int sequence, ModerationView moderation, CommentView? served})
+  >
+  _removals = {};
+  int _removalSequence = 0;
+
+  /// Records a confirmed removal of [commentUri] and shows it as the
+  /// removed placeholder wherever it is in the loaded tree, keeping its
+  /// replies and reply pagination.
+  ///
+  /// The placeholder's moderation is built from the confirmed decision, not
+  /// copied from [state]: the mutation response's moderation carries no
+  /// removal sources. It takes [state]'s content labels and one
+  /// instance-scoped source attributed to [state]'s local removal (else the
+  /// [action]'s authority).
+  void markCommentRemoved({
+    required String commentUri,
+    required ModerationSubjectState state,
+    AdminModerationActionView? action,
+  }) {
+    if (_isDisposed) {
+      return;
+    }
+    final authorityDid =
+        state.localRemoval?.serviceDid ?? action?.action.authorityDid;
+    final sequence = ++_removalSequence;
+    _removals[commentUri] = (
+      sequence: sequence,
+      served: null,
+      moderation: ModerationView(
+        state: ModerationState.removed,
+        contentLabels: state.moderation.contentLabels,
+        sources: [
+          if (authorityDid != null)
+            ModerationSource(
+              authorityDid: authorityDid,
+              scope: const ModerationScope(kind: ModerationScopeKind.instance),
+            ),
+        ],
+      ),
+    );
+
+    final current = _controller.items;
+    final overlaid = [
+      for (final thread in current) _overlay(thread, since: sequence - 1),
+    ];
+    final changed = Iterable<int>.generate(current.length)
+        .any((index) => !identical(current[index], overlaid[index]));
+    if (changed) {
+      // Notifies through [_onControllerChanged].
+      _controller.replaceItems(overlaid);
+    } else {
+      // Screens holding their own snapshots re-apply the overlay.
+      _safeNotifyListeners();
+    }
+  }
+
+  /// Forgets the removal of [commentUri] recorded through
+  /// [markCommentRemoved], after the comment was restored, so the overlay
+  /// no longer replaces it. Nodes already showing the placeholder keep it
+  /// until a reload replaces them with what the server serves.
+  void clearCommentRemoval(String commentUri) {
+    _removals.remove(commentUri);
+  }
+
+  /// The sequence number of the latest removal recorded through
+  /// [markCommentRemoved]; 0 before any. A screen holding its own snapshot
+  /// reads it when it requests that snapshot and passes it to
+  /// [applyRemovalOverlay] as `since`.
+  int get removalSequence => _removalSequence;
+
+  /// [thread] with every comment removed through [markCommentRemoved] (the
+  /// node itself or any descendant) replaced by its removed placeholder.
+  /// Returns [thread] itself when nothing in it was removed.
+  ///
+  /// With [since], only removals recorded after that [removalSequence]
+  /// apply: a snapshot requested after a removal reflects the server's own
+  /// state and is taken as served.
+  ThreadViewComment applyRemovalOverlay(
+    ThreadViewComment thread, {
+    int since = 0,
+  }) => _overlay(thread, since: since);
+
+  /// [node] with the placeholder applied for every removal whose sequence
+  /// is above [since]; [node] itself when none applies.
+  ThreadViewComment _overlay(ThreadViewComment node, {required int since}) {
+    if (_removals.isEmpty) {
+      return node;
+    }
+    final removal = _removals[node.comment.uri];
+    final comment = removal == null || removal.sequence <= since
+        ? node.comment
+        : _removedPlaceholder(node.comment, removal);
+
+    final replies = node.replies;
+    List<ThreadViewComment>? overlaidReplies;
+    if (replies != null) {
+      final mapped = [
+        for (final reply in replies) _overlay(reply, since: since),
+      ];
+      final repliesChanged = Iterable<int>.generate(replies.length)
+          .any((index) => !identical(replies[index], mapped[index]));
+      if (repliesChanged) {
+        overlaidReplies = mapped;
+      }
+    }
+
+    if (identical(comment, node.comment) && overlaidReplies == null) {
+      return node;
+    }
+    return node.copyWith(comment: comment, replies: overlaidReplies);
+  }
+
+  /// The removed placeholder for [live] under [removal].
+  ///
+  /// Returns [live] when it already is a removed placeholder the server
+  /// served: it carries the server's own moderation and capabilities (such
+  /// as restore), which the local placeholder would drop. Otherwise, for a
+  /// live comment or for [removal]'s own local placeholder (which carries
+  /// [removal]'s moderation object), returns the server's placeholder that
+  /// [readBackRemovedComment] adopted, else the locally built one: no
+  /// record or embed, a DID-only author, no moderation capabilities, and
+  /// [removal]'s moderation.
+  CommentView _removedPlaceholder(
+    CommentView live,
+    ({int sequence, ModerationView moderation, CommentView? served}) removal,
+  ) {
+    final isLocalPlaceholder = identical(live.moderation, removal.moderation);
+    if (live.isDeleted && live.moderation != null && !isLocalPlaceholder) {
+      return live;
+    }
+    final served = removal.served;
+    if (served != null) {
+      return served;
+    }
+    if (isLocalPlaceholder) {
+      return live;
+    }
+    final author = live.author;
+    return CommentView(
+      uri: live.uri,
+      cid: live.cid,
+      isDeleted: true,
+      deletionReason: 'moderator',
+      createdAt: live.createdAt,
+      indexedAt: live.indexedAt,
+      author: author == null
+          ? null
+          : AuthorView(did: author.did, handle: 'handle.invalid'),
+      post: live.post,
+      parent: live.parent,
+      stats: live.stats,
+      viewer: CommentViewerState(
+        vote: live.viewer?.vote,
+        voteUri: live.viewer?.voteUri,
+      ),
+      moderation: removal.moderation,
+    );
+  }
+
   /// Maximum comment length in characters (matches backend limit)
   /// Note: This counts Unicode grapheme clusters, so emojis count correctly
   static const int maxCommentLength = 10000;
 
   /// Default staleness threshold for background refresh
   static const Duration stalenessThreshold = Duration(minutes: 5);
+
+  /// The getComments error code for a post that no longer exists (removed
+  /// or deleted). See [errorCode].
+  static const String rootNotFoundErrorCode = 'RootNotFound';
 
   /// Default backoff schedule while waiting for the AppView to index a
   /// newly created comment (~1-2s firehose lag). Injectable via the
@@ -134,17 +327,26 @@ class CommentsProvider with ChangeNotifier {
   CommentThreadTree get _tree => CommentThreadTree(_controller.items);
 
   // The most recently started refresh: its number, the sort it fetches,
-  // and its kind. Set only when a refresh starts, so an older refresh
-  // landing never changes it.
-  ({int number, String sort, _RefreshKind kind}) _latestRefresh = (
+  // its kind and the session key read when it started. Set only when a
+  // refresh starts, so an older refresh landing never changes it.
+  ({int number, String sort, _RefreshKind kind, Object? sessionKey})
+  _latestRefresh = (
     number: 0,
     sort: 'hot',
     kind: _RefreshKind.normal,
+    sessionKey: null,
   );
 
   // The number of the last refresh that failed while it was current.
   // Superseded refreshes never get here: their results are dropped whole.
   int? _failedRefreshRequest;
+
+  // Set when a comments request of the current refresh (its first page or
+  // a later page) fails with [rootNotFoundErrorCode]: the post is gone, so
+  // pagination stops and [errorCode] reports it. Cleared only when the
+  // current refresh's first page succeeds; a refresh that fails any other
+  // way (a 500, no connection) says nothing about the post.
+  bool _postGone = false;
 
   // The controller's first-page loading flag as of its previous
   // notification, so [_onControllerChanged] can tell when a refresh lands.
@@ -213,10 +415,28 @@ class CommentsProvider with ChangeNotifier {
   bool get isLoadingMore => _controller.isLoadingMore;
   String? get error => _controller.error;
 
+  /// Server error code of the last first-page load or refresh failure, or
+  /// [rootNotFoundErrorCode] when a next page failed with it; null on
+  /// success or when the failure carried no code.
+  ///
+  /// [rootNotFoundErrorCode] whenever any comments request of the current
+  /// refresh (first page, sort change, or next page) failed with it. That
+  /// state is terminal for the thread until a refresh lands: [hasMore] is
+  /// false and load-more requests nothing.
+  String? get errorCode {
+    if (_postGone) {
+      return rootNotFoundErrorCode;
+    }
+    return switch (_controller.errorCause) {
+      final ApiException exception => exception.errorCode,
+      _ => null,
+    };
+  }
+
   /// Pagination error for the list footer; never drives the full-screen
   /// error.
   String? get loadMoreError => _controller.loadMoreError;
-  bool get hasMore => _controller.hasMore;
+  bool get hasMore => !_postGone && _controller.hasMore;
   String get sort => _sort;
   String? get timeframe => _timeframe;
   ValueNotifier<DateTime?> get currentTimeNotifier => _currentTimeNotifier;
@@ -346,7 +566,7 @@ class CommentsProvider with ChangeNotifier {
       return;
     }
     if (!refresh) {
-      await _controller.loadMore();
+      await loadMoreComments();
       return;
     }
 
@@ -362,7 +582,12 @@ class CommentsProvider with ChangeNotifier {
   /// so a first-page load started anywhere else would be credited to it.
   Future<int> _refresh(_RefreshKind kind) async {
     final request = _latestRefresh.number + 1;
-    _latestRefresh = (number: request, sort: _sort, kind: kind);
+    _latestRefresh = (
+      number: request,
+      sort: _sort,
+      kind: kind,
+      sessionKey: _sessionKeyOf?.call(),
+    );
     if (kDebugMode) {
       debugPrint('📡 Fetching comments: sort=$_sort, postUri=$_postUri');
     }
@@ -373,13 +598,36 @@ class CommentsProvider with ChangeNotifier {
   Future<CursorPage<ThreadViewComment>> _fetchCommentsPage(
     String? cursor,
   ) async {
-    final response = await _apiService.getComments(
-      postUri: _postUri,
-      sort: cursor == null ? _latestRefresh.sort : _loadedSort,
-      timeframe: _timeframe,
-      cursor: cursor,
-    );
-    return CursorPage(items: response.comments, cursor: response.cursor);
+    // Every page, first or next, belongs to the latest refresh when it
+    // starts; one that a newer refresh superseded must not mark the post
+    // gone.
+    final refreshNumber = _latestRefresh.number;
+    final removalsBefore = _removalSequence;
+    try {
+      final response = await _apiService.getComments(
+        postUri: _postUri,
+        sort: cursor == null ? _latestRefresh.sort : _loadedSort,
+        timeframe: _timeframe,
+        cursor: cursor,
+      );
+      // A removal confirmed while this page was in flight must not be
+      // undone by the content the page still carries.
+      return CursorPage(
+        items: [
+          for (final thread in response.comments)
+            _overlay(thread, since: removalsBefore),
+        ],
+        cursor: response.cursor,
+      );
+    } on ApiException catch (error) {
+      if (error.errorCode == rootNotFoundErrorCode &&
+          refreshNumber == _latestRefresh.number) {
+        // Set before the controller records the failure, so its
+        // notification already carries the new errorCode.
+        _postGone = true;
+      }
+      rethrow;
+    }
   }
 
   /// Apply viewer vote state from the page that just landed. The controller
@@ -411,16 +659,20 @@ class CommentsProvider with ChangeNotifier {
       _failedRefreshRequest = _latestRefresh.number;
       // The displayed comments are still the loaded sort's.
       _sort = _loadedSort;
-      if (_latestRefresh.kind == _RefreshKind.sortChange) {
+      if (_latestRefresh.kind == _RefreshKind.sortChange && !_postGone) {
         // setSortOption reports this failure through its return value (the
         // screen's snackbar), so the error is cleared before any listener
         // sees it. clearError re-enters this method, which forwards the
-        // notification with the error already gone.
+        // notification with the error already gone. A post that is gone
+        // keeps its error: the thread itself is unavailable, not the sort.
         _controller.clearError();
         return;
       }
     } else if (refreshSettled) {
+      // The current refresh's first page landed: the post is served again.
+      _postGone = false;
       _loadedSort = _latestRefresh.sort;
+      _sessionStamp = _latestRefresh.sessionKey;
       _lastRefreshTime = DateTime.now();
       // The whole tree was replaced - invalidate in-flight subtree fetches
       // so they don't merge stale data into the new tree.
@@ -450,23 +702,159 @@ class CommentsProvider with ChangeNotifier {
 
   /// Load more comments (pagination)
   ///
-  /// A no-op while a load is in flight, at the end of the thread, or while
-  /// [loadMoreError] is set, or once disposed; the footer's Retry goes
-  /// through [retryLoadMore].
+  /// A no-op while a load is in flight, at the end of the thread, while
+  /// [loadMoreError] is set, once the post is gone (see [errorCode]), or
+  /// once disposed; the footer's Retry goes through [retryLoadMore].
   Future<void> loadMoreComments() async {
-    if (_isDisposed) {
+    if (_isDisposed || _postGone) {
       return;
     }
     await _controller.loadMore();
   }
 
   /// The footer's Retry: clears [loadMoreError] and fetches the same page
-  /// again. A no-op once disposed.
+  /// again. A no-op once the post is gone or once disposed.
   Future<void> retryLoadMore() async {
-    if (_isDisposed) {
+    if (_isDisposed || _postGone) {
       return;
     }
     await _controller.retryLoadMore();
+  }
+
+  /// Fetches the server's current copy of the comment at [commentUri] with
+  /// its first page of replies, without merging it into the loaded tree.
+  ///
+  /// For screens holding their own snapshot of a comment (a focused
+  /// thread's ancestor rows). Returns null when the response does not carry
+  /// that comment, or once disposed. A removal confirmed while the request
+  /// was out is applied to the result.
+  ///
+  /// Throws [MalformedCommentUriException] for a comment URI with no rkey.
+  /// Throws ApiException/AuthenticationException on network or auth errors.
+  Future<ThreadViewComment?> fetchCommentSnapshot(String commentUri) async {
+    final removalsBefore = _removalSequence;
+    final entry = await _fetchServedComment(commentUri);
+    if (_isDisposed || entry == null) {
+      return null;
+    }
+    return _overlay(entry, since: removalsBefore);
+  }
+
+  /// The server's current copy of the comment at [commentUri] with its
+  /// first page of replies, as served; null when the response does not
+  /// carry that comment.
+  Future<ThreadViewComment?> _fetchServedComment(String commentUri) async {
+    final rkey = _rkeyOf(commentUri);
+    final response = await _apiService.getComments(
+      postUri: _postUri,
+      sort: _loadedSort,
+      timeframe: _timeframe,
+      parentRkey: rkey,
+    );
+    return response.comments
+        .where((thread) => thread.comment.uri == commentUri)
+        .firstOrNull;
+  }
+
+  /// Reads the comment at [commentUri], just removed through
+  /// [markCommentRemoved], back from the server once, so its placeholder
+  /// carries the server's moderation and capabilities (such as restore).
+  ///
+  /// When the server serves it as a removed placeholder offering restore
+  /// and the removal recorded when the read started is still the current
+  /// one, that placeholder replaces the local one wherever it shows (the
+  /// comment only; its replies and reply pagination stay) and the overlay
+  /// applies it from then on. Any other answer, a failed read, a removal
+  /// cleared or recorded again while the read was out, or disposal changes
+  /// nothing. Never retries and never throws ApiException.
+  Future<void> readBackRemovedComment(String commentUri) async {
+    final removal = _removals[commentUri];
+    if (_isDisposed || removal == null) {
+      return;
+    }
+    final ThreadViewComment? entry;
+    try {
+      entry = await _fetchServedComment(commentUri);
+    } on ApiException {
+      return;
+    }
+    if (_isDisposed || _removals[commentUri]?.sequence != removal.sequence) {
+      return;
+    }
+    final served = entry?.comment;
+    if (served == null ||
+        !served.isDeleted ||
+        served.moderation?.state != ModerationState.removed ||
+        !(served.viewer?.moderation.contains(ModerationCapability.restore) ??
+            false)) {
+      return;
+    }
+    _removals[commentUri] = (
+      sequence: removal.sequence,
+      moderation: removal.moderation,
+      served: served,
+    );
+
+    final current = _controller.items;
+    final adopted = [
+      for (final thread in current)
+        _replaceLocalPlaceholder(thread, removal.moderation, served),
+    ];
+    final changed = Iterable<int>.generate(current.length)
+        .any((index) => !identical(current[index], adopted[index]));
+    if (changed) {
+      // Notifies through [_onControllerChanged].
+      _controller.replaceItems(adopted);
+    } else {
+      // Screens holding their own snapshots re-apply the overlay.
+      _safeNotifyListeners();
+    }
+  }
+
+  /// [node] with every comment that is the local placeholder carrying
+  /// [localModeration] replaced by [served], keeping replies and reply
+  /// pagination; [node] itself when none is.
+  ThreadViewComment _replaceLocalPlaceholder(
+    ThreadViewComment node,
+    ModerationView localModeration,
+    CommentView served,
+  ) {
+    final comment = identical(node.comment.moderation, localModeration)
+        ? served
+        : node.comment;
+
+    final replies = node.replies;
+    List<ThreadViewComment>? replacedReplies;
+    if (replies != null) {
+      final mapped = [
+        for (final reply in replies)
+          _replaceLocalPlaceholder(reply, localModeration, served),
+      ];
+      final repliesChanged = Iterable<int>.generate(replies.length)
+          .any((index) => !identical(replies[index], mapped[index]));
+      if (repliesChanged) {
+        replacedReplies = mapped;
+      }
+    }
+
+    if (identical(comment, node.comment) && replacedReplies == null) {
+      return node;
+    }
+    return node.copyWith(comment: comment, replies: replacedReplies);
+  }
+
+  /// The record key of a comment AT-URI: its last path segment.
+  ///
+  /// Throws [MalformedCommentUriException] when there is none. Note:
+  /// Uri.parse cannot handle at:// URIs (the DID's colons look like an
+  /// invalid port).
+  static String _rkeyOf(String commentUri) {
+    final segments = commentUri.split('/');
+    final rkey = segments.length > 1 ? segments.last : '';
+    if (rkey.isEmpty) {
+      throw MalformedCommentUriException(commentUri);
+    }
+    return rkey;
   }
 
   /// Load more replies for a specific comment ("Load more replies" button)
@@ -500,13 +888,7 @@ class CommentsProvider with ChangeNotifier {
       return inFlight.future;
     }
 
-    // rkey is the last path segment of the comment AT-URI. Note: Uri.parse
-    // cannot handle at:// URIs (the DID's colons look like an invalid port).
-    final segments = commentUri.split('/');
-    final rkey = segments.length > 1 ? segments.last : '';
-    if (rkey.isEmpty) {
-      throw MalformedCommentUriException(commentUri);
-    }
+    final rkey = _rkeyOf(commentUri);
 
     // Register the in-flight future BEFORE starting the work: the fetch can
     // fail synchronously, and _doLoadMoreReplies' cleanup must always run
@@ -541,6 +923,7 @@ class CommentsProvider with ChangeNotifier {
     // flight, and the two observations are then allowed to disagree. Pinned
     // by a test - do not collapse them into one lookup.
     final requestCursor = _tree.findByUri(commentUri)?.repliesCursor;
+    final removalsBefore = _removalSequence;
 
     try {
       final response = await _apiService.getComments(
@@ -587,7 +970,9 @@ class CommentsProvider with ChangeNotifier {
 
       // Contract guard: the response must contain the subtree rooted at the
       // requested comment as its sole top-level entry.
-      final fresh = response.comments.first;
+      // A removal confirmed while this subtree was in flight must not be
+      // undone by the content it still carries.
+      final fresh = _overlay(response.comments.first, since: removalsBefore);
       if (fresh.comment.uri != commentUri) {
         if (kDebugMode) {
           debugPrint(
@@ -664,7 +1049,9 @@ class CommentsProvider with ChangeNotifier {
   /// Returns false only when this sort change is still the current request
   /// and its refresh failed. Then [sort] reverts to the sort of the
   /// comments on screen and [error] stays null, so the return value (the
-  /// screen's snackbar) is the only report of the failure. A sort change
+  /// screen's snackbar) is the only report of the failure. A failure with
+  /// [rootNotFoundErrorCode] is the exception: [error] and [errorCode] keep
+  /// it, since the thread itself is unavailable, not the sort. A sort change
   /// superseded by a newer refresh or sort change returns true and reverts
   /// nothing; the newer request decides the outcome. Once disposed it
   /// changes nothing and returns true.

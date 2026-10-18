@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,17 +7,27 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
+import '../constants/moderation_constants.dart';
 import '../constants/threading_colors.dart';
 import '../models/comment.dart';
+import '../models/moderation.dart';
+import '../models/moderation_subject_state.dart';
 import '../models/post.dart';
 import '../providers/auth_provider.dart';
 import '../providers/block_provider.dart';
+import '../providers/comments_provider.dart';
+import '../providers/viewer_authority_provider.dart';
 import '../providers/vote_provider.dart';
+import '../services/admin_moderation_flow.dart';
+import '../services/admin_tools_gate.dart';
 import '../services/api_exceptions.dart';
+import '../services/coves_api_service.dart';
+import '../services/moderation_errors.dart';
 import '../utils/copy_link.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/error_messages.dart';
 import '../utils/post_web_link.dart';
+import '../utils/removal_copy.dart';
 import '../utils/share_link.dart';
 import '../utils/web_link_builder.dart';
 import 'animated_vote_count.dart';
@@ -23,6 +35,8 @@ import 'block_action_helpers.dart';
 import 'icons/animated_heart_icon.dart';
 import 'icons/downvote_icon.dart';
 import 'icons/share_icon.dart';
+import 'moderation/moderation_action_sheet.dart';
+import 'moderation/moderation_failure_decision.dart';
 import 'report_dialog.dart';
 import 'rich_text_renderer.dart';
 import 'sign_in_dialog.dart';
@@ -42,10 +56,10 @@ import 'user_avatar.dart';
 ///
 /// ## Deleted Comments
 ///
-/// When the comment's `isDeleted` flag is true, the card displays a
-/// placeholder based on `deletionReason`: `[removed by moderator]` or
-/// `[deleted by user]`. The vote controls and actions are hidden.
-/// Author information is hidden for deleted comments to preserve privacy.
+/// When [CommentView.isTombstoned] is true, the card displays the
+/// placeholder copy from [RemovalCopy.forComment], which names who deleted
+/// or removed the comment. The vote controls, actions and [onTap] are
+/// dropped, and author information is hidden to preserve privacy.
 ///
 /// The [currentTime] parameter allows passing the current time for
 /// time-ago calculations, enabling periodic updates and testing.
@@ -55,6 +69,7 @@ import 'user_avatar.dart';
 class CommentCard extends StatefulWidget {
   const CommentCard({
     required this.comment,
+    required this.sessionStamp,
     this.depth = 0,
     this.currentTime,
     this.onTap,
@@ -64,11 +79,27 @@ class CommentCard extends StatefulWidget {
     this.onDelete,
     this.isHighlighted = false,
     this.parentPost,
+    this.reloadAfterModeration,
     this.votingEnabled = true,
     super.key,
-  });
+  }) : assert(
+         sessionStamp == null || reloadAfterModeration != null,
+         'A surface that offers admin tools must reload after moderation.',
+       );
 
   final CommentView comment;
+
+  /// The session key [comment] was loaded under, from the surface that
+  /// loaded it; null for a surface that offers no admin tools, which the
+  /// gate denies.
+  final Object? sessionStamp;
+
+  /// Reloads what the surface shows when a moderation action finds the
+  /// comment changed or gone on the server, completing with whether the
+  /// reload landed. Supplied by every surface that passes a [sessionStamp];
+  /// the removal itself is recorded on the [CommentsProvider] above the
+  /// card.
+  final Future<bool> Function()? reloadAfterModeration;
 
   /// The post this comment belongs to, when the surface showing the comment
   /// has it loaded. Supplies the community and post author a comment
@@ -121,9 +152,12 @@ class _CommentCardState extends State<CommentCard> {
 
   @override
   Widget build(BuildContext context) {
-    // Author is null for deleted comments (backend omits it to preserve
-    // privacy). Capture locally so Dart can promote it to non-null below.
+    // Placeholders carry no real author (null, or `handle.invalid`).
+    // Capture locally so Dart can promote it to non-null below.
     final author = comment.author;
+    // A placeholder has nothing to reply to, so its taps are ignored; this
+    // guard covers every screen that passes onTap.
+    final onTap = comment.isTombstoned ? null : this.onTap;
 
     // All comments get at least 1 threading line (depth + 1)
     final threadingLineCount = depth + 1;
@@ -134,7 +168,8 @@ class _CommentCardState extends State<CommentCard> {
     final borderLeftOffset = (threadingLineCount * 6.0) + 2.0;
 
     return Semantics(
-      button: true,
+      // A placeholder ignores taps, so it is not announced as a button.
+      button: !comment.isTombstoned,
       hint: onLongPress != null
           ? (isCollapsed
                 ? 'Double tap and hold to expand thread'
@@ -163,7 +198,7 @@ class _CommentCardState extends State<CommentCard> {
                       debugPrint('Haptics not supported: $e');
                     }
                   }
-                  onTap!();
+                  onTap();
                 }
               : null,
           child: Container(
@@ -222,9 +257,10 @@ class _CommentCardState extends State<CommentCard> {
                               // Show deletion reason as placeholder
                               Expanded(
                                 child: Text(
-                                  comment.deletionReason == 'moderator'
-                                      ? '[removed by moderator]'
-                                      : '[deleted by user]',
+                                  RemovalCopy.forComment(
+                                    deletionReason: comment.deletionReason,
+                                    moderation: comment.moderation,
+                                  ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -290,6 +326,7 @@ class _CommentCardState extends State<CommentCard> {
                                   fontSize: 12,
                                 ),
                               ),
+                            if (comment.isTombstoned) _buildPlaceholderMenu(),
                           ],
                         ),
 
@@ -534,25 +571,41 @@ class _CommentCardState extends State<CommentCard> {
   }
 
   /// The moderation entries of the comment menu: block and report for another
-  /// user's comment, delete for the viewer's own.
+  /// user's comment, delete for the viewer's own, and remove on either when
+  /// [showRemove] says the admin tool is allowed.
   ///
-  /// Empty when there is nobody to act on — a signed-out viewer, or a deleted
-  /// comment, which the backend serves without its author so there is nobody
-  /// to block, report, or match against for delete permissions.
+  /// Empty when there is nothing to act on — a signed-out viewer, or a
+  /// tombstoned comment. A deleted or removed comment's placeholder carries
+  /// only `{did, handle: "handle.invalid"}` as its author, and the action row
+  /// is already hidden for it by the same [CommentView.isTombstoned] gate, so
+  /// there is nothing to block, report, or delete.
   List<Widget> _buildModerationMenuItems(
     BuildContext context,
     AuthProvider authProvider,
-    BlockProvider blockProvider,
-  ) {
+    BlockProvider blockProvider, {
+    required bool showRemove,
+  }) {
     final author = comment.author;
-    if (!authProvider.isAuthenticated || author == null) {
+    if (!authProvider.isAuthenticated ||
+        comment.isTombstoned ||
+        author == null) {
       return const [];
     }
 
+    final removeItem = MenuItemButton(
+      onPressed: () => _removeComment(context),
+      leadingIcon: const Icon(
+        Icons.delete_outline,
+        size: 20,
+        color: Colors.red,
+      ),
+      child: const Text('Remove comment', style: TextStyle(color: Colors.red)),
+    );
     final authorDid = author.did;
     final authorHandle = author.handle;
     if (authProvider.did == authorDid) {
       return [
+        if (showRemove) removeItem,
         MenuItemButton(
           onPressed: () => _handleMenuAction(context, 'delete'),
           leadingIcon: const Icon(
@@ -583,7 +636,214 @@ class _CommentCardState extends State<CommentCard> {
         leadingIcon: const Icon(Icons.flag_outlined, size: 20),
         child: const Text('Report comment'),
       ),
+      if (showRemove) removeItem,
     ];
+  }
+
+  /// Opens the removal sheet for [comment] and applies its outcome: a
+  /// confirmed removal becomes the placeholder through the
+  /// [CommentsProvider] above the card, a changed or gone comment reloads
+  /// through [CommentCard.reloadAfterModeration].
+  Future<void> _removeComment(BuildContext context) async {
+    final apiService = context.read<CovesApiService>();
+    final commentsProvider = context.read<CommentsProvider>();
+    final authority = context.read<ViewerAuthorityProvider>();
+    final reload = widget.reloadAfterModeration;
+    final sessionKey = authority.sessionKey;
+    final messenger = ScaffoldMessenger.of(context);
+    final subject = StrongRef(uri: comment.uri, cid: comment.cid);
+    final flow = AdminModerationFlow(apiService, authority: authority);
+    // Anything that lands after the session changed belongs to the previous
+    // account and is neither shown nor applied.
+    bool sessionChanged() => authority.sessionKey != sessionKey;
+    void showMessage(String message) {
+      if (messenger.mounted && !sessionChanged()) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
+
+    await ModerationActionSheet.show<ModerationFlowResult>(
+      context,
+      title: 'Remove comment',
+      confirmLabel: 'Remove',
+      reasons: removalReasons,
+      failureMessage: "Couldn't remove this comment. Try again.",
+      authority: authority,
+      onSubmit: (reason, privateNote) async {
+        if (flow.retainedSubmission != null) {
+          return (await flow.retry())!;
+        }
+        return flow.submitRemoval(
+          subject: subject,
+          reason: reason,
+          privateNote: privateNote,
+        );
+      },
+      onResult: (outcome) async {
+        if (outcome is ModerationFlowSucceeded) {
+          commentsProvider.markCommentRemoved(
+            commentUri: subject.uri,
+            state: outcome.result.state,
+            action: outcome.result.action,
+          );
+          unawaited(commentsProvider.readBackRemovedComment(subject.uri));
+          showMessage(
+            outcome.result.outcome == ModerationMutationOutcome.applied
+                ? 'Comment removed'
+                : 'Comment was already removed',
+          );
+          return const ModerationSheetDecision();
+        }
+
+        return moderationFailureDecision(
+          outcome,
+          authority: authority,
+          showMessage: showMessage,
+          resolveStateConflict: (failure) {
+            final currentState = failure.currentState;
+            if (currentState?.moderation.state != ModerationState.removed) {
+              return false;
+            }
+            commentsProvider.markCommentRemoved(
+              commentUri: subject.uri,
+              state: currentState!,
+            );
+            unawaited(commentsProvider.readBackRemovedComment(subject.uri));
+            showMessage('Someone else already removed this comment.');
+            return true;
+          },
+          reloadSubject: _reloadThenReport(
+            reload,
+            showMessage,
+            contentChangedMessage:
+                'The author edited this comment. Review the new version '
+                'before acting.',
+          ),
+        );
+      },
+    );
+  }
+
+  /// Opens the restore sheet for the removed [comment]'s placeholder. A
+  /// restore that leaves the comment visible, or finds it already restored,
+  /// drops the local removal on the [CommentsProvider] above the card. Every
+  /// accepted restore then reloads through
+  /// [CommentCard.reloadAfterModeration], which shows whatever the server
+  /// returns.
+  Future<void> _restoreComment(BuildContext context) async {
+    final apiService = context.read<CovesApiService>();
+    final commentsProvider = context.read<CommentsProvider>();
+    final authority = context.read<ViewerAuthorityProvider>();
+    final reload = widget.reloadAfterModeration;
+    final sessionKey = authority.sessionKey;
+    final messenger = ScaffoldMessenger.of(context);
+    final subjectUri = comment.uri;
+    final flow = AdminModerationFlow(apiService, authority: authority);
+    // Anything that lands after the session changed belongs to the previous
+    // account and is neither shown nor applied.
+    bool sessionChanged() => authority.sessionKey != sessionKey;
+    void showMessage(String message) {
+      if (messenger.mounted && !sessionChanged()) {
+        messenger.showSnackBar(
+          SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
+
+    await ModerationActionSheet.show<ModerationFlowResult>(
+      context,
+      title: 'Restore comment',
+      confirmLabel: 'Restore',
+      reasons: restoreReasons,
+      failureMessage: "Couldn't restore this comment. Try again.",
+      authority: authority,
+      onSubmit: (reason, privateNote) async {
+        if (flow.retainedSubmission != null) {
+          return (await flow.retry())!;
+        }
+        return flow.submitRestore(
+          subjectUri: subjectUri,
+          reason: reason,
+          privateNote: privateNote,
+        );
+      },
+      onResult: (outcome) async {
+        final restoreOutcome = restoreOutcomeOf(outcome);
+        if (restoreOutcome != null) {
+          // Only a comment the server shows again drops the local removal:
+          // while it stays hidden, the removal still masks snapshots taken
+          // before it that no reload replaces.
+          if (restoreOutcome == RestoreOutcome.restored ||
+              restoreOutcome == RestoreOutcome.notRemoved) {
+            commentsProvider.clearCommentRemoval(subjectUri);
+          }
+          final reloaded = reload != null && await reload();
+          showMessage(switch (restoreOutcome) {
+            RestoreOutcome.restored when !reloaded =>
+              "Comment restored, but couldn't load the latest version. "
+                  'Try again.',
+            RestoreOutcome.restored => 'Comment restored',
+            RestoreOutcome.restoredButDeleted =>
+              'Restored, but the author deleted it, so it stays hidden.',
+            RestoreOutcome.restoredButUnavailable =>
+              "Restored, but it can't be shown right now.",
+            RestoreOutcome.notRemoved => 'This is no longer removed.',
+          });
+          return const ModerationSheetDecision();
+        }
+
+        return moderationFailureDecision(
+          outcome,
+          authority: authority,
+          showMessage: showMessage,
+          // A conflicting decision changed the removal: show the comment as
+          // it is now rather than asking to confirm a restore of a stale
+          // view. The sheet closes at once; the message waits for the reload.
+          resolveStateConflict: (_) {
+            unawaited(() async {
+              final reloaded = reload != null && await reload();
+              showMessage(
+                reloaded
+                    ? 'This item changed. Showing the latest version.'
+                    : "Couldn't load the latest version. Try again.",
+              );
+            }());
+            return true;
+          },
+          reloadSubject: _reloadThenReport(
+            reload,
+            showMessage,
+            contentChangedMessage:
+                'The author edited this comment. Try restoring again.',
+          ),
+        );
+      },
+    );
+  }
+
+  /// A `reloadSubject` for [moderationFailureDecision]: reloads through
+  /// [reload], then shows [contentChangedMessage] for an edited comment or
+  /// the error's own message otherwise.
+  ///
+  /// Without a reload the stale comment stays shown, so that is reported as
+  /// a failed reload rather than as the latest version.
+  static Future<void> Function(ModerationError error) _reloadThenReport(
+    Future<bool> Function()? reload,
+    void Function(String message) showMessage, {
+    required String contentChangedMessage,
+  }) {
+    return (error) async {
+      final reloaded = reload != null && await reload();
+      if (!reloaded) {
+        showMessage("Couldn't load the latest version. Try again.");
+      } else if (error.code == ModerationErrorCode.contentChanged) {
+        showMessage(contentChangedMessage);
+      } else {
+        showMessage(error.message);
+      }
+    };
   }
 
   /// Builds the three-dots menu for comment actions.
@@ -598,10 +858,25 @@ class _CommentCardState extends State<CommentCard> {
 
     return Consumer2<AuthProvider, BlockProvider>(
       builder: (context, authProvider, blockProvider, child) {
+        final capabilities =
+            comment.viewer?.moderation ?? const <ModerationCapability>{};
+        // Only a card carrying the token looks the authority up, so trees
+        // with no admin tools need not provide it.
+        final authority = capabilities.contains(ModerationCapability.remove)
+            ? context.watch<ViewerAuthorityProvider>()
+            : null;
         final moderationItems = _buildModerationMenuItems(
           context,
           authProvider,
           blockProvider,
+          showRemove:
+              authority != null &&
+              adminToolAllowed(
+                capability: ModerationCapability.remove,
+                capabilities: capabilities,
+                loadedUnderSessionKey: widget.sessionStamp,
+                authority: authority,
+              ),
         );
         if (parentPost == null && moderationItems.isEmpty) {
           return const SizedBox.shrink();
@@ -611,15 +886,7 @@ class _CommentCardState extends State<CommentCard> {
             ? null
             : comment.webUrl(WebLinkBuilder.current(), parentPost: parentPost);
 
-        return MenuAnchor(
-          style: MenuStyle(
-            backgroundColor: const WidgetStatePropertyAll(
-              AppColors.backgroundSecondary,
-            ),
-            shape: WidgetStatePropertyAll(
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
+        return _buildMenuAnchor(
           menuChildren: [
             if (parentPost != null) ...[
               MenuItemButton(
@@ -641,29 +908,85 @@ class _CommentCardState extends State<CommentCard> {
             ],
             ...moderationItems,
           ],
-          builder: (context, controller, child) {
-            return IconButton(
-              key: _menuTriggerKey,
-              icon: Icon(
-                Icons.more_horiz,
-                size: 18,
-                color: AppColors.textPrimary.withValues(alpha: 0.6),
-              ),
-              tooltip: 'Comment options',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              style: const ButtonStyle(
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              onPressed: () {
-                if (controller.isOpen) {
-                  controller.close();
-                } else {
-                  controller.open();
-                }
-              },
-            );
+        );
+      },
+    );
+  }
+
+  /// The "Comment options" trigger and the menu it opens with
+  /// [menuChildren].
+  Widget _buildMenuAnchor({required List<Widget> menuChildren}) {
+    return MenuAnchor(
+      style: MenuStyle(
+        backgroundColor: const WidgetStatePropertyAll(
+          AppColors.backgroundSecondary,
+        ),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+      menuChildren: menuChildren,
+      builder: (context, controller, child) {
+        return IconButton(
+          key: _menuTriggerKey,
+          icon: Icon(
+            Icons.more_horiz,
+            size: 18,
+            color: AppColors.textPrimary.withValues(alpha: 0.6),
+          ),
+          tooltip: 'Comment options',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          style: const ButtonStyle(
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: () {
+            if (controller.isOpen) {
+              controller.close();
+            } else {
+              controller.open();
+            }
           },
+        );
+      },
+    );
+  }
+
+  /// The removed placeholder's menu, holding only "Restore comment", when
+  /// the restore admin tool is allowed for [comment]; nothing otherwise.
+  ///
+  /// Reads no [CommentsProvider] while building: a placeholder can be shown
+  /// where none is above the card.
+  Widget _buildPlaceholderMenu() {
+    final capabilities =
+        comment.viewer?.moderation ?? const <ModerationCapability>{};
+    // Only a card carrying the token looks the authority up, so trees with
+    // no admin tools need not provide it.
+    if (!capabilities.contains(ModerationCapability.restore)) {
+      return const SizedBox.shrink();
+    }
+    return Builder(
+      builder: (context) {
+        final allowed = adminToolAllowed(
+          capability: ModerationCapability.restore,
+          capabilities: capabilities,
+          loadedUnderSessionKey: widget.sessionStamp,
+          authority: context.watch<ViewerAuthorityProvider>(),
+        );
+        if (!allowed) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: _buildMenuAnchor(
+            menuChildren: [
+              MenuItemButton(
+                onPressed: () => _restoreComment(context),
+                leadingIcon: const Icon(Icons.restore, size: 20),
+                child: const Text('Restore comment'),
+              ),
+            ],
+          ),
         );
       },
     );

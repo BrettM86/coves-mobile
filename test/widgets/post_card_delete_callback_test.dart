@@ -1,7 +1,5 @@
-// A PostCard reports a successful delete of its post through `onDeleted`,
-// so whichever feed owns the card can drop it. It reports nothing when the
-// author cancels or when the delete fails. A delete that succeeds after the
-// card has left the tree is still reported.
+// A confirmed delete publishes once on the app-wide post change broadcast,
+// including when the card has left the tree before the request completes.
 
 import 'dart:async';
 
@@ -13,6 +11,7 @@ import 'package:coves_flutter/providers/community_subscription_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/streamable_service.dart';
 import 'package:coves_flutter/widgets/post_card.dart';
 import 'package:flutter/foundation.dart';
@@ -49,7 +48,8 @@ FeedViewPost _myPost() {
 void main() {
   late FakeAuthProvider authProvider;
   late MockCovesApiService apiService;
-  late int deletedCallbackCount;
+  late PostChangeBroadcast broadcast;
+  late List<PostChange> changes;
 
   setUp(() {
     authProvider = FakeAuthProvider(
@@ -57,26 +57,22 @@ void main() {
       signedInHandle: myHandle,
     );
     apiService = MockCovesApiService();
-    deletedCallbackCount = 0;
+    broadcast = PostChangeBroadcast();
+    changes = [];
+    broadcast.addPostChangeListener(changes.add);
   });
 
   tearDown(() {
     authProvider.dispose();
   });
 
-  /// Pumps the author's post card with an `onDeleted` that counts calls,
-  /// or with [onDeleted] when given.
-  ///
   /// With [cardShown], the Scaffold body is a host that stays mounted and
   /// shows the card only while [cardShown] is true, the way a feed list
   /// disposes a card scrolled off screen.
   Future<void> pumpMyPostCard(
     WidgetTester tester, {
     ValueListenable<bool>? cardShown,
-    VoidCallback? onDeleted,
   }) async {
-    final onCardDeleted = onDeleted ?? () => deletedCallbackCount++;
-
     // The delete flow awaits HapticFeedback; without a handler the platform
     // channel call never completes in tests.
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -111,16 +107,17 @@ void main() {
             ),
           ),
           Provider<StreamableService>.value(value: StreamableService()),
+          Provider<PostChangeBroadcast>.value(value: broadcast),
         ],
         child: MaterialApp(
           theme: AppTheme.dark,
           home: Scaffold(
             body: cardShown == null
-                ? PostCard(post: _myPost(), onDeleted: onCardDeleted)
+                ? PostCard(post: _myPost(), sessionStamp: null)
                 : ValueListenableBuilder<bool>(
                     valueListenable: cardShown,
                     builder: (context, shown, _) => shown
-                        ? PostCard(post: _myPost(), onDeleted: onCardDeleted)
+                        ? PostCard(post: _myPost(), sessionStamp: null)
                         : const SizedBox.shrink(),
                   ),
           ),
@@ -141,69 +138,31 @@ void main() {
     expect(find.text('Delete Post'), findsOneWidget);
   }
 
-  testWidgets('onDeleted fires once after a confirmed delete succeeds', (
+  testWidgets('B8 confirmed delete publishes once after the request succeeds', (
     tester,
   ) async {
-    when(apiService.deletePost(uri: postUri)).thenAnswer((_) async {});
+    final deleteRequest = Completer<void>();
+    when(apiService.deletePost(uri: postUri))
+        .thenAnswer((_) => deleteRequest.future);
 
     await pumpMyPostCard(tester);
     await openDeleteDialog(tester);
 
     await tester.tap(find.text('Delete'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
 
     verify(apiService.deletePost(uri: postUri)).called(1);
-    expect(deletedCallbackCount, 1);
+    expect(changes, isEmpty);
+    deleteRequest.complete();
+    await tester.pumpAndSettle();
+    expect(changes, hasLength(1));
+    expect(changes.single, isA<PostRemoved>());
+    expect((changes.single as PostRemoved).uri, postUri);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'an onDeleted that throws after a successful delete does not report the '
-    'delete as failed',
-    (tester) async {
-      when(apiService.deletePost(uri: postUri)).thenAnswer((_) async {});
-      final callbackError = Exception('onDeleted failed');
-
-      await pumpMyPostCard(tester, onDeleted: () => throw callbackError);
-
-      // The delete flow starts in a post-frame callback of a pump run here,
-      // so an error escaping it reaches this zone's handler. Outside such a
-      // zone flutter_test fails the test on the uncaught async error, and
-      // tester.takeException() never sees it. Any other error is rethrown.
-      final uncaughtErrors = <Object>[];
-      await runZonedGuarded(
-        () async {
-          await openDeleteDialog(tester);
-          await tester.tap(find.text('Delete'));
-          await tester.pumpAndSettle();
-        },
-        (error, stack) {
-          if (!identical(error, callbackError)) {
-            Error.throwWithStackTrace(error, stack);
-          }
-          uncaughtErrors.add(error);
-        },
-      );
-
-      expect(find.text('Post deleted'), findsOneWidget);
-
-      // Snackbars queue, so let "Post deleted" time out before checking that
-      // no failure snackbar was queued behind it.
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Post deleted'), findsNothing);
-      expect(
-        find.text('Could not delete post. Please try again.'),
-        findsNothing,
-      );
-      // The callback's own error escapes the delete flow uncaught.
-      expect(uncaughtErrors, [callbackError]);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets('cancelling the dialog neither deletes nor fires onDeleted', (
+  testWidgets('B8 cancelling the dialog neither deletes nor publishes', (
     tester,
   ) async {
     await pumpMyPostCard(tester);
@@ -214,11 +173,11 @@ void main() {
 
     expect(find.text('Delete Post'), findsNothing);
     verifyNever(apiService.deletePost(uri: anyNamed('uri')));
-    expect(deletedCallbackCount, 0);
+    expect(changes, isEmpty);
     expect(tester.takeException(), isNull);
   });
 
-  group('a failed delete does not fire onDeleted', () {
+  group('B8 a failed delete does not publish', () {
     final failures = <String, Exception Function()>{
       'network error': () => NetworkException('Connection refused'),
       'forbidden (403)': () => ApiException('Forbidden', statusCode: 403),
@@ -227,23 +186,28 @@ void main() {
 
     for (final MapEntry(key: description, value: failure) in failures.entries) {
       testWidgets(description, (tester) async {
+        final deleteRequest = Completer<void>();
         when(apiService.deletePost(uri: postUri))
-            .thenAnswer((_) async => throw failure());
+            .thenAnswer((_) => deleteRequest.future);
 
         await pumpMyPostCard(tester);
         await openDeleteDialog(tester);
 
         await tester.tap(find.text('Delete'));
-        await tester.pumpAndSettle();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
 
         verify(apiService.deletePost(uri: postUri)).called(1);
-        expect(deletedCallbackCount, 0);
+        expect(changes, isEmpty);
+        deleteRequest.completeError(failure());
+        await tester.pumpAndSettle();
+        expect(changes, isEmpty);
         expect(tester.takeException(), isNull);
       });
     }
   });
 
-  group('the card leaves the tree while deletePost is in flight', () {
+  group('B8 the card leaves the tree while deletePost is in flight', () {
     /// Confirms the delete, then removes the card while the request is
     /// still pending. Returns the pending request.
     ///
@@ -263,10 +227,12 @@ void main() {
       await openDeleteDialog(tester);
 
       await tester.tap(find.text('Delete'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
 
       verify(apiService.deletePost(uri: postUri)).called(1);
       expect(deleteRequest.isCompleted, isFalse);
+      expect(changes, isEmpty);
 
       cardShown.value = false;
       await tester.pumpAndSettle();
@@ -275,27 +241,25 @@ void main() {
       return deleteRequest;
     }
 
-    testWidgets('a delete that then succeeds still fires onDeleted once', (
-      tester,
-    ) async {
+    testWidgets('success still publishes exactly once', (tester) async {
       final deleteRequest = await confirmDeleteThenRemoveCard(tester);
 
       deleteRequest.complete();
       await tester.pumpAndSettle();
 
-      expect(deletedCallbackCount, 1);
+      expect(changes, hasLength(1));
+      expect(changes.single, isA<PostRemoved>());
+      expect((changes.single as PostRemoved).uri, postUri);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('a delete that then fails does not fire onDeleted', (
-      tester,
-    ) async {
+    testWidgets('failure publishes nothing', (tester) async {
       final deleteRequest = await confirmDeleteThenRemoveCard(tester);
 
       deleteRequest.completeError(NetworkException('Connection refused'));
       await tester.pumpAndSettle();
 
-      expect(deletedCallbackCount, 0);
+      expect(changes, isEmpty);
       expect(tester.takeException(), isNull);
     });
   });

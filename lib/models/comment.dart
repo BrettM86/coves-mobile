@@ -5,6 +5,7 @@
 
 import 'package:flutter/foundation.dart';
 
+import 'moderation.dart';
 import 'post.dart';
 
 class CommentsResponse {
@@ -201,6 +202,8 @@ class CommentView {
     required this.stats,
     this.viewer,
     this.embed,
+    this.moderation,
+    this.deletedAt,
   }) : assert(
          !isDeleted || record == null,
          'Deleted comments must have null record',
@@ -243,8 +246,8 @@ class CommentView {
       deletionReason: json['deletionReason'] as String?,
       createdAt: createdAt,
       indexedAt: indexedAt,
-      // Author is absent for deleted comments (backend omits the key
-      // entirely to avoid leaking the author's DID).
+      // Placeholders carry only {did, handle: "handle.invalid"}; older
+      // servers omitted the key entirely.
       author: json['author'] != null
           ? AuthorView.fromJson(json['author'] as Map<String, dynamic>)
           : null,
@@ -257,6 +260,10 @@ class CommentView {
           ? CommentViewerState.fromJson(json['viewer'] as Map<String, dynamic>)
           : null,
       embed: json['embed'] as Map<String, dynamic>?,
+      moderation: ModerationView.tryParse(json['moderation']),
+      deletedAt: json['deletedAt'] is String
+          ? DateTime.tryParse(json['deletedAt'] as String)
+          : null,
     );
   }
 
@@ -270,9 +277,9 @@ class CommentView {
 
   /// The comment author.
   ///
-  /// Null for deleted comments: the backend omits the `author` key entirely
-  /// so the author's identity (DID/handle) is never exposed for deleted
-  /// content. Check [isDeleted] before rendering author info.
+  /// On deleted or removed placeholders the backend sends only
+  /// `{did, handle: "handle.invalid"}` (older servers omitted it, leaving
+  /// this null). Check [isTombstoned] before rendering author info.
   final AuthorView? author;
   final CommentRef post;
   final CommentRef? parent;
@@ -284,6 +291,13 @@ class CommentView {
   /// May contain media, link previews, or other embedded content.
   /// Stored as raw JSON since comment embed structure may vary.
   final Map<String, dynamic>? embed;
+
+  /// Effective server moderation state; null when the server sent none.
+  final ModerationView? moderation;
+
+  /// When the comment was deleted or removed; the server omits it for
+  /// removals attributed to moderation sources.
+  final DateTime? deletedAt;
 
   /// The comment text content.
   ///
@@ -348,12 +362,13 @@ class CommentStats {
 }
 
 class CommentViewerState {
-  CommentViewerState({this.vote, this.voteUri});
+  CommentViewerState({this.vote, this.voteUri, this.moderation = const {}});
 
   factory CommentViewerState.fromJson(Map<String, dynamic> json) {
     return CommentViewerState(
       vote: json['vote'] as String?,
       voteUri: json['voteUri'] as String?,
+      moderation: parseModerationCapabilities(json['moderation']),
     );
   }
 
@@ -362,6 +377,8 @@ class CommentViewerState {
 
   /// AT-URI of the vote record (if backend provides it)
   final String? voteUri;
+
+  final Set<ModerationCapability> moderation;
 }
 
 /// Sentinel value for copyWith to distinguish "not provided" from "null"

@@ -15,6 +15,9 @@ class FullScreenLoading extends StatelessWidget {
 }
 
 /// Full-screen error state with retry button and optional secondary action
+///
+/// A null [onRetry] hides the Retry button, for failures a retry can never
+/// fix.
 class FullScreenError extends StatelessWidget {
   const FullScreenError({
     required this.message,
@@ -28,7 +31,7 @@ class FullScreenError extends StatelessWidget {
 
   final String title;
   final String message;
-  final VoidCallback onRetry;
+  final VoidCallback? onRetry;
 
   /// Optional secondary action button label (e.g., "Sign Out")
   final String? secondaryActionLabel;
@@ -66,14 +69,17 @@ class FullScreenError extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: onRetry,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
+            if (onRetry != null) ...[
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: onRetry,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                ),
+                child: const Text('Retry'),
               ),
-              child: const Text('Retry'),
-            ),
+            ],
             if (secondaryActionLabel != null && onSecondaryAction != null) ...[
               const SizedBox(height: 12),
               TextButton(
@@ -166,12 +172,16 @@ class NotFoundError extends StatelessWidget {
     required this.title,
     required this.message,
     required this.onBackPressed,
+    this.extraActions = const [],
     super.key,
   });
 
   final String title;
   final String message;
   final VoidCallback onBackPressed;
+
+  /// Text buttons shown below Go Back, in order.
+  final List<({String label, VoidCallback onPressed})> extraActions;
 
   @override
   Widget build(BuildContext context) {
@@ -213,9 +223,17 @@ class NotFoundError extends StatelessWidget {
                 onPressed: onBackPressed,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 ),
                 child: const Text('Go Back'),
               ),
+              for (final action in extraActions) ...[
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: action.onPressed,
+                  child: Text(action.label),
+                ),
+              ],
             ],
           ),
         ),

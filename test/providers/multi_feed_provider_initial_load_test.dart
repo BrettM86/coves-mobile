@@ -6,10 +6,12 @@ import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/services/coves_auth_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 
+import '../test_helpers/fake_providers.dart' show unchangingSessionKey;
 import '../test_helpers/test_mocks.dart';
 import 'auth_provider_test.mocks.dart';
 
@@ -105,6 +107,8 @@ class _Harness {
       apiService: apiService,
       voteProvider: voteProvider,
       clock: clock.call,
+      postChangeBroadcast: PostChangeBroadcast(),
+      sessionKeyOf: unchangingSessionKey,
     );
   }
 
@@ -426,12 +430,10 @@ void main() {
         final validationGate = Completer<SessionValidationResult>();
         final refreshGate = Completer<CovesSession>();
         when(authService.initialize()).thenAnswer((_) async {});
-        when(
-          authService.restoreSession(),
-        ).thenAnswer((_) async => restoredSession);
-        when(
-          authService.validateSession(),
-        ).thenAnswer((_) => validationGate.future);
+        when(authService.restoreSession())
+            .thenAnswer((_) async => restoredSession);
+        when(authService.validateSession())
+            .thenAnswer((_) => validationGate.future);
         when(authService.refreshToken()).thenAnswer((_) => refreshGate.future);
 
         final authProvider = AuthProvider(authService: authService);

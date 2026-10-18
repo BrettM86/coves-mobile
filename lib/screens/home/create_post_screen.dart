@@ -270,8 +270,11 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                PostDetailScreen(post: optimisticPost, isOptimistic: true),
+            builder: (context) => PostDetailScreen(
+              post: optimisticPost,
+              isOptimistic: true,
+              sessionStamp: null,
+            ),
           ),
         );
       }

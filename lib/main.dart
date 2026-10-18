@@ -12,13 +12,13 @@ import 'constants/app_colors.dart';
 import 'constants/app_theme.dart';
 import 'constants/app_typography.dart';
 import 'models/community.dart';
-import 'models/post.dart';
 import 'providers/auth_provider.dart';
 import 'providers/block_provider.dart';
 import 'providers/community_guidelines_provider.dart';
 import 'providers/community_subscription_provider.dart';
 import 'providers/eula_provider.dart';
 import 'providers/multi_feed_provider.dart';
+import 'providers/viewer_authority_provider.dart';
 import 'providers/vote_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/community/community_feed_screen.dart';
@@ -26,18 +26,20 @@ import 'screens/community_guidelines_screen.dart';
 import 'screens/eula_screen.dart';
 import 'screens/home/main_shell_screen.dart';
 import 'screens/home/post_detail_loader.dart';
-import 'screens/home/post_detail_screen.dart';
 import 'screens/home/profile_screen.dart';
 import 'screens/landing_screen.dart';
+import 'screens/moderation/modlog_screen.dart';
 import 'services/comment_service.dart';
 import 'services/comments_provider_cache.dart';
 import 'services/coves_api_service.dart';
 import 'services/link_sharer.dart';
 import 'services/media_saver.dart';
+import 'services/post_change_broadcast.dart';
 import 'services/profile_cache.dart';
 import 'services/streamable_service.dart';
 import 'services/viewer_state_hydrator.dart';
 import 'services/vote_service.dart';
+import 'utils/post_detail_route.dart';
 import 'widgets/icons/lucide_paths.dart';
 import 'widgets/loading_error_states.dart';
 
@@ -109,6 +111,10 @@ Future<Widget> bootstrapCovesApp() async {
     tokenRefresher: authProvider.refreshToken,
     signOutHandler: authProvider.signOut,
   );
+  final viewerAuthorityProvider = ViewerAuthorityProvider(
+    apiService: apiService,
+    authProvider: authProvider,
+  );
 
   // Initialize vote service with auth callbacks
   // Votes go through the Coves backend (which proxies to PDS with DPoP)
@@ -149,10 +155,13 @@ Future<Widget> bootstrapCovesApp() async {
     voteProvider: voteProvider,
     subscriptionProvider: subscriptionProvider,
   );
+  final postChangeBroadcast = PostChangeBroadcast();
   final feedProvider = MultiFeedProvider(
     authProvider,
     apiService: apiService,
+    postChangeBroadcast: postChangeBroadcast,
     hydrator: hydrator,
+    sessionKeyOf: () => viewerAuthorityProvider.sessionKey,
   );
   // Only a signed-in user whose acceptances are done lands on /feed
   // directly; everyone else sees a gate or the landing screen first.
@@ -170,9 +179,11 @@ Future<Widget> bootstrapCovesApp() async {
       ChangeNotifierProvider.value(value: voteProvider),
       // Expose the shared API client so screens/widgets can context.read it
       Provider<CovesApiService>.value(value: apiService),
+      Provider<PostChangeBroadcast>.value(value: postChangeBroadcast),
       // Expose the shared comment service for per-screen profile providers
       Provider<CommentService>.value(value: commentService),
       ChangeNotifierProvider.value(value: subscriptionProvider),
+      ChangeNotifierProvider.value(value: viewerAuthorityProvider),
       ChangeNotifierProvider(
         create: (_) =>
             BlockProvider(apiService: apiService, authProvider: authProvider),
@@ -188,6 +199,7 @@ Future<Widget> bootstrapCovesApp() async {
           commentService: commentService,
           apiService: apiService,
           hydrator: hydrator,
+          sessionKeyOf: () => viewerAuthorityProvider.sessionKey,
         ),
         dispose: (_, cache) => cache.dispose(),
       ),
@@ -288,6 +300,15 @@ GoRouter createRouter(
         builder: (context, state) => const MainShellScreen(),
       ),
       GoRoute(
+        path: '/modlog',
+        builder: (context, state) {
+          final subject = state.uri.queryParameters['subject'];
+          return ModlogScreen(
+            subject: subject == null || subject.isEmpty ? null : subject,
+          );
+        },
+      ),
+      GoRoute(
         path: '/profile/:actor',
         builder: (context, state) {
           final actor = state.pathParameters['actor']!;
@@ -308,14 +329,17 @@ GoRouter createRouter(
       GoRoute(
         path: '/post/:postUri',
         builder: (context, state) {
-          // Fast path: post passed via state.extra (in-app navigation)
-          final post = state.extra as FeedViewPost?;
+          // Fast path: the post and the session it was loaded under, passed
+          // via state.extra (in-app navigation). The loader shows it without
+          // a fetch and fetches it again if it is removed.
+          final loadedPost = state.extra as PostDetailRouteExtra?;
           // Optional `?comment=<at-uri>` scrolls to and highlights a comment
           // (used by profile → "your comment" links).
           final focusCommentUri = state.uri.queryParameters['comment'];
-          if (post != null) {
-            return PostDetailScreen(
-              post: post,
+          if (loadedPost != null) {
+            return PostDetailLoader(
+              postUri: loadedPost.post.post.uri,
+              loadedPost: loadedPost,
               focusCommentUri: focusCommentUri,
             );
           }

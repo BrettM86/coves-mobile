@@ -31,12 +31,14 @@ import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/community_subscription_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
+import 'package:coves_flutter/providers/viewer_authority_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/community/community_feed_screen.dart';
 import 'package:coves_flutter/screens/home/feed_screen.dart';
 import 'package:coves_flutter/screens/home/main_shell_screen.dart';
 import 'package:coves_flutter/screens/home/profile_screen.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/streamable_service.dart';
 import 'package:coves_flutter/services/viewer_state_hydrator.dart';
 import 'package:coves_flutter/widgets/feed_page.dart';
@@ -201,12 +203,19 @@ List<SingleChildWidget> _appProviders({
         subscriptionProvider: context.read<CommunitySubscriptionProvider>(),
       ),
     ),
+    Provider<PostChangeBroadcast>(create: (_) => PostChangeBroadcast()),
+    viewerAuthorityRegistration(auth: authProvider, apiService: apiService),
     ChangeNotifierProvider<MultiFeedProvider>(
-      create: (context) => MultiFeedProvider(
-        authProvider,
-        apiService: apiService,
-        hydrator: context.read<ViewerStateHydrator>(),
-      ),
+      create: (context) {
+        final authority = context.read<ViewerAuthorityProvider>();
+        return MultiFeedProvider(
+          authProvider,
+          apiService: apiService,
+          hydrator: context.read<ViewerStateHydrator>(),
+          postChangeBroadcast: context.read<PostChangeBroadcast>(),
+          sessionKeyOf: () => authority.sessionKey,
+        );
+      },
     ),
     Provider<StreamableService>.value(value: StreamableService()),
   ];
@@ -223,6 +232,7 @@ void main() {
     );
     apiService = MockCovesApiService();
     when(apiService.deletePost(uri: anyNamed('uri'))).thenAnswer((_) async {});
+    when(apiService.getViewerAuthority()).thenAnswer((_) async => false);
   });
 
   tearDown(() {

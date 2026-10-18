@@ -6,6 +6,7 @@ import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/post_detail_screen.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/widgets/loading_error_states.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -94,6 +95,7 @@ void main() {
 
   Widget app() => MultiProvider(
     providers: [
+      Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
       ChangeNotifierProvider<AuthProvider>.value(value: auth),
       ChangeNotifierProvider<VoteProvider>.value(value: votes),
       ChangeNotifierProvider<BlockProvider>.value(value: blocks),
@@ -102,6 +104,7 @@ void main() {
     child: MaterialApp(
       theme: AppTheme.dark,
       home: PostDetailScreen(
+        sessionStamp: null,
         post: FeedViewPost(
           post: PostView(
             uri: postUri,

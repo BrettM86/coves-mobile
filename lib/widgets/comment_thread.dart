@@ -26,6 +26,7 @@ import 'comment_card.dart';
 class CommentThread extends StatelessWidget {
   const CommentThread({
     required this.thread,
+    required this.sessionStamp,
     this.depth = 0,
     this.maxDepth = 5,
     this.currentTime,
@@ -40,10 +41,21 @@ class CommentThread extends StatelessWidget {
     this.focusedCommentUri,
     this.focusedCommentKey,
     this.parentPost,
+    this.reloadAfterModeration,
     super.key,
-  });
+  }) : assert(
+         sessionStamp == null || reloadAfterModeration != null,
+         'A surface that offers admin tools must reload after moderation.',
+       );
 
   final ThreadViewComment thread;
+
+  /// The session key these comments were loaded under; null for a surface
+  /// that offers no admin tools. See [CommentCard.sessionStamp].
+  final Object? sessionStamp;
+
+  /// See [CommentCard.reloadAfterModeration].
+  final Future<bool> Function()? reloadAfterModeration;
 
   /// The post these comments belong to, when the surface showing them has it
   /// loaded. Supplies what a comment permalink needs.
@@ -141,6 +153,8 @@ class CommentThread extends StatelessWidget {
                 focusedCommentUri: focusedCommentUri,
                 focusedCommentKey: focusedCommentKey,
                 parentPost: parentPost,
+                sessionStamp: sessionStamp,
+                reloadAfterModeration: reloadAfterModeration,
               );
             }).toList(),
           )
@@ -165,6 +179,8 @@ class CommentThread extends StatelessWidget {
             onDelete: onDelete,
             isHighlighted: isFocused,
             parentPost: parentPost,
+            sessionStamp: sessionStamp,
+            reloadAfterModeration: reloadAfterModeration,
           ),
         ),
 

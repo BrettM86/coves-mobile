@@ -34,6 +34,15 @@ const String _thumbsDownD =
     'M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 '
     '2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 '
     '3.13 0 0 1-3-3.88Z';
+const String _eyeOffUpperD =
+    'M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 '
+    '10.747 10.747 0 0 1-1.444 2.49';
+const String _eyeOffLowerD =
+    'M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 '
+    '10.75 10.75 0 0 1 4.446-5.143';
+const String _eyeD =
+    'M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 '
+    '0 .696 10.75 10.75 0 0 1-19.876 0';
 
 abstract final class LucidePaths {
   /// Declares the ISC license for the bundled Lucide glyphs (both the `d`
@@ -106,6 +115,63 @@ abstract final class LucidePaths {
     'M13 18H7a2 2 0 0 1-2-2V6',
     'm22 15-3 3-3-3',
     'M11 6h6a2 2 0 0 1 2 2v10',
+  ];
+
+  /// `ban` — a removal in the moderation log
+  ///
+  /// The circle is drawn as two half arcs, as in [info].
+  static const List<String> ban = [
+    'M22 12a10 10 0 1 0-20 0a10 10 0 1 0 20 0',
+    'm4.9 4.9 14.2 14.2',
+  ];
+
+  /// `rotate-ccw` — a restore in the moderation log, and the Restore button
+  static const List<String> rotateCcw = [
+    'M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8',
+    'M3 3v5h5',
+  ];
+
+  /// `eye-off` — an NSFW label in the moderation log
+  static const List<String> eyeOff = [
+    _eyeOffUpperD,
+    'M14.084 14.158a3 3 0 0 1-4.242-4.242',
+    _eyeOffLowerD,
+    'm2 2 20 20',
+  ];
+
+  /// `eye` — a retracted NSFW label in the moderation log
+  ///
+  /// The pupil circle is drawn as two half arcs, as in [info].
+  static const List<String> eye = [_eyeD, 'M15 12a3 3 0 1 0-6 0a3 3 0 1 0 6 0'];
+
+  /// `lock` — admin-only moderation log content
+  ///
+  /// The body `rect` (x3 y11, 18x11, rx2) is written as a rounded-rectangle
+  /// path: the parser has no `rect` primitive.
+  static const List<String> lock = [
+    'M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z',
+    'M7 11V7a5 5 0 0 1 10 0v4',
+  ];
+
+  /// `chevron-down` — a control that opens a menu
+  static const List<String> chevronDown = ['m6 9 6 6 6-6'];
+
+  /// `chevron-right` — a row that opens another screen
+  static const List<String> chevronRight = ['m9 18 6-6-6-6'];
+
+  /// `check` — the selected entry of a menu
+  static const List<String> check = ['M20 6 9 17l-5-5'];
+
+  /// `x` — clears a filter
+  static const List<String> x = ['M18 6 6 18', 'm6 6 12 12'];
+
+  /// `gavel` — the moderation log entry on Explore
+  static const List<String> gavel = [
+    'm14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8',
+    'm16 16 6-6',
+    'm8 8 6-6',
+    'm9 7 8 8',
+    'm21 11-8-8',
   ];
 }
 

@@ -1,10 +1,11 @@
-// MultiFeedProvider.removePost drops a deleted post from every loaded feed
+// Broadcast removal drops a deleted post from every loaded feed
 // in place: Discover and For You both lose it, nothing else about either
 // feed changes, and nothing is refetched.
 
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 
@@ -19,6 +20,23 @@ const String keptPostUri =
 const String otherPostUri =
     'at://did:plc:community/social.coves.community.post/other';
 const String discoverCursor = 'discover-page-2';
+
+class _RecordingBroadcast extends PostChangeBroadcast {
+  int adds = 0;
+  int removes = 0;
+
+  @override
+  void addPostChangeListener(PostChangeListener listener) {
+    adds++;
+    super.addPostChangeListener(listener);
+  }
+
+  @override
+  void removePostChangeListener(PostChangeListener listener) {
+    removes++;
+    super.removePostChangeListener(listener);
+  }
+}
 
 FeedViewPost _post(String uri) {
   return FeedViewPost(
@@ -62,6 +80,8 @@ void main() {
   late FakeVoteProvider voteProvider;
   late FakeSubscriptionProvider subscriptionProvider;
   late MultiFeedProvider provider;
+  late _RecordingBroadcast broadcast;
+  var disposed = false;
   late int discoverFetches;
   late int timelineFetches;
 
@@ -110,12 +130,16 @@ void main() {
       authProvider: authProvider,
       apiService: apiService,
     );
+    broadcast = _RecordingBroadcast();
+    disposed = false;
     provider = MultiFeedProvider(
       authProvider,
       apiService: apiService,
       voteProvider: voteProvider,
       subscriptionProvider: subscriptionProvider,
       clock: () => DateTime.utc(2026, 9, 29, 12),
+      postChangeBroadcast: broadcast,
+      sessionKeyOf: unchangingSessionKey,
     );
 
     await provider.loadFeed(FeedType.discover, refresh: true);
@@ -141,13 +165,15 @@ void main() {
   });
 
   tearDown(() {
-    provider.dispose();
+    if (!disposed) {
+      provider.dispose();
+    }
     subscriptionProvider.dispose();
     voteProvider.dispose();
     authProvider.dispose();
   });
 
-  test('removes the post from both feeds in place, notifying once and '
+  test('B6 removes the post from both feeds in place, notifying once and '
       'fetching nothing', () {
     var notifications = 0;
     provider.addListener(() => notifications++);
@@ -158,7 +184,7 @@ void main() {
     final discoverFetchesBefore = discoverFetches;
     final timelineFetchesBefore = timelineFetches;
 
-    provider.removePost(deletedPostUri);
+    broadcast.removePost(deletedPostUri);
 
     expect(_uris(provider.getState(FeedType.discover).posts), [
       keptPostUri,
@@ -188,14 +214,14 @@ void main() {
     expect(timelineFetches, timelineFetchesBefore);
   });
 
-  test('a uri that is in no loaded feed changes nothing and does not '
+  test('B6 a uri that is in no loaded feed changes nothing and does not '
       'notify', () {
     var notifications = 0;
     provider.addListener(() => notifications++);
     final discoverFieldsBefore = _nonPostFields(provider, FeedType.discover);
     final forYouFieldsBefore = _nonPostFields(provider, FeedType.forYou);
 
-    provider.removePost(
+    broadcast.removePost(
       'at://did:plc:community/social.coves.community.post/not-loaded',
     );
 
@@ -212,5 +238,13 @@ void main() {
     ]);
     expect(_nonPostFields(provider, FeedType.discover), discoverFieldsBefore);
     expect(_nonPostFields(provider, FeedType.forYou), forYouFieldsBefore);
+  });
+
+  test('B5 multi-feed unsubscribes exactly once on dispose', () {
+    expect(broadcast.adds, 1);
+    provider.dispose();
+    disposed = true;
+    expect(broadcast.removes, 1);
+    expect(broadcast.adds, broadcast.removes);
   });
 }

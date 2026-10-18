@@ -1,7 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
@@ -10,6 +9,7 @@ import '../services/streamable_service.dart';
 import '../utils/community_handle_utils.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/image_decode_size.dart';
+import '../utils/post_detail_route.dart';
 import 'bluesky_post_card.dart';
 import 'community_avatar.dart';
 import 'external_link_bar.dart';
@@ -49,6 +49,7 @@ const BoxDecoration _embedFrame = BoxDecoration(
 class PostCard extends StatefulWidget {
   const PostCard({
     required this.post,
+    required this.sessionStamp,
     this.currentTime,
     this.showCommentButton = true,
     this.disableNavigation = false,
@@ -63,9 +64,12 @@ class PostCard extends StatefulWidget {
     this.embedHeight = 180,
     this.titleFontSize = 16,
     this.titleFontWeight = FontWeight.w400,
-    this.onDeleted,
     super.key,
   });
+
+  /// The session key [post] was loaded under; see
+  /// [PostCardActions.sessionStamp].
+  final Object? sessionStamp;
 
   final FeedViewPost post;
   final DateTime? currentTime;
@@ -82,7 +86,6 @@ class PostCard extends StatefulWidget {
   final double embedHeight;
   final double titleFontSize;
   final FontWeight titleFontWeight;
-  final VoidCallback? onDeleted;
 
   @override
   State<PostCard> createState() => _PostCardState();
@@ -134,7 +137,7 @@ class _PostCardState extends State<PostCard> {
       concealed:
           widget.post.post.isSensitive && _revealedUri != widget.post.post.uri,
       onToggleReveal: _toggleReveal,
-      onDeleted: widget.onDeleted,
+      sessionStamp: widget.sessionStamp,
     );
   }
 }
@@ -160,7 +163,7 @@ class _PostCardContent extends StatelessWidget {
     required this.titleFontWeight,
     required this.concealed,
     required this.onToggleReveal,
-    required this.onDeleted,
+    required this.sessionStamp,
   });
 
   final FeedViewPost post;
@@ -186,14 +189,10 @@ class _PostCardContent extends StatelessWidget {
   /// Flips the card's reveal state.
   final VoidCallback onToggleReveal;
 
-  final VoidCallback? onDeleted;
+  final Object? sessionStamp;
 
   void _navigateToDetail(BuildContext context) {
-    // Navigate to post detail screen
-    // Use URI-encoded version of the post URI for the URL path
-    // Pass the full post object via extras
-    final encodedUri = Uri.encodeComponent(post.post.uri);
-    context.push('/post/$encodedUri', extra: post);
+    pushPostDetail(context, post: post, sessionStamp: sessionStamp);
   }
 
   @override
@@ -418,7 +417,7 @@ class _PostCardContent extends StatelessWidget {
               PostCardActions(
                 post: post,
                 showCommentButton: showCommentButton,
-                onDeleted: onDeleted,
+                sessionStamp: sessionStamp,
               ),
           ],
         ),

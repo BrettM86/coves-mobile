@@ -18,6 +18,8 @@ import '../../utils/responsive_utils.dart';
 import '../../widgets/community_chip.dart';
 import '../../widgets/community_hero_card.dart';
 import '../../widgets/community_list_tile.dart';
+import '../../widgets/icons/lucide_icon_painter.dart';
+import '../../widgets/icons/lucide_paths.dart';
 import 'communities_see_all_screen.dart';
 
 /// Communities discovery screen with sectioned layout.
@@ -667,6 +669,83 @@ class _CommunitiesDiscoveryScreenState
 
   // --- Sections ---
 
+  /// The end-of-page entry to the moderation log, sized like the "Join your
+  /// first community" card.
+  Widget _buildModerationLogCard() {
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: const BorderSide(color: AppColors.insetBorder),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 32, 16, 0),
+      child: Semantics(
+        button: true,
+        child: Material(
+          color: AppColors.insetSurface,
+          shape: shape,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => context.push('/modlog'),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                spacing: 12,
+                children: [
+                  ExcludeSemantics(
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.teal.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const LucideGlyph(
+                        LucidePaths.gavel,
+                        size: 20,
+                        color: AppColors.teal,
+                      ),
+                    ),
+                  ),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      spacing: 2,
+                      children: [
+                        Text(
+                          'Moderation log',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'See what moderators removed or restored, and why',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMeta,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const ExcludeSemantics(
+                    child: LucideGlyph(
+                      LucidePaths.chevronRight,
+                      size: 20,
+                      color: AppColors.textMeta,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   List<Widget> _buildSections() {
     final authProvider = context.watch<AuthProvider>();
     final isAuthenticated = authProvider.isAuthenticated;
@@ -680,6 +759,8 @@ class _CommunitiesDiscoveryScreenState
 
       // New Communities — list tiles with accents
       _buildNewSection(),
+
+      _buildModerationLogCard(),
 
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 48),

@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:coves_flutter/models/moderation.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/models/post_get_result.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
@@ -10,11 +12,14 @@ import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:coves_flutter/widgets/loading_error_states.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+
+import '../test_helpers/fake_providers.dart' show viewerAuthorityRegistration;
 
 // Fake AuthProvider for testing (same convention as feed_screen_test.dart)
 class FakeAuthProvider extends AuthProvider {
@@ -50,6 +55,18 @@ void main() {
     );
   }
 
+  /// Registers the app-wide ViewerAuthorityProvider, signed out, which the
+  /// loader reads to stamp each request with its session.
+  Widget withSignedOutAuthority(Widget child) => MultiProvider(
+    providers: [
+      viewerAuthorityRegistration(
+        auth: FakeAuthProvider(),
+        apiService: CovesApiService(tokenGetter: () async => null),
+      ),
+    ],
+    child: child,
+  );
+
   /// Pumps the loader with an injectable fetcher.
   ///
   /// No providers are needed for non-success paths: the loader touches
@@ -61,8 +78,10 @@ void main() {
     String postUri = testUri,
   }) async {
     await tester.pumpWidget(
-      MaterialApp(
-        home: PostDetailLoader(postUri: postUri, fetchPost: fetchPost),
+      withSignedOutAuthority(
+        MaterialApp(
+          home: PostDetailLoader(postUri: postUri, fetchPost: fetchPost),
+        ),
       ),
     );
   }
@@ -140,9 +159,14 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
           ChangeNotifierProvider<AuthProvider>.value(value: fakeAuthProvider),
           ChangeNotifierProvider<VoteProvider>.value(value: voteProvider),
           Provider<CommentsProviderCache>.value(value: commentsCache),
+          viewerAuthorityRegistration(
+            auth: fakeAuthProvider,
+            apiService: CovesApiService(),
+          ),
         ],
         child: MaterialApp(
           home: PostDetailLoader(
@@ -192,9 +216,14 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
           ChangeNotifierProvider<AuthProvider>.value(value: fakeAuthProvider),
           ChangeNotifierProvider<VoteProvider>.value(value: voteProvider),
           Provider<CommentsProviderCache>.value(value: commentsCache),
+          viewerAuthorityRegistration(
+            auth: fakeAuthProvider,
+            apiService: CovesApiService(),
+          ),
         ],
         child: MaterialApp(
           home: PostDetailLoader(
@@ -218,6 +247,92 @@ void main() {
 
     await tester.pumpWidget(const MaterialApp(home: Scaffold()));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('a server-admin-removed post shows a content-free tombstone '
+      'with its community', (tester) async {
+    const moderatedPostWire =
+        r'{"$type":"social.coves.community.post.defs#moderatedPost",'
+        '"uri":"at://did:plc:author/social.coves.community.post/3abc",'
+        '"moderation":{"state":"removed","sources":[{"authorityDid":'
+        '"did:web:coves.social","scope":{"kind":"instance"}}]},'
+        '"authorDid":"did:plc:author",'
+        '"community":{"did":"did:plc:comm","handle":"c-gaming.coves.social",'
+        '"name":"gaming"}}';
+
+    await pumpLoader(
+      tester,
+      postUri: 'at://did:plc:author/social.coves.community.post/3abc',
+      fetchPost: (_) async => PostGetResult.fromJson(
+        jsonDecode(moderatedPostWire) as Map<String, dynamic>,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('[Removed by server admin]'), findsWidgets);
+    expect(find.textContaining('gaming'), findsWidgets);
+    expect(find.textContaining('Post Not Found'), findsNothing);
+    expect(find.textContaining('did:plc:author'), findsNothing);
+    expect(find.textContaining('did:plc:comm'), findsNothing);
+    expect(find.textContaining('c-gaming.coves.social'), findsNothing);
+    expect(find.byType(PostDetailScreen), findsNothing);
+  });
+
+  testWidgets('a removed post names who removed it instead of "not found"', (
+    tester,
+  ) async {
+    ModerationView removedBy(ModerationScopeKind kind) => ModerationView(
+      state: ModerationState.removed,
+      sources: [
+        ModerationSource(
+          authorityDid: 'did:web:coves.social',
+          scope: ModerationScope(kind: kind),
+        ),
+      ],
+    );
+
+    final cases = <(String, PostGetResult, String)>[
+      (
+        'community removal',
+        const PostGetCommunityRemoved(uri: testUri, code: 'spam'),
+        '[Removed by community moderator]',
+      ),
+      (
+        'instance removal with only uri and moderation',
+        PostGetModerated(
+          uri: testUri,
+          moderation: removedBy(ModerationScopeKind.instance),
+        ),
+        '[Removed by server admin]',
+      ),
+      (
+        'removal whose only source has an unknown scope',
+        PostGetModerated(
+          uri: testUri,
+          moderation: removedBy(ModerationScopeKind.unknown),
+        ),
+        '[Removed by moderator]',
+      ),
+    ];
+
+    for (final (description, result, expectedCopy) in cases) {
+      // Unmount the previous row so each loader fetches afresh.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await pumpLoader(tester, fetchPost: (_) async => result);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull, reason: description);
+      expect(
+        find.textContaining(expectedCopy),
+        findsWidgets,
+        reason: description,
+      );
+      expect(
+        find.textContaining('Post Not Found'),
+        findsNothing,
+        reason: description,
+      );
+    }
   });
 
   testWidgets('shows blocked-author message for blocked posts', (tester) async {
@@ -387,11 +502,13 @@ void main() {
     }
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: PostDetailLoader(
-          key: loaderKey,
-          postUri: testUri,
-          fetchPost: fetchPost,
+      withSignedOutAuthority(
+        MaterialApp(
+          home: PostDetailLoader(
+            key: loaderKey,
+            postUri: testUri,
+            fetchPost: fetchPost,
+          ),
         ),
       ),
     );
@@ -401,11 +518,13 @@ void main() {
     // Same key/position: the State is reused, so didUpdateWidget must
     // detect the new URI and refetch
     await tester.pumpWidget(
-      MaterialApp(
-        home: PostDetailLoader(
-          key: loaderKey,
-          postUri: secondUri,
-          fetchPost: fetchPost,
+      withSignedOutAuthority(
+        MaterialApp(
+          home: PostDetailLoader(
+            key: loaderKey,
+            postUri: secondUri,
+            fetchPost: fetchPost,
+          ),
         ),
       ),
     );
@@ -437,8 +556,13 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
           ChangeNotifierProvider<AuthProvider>.value(value: fakeAuthProvider),
           Provider<CovesApiService>.value(value: apiService),
+          viewerAuthorityRegistration(
+            auth: fakeAuthProvider,
+            apiService: apiService,
+          ),
         ],
         child: const MaterialApp(home: PostDetailLoader(postUri: testUri)),
       ),
@@ -464,7 +588,9 @@ void main() {
     await tester.pumpWidget(
       ChangeNotifierProvider<AuthProvider>.value(
         value: fakeAuthProvider,
-        child: const MaterialApp(home: PostDetailLoader(postUri: testUri)),
+        child: withSignedOutAuthority(
+          const MaterialApp(home: PostDetailLoader(postUri: testUri)),
+        ),
       ),
     );
     await tester.pumpAndSettle();

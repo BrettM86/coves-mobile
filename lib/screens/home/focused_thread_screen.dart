@@ -170,9 +170,27 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   /// outside it.
   late ThreadViewComment _thread;
 
+  /// The [CommentsProvider.removalSequence] [_thread] reflects: 0 for the
+  /// snapshot handed in at entry, else the sequence when its fetch was
+  /// requested. Only removals after it are applied over it.
+  int _threadRemovalsSeen = 0;
+
   /// Monotonic sequence for subtree fetches so an older in-flight response
   /// can never overwrite the result of a newer one.
   int _refreshSeq = 0;
+
+  /// The ancestor rows shown above the anchor, each with the
+  /// [CommentsProvider.removalSequence] it reflects (see
+  /// [_threadRemovalsSeen]) and the session stamp it was loaded under.
+  /// Seeded from the widget and replaced row by row by [refreshSnapshots].
+  /// A row keeps its stamp across a session change, so admin tools stay
+  /// denied on it until a fetch for the current session replaces it.
+  late List<({ThreadViewComment row, int removalsSeen, Object? sessionStamp})>
+  _ancestors;
+
+  /// Monotonic sequence for ancestor refreshes so an older in-flight
+  /// response can never overwrite the result of a newer one.
+  int _ancestorRefreshSeq = 0;
 
   /// Whether the most recent anchor-subtree hydration failed.
   ///
@@ -189,9 +207,10 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   bool _awaitingNewSessionSubtree = false;
 
   /// Whether the signed-in account changed since this screen opened.
-  /// Ancestors come from the snapshot taken at that time and are never
-  /// fetched here, so after a change only an ancestor present in the
-  /// current provider's loaded tree has vote state for the new session.
+  /// Ancestors come from the snapshot taken at that time or from
+  /// [refreshSnapshots], which applies no vote state, so after a change
+  /// only an ancestor present in the current provider's loaded tree has
+  /// vote state for the new session.
   bool _ancestorsFromPreviousSession = false;
 
   /// The provider's [CommentsProvider.lastRefreshTime] when this screen last
@@ -202,6 +221,14 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   void initState() {
     super.initState();
     _thread = widget.thread;
+    // Snapshots handed in may predate any removal made in this session.
+    // They were loaded with the provider's displayed thread, so they carry
+    // its stamp.
+    final sessionStamp = widget.commentsProvider.sessionStamp;
+    _ancestors = [
+      for (final ancestor in widget.ancestors)
+        (row: ancestor, removalsSeen: 0, sessionStamp: sessionStamp),
+    ];
     _threadRefreshTimeAtSubtreeFetch = widget.commentsProvider.lastRefreshTime;
     widget.commentsProvider.addListener(_onCommentsChanged);
     // Scroll to anchor comment after build, then hydrate the full subtree
@@ -222,6 +249,18 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
       // A fetch still in flight on the old provider must not land on the
       // new session.
       _refreshSeq++;
+      _ancestorRefreshSeq++;
+      // Removal sequences are per provider, and the new one recorded none
+      // before these snapshots were taken.
+      _threadRemovalsSeen = 0;
+      _ancestors = [
+        for (final ancestor in _ancestors)
+          (
+            row: ancestor.row,
+            removalsSeen: 0,
+            sessionStamp: ancestor.sessionStamp,
+          ),
+      ];
       _hydrationFailed = false;
       _awaitingNewSessionSubtree = true;
       _ancestorsFromPreviousSession = true;
@@ -259,12 +298,17 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   /// empty snapshot a retryable error state is shown. While
   /// [_awaitingNewSessionSubtree] is set, a failure or a null subtree shows
   /// the retryable error whatever the snapshot holds.
-  Future<void> _refreshSubtree() async {
+  ///
+  /// Completes with whether this fetch landed a subtree: false when it
+  /// failed, the response did not carry the anchor (nothing is applied),
+  /// the screen unmounted, or a newer fetch superseded it.
+  Future<bool> _refreshSubtree() async {
     if (!mounted) {
-      return;
+      return false;
     }
     final provider = widget.commentsProvider;
     final seq = ++_refreshSeq;
+    final removalsSeen = provider.removalSequence;
     // Joining a fetch already in flight keeps the recorded time, so a
     // refresh that overlapped that fetch still triggers another one.
     if (!_isAnchorFetchInFlight) {
@@ -273,7 +317,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
     try {
       final subtree = await provider.loadMoreReplies(widget.thread.comment.uri);
       if (!mounted || seq != _refreshSeq) {
-        return;
+        return false;
       }
       setState(() {
         // A null subtree leaves the snapshot as it is, which must not show
@@ -281,18 +325,94 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
         _hydrationFailed = subtree == null && _awaitingNewSessionSubtree;
         if (subtree != null) {
           _thread = subtree;
+          _threadRemovalsSeen = removalsSeen;
           _awaitingNewSessionSubtree = false;
         }
       });
+      return subtree != null;
     } on Exception catch (e) {
       if (kDebugMode) {
         debugPrint('⚠️ Failed to refresh focused subtree: $e');
       }
       if (!mounted || seq != _refreshSeq) {
-        return;
+        return false;
       }
       setState(() => _hydrationFailed = true);
+      return false;
     }
+  }
+
+  /// Re-fetches what this screen holds as its own snapshots: the anchor's
+  /// subtree (through [_refreshSubtree]) and each ancestor row. An ancestor
+  /// fetch that failed or did not carry the row keeps that row's snapshot.
+  /// Each row that landed is stamped with the removal sequence of its own
+  /// request, never with the sequence when the whole batch completed: a
+  /// removal confirmed while another row was still in flight must keep
+  /// showing on a row that had already landed.
+  ///
+  /// Completes with whether every row was refreshed: false when any
+  /// ancestor fetch or the subtree refresh failed or came back without its
+  /// row, or when this refresh was not applied because the screen unmounted
+  /// or a newer one superseded it.
+  Future<bool> refreshSnapshots() async {
+    if (!mounted) {
+      return false;
+    }
+    final provider = widget.commentsProvider;
+    final seq = ++_ancestorRefreshSeq;
+    final ancestors = _ancestors;
+    final subtreeRefresh = _refreshSubtree();
+    final refreshed = await Future.wait([
+      for (final ancestor in ancestors) _fetchAncestor(provider, ancestor.row),
+    ]);
+    final subtreeRefreshed = await subtreeRefresh;
+    if (!mounted || seq != _ancestorRefreshSeq) {
+      return false;
+    }
+    setState(() {
+      _ancestors = [
+        for (var index = 0; index < ancestors.length; index++)
+          refreshed[index] ?? ancestors[index],
+      ];
+    });
+    return subtreeRefreshed && refreshed.every((row) => row != null);
+  }
+
+  /// The server's current copy of [ancestor] with the removal sequence and
+  /// the provider's session stamp read when its request started, or null
+  /// when it did not land: the fetch failed or the response did not carry
+  /// the row. Either way the row was not refreshed.
+  Future<({ThreadViewComment row, int removalsSeen, Object? sessionStamp})?>
+  _fetchAncestor(CommentsProvider provider, ThreadViewComment ancestor) async {
+    // Read when the request starts, as the provider does: a removal
+    // confirmed while it is out is already applied to the result, and
+    // applying it again at build changes nothing.
+    final removalsSeen = provider.removalSequence;
+    final sessionStamp = provider.sessionStamp;
+    try {
+      final row = await provider.fetchCommentSnapshot(ancestor.comment.uri);
+      return row == null
+          ? null
+          : (row: row, removalsSeen: removalsSeen, sessionStamp: sessionStamp);
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ Failed to refresh an ancestor row: $e');
+      }
+      return null;
+    }
+  }
+
+  /// The reload a comment card runs when a moderation action finds a
+  /// comment changed or gone: the whole thread quietly, then this screen's
+  /// own snapshots. Sequential, so the subtree fetch starts against the
+  /// refreshed tree instead of being discarded when the refresh lands.
+  /// Completes with whether both landed.
+  Future<bool> _reloadAfterModeration() async {
+    final provider = widget.commentsProvider;
+    await provider.loadComments(refresh: true, quiet: true);
+    final threadReloaded = provider.error == null;
+    final snapshotsRefreshed = await refreshSnapshots();
+    return threadReloaded && snapshotsRefreshed;
   }
 
   /// Retry from the error shown in place of the previous session's
@@ -458,9 +578,16 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
     // present in the loaded tree, so deletes, sort changes, and hydrations
     // performed elsewhere reach this screen. The local snapshot is the
     // fallback for anchors outside the provider's loaded tree.
+    // The fallback snapshot and the ancestor rows are this screen's own
+    // copies, so a removal confirmed anywhere after each was taken is
+    // applied to it here. An earlier removal is already reflected in it,
+    // and reapplying it would hide a comment restored since.
     final thread =
         _findInLoadedTree(commentsProvider, widget.thread.comment.uri) ??
-        _thread;
+        commentsProvider.applyRemovalOverlay(
+          _thread,
+          since: _threadRemovalsSeen,
+        );
 
     // Calculate minimum bottom padding to allow anchor to scroll to top
     final screenHeight = MediaQuery.of(context).size.height;
@@ -492,10 +619,15 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   // Ancestor comments (shown flat, not nested)
-                  ...widget.ancestors.map(
-                    (ancestor) =>
-                        _buildAncestorComment(ancestor, commentsProvider),
-                  ),
+                  for (final ancestor in _ancestors)
+                    _buildAncestorComment(
+                      commentsProvider.applyRemovalOverlay(
+                        ancestor.row,
+                        since: ancestor.removalsSeen,
+                      ),
+                      ancestor.sessionStamp,
+                      commentsProvider,
+                    ),
 
                   // The previous session's snapshot has no vote state for
                   // this one: a loader, or a retryable error, stands in for
@@ -513,7 +645,10 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
                     // Anchor comment (the focused comment) - made prominent
                     KeyedSubtree(
                       key: _anchorKey,
-                      child: _buildAnchorComment(thread),
+                      child: _buildAnchorComment(
+                        thread,
+                        commentsProvider.sessionStamp,
+                      ),
                     ),
 
                     // Replies (if any)
@@ -534,6 +669,8 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
                           ancestors: [thread],
                           onDelete: _onDelete,
                           parentPost: widget.parentPost,
+                          sessionStamp: commentsProvider.sessionStamp,
+                          reloadAfterModeration: _reloadAfterModeration,
                         );
                       }),
 
@@ -595,8 +732,12 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   /// [commentsProvider]'s loaded tree has it: that provider was created for
   /// the new session, so its tree came from responses whose votes it
   /// applied.
+  ///
+  /// [sessionStamp] is the stamp the row's snapshot was loaded under, so a
+  /// row retained from a previous session is denied admin tools.
   Widget _buildAncestorComment(
     ThreadViewComment ancestor,
+    Object? sessionStamp,
     CommentsProvider commentsProvider,
   ) {
     final controlsEnabled =
@@ -609,13 +750,15 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
         onTap: controlsEnabled ? () => _openReplyScreen(ancestor) : null,
         onDelete: _onDelete,
         parentPost: widget.parentPost,
+        sessionStamp: sessionStamp,
+        reloadAfterModeration: _reloadAfterModeration,
         votingEnabled: controlsEnabled,
       ),
     );
   }
 
   /// Build the anchor comment (the focused comment) with prominent styling
-  Widget _buildAnchorComment(ThreadViewComment thread) {
+  Widget _buildAnchorComment(ThreadViewComment thread, Object? sessionStamp) {
     // Note: CommentCard has its own Consumer<VoteProvider> for vote state
     return Container(
       decoration: BoxDecoration(
@@ -638,6 +781,8 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
             : 0,
         onDelete: _onDelete,
         parentPost: widget.parentPost,
+        sessionStamp: sessionStamp,
+        reloadAfterModeration: _reloadAfterModeration,
       ),
     );
   }

@@ -13,6 +13,7 @@ import 'package:coves_flutter/screens/home/post_detail_loader.dart';
 import 'package:coves_flutter/screens/home/post_detail_screen.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/viewer_state_hydrator.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:coves_flutter/widgets/comment_card.dart';
@@ -196,6 +197,8 @@ class _PostOverBaseRoute {
     // Mockito cannot build a placeholder of the sealed result type while
     // stubbing.
     provideDummy<PostGetResult>(const PostGetNotFound(_postUri));
+    // The cold-load loader stamps the post with the viewer's authority.
+    when(api.getViewerAuthority()).thenAnswer((_) async => false);
     when(api.getPost(any)).thenAnswer((_) async {
       // The server answers for whichever session sent the request.
       final viewerDid = auth.did;
@@ -244,11 +247,13 @@ class _PostOverBaseRoute {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
           ChangeNotifierProvider<AuthProvider>.value(value: auth),
           ChangeNotifierProvider<VoteProvider>.value(value: votes),
           ChangeNotifierProvider<BlockProvider>.value(value: blocks),
           Provider<CovesApiService>.value(value: api),
           Provider<CommentsProviderCache>.value(value: cache),
+          viewerAuthorityRegistration(auth: auth, apiService: api),
         ],
         child: MaterialApp(
           theme: AppTheme.dark,
@@ -267,6 +272,7 @@ class _PostOverBaseRoute {
                   fetchPost: (_) async => PostGetSuccess(_postFor(auth.did)),
                 )
               : PostDetailScreen(
+                  sessionStamp: null,
                   post: _feedPost(),
                   focusCommentUri: focusCommentUri,
                 ),

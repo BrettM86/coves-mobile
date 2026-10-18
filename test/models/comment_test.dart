@@ -1,4 +1,5 @@
 import 'package:coves_flutter/models/comment.dart';
+import 'package:coves_flutter/models/moderation.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -695,6 +696,56 @@ void main() {
 
       expect(comment.isDeleted, true);
       expect(comment.deletionReason, 'moderator');
+    });
+
+    test('should parse moderation and deletedAt on a placeholder that is '
+        'both author-deleted and admin-removed', () {
+      final json = <String, dynamic>{
+        'uri': 'at://did:plc:author/social.coves.community.comment/c1',
+        'cid': 'bafycommentcid',
+        'record': null,
+        'isDeleted': true,
+        'deletionReason': 'author',
+        'deletedAt': '2026-10-01T12:00:00.000Z',
+        'createdAt': '2026-09-30T08:00:00.000Z',
+        'indexedAt': '2026-09-30T08:00:01.000Z',
+        'author': <String, dynamic>{
+          'did': 'did:plc:author',
+          'handle': 'handle.invalid',
+        },
+        'post': <String, dynamic>{
+          'uri': 'at://did:plc:author/social.coves.community.post/3abc',
+          'cid': 'bafypostcid',
+        },
+        'stats': <String, dynamic>{
+          'upvotes': 0,
+          'downvotes': 0,
+          'score': 0,
+          'replyCount': 2,
+        },
+        'moderation': <String, dynamic>{
+          'state': 'removed',
+          'sources': <dynamic>[
+            <String, dynamic>{
+              'authorityDid': 'did:web:coves.social',
+              'scope': <String, dynamic>{'kind': 'instance'},
+            },
+          ],
+        },
+      };
+
+      final comment = CommentView.fromJson(json);
+
+      expect(comment.deletedAt, DateTime.utc(2026, 10, 1, 12));
+      final moderation = comment.moderation;
+      expect(moderation, isNotNull);
+      expect(moderation!.state, ModerationState.removed);
+      expect(moderation.sources, hasLength(1));
+      expect(moderation.sources.single.authorityDid, 'did:web:coves.social');
+      expect(
+        moderation.sources.single.scope.kind,
+        ModerationScopeKind.instance,
+      );
     });
 
     test('isTombstoned is true for deleted or author-less comments', () {

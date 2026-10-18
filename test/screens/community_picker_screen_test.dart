@@ -1,7 +1,43 @@
+import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/models/community.dart';
+import 'package:coves_flutter/screens/compose/community_picker_screen.dart';
+import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart';
+import 'package:provider/provider.dart';
+
+import '../test_helpers/pump_helpers.dart';
+import '../test_helpers/test_mocks.dart';
 
 void main() {
+  testWidgets('the compose picker keeps its "Post to" header by default', (
+    tester,
+  ) async {
+    final api = MockCovesApiService();
+    when(
+      api.listCommunities(
+        limit: anyNamed('limit'),
+        cursor: anyNamed('cursor'),
+        sort: anyNamed('sort'),
+        subscribed: anyNamed('subscribed'),
+      ),
+    ).thenAnswer((_) async => CommunitiesResponse(communities: const []));
+
+    await tester.pumpWidget(
+      Provider<CovesApiService>.value(
+        value: api,
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          home: const CommunityPickerScreen(),
+        ),
+      ),
+    );
+    await pumpFrames(tester);
+
+    expect(find.text('Post to'), findsOneWidget);
+  });
+
   // Note: Full widget tests for CommunityPickerScreen require mocking the API
   // service and proper timer management. The core business logic is thoroughly
   // tested in the unit test groups below (search filtering, count formatting,

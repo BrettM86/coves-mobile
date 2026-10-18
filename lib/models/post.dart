@@ -10,6 +10,7 @@ import '../constants/embed_types.dart';
 import '../utils/url_policy.dart';
 import 'bluesky_post.dart';
 import 'facet.dart';
+import 'moderation.dart';
 
 export 'facet.dart' show RichTextFacet, parseFacetsFromRecord;
 
@@ -84,6 +85,7 @@ class ViewerState {
     this.saved = false,
     this.savedUri,
     this.tags,
+    this.moderation = const {},
   });
 
   factory ViewerState.fromJson(Map<String, dynamic> json) {
@@ -93,6 +95,7 @@ class ViewerState {
       saved: json['saved'] as bool? ?? false,
       savedUri: json['savedUri'] as String?,
       tags: (json['tags'] as List<dynamic>?)?.cast<String>(),
+      moderation: parseModerationCapabilities(json['moderation']),
     );
   }
 
@@ -110,6 +113,8 @@ class ViewerState {
 
   /// User-applied tags
   final List<String>? tags;
+
+  final Set<ModerationCapability> moderation;
 }
 
 /// Reads the active self-label values out of a record's `labels` field.
@@ -194,6 +199,7 @@ class PostView {
     required this.stats,
     this.embed,
     this.viewer,
+    this.moderation,
   }) : assert(
          !isDeleted || record == null,
          'Deleted posts must have null record',
@@ -226,6 +232,8 @@ class PostView {
       viewer: json['viewer'] != null
           ? ViewerState.fromJson(json['viewer'] as Map<String, dynamic>)
           : null,
+      // Tolerant: a throw here would drop the post from its feed.
+      moderation: ModerationView.tryParse(json['moderation']),
     );
   }
   final String uri;
@@ -245,6 +253,9 @@ class PostView {
   final PostStats stats;
   final PostEmbed? embed;
   final ViewerState? viewer;
+
+  /// Effective server moderation state; null when the server sent none.
+  final ModerationView? moderation;
 
   /// The post title.
   ///
@@ -276,8 +287,12 @@ class PostView {
   /// Returns null when [record] is null or when the post has no facets.
   List<RichTextFacet>? get facets => record?.facets;
 
-  /// Whether the author self-labelled this post as sensitive.
-  bool get isSensitive => record?.labels.contains('nsfw') ?? false;
+  /// Whether the author self-labelled this post as sensitive or a moderator
+  /// applied an nsfw content label.
+  bool get isSensitive =>
+      (record?.labels.contains('nsfw') ?? false) ||
+      (moderation?.contentLabels.any((label) => label.value == 'nsfw') ??
+          false);
 
   /// Returns a copy with the given fields replaced.
   ///
@@ -299,6 +314,7 @@ class PostView {
     PostStats? stats,
     PostEmbed? embed,
     ViewerState? viewer,
+    ModerationView? moderation,
   }) {
     return PostView(
       uri: uri ?? this.uri,
@@ -314,6 +330,7 @@ class PostView {
       stats: stats ?? this.stats,
       embed: embed ?? this.embed,
       viewer: viewer ?? this.viewer,
+      moderation: moderation ?? this.moderation,
     );
   }
 }

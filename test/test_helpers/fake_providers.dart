@@ -2,9 +2,11 @@ import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/community_subscription_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
+import 'package:coves_flutter/providers/viewer_authority_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:coves_flutter/services/streamable_service.dart';
 import 'package:coves_flutter/services/viewer_state_hydrator.dart';
@@ -101,6 +103,7 @@ CovesApiService tokenlessApiService() =>
 List<SingleChildWidget> postCardProviders({
   required AuthProvider auth,
   StreamableService? streamableService,
+  PostChangeBroadcast? postChangeBroadcast,
 }) {
   return [
     // PostCardActions' delete flow and ReportDialog read the shared API
@@ -124,20 +127,55 @@ List<SingleChildWidget> postCardProviders({
     Provider<StreamableService>.value(
       value: streamableService ?? StreamableService(),
     ),
+    // PostCardActions publishes a confirmed delete on the app-wide broadcast.
+    Provider<PostChangeBroadcast>.value(
+      value: postChangeBroadcast ?? PostChangeBroadcast(),
+    ),
   ];
+}
+
+/// A `sessionKeyOf` for a provider whose test never changes the session:
+/// every page is requested and accepted under this one key.
+Object? unchangingSessionKey() => 'unchanging-test-session';
+
+/// The app-wide [ViewerAuthorityProvider] registration a community or
+/// profile screen reads, mirroring main.dart.
+///
+/// Real: for a signed-in [auth] it asks [apiService] for the viewer's
+/// authority as soon as it is first read, so a mocked service must stub
+/// `getViewerAuthority`.
+SingleChildWidget viewerAuthorityRegistration({
+  required AuthProvider auth,
+  required CovesApiService apiService,
+}) {
+  return ChangeNotifierProvider<ViewerAuthorityProvider>(
+    create: (_) =>
+        ViewerAuthorityProvider(apiService: apiService, authProvider: auth),
+  );
 }
 
 /// The app-wide [MultiFeedProvider] registration for a test that pumps a
 /// community or profile screen, which also removes a post its author deletes
 /// from the home feeds, but never shows those feeds.
 ///
-/// Real, and never loaded, so it makes no requests.
+/// Real, and never loaded, so it makes no requests. It subscribes to the
+/// [PostChangeBroadcast] and stamps with the [ViewerAuthorityProvider]
+/// registered above it, which the caller provides (the same instances the
+/// screen under test reads).
 SingleChildWidget unloadedMultiFeedProvider({
   required AuthProvider auth,
   required CovesApiService apiService,
 }) {
   return ChangeNotifierProvider<MultiFeedProvider>(
-    create: (_) => MultiFeedProvider(auth, apiService: apiService),
+    create: (context) {
+      final authority = context.read<ViewerAuthorityProvider>();
+      return MultiFeedProvider(
+        auth,
+        apiService: apiService,
+        postChangeBroadcast: context.read<PostChangeBroadcast>(),
+        sessionKeyOf: () => authority.sessionKey,
+      );
+    },
   );
 }
 
@@ -148,10 +186,17 @@ SingleChildWidget unloadedMultiFeedProvider({
 /// these, so no UserProfileProvider is provided here. The app-wide
 /// [MultiFeedProvider] is a real one that nothing loads unless a home
 /// `FeedScreen` is also pumped, so it makes no requests on its own.
+///
+/// The [ViewerAuthorityProvider] is [viewerAuthority] when given (the caller
+/// owns and disposes it), otherwise a real one built on [apiService]; see
+/// [viewerAuthorityRegistration]. The home feeds stamp their cards with its
+/// session key, as main.dart does.
 List<SingleChildWidget> profileScreenProviders({
   required AuthProvider auth,
   required CovesApiService apiService,
   required CommentService commentService,
+  PostChangeBroadcast? postChangeBroadcast,
+  ViewerAuthorityProvider? viewerAuthority,
 }) {
   return [
     ChangeNotifierProvider<AuthProvider>.value(value: auth),
@@ -171,12 +216,27 @@ List<SingleChildWidget> profileScreenProviders({
         voteProvider: context.read<VoteProvider>(),
       ),
     ),
+    // One app-wide broadcast, shared by the home feeds and every screen.
+    Provider<PostChangeBroadcast>.value(
+      value: postChangeBroadcast ?? PostChangeBroadcast(),
+    ),
+    if (viewerAuthority != null)
+      ChangeNotifierProvider<ViewerAuthorityProvider>.value(
+        value: viewerAuthority,
+      )
+    else
+      viewerAuthorityRegistration(auth: auth, apiService: apiService),
     ChangeNotifierProvider<MultiFeedProvider>(
-      create: (context) => MultiFeedProvider(
-        auth,
-        apiService: apiService,
-        hydrator: context.read<ViewerStateHydrator>(),
-      ),
+      create: (context) {
+        final authority = context.read<ViewerAuthorityProvider>();
+        return MultiFeedProvider(
+          auth,
+          apiService: apiService,
+          postChangeBroadcast: context.read<PostChangeBroadcast>(),
+          hydrator: context.read<ViewerStateHydrator>(),
+          sessionKeyOf: () => authority.sessionKey,
+        );
+      },
     ),
     Provider<StreamableService>.value(value: StreamableService()),
     Provider<ProfileCache>(

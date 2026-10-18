@@ -13,10 +13,11 @@ import '../../models/community.dart';
 import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/community_subscription_provider.dart';
-import '../../providers/multi_feed_provider.dart';
+import '../../providers/viewer_authority_provider.dart';
 import '../../providers/vote_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
+import '../../services/post_change_broadcast.dart';
 import '../../services/viewer_state_hydrator.dart';
 import '../../utils/community_handle_utils.dart';
 import '../../utils/cursor_pagination_controller.dart';
@@ -45,6 +46,7 @@ class CommunityFeedScreen extends StatefulWidget {
   const CommunityFeedScreen({
     required this.identifier,
     this.community,
+    @visibleForTesting this.paginationClock,
     super.key,
   });
 
@@ -53,6 +55,10 @@ class CommunityFeedScreen extends StatefulWidget {
 
   /// Pre-fetched community data (optional, for faster initial display)
   final CommunityView? community;
+
+  /// The clock the pagination throttle reads; tests drive it so the
+  /// throttle follows pumped time. Null means [DateTime.now].
+  final DateTime Function()? paginationClock;
 
   @override
   State<CommunityFeedScreen> createState() => _CommunityFeedScreenState();
@@ -66,10 +72,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   // Shared app-wide API client (owned by main.dart) — do not dispose here
   late final CovesApiService _apiService;
 
-  // App-wide home feeds, which stay alive under this screen: a post deleted
-  // here must leave them too. Read once, since a delete can finish after
-  // this screen has closed.
-  late final MultiFeedProvider _multiFeedProvider;
+  late final PostChangeBroadcast _postChangeBroadcast;
   final ScrollController _scrollController = ScrollController();
 
   // Tab state
@@ -111,8 +114,11 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   void initState() {
     super.initState();
     _apiService = context.read<CovesApiService>();
-    _multiFeedProvider = context.read<MultiFeedProvider>();
+    _postChangeBroadcast = context.read<PostChangeBroadcast>();
     _community = widget.community;
+    // The feed keeps its cards across an account change, so each page is
+    // tied to the session that loaded it; admin tools follow that stamp.
+    final authority = context.read<ViewerAuthorityProvider>();
 
     _feedController = CursorPaginationController<FeedViewPost>(
       fetchPage: _fetchFeedPage,
@@ -127,11 +133,14 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
       // by this URI and asserts on duplicates.
       idOf: (post) => post.post.uri,
       onUnexpectedError: _reportUnexpected,
+      sessionKeyOf: () => authority.sessionKey,
     )..addListener(_onFeedChanged);
+    _postChangeBroadcast.addPostChangeListener(_onPostChanged);
 
     _paginationListener = PaginationScrollListener(
       controller: _scrollController,
       onLoadMore: _feedController.loadMore,
+      clock: widget.paginationClock ?? DateTime.now,
     )..attach();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -143,12 +152,35 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
 
   @override
   void dispose() {
+    _postChangeBroadcast.removePostChangeListener(_onPostChanged);
     _paginationListener.dispose();
     _feedController.dispose();
     _scrollController.dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onPostChanged(PostChange change) {
+    if (!mounted) {
+      return;
+    }
+    switch (change) {
+      case PostRemoved(:final uri):
+        _feedController.removeById(uri);
+      case PostReplaced(:final post):
+        final items = _feedController.items;
+        if (!items.any((feedPost) => feedPost.post.uri == post.uri)) {
+          return;
+        }
+        _feedController.replaceItems([
+          for (final feedPost in items)
+            if (feedPost.post.uri == post.uri)
+              feedPost.copyWith(post: post)
+            else
+              feedPost,
+        ]);
+    }
   }
 
   /// The controller owns the feed state; rebuild when it changes.
@@ -930,12 +962,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
         final postCard = PostCard(
           post: post,
           currentTime: _currentTime,
-          onDeleted: () {
-            _feedController.removeWhere(
-              (feedPost) => feedPost.post.uri == post.post.uri,
-            );
-            _multiFeedProvider.removePost(post.post.uri);
-          },
+          sessionStamp: _feedController.sessionStamp,
         );
 
         // Constrain width on tablets for better readability

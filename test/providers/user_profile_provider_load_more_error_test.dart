@@ -16,10 +16,12 @@ import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/models/user_profile.dart';
 import 'package:coves_flutter/providers/user_profile_provider.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 
+import '../test_helpers/fake_providers.dart' show unchangingSessionKey;
 import '../test_helpers/test_mocks.dart';
 
 const _profileDid = 'did:plc:profileowner';
@@ -63,6 +65,8 @@ void main() {
       apiService: mockApiService,
       commentService: mockCommentService,
       profileCache: profileCache,
+      postChangeBroadcast: PostChangeBroadcast(),
+      sessionKeyOf: unchangingSessionKey,
     );
 
     when(

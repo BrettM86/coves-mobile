@@ -69,6 +69,12 @@ class AppColors {
   /// Link text - teal accent
   static const textLink = teal;
 
+  /// Metadata text - timestamps, kind labels and other small secondary copy.
+  ///
+  /// Unlike [textMuted], this passes 4.5:1 contrast on [background], so it is
+  /// safe for text a reader needs.
+  static const textMeta = Color(0xFF8494A3);
+
   // ═══════════════════════════════════════════════════════════════════════════
   // UI ELEMENTS
   // ═══════════════════════════════════════════════════════════════════════════
@@ -89,6 +95,13 @@ class AppColors {
   /// Divider separating the tablet navigation rail from the page body.
   static const navDivider = Color(0xFF1A2433);
 
+  /// Surface of an inset box quoting other content, such as a moderation log
+  /// row's subject.
+  static const insetSurface = Color(0xFF131920);
+
+  /// Border of an [insetSurface] box.
+  static const insetBorder = Color(0xFF1E252E);
+
   /// Loading indicator
   static const loadingIndicator = Color(0xFF484F58);
 
@@ -107,6 +120,9 @@ class AppColors {
 
   /// Error red
   static const error = Color(0xFFEC7558);
+
+  /// NSFW label amber - marking or unmarking content as NSFW.
+  static const nsfwLabel = Color(0xFFE8B84A);
 
   /// The liked / upvoted vote state - the filled heart on a post or comment.
   ///

@@ -1,0 +1,79 @@
+# Section G — removing a comment in post detail offers Restore at once
+# (chunk 21 of the mobile moderation admin PRD): as the instance admin,
+# "Remove comment" turns the comment into the "[Removed by server admin]"
+# placeholder in place. Mobile then reads that comment back with
+# getComments(parentRkey), so the placeholder's menu offers "Restore
+# comment" without leaving or reopening detail. Restoring brings the comment
+# text back in place.
+#
+# Self-contained round-trip: the flow ends with the comment restored, so it
+# can be re-run.
+#
+# Target: mari's comment "b9 device check 2314 comment" on the older
+# aggregator post "Breaking news from an RSS feed"
+# (at://did:plc:3wg2tzv7we7znyi6utfbxq6f/social.coves.community.postv2/3mxgyu4nu4ez5)
+# in !pwxb3jp3s48. Do not point this at the newest Discover aggregator post
+# or at other people's comments; other sessions keep fixtures there.
+#
+# NOT in config.yaml's flowsOrder: the community is reachable only by adb
+# deep link (MainActivity has no VIEW intent filter), so fire it BEFORE
+# running this flow. Signed in as mari.local.coves.dev (instance admin):
+#   adb shell am force-stop social.coves.dev
+#   adb shell am start -n social.coves.dev/social.coves.MainActivity \
+#     -a android.intent.action.VIEW \
+#     -d 'social.coves:///community/did%3Aplc%3Aefzuhwf2xytqu4gzj3kldlcc'
+# The `standalone` tag is excluded in config.yaml.
+appId: social.coves.dev
+tags:
+  - standalone
+---
+- extendedWaitUntil:
+    visible: "Breaking news from an RSS feed"
+    timeout: 30000
+- tapOn: "Breaking news from an RSS feed"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*b9 device check 2314 comment[\\s\\S]*"
+    timeout: 15000
+
+# Check 1: Remove comment with a private note shows the placeholder in place
+- tapOn: "Comment options"
+- extendedWaitUntil:
+    visible: "Remove comment"
+    timeout: 10000
+- tapOn: "Remove comment"
+- extendedWaitUntil:
+    visible: "Moderator discretion"
+    timeout: 10000
+- tapOn: "Moderator discretion"
+- tapOn: "Private note.*"
+- inputText: "b9 chunk21"
+- hideKeyboard
+- tapOn: "Remove"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*\\[Removed by server admin\\][\\s\\S]*"
+    timeout: 20000
+- assertNotVisible: "[\\s\\S]*b9 device check 2314 comment[\\s\\S]*"
+- takeScreenshot: build/maestro/g6_placeholder
+
+# Check 2: without leaving detail, the placeholder's menu offers Restore
+- extendedWaitUntil:
+    visible: "Comment options"
+    timeout: 15000
+- tapOn: "Comment options"
+- extendedWaitUntil:
+    visible: "Restore comment"
+    timeout: 10000
+- takeScreenshot: build/maestro/g6_restore_menu
+
+# Check 3: Restore comment brings the comment text back in place
+- tapOn: "Restore comment"
+- extendedWaitUntil:
+    visible: "Moderator discretion"
+    timeout: 10000
+- tapOn: "Moderator discretion"
+- tapOn: "Restore"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*b9 device check 2314 comment[\\s\\S]*"
+    timeout: 20000
+- assertNotVisible: "[\\s\\S]*\\[Removed by server admin\\][\\s\\S]*"
+- takeScreenshot: build/maestro/g6_restored

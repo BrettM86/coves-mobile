@@ -1,0 +1,137 @@
+# Section D — public moderation log (guest): the discovery screen's
+# "Moderation log" card opens the modlog screen, which shows either action
+# rows ("@handle removed a post", "... restored a comment") or the empty
+# message.
+# PRECONDITION: signed out (run after a2_signout_landing). Reaches the
+# discovery screen via the landing page's "Explore communities" link, since
+# the admin test account (mari) sees the admin panel instead when signed in.
+# Then exercises the filter bar: the action dropdown (All actions /
+# Removals) and the Community button, which opens the picker titled "Filter
+# by community"; the picked community shows as its !name@origin label, read
+# as "Community filter", until cleared. Picks
+# "News" (!news@coves.social), the community the local log's actions carry.
+# Leaves the app signed out.
+appId: social.coves.dev
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Sign in"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: "Explore communities"
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- tapOn: "Communities"
+# Let the semantics tree settle after the tab switch (see a1 flow note)
+- waitForAnimationToEnd:
+    timeout: 5000
+- extendedWaitUntil:
+    visible: "Popular[\\s\\S]*"
+    timeout: 15000
+# The card sits below the browse sections; its node also carries the
+# card's subtitle
+- scrollUntilVisible:
+    element: "Moderation log[\\s\\S]*"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Moderation log[\\s\\S]*"
+# Screen title, then either action rows or the empty message
+- extendedWaitUntil:
+    visible: "Moderation log"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "[\\s\\S]*(removed|restored|took a moderation action|No moderation actions yet\\.)[\\s\\S]*"
+    timeout: 15000
+# With rows loaded, each row names its actor: "@handle" once the profile
+# lookup resolves, or "Server admin" when the action carries no actor
+- runFlow:
+    when:
+      notVisible: "No moderation actions yet\\."
+    commands:
+      - extendedWaitUntil:
+          visible: "[\\s\\S]*(@[A-Za-z0-9.-]+|Server admin)[\\s\\S]*"
+          timeout: 15000
+- takeScreenshot: build/maestro/d6_modlog
+# A post subject (social.coves.community.post or .postv2) renders as a boxed
+# link to the post screen: its preview text, community, then "Post". The local log's subjects include postv2 posts, so
+# with rows loaded the link is required. The post screen opens on the post,
+# or on the "[Removed by server admin]" tombstone while it stays removed;
+# never on "Post Not Found".
+- runFlow:
+    when:
+      notVisible: "No moderation actions yet\\."
+    commands:
+      # The box is its own link node (lines joined by newlines) whose last
+      # line is "Post"; a row's headline node ends with its scope instead.
+      - scrollUntilVisible:
+          element: "([\\s\\S]*\\n)?Post"
+          direction: DOWN
+          timeout: 20000
+      - tapOn:
+          text: "([\\s\\S]*\\n)?Post"
+          index: 0
+      - extendedWaitUntil:
+          notVisible: "Moderation log"
+          timeout: 15000
+      - extendedWaitUntil:
+          visible: "[\\s\\S]*(View [0-9]+ comments?|\\[Removed by server admin\\])[\\s\\S]*"
+          timeout: 15000
+      - assertNotVisible: "Post Not Found"
+      - takeScreenshot: build/maestro/d6_modlog_post
+      - back
+      - extendedWaitUntil:
+          visible: "Moderation log"
+          timeout: 15000
+- back
+- extendedWaitUntil:
+    visible: "Moderation log[\\s\\S]*"
+    timeout: 15000
+# Back on the discovery screen; reopen the log for the filter bar
+- tapOn: "Moderation log[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "All actions"
+    timeout: 15000
+# Filter bar: the dropdown's Removals shows matching rows or the filtered
+# empty message
+- tapOn: "All actions"
+- tapOn: "Removals"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*(removed|No moderation actions match these filters\\.)[\\s\\S]*"
+    timeout: 15000
+- assertNotVisible: "[\\s\\S]*restored[\\s\\S]*"
+- takeScreenshot: build/maestro/d6_modlog_removals
+# The button now reads "Removals"; reopen the menu and choose All actions
+- tapOn: "Removals"
+- tapOn: "All actions"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*(removed|restored|took a moderation action|No moderation actions yet\\.)[\\s\\S]*"
+    timeout: 15000
+# The Community button opens the picker under its filter title
+- tapOn: "Community"
+- extendedWaitUntil:
+    visible: "Filter by community"
+    timeout: 15000
+# A row's node leads with its avatar's initial when it has no avatar image
+- extendedWaitUntil:
+    visible: "(N\\n)?News[\\s\\S]*"
+    timeout: 15000
+- tapOn: "(N\\n)?News[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Moderation log"
+    timeout: 15000
+# The active filter reads as "Community filter" plus its label; rows from
+# the community carry the same label inside their subject boxes
+- extendedWaitUntil:
+    visible: "Community filter\\n!news@coves.social"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "[\\s\\S]*(removed|restored|took a moderation action|No moderation actions match these filters\\.)[\\s\\S]*"
+    timeout: 15000
+- takeScreenshot: build/maestro/d6_modlog_community
+- tapOn: "Clear community filter"
+- extendedWaitUntil:
+    visible: "Community"
+    timeout: 15000
+- assertNotVisible: "Community filter[\\s\\S]*"

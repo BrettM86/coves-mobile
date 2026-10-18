@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/constants/embed_types.dart';
+import 'package:coves_flutter/models/moderation.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/widgets/bluesky_post_card.dart';
 import 'package:coves_flutter/widgets/external_link_bar.dart';
@@ -108,6 +109,7 @@ void main() {
               valueListenable: post,
               builder: (context, value, _) => PostCard(
                 post: value,
+                sessionStamp: null,
                 showHeader: config.showHeader,
                 disableNavigation: config.disableNavigation,
                 showActions: config.showActions,
@@ -154,6 +156,7 @@ void main() {
     String content = _body,
     String? title = _title,
     bool sensitive = true,
+    ModerationView? moderation,
   }) {
     return FeedViewPost(
       post: PostView(
@@ -174,6 +177,7 @@ void main() {
         ),
         stats: PostStats(upvotes: 0, downvotes: 0, score: 0, commentCount: 0),
         embed: embed,
+        moderation: moderation,
       ),
     );
   }
@@ -359,6 +363,40 @@ void main() {
 
       expect(find.byKey(_bannerKey), findsOneWidget);
       expect(find.byType(BlueskyPostCard), findsNothing);
+    });
+
+    testWidgets('a text-only post labelled nsfw by a moderator, not its '
+        'author, is concealed', (tester) async {
+      await pumpCard(
+        tester,
+        makePost(
+          sensitive: false,
+          moderation: const ModerationView(
+            state: ModerationState.clear,
+            contentLabels: [
+              ContentLabelView(
+                value: 'nsfw',
+                sources: [
+                  ModerationSource(
+                    authorityDid: 'did:web:coves.social',
+                    scope: ModerationScope(kind: ModerationScopeKind.instance),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+      expect(
+        find.descendant(
+          of: find.byKey(_bannerKey),
+          matching: find.text('Show'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text(_body), findsNothing);
+      expect(find.text(_title), findsOneWidget);
     });
 
     testWidgets('a post with no nsfw label renders as it always has', (

@@ -1,28 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
 import '../models/post.dart';
 import '../providers/auth_provider.dart';
-import '../providers/block_provider.dart';
-import '../providers/community_subscription_provider.dart';
 import '../providers/vote_provider.dart';
-import '../services/api_exceptions.dart';
-import '../services/coves_api_service.dart';
-import '../utils/copy_link.dart';
 import '../utils/display_utils.dart';
 import '../utils/error_messages.dart';
+import '../utils/post_detail_route.dart';
 import '../utils/post_web_link.dart';
 import '../utils/web_link_builder.dart';
 import 'animated_vote_count.dart';
-import 'block_action_helpers.dart';
 import 'icons/animated_heart_icon.dart';
 import 'icons/downvote_icon.dart';
 import 'icons/reply_icon.dart';
-import 'report_dialog.dart';
+import 'post_options_menu.dart';
 import 'share_button.dart';
 import 'sign_in_dialog.dart';
 
@@ -33,306 +27,30 @@ import 'sign_in_dialog.dart';
 class PostCardActions extends StatefulWidget {
   const PostCardActions({
     required this.post,
+    required this.sessionStamp,
     this.showCommentButton = true,
-    this.onDeleted,
     super.key,
   });
 
   final FeedViewPost post;
   final bool showCommentButton;
-  final VoidCallback? onDeleted;
+
+  /// The session key [post] was loaded under, from the surface that loaded
+  /// it; null for a surface that offers no admin tools, which the gate
+  /// denies.
+  final Object? sessionStamp;
 
   @override
   State<PostCardActions> createState() => _PostCardActionsState();
 }
 
 class _PostCardActionsState extends State<PostCardActions> {
-  bool _isDeleting = false;
-
   FeedViewPost get post => widget.post;
   bool get showCommentButton => widget.showCommentButton;
-  VoidCallback? get onDeleted => widget.onDeleted;
 
-  /// The post's link on the web client, shared and copied from here. Null
+  /// The post's link on the web client, shared from here. Null
   /// when the post's at-URI yields no canonical URL.
   String? get _postWebUrl => post.post.webUrl(WebLinkBuilder.current());
-
-  Future<void> _handleMenuAction(BuildContext context, String action) async {
-    final communityDid = post.post.community.did;
-    final communityName = post.post.community.name;
-
-    if (action == 'copyLink') {
-      await copyLinkToClipboard(context, _postWebUrl);
-    } else if (action == 'subscribe') {
-      // Check authentication - subscribe requires sign-in
-      final authProvider = context.read<AuthProvider>();
-      if (!authProvider.isAuthenticated) {
-        if (!context.mounted) {
-          return;
-        }
-        final shouldSignIn = await SignInDialog.show(
-          context,
-          message: 'You need to sign in to subscribe to communities.',
-        );
-        if (shouldSignIn != true && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Sign in required to subscribe'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-        return;
-      }
-
-      // Toggle subscription
-      try {
-        await HapticFeedback.lightImpact();
-      } on PlatformException {
-        // Haptics not supported
-      }
-
-      if (!context.mounted) {
-        return;
-      }
-      final messenger = ScaffoldMessenger.of(context);
-      final subscriptionProvider = context
-          .read<CommunitySubscriptionProvider>();
-
-      try {
-        final nowSubscribed = await subscriptionProvider.toggleSubscription(
-          communityDid: communityDid,
-        );
-
-        if (context.mounted) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                nowSubscribed
-                    ? 'Subscribed to !$communityName'
-                    : 'Unsubscribed from !$communityName',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } on Exception catch (e) {
-        if (kDebugMode) {
-          debugPrint('Failed to toggle subscription: $e');
-        }
-        if (context.mounted) {
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Could not update subscription. Please try again.'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      }
-    } else if (action == 'blockCommunity') {
-      await handleBlockCommunity(
-        context: context,
-        communityDid: communityDid,
-        communityName: communityName,
-      );
-    } else if (action == 'blockUser') {
-      await handleBlockUser(
-        context: context,
-        authorDid: post.post.author.did,
-        authorHandle: post.post.author.handle,
-      );
-    } else if (action == 'report') {
-      // Check authentication - report requires sign-in
-      final authProvider = context.read<AuthProvider>();
-      if (!authProvider.isAuthenticated) {
-        if (!context.mounted) {
-          return;
-        }
-        final shouldSignIn = await SignInDialog.show(
-          context,
-          message: 'You need to sign in to report content.',
-        );
-        if (shouldSignIn != true && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Sign in required to report content'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-        return;
-      }
-
-      if (!context.mounted) {
-        return;
-      }
-      final messenger = ScaffoldMessenger.of(context);
-
-      // Show report dialog
-      final reported = await ReportDialog.show(
-        context,
-        targetUri: post.post.uri,
-        contentType: 'post',
-      );
-
-      if ((reported ?? false) && context.mounted) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Report submitted. Thank you for helping keep our '
-              'community safe.',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } else if (action == 'delete') {
-      // Prevent multiple taps - set flag immediately before dialog
-      if (_isDeleting) {
-        return;
-      }
-      setState(() => _isDeleting = true);
-
-      // Check authentication
-      final authProvider = context.read<AuthProvider>();
-      if (!authProvider.isAuthenticated) {
-        setState(() => _isDeleting = false);
-        return;
-      }
-
-      // Show confirmation dialog
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Delete Post'),
-          content: const Text(
-            'Are you sure you want to delete this post? This cannot be undone.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Delete'),
-            ),
-          ],
-        ),
-      );
-
-      if (confirmed != true || !context.mounted) {
-        if (mounted) {
-          setState(() => _isDeleting = false);
-        }
-        return;
-      }
-
-      try {
-        await HapticFeedback.lightImpact();
-      } on PlatformException catch (e) {
-        if (kDebugMode) {
-          debugPrint('Haptics not supported: $e');
-        }
-      }
-
-      if (!context.mounted) {
-        return;
-      }
-      final messenger = ScaffoldMessenger.of(context);
-
-      // Shared app-wide API client (owned by main.dart) — do not dispose
-      final apiService = context.read<CovesApiService>();
-
-      // Captured before the request: the card can leave the tree (scrolled
-      // off-screen) while it is in flight, and the owner must still hear
-      // about a successful delete.
-      final notifyDeleted = onDeleted;
-
-      var deleted = false;
-      try {
-        await apiService.deletePost(uri: post.post.uri);
-        deleted = true;
-      } on NetworkException catch (e) {
-        if (kDebugMode) {
-          debugPrint('Network error deleting post: $e');
-        }
-        if (context.mounted) {
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Network error. Please check your connection and try again.',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } on NotFoundException catch (e) {
-        if (kDebugMode) {
-          debugPrint('Post not found: $e');
-        }
-        if (context.mounted) {
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Post not found. It may have already been deleted.',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } on ApiException catch (e) {
-        if (kDebugMode) {
-          debugPrint('Failed to delete post: $e');
-        }
-        if (context.mounted) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                e.statusCode == 403
-                    ? 'You can only delete your own posts'
-                    : 'Could not delete post. Please try again.',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } on Exception catch (e) {
-        if (kDebugMode) {
-          debugPrint('Failed to delete post: $e');
-        }
-        if (context.mounted) {
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Could not delete post. Please try again.'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isDeleting = false);
-        }
-      }
-
-      // Outside the try so an error thrown by the callback is not reported
-      // as a failed delete.
-      if (deleted) {
-        if (context.mounted) {
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Post deleted'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-
-        // Notify parent to handle post removal from feed
-        notifyDeleted?.call();
-      }
-    }
-  }
 
   Future<void> _handleVote(
     BuildContext context,
@@ -392,170 +110,24 @@ class _PostCardActionsState extends State<PostCardActions> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Three dots menu button
-            Consumer3<
-              CommunitySubscriptionProvider,
-              AuthProvider,
-              BlockProvider
-            >(
-              builder:
-                  (
-                    context,
-                    subscriptionProvider,
-                    authProvider,
-                    blockProvider,
-                    child,
-                  ) {
-                    final communityDid = post.post.community.did;
-                    final communityName = post.post.community.name;
-                    final isSubscribed = subscriptionProvider.isSubscribed(
-                      communityDid,
-                    );
-                    final isPending = subscriptionProvider.isPending(
-                      communityDid,
-                    );
-                    final isPostAuthor =
-                        authProvider.did == post.post.author.did;
-                    final authorDid = post.post.author.did;
-                    final authorHandle = post.post.author.handle;
-                    final isUserBlocked = blockProvider.isUserBlocked(
-                      authorDid,
-                    );
-                    final isUserBlockPending = blockProvider.isUserBlockPending(
-                      authorDid,
-                    );
-                    final isCommunityBlocked = blockProvider.isCommunityBlocked(
-                      communityDid,
-                    );
-                    final isCommunityBlockPending = blockProvider
-                        .isCommunityBlockPending(communityDid);
-                    // TODO: Set to true when the user is the community owner.
-                    // CommunityRef currently lacks an owner/creator DID field,
-                    // so we cannot determine ownership from post data alone.
-                    const isCommunityOwner = false;
-
-                    return MenuAnchor(
-                      style: MenuStyle(
-                        backgroundColor: const WidgetStatePropertyAll(
-                          AppColors.backgroundSecondary,
-                        ),
-                        shape: WidgetStatePropertyAll(
-                          RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                      menuChildren: [
-                        // Copy link needs no account: a link is public.
-                        MenuItemButton(
-                          onPressed: () =>
-                              _handleMenuAction(context, 'copyLink'),
-                          leadingIcon: const Icon(Icons.link, size: 20),
-                          child: const Text('Copy link'),
-                        ),
-                        MenuItemButton(
-                          onPressed: isPending
-                              ? null
-                              : () => _handleMenuAction(context, 'subscribe'),
-                          leadingIcon: isPending
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Icon(
-                                  isSubscribed
-                                      ? Icons.remove_circle_outline
-                                      : Icons.add_circle_outline,
-                                  size: 20,
-                                ),
-                          trailingIcon: isSubscribed && !isPending
-                              ? const Icon(
-                                  Icons.check,
-                                  color: AppColors.primary,
-                                  size: 20,
-                                )
-                              : null,
-                          child: Text(
-                            isPending
-                                ? (isSubscribed
-                                      ? 'Unsubscribing...'
-                                      : 'Subscribing...')
-                                : (isSubscribed
-                                      ? 'Unsubscribe from !$communityName'
-                                      : 'Subscribe to !$communityName'),
-                          ),
-                        ),
-                        // Block community option (hidden for community owners)
-                        if (!isCommunityOwner)
-                          buildBlockMenuItem(
-                            isBlocked: isCommunityBlocked,
-                            isPending: isCommunityBlockPending,
-                            label: isCommunityBlocked
-                                ? 'Unblock !$communityName'
-                                : 'Block !$communityName',
-                            onPressed: () =>
-                                _handleMenuAction(context, 'blockCommunity'),
-                          ),
-                        // Block user option (except own posts)
-                        if (!isPostAuthor)
-                          buildBlockMenuItem(
-                            isBlocked: isUserBlocked,
-                            isPending: isUserBlockPending,
-                            label: isUserBlocked
-                                ? 'Unblock @$authorHandle'
-                                : 'Block @$authorHandle',
-                            onPressed: () =>
-                                _handleMenuAction(context, 'blockUser'),
-                          ),
-                        // Report option (for all authenticated users,
-                        // except own posts)
-                        if (!isPostAuthor)
-                          MenuItemButton(
-                            onPressed: () =>
-                                _handleMenuAction(context, 'report'),
-                            leadingIcon: const Icon(
-                              Icons.flag_outlined,
-                              size: 20,
-                            ),
-                            child: const Text('Report post'),
-                          ),
-                        // Delete option (only for post author)
-                        if (isPostAuthor)
-                          MenuItemButton(
-                            onPressed: () =>
-                                _handleMenuAction(context, 'delete'),
-                            leadingIcon: const Icon(
-                              Icons.delete_outline,
-                              size: 20,
-                              color: Colors.red,
-                            ),
-                            child: const Text(
-                              'Delete post',
-                              style: TextStyle(color: Colors.red),
-                            ),
-                          ),
-                      ],
-                      builder: (context, controller, child) {
-                        return IconButton(
-                          icon: Icon(
-                            Icons.more_horiz,
-                            size: 20,
-                            color: AppColors.textPrimary.withValues(alpha: 0.6),
-                          ),
-                          tooltip: 'Post options',
-                          onPressed: () {
-                            if (controller.isOpen) {
-                              controller.close();
-                            } else {
-                              controller.open();
-                            }
-                          },
-                        );
-                      },
-                    );
-                  },
+            PostOptionsMenu(
+              post: post,
+              sessionStamp: widget.sessionStamp,
+              anchorBuilder: (context, controller) => IconButton(
+                icon: Icon(
+                  Icons.more_horiz,
+                  size: 20,
+                  color: AppColors.textPrimary.withValues(alpha: 0.6),
+                ),
+                tooltip: 'Post options',
+                onPressed: () {
+                  if (controller.isOpen) {
+                    controller.close();
+                  } else {
+                    controller.open();
+                  }
+                },
+              ),
             ),
 
             // Share button
@@ -579,8 +151,11 @@ class _PostCardActionsState extends State<PostCardActions> {
                     child: InkWell(
                       onTap: () {
                         // Navigate to post detail screen (ALL post types)
-                        final encodedUri = Uri.encodeComponent(post.post.uri);
-                        context.push('/post/$encodedUri', extra: post);
+                        pushPostDetail(
+                          context,
+                          post: post,
+                          sessionStamp: widget.sessionStamp,
+                        );
                       },
                       child: SizedBox(
                         width: compactActions ? 48 : null,

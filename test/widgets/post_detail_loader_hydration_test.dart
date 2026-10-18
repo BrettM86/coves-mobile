@@ -21,11 +21,14 @@ import 'package:coves_flutter/screens/home/post_detail_screen.dart';
 import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:coves_flutter/widgets/loading_error_states.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+
+import '../test_helpers/fake_providers.dart' show viewerAuthorityRegistration;
 
 class _FakeAuthProvider extends AuthProvider {
   _FakeAuthProvider({required bool authenticated})
@@ -83,6 +86,7 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
           ChangeNotifierProvider<AuthProvider>.value(value: auth),
           ChangeNotifierProvider<VoteProvider>.value(value: votes),
           Provider<CommentsProviderCache>.value(
@@ -93,6 +97,7 @@ void main() {
               apiService: apiService,
             ),
           ),
+          viewerAuthorityRegistration(auth: auth, apiService: apiService),
         ],
         child: MaterialApp(
           home: PostDetailLoader(
@@ -154,9 +159,16 @@ void main() {
     }) async {
       final auth = _FakeAuthProvider(authenticated: authenticated);
 
+      final apiService = CovesApiService(tokenGetter: () async => null);
+      addTearDown(apiService.dispose);
+
       await tester.pumpWidget(
-        ChangeNotifierProvider<AuthProvider>.value(
-          value: auth,
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AuthProvider>.value(value: auth),
+            // Registered app-wide; the loader stamps each request with it.
+            viewerAuthorityRegistration(auth: auth, apiService: apiService),
+          ],
           child: MaterialApp(
             home: PostDetailLoader(
               postUri: testUri,

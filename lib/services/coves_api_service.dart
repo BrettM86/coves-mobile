@@ -3,8 +3,11 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../constants/moderation_constants.dart';
 import '../models/comment.dart';
 import '../models/community.dart';
+import '../models/moderation_action.dart';
+import '../models/moderation_subject_state.dart';
 import '../models/post.dart';
 import '../models/post_get_result.dart';
 import '../models/user_profile.dart';
@@ -13,6 +16,60 @@ import 'auth_interceptor.dart';
 import 'coves_http.dart';
 import 'log_redaction.dart';
 import 'retry_interceptor.dart';
+
+/// Preserve Dio's debug logging for public routes while withholding private
+/// moderation headers, query values and bodies at the interceptor boundary.
+class _ModerationSafeLogInterceptor extends Interceptor {
+  _ModerationSafeLogInterceptor()
+    : _publicLogger = LogInterceptor(
+        requestBody: true,
+        responseBody: true,
+        logPrint: (obj) => debugPrint(redactBearerTokens(obj.toString())),
+      );
+
+  final LogInterceptor _publicLogger;
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    if (isPrivateModerationPath(options.path)) {
+      debugPrint('${options.method} ${options.path.split('?').first}');
+      handler.next(options);
+    } else {
+      _publicLogger.onRequest(options, handler);
+    }
+  }
+
+  @override
+  void onResponse(
+    Response<dynamic> response,
+    ResponseInterceptorHandler handler,
+  ) {
+    final options = response.requestOptions;
+    if (isPrivateModerationPath(options.path)) {
+      debugPrint(
+        '${options.method} ${options.path.split('?').first} '
+        '${response.statusCode}',
+      );
+      handler.next(response);
+    } else {
+      _publicLogger.onResponse(response, handler);
+    }
+  }
+
+  @override
+  void onError(DioException error, ErrorInterceptorHandler handler) {
+    final options = error.requestOptions;
+    if (isPrivateModerationPath(options.path)) {
+      debugPrint(
+        '${options.method} ${options.path.split('?').first} '
+        '${error.response?.statusCode ?? 'no status'}',
+      );
+      handler.next(error);
+    } else {
+      _publicLogger.onError(error, handler);
+    }
+  }
+}
 
 /// Coves API Service
 ///
@@ -57,17 +114,10 @@ class CovesApiService {
       ),
     );
 
-    // Add logging interceptor AFTER auth (so it can see the
-    // Authorization header). Tokens are redacted before printing —
-    // credentials must never reach the logs, even in debug builds.
+    // Log private moderation requests without headers, queries or bodies.
+    // All other routes keep the existing redacted Dio logging.
     if (kDebugMode) {
-      _dio.interceptors.add(
-        LogInterceptor(
-          requestBody: true,
-          responseBody: true,
-          logPrint: (obj) => debugPrint(redactBearerTokens(obj.toString())),
-        ),
-      );
+      _dio.interceptors.add(_ModerationSafeLogInterceptor());
     }
   }
 
@@ -316,8 +366,10 @@ class CovesApiService {
   /// Batch-fetches post views for feed hydration and permalink/cold-load
   /// rendering. The social.coves.community.post.get lexicon guarantees the
   /// server returns posts in the same order as the input URIs.
-  /// Posts that are deleted or never indexed come back as [PostGetNotFound]
-  /// and blocked posts as [PostGetBlocked] instead of failing the whole
+  /// Posts that are deleted or never indexed come back as [PostGetNotFound],
+  /// blocked posts as [PostGetBlocked], posts removed by instance-scoped or
+  /// inherited moderation as [PostGetModerated], and posts removed by their
+  /// community as [PostGetCommunityRemoved], instead of failing the whole
   /// batch. (Malformed URIs are rejected by the server with a 400
   /// InvalidRequest error, surfaced as an [ApiException].) Entries that fail
   /// to parse are likewise degraded to [PostGetNotFound].
@@ -388,6 +440,224 @@ class CovesApiService {
       }
     }
     return PostGetNotFound(uri);
+  }
+
+  Future<ModerationActionPage> listModerationActions({
+    String? cursor,
+    int limit = 50,
+    String? action,
+    String? community,
+    String? subject,
+  }) {
+    return _request(
+      operation: 'fetch moderation actions',
+      send: () => _dio.get(
+        '/xrpc/social.coves.moderation.listActions',
+        queryParameters: {
+          'limit': limit.clamp(1, 100),
+          'cursor': ?cursor,
+          'action': ?action,
+          'community': ?community,
+          'subject': ?subject,
+        },
+      ),
+      parse: (data) => ModerationActionPage.fromJson(_asJsonMap(data)),
+    );
+  }
+
+  Future<AdminModerationActionPage> listAdminModerationActions({
+    String? cursor,
+    int limit = 50,
+    String? action,
+    String? community,
+    String? subject,
+  }) {
+    return _request(
+      operation: 'fetch admin moderation actions',
+      send: () => _dio.get(
+        '/xrpc/social.coves.moderation.listAdminActions',
+        queryParameters: {
+          'limit': limit.clamp(1, 100),
+          'cursor': ?cursor,
+          'action': ?action,
+          'community': ?community,
+          'subject': ?subject,
+        },
+      ),
+      parse: (data) => AdminModerationActionPage.fromJson(_asJsonMap(data)),
+    );
+  }
+
+  Future<ModerationSubjectState> getModerationSubjectState(String subjectUri) {
+    return _request(
+      operation: 'fetch moderation subject state',
+      send: () => _dio.get(
+        '/xrpc/social.coves.moderation.getSubjectState',
+        queryParameters: {'subject': subjectUri},
+      ),
+      parse: (data) => ModerationSubjectState.fromJson(
+        _asJsonMap(_asJsonMap(data)['state']),
+      ),
+    );
+  }
+
+  /// Removes [subject] at [expectedVersion] for [reason].
+  ///
+  /// Throws [ArgumentError] without sending a request when [reason] is
+  /// [ModerationReason.unknown]; every other failure is an [ApiException].
+  Future<ModerationMutationResult> removeContent({
+    required StrongRef subject,
+    required String expectedVersion,
+    required String idempotencyKey,
+    required ModerationReason reason,
+    String? privateNote,
+  }) async {
+    final reasonToken = _reasonWireToken(reason);
+    return _request(
+      operation: 'remove content',
+      send: () => _dio.post(
+        '/xrpc/social.coves.moderation.removeContent',
+        data: {
+          'subject': _strongRefJson(subject),
+          'expectedVersion': expectedVersion,
+          'idempotencyKey': idempotencyKey,
+          'reason': reasonToken,
+          'privateNote': ?privateNote,
+        },
+      ),
+      parse: (data) => ModerationMutationResult.fromJson(_asJsonMap(data)),
+    );
+  }
+
+  /// Applies the NSFW content label to [subject] at [expectedVersion].
+  ///
+  /// [reason] and [privateNote] are optional and omitted from the body when
+  /// null. Throws [ArgumentError] without sending a request when [reason] is
+  /// [ModerationReason.unknown]; every other failure is an [ApiException].
+  Future<ModerationMutationResult> labelContent({
+    required StrongRef subject,
+    required String expectedVersion,
+    required String idempotencyKey,
+    ModerationReason? reason,
+    String? privateNote,
+  }) async {
+    final reasonToken = reason == null ? null : _reasonWireToken(reason);
+    return _request(
+      operation: 'label content',
+      send: () => _dio.post(
+        '/xrpc/social.coves.moderation.labelContent',
+        data: {
+          'subject': _strongRefJson(subject),
+          'labelValue': nsfwLabelValue,
+          'expectedVersion': expectedVersion,
+          'idempotencyKey': idempotencyKey,
+          'reason': ?reasonToken,
+          'privateNote': ?privateNote,
+        },
+      ),
+      parse: (data) => ModerationMutationResult.fromJson(_asJsonMap(data)),
+    );
+  }
+
+  /// Reverses the removal made by moderation action [actionId] at
+  /// [expectedVersion] for [reason].
+  ///
+  /// [reviewedSubject] and [privateNote] are optional and omitted from the
+  /// body when null. Throws [ArgumentError] without sending a request when
+  /// [reason] is [ModerationReason.unknown]; every other failure is an
+  /// [ApiException].
+  Future<ModerationMutationResult> restoreContent({
+    required String actionId,
+    required String expectedVersion,
+    required String idempotencyKey,
+    required ModerationReason reason,
+    StrongRef? reviewedSubject,
+    String? privateNote,
+  }) async {
+    final reasonToken = _reasonWireToken(reason);
+    return _request(
+      operation: 'restore content',
+      send: () => _dio.post(
+        '/xrpc/social.coves.moderation.restoreContent',
+        data: {
+          'actionId': actionId,
+          'expectedVersion': expectedVersion,
+          'idempotencyKey': idempotencyKey,
+          'reason': reasonToken,
+          'reviewedSubject': ?(reviewedSubject == null
+              ? null
+              : _strongRefJson(reviewedSubject)),
+          'privateNote': ?privateNote,
+        },
+      ),
+      parse: (data) => ModerationMutationResult.fromJson(_asJsonMap(data)),
+    );
+  }
+
+  /// Retracts the label applied by moderation action [actionId] at
+  /// [expectedVersion].
+  ///
+  /// [reason], [reviewedSubject] and [privateNote] are optional and omitted
+  /// from the body when null. Throws [ArgumentError] without sending a request
+  /// when [reason] is [ModerationReason.unknown]; every other failure is an
+  /// [ApiException].
+  Future<ModerationMutationResult> retractContentLabel({
+    required String actionId,
+    required String expectedVersion,
+    required String idempotencyKey,
+    ModerationReason? reason,
+    StrongRef? reviewedSubject,
+    String? privateNote,
+  }) async {
+    final reasonToken = reason == null ? null : _reasonWireToken(reason);
+    return _request(
+      operation: 'retract content label',
+      send: () => _dio.post(
+        '/xrpc/social.coves.moderation.retractContentLabel',
+        data: {
+          'actionId': actionId,
+          'expectedVersion': expectedVersion,
+          'idempotencyKey': idempotencyKey,
+          'reason': ?reasonToken,
+          'reviewedSubject': ?(reviewedSubject == null
+              ? null
+              : _strongRefJson(reviewedSubject)),
+          'privateNote': ?privateNote,
+        },
+      ),
+      parse: (data) => ModerationMutationResult.fromJson(_asJsonMap(data)),
+    );
+  }
+
+  static Map<String, String> _strongRefJson(StrongRef ref) => {
+    'uri': ref.uri,
+    'cid': ref.cid,
+  };
+
+  static String _reasonWireToken(ModerationReason reason) {
+    final reasonToken = reason.wireToken;
+    if (reasonToken == null) {
+      throw ArgumentError.value(
+        reason,
+        'reason',
+        'must be a known moderation reason',
+      );
+    }
+    return reasonToken;
+  }
+
+  Future<bool> getViewerAuthority() {
+    return _request(
+      operation: 'fetch viewer authority',
+      send: () => _dio.get('/xrpc/social.coves.actor.getViewerAuthority'),
+      parse: (data) {
+        final authority = _asJsonMap(data)['instanceAdmin'];
+        if (authority is! bool) {
+          throw ApiException('Invalid viewer authority response');
+        }
+        return authority;
+      },
+    );
   }
 
   /// List communities with optional filtering

@@ -31,7 +31,11 @@ void main() {
         GoRoute(
           path: '/',
           builder: (context, state) => Scaffold(
-            body: PostCard(post: post, showAuthorFooter: showAuthorFooter),
+            body: PostCard(
+              post: post,
+              sessionStamp: null,
+              showAuthorFooter: showAuthorFooter,
+            ),
           ),
         ),
         GoRoute(

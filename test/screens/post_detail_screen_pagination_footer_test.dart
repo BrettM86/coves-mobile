@@ -7,13 +7,19 @@ import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/comments_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
+import 'package:coves_flutter/screens/compose/reply_screen.dart';
 import 'package:coves_flutter/screens/home/post_detail_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
+import 'package:coves_flutter/widgets/comment_card.dart';
 import 'package:coves_flutter/widgets/comments_header.dart';
 import 'package:coves_flutter/widgets/loading_error_states.dart';
+import 'package:coves_flutter/widgets/post_action_bar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
@@ -104,37 +110,58 @@ void main() {
     });
   });
 
-  Widget app() => MultiProvider(
-    providers: [
-      ChangeNotifierProvider<AuthProvider>.value(value: auth),
-      ChangeNotifierProvider<VoteProvider>.value(value: votes),
-      ChangeNotifierProvider<BlockProvider>.value(value: blocks),
-      Provider<CommentsProviderCache>.value(value: cache),
-    ],
-    child: MaterialApp(
-      theme: AppTheme.dark,
-      home: PostDetailScreen(
-        post: FeedViewPost(
-          post: PostView(
-            uri: postUri,
-            cid: postCid,
-            rkey: 'post',
-            author: AuthorView(did: 'did:plc:author', handle: 'author.test'),
-            community: CommunityRef(did: 'did:plc:community', name: 'test'),
-            createdAt: DateTime(2025),
-            indexedAt: DateTime(2025),
-            record: const PostRecord(content: 'Pagination footer post'),
-            stats: PostStats(
-              upvotes: 0,
-              downvotes: 0,
-              score: 0,
-              commentCount: 83,
-            ),
-          ),
-        ),
+  /// [isOptimistic] opens the screen as create_post_screen does for a post
+  /// it just created.
+  Widget detailScreen({bool isOptimistic = false}) => PostDetailScreen(
+    sessionStamp: null,
+    isOptimistic: isOptimistic,
+    post: FeedViewPost(
+      post: PostView(
+        uri: postUri,
+        cid: postCid,
+        rkey: 'post',
+        author: AuthorView(did: 'did:plc:author', handle: 'author.test'),
+        community: CommunityRef(did: 'did:plc:community', name: 'test'),
+        createdAt: DateTime(2025),
+        indexedAt: DateTime(2025),
+        record: const PostRecord(content: 'Pagination footer post'),
+        stats: PostStats(upvotes: 0, downvotes: 0, score: 0, commentCount: 83),
       ),
     ),
   );
+
+  /// With [pushedFromHome] the screen sits on a route pushed over a home
+  /// route (button 'Open post'), so popping it has somewhere to go.
+  Widget app({bool pushedFromHome = false, bool isOptimistic = false}) =>
+      MultiProvider(
+        providers: [
+          Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
+          ChangeNotifierProvider<AuthProvider>.value(value: auth),
+          ChangeNotifierProvider<VoteProvider>.value(value: votes),
+          ChangeNotifierProvider<BlockProvider>.value(value: blocks),
+          Provider<CommentsProviderCache>.value(value: cache),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          home: pushedFromHome
+              ? Builder(
+                  builder: (context) => Scaffold(
+                    body: Center(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                detailScreen(isOptimistic: isOptimistic),
+                          ),
+                        ),
+                        child: const Text('Open post'),
+                      ),
+                    ),
+                  ),
+                )
+              : detailScreen(isOptimistic: isOptimistic),
+        ),
+      );
 
   ScrollPosition position(WidgetTester tester) => tester
       .state<ScrollableState>(
@@ -153,6 +180,35 @@ void main() {
   Future<void> flush(WidgetTester tester) async {
     await tester.pump();
     await tester.pump();
+  }
+
+  /// The screen as the only route of a router that also has /feed, as when
+  /// a deep link or state restoration opens /post/:postUri directly.
+  Widget routedApp() {
+    final router = GoRouter(
+      initialLocation: '/post/${Uri.encodeComponent(postUri)}',
+      routes: [
+        GoRoute(
+          path: '/feed',
+          builder: (context, state) => const Scaffold(body: Text('Feed home')),
+        ),
+        GoRoute(
+          path: '/post/:postUri',
+          builder: (context, state) => detailScreen(),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    return MultiProvider(
+      providers: [
+        Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
+        ChangeNotifierProvider<AuthProvider>.value(value: auth),
+        ChangeNotifierProvider<VoteProvider>.value(value: votes),
+        ChangeNotifierProvider<BlockProvider>.value(value: blocks),
+        Provider<CommentsProviderCache>.value(value: cache),
+      ],
+      child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
+    );
   }
 
   /// Jump to the end of the lazy list; the extent is an estimate until the
@@ -582,5 +638,346 @@ void main() {
         );
       },
     );
+  });
+
+  group('a post the server no longer serves', () {
+    const unavailableCopy = 'This post is no longer available';
+    const postBody = 'Pagination footer post';
+
+    testScreen('W7a: a first load that fails with RootNotFound shows the '
+        'unavailable state without Retry; other 404s keep Retry', (
+      tester,
+    ) async {
+      final cases = <(String?, bool)>[
+        // (server error code, shows the unavailable state)
+        ('RootNotFound', true),
+        ('NotFound', false),
+        (null, false),
+      ];
+
+      for (final (errorCode, unavailable) in cases) {
+        final row = 'errorCode $errorCode';
+        // Each row needs a fresh provider: the cache keeps the failed one.
+        await tester.pumpWidget(const SizedBox.shrink());
+        cache.dispose();
+        cache = CommentsProviderCache(
+          authProvider: auth,
+          voteProvider: votes,
+          commentService: MockCommentService(),
+          apiService: api,
+        );
+        requests.clear();
+
+        await tester.pumpWidget(app());
+        await tester.pump();
+        expect(requests, hasLength(1), reason: row);
+
+        requests.single.completer.completeError(
+          NotFoundException('Post not found', errorCode: errorCode),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text(unavailableCopy),
+          unavailable ? findsWidgets : findsNothing,
+          reason: row,
+        );
+        expect(
+          find.text('Retry'),
+          unavailable ? findsNothing : findsOneWidget,
+          reason: row,
+        );
+      }
+    });
+
+    testScreen('W7b: a refresh of a loaded thread that fails with '
+        'RootNotFound replaces the post and thread with the unavailable '
+        'state and no Retry anywhere', (tester) async {
+      final comments = await openWithFirstPage(tester, page('first', 1));
+      expect(find.text(postBody, findRichText: true), findsOneWidget);
+      expect(find.text('Comment first-0'), findsOneWidget);
+
+      unawaited(comments.refreshComments());
+      await tester.pump();
+      expect(requests, hasLength(2));
+      expect(requests[1].cursor, isNull);
+
+      requests[1].completer.completeError(
+        NotFoundException('Post not found', errorCode: 'RootNotFound'),
+      );
+      await flush(tester);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text(unavailableCopy), findsWidgets);
+      expect(
+        find.text(postBody, findRichText: true),
+        findsNothing,
+        reason: 'the unavailable state replaces the post it says is gone',
+      );
+      expect(
+        find.text('Comment first-0'),
+        findsNothing,
+        reason: 'the unavailable state replaces the loaded thread',
+      );
+      expect(
+        find.text('Retry'),
+        findsNothing,
+        reason: 'retrying a removed post can never succeed',
+      );
+    });
+
+    testScreen('W7c: a load-more of a loaded thread that fails with '
+        'RootNotFound replaces the thread with the unavailable state and '
+        'no Retry anywhere', (tester) async {
+      await openWithFirstPage(tester, page('first', 80, cursor: firstCursor));
+
+      await scrollToBottom(tester);
+      expect(requests, hasLength(2), reason: 'reaching the bottom loads more');
+      expect(requests[1].cursor, firstCursor);
+      expect(find.text('Comment first-79'), findsOneWidget);
+
+      requests[1].completer.completeError(
+        NotFoundException('Post not found', errorCode: 'RootNotFound'),
+      );
+      await flush(tester);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text(unavailableCopy), findsWidgets);
+      expect(
+        find.text('Comment first-79'),
+        findsNothing,
+        reason: 'the unavailable state replaces the loaded thread',
+      );
+      expect(
+        find.text('Retry'),
+        findsNothing,
+        reason: 'retrying a removed post can never succeed',
+      );
+    });
+
+    testScreen('W7d: a sort change of a loaded thread that fails with '
+        'RootNotFound shows the unavailable state and no Retry, not even '
+        'on a snackbar', (tester) async {
+      await openWithFirstPage(tester, page('first', 5, cursor: firstCursor));
+
+      await selectSort(tester, 'Top');
+      expect(requests, hasLength(2));
+      expect(requests[1].sort, 'top');
+
+      requests[1].completer.completeError(
+        NotFoundException('Post not found', errorCode: 'RootNotFound'),
+      );
+      await flush(tester);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text(unavailableCopy), findsWidgets);
+      expect(find.byType(SnackBarAction), findsNothing);
+      expect(
+        find.text('Retry'),
+        findsNothing,
+        reason: 'retrying a removed post can never succeed',
+      );
+    });
+
+    testScreen('W8a: a first load that fails with RootNotFound offers a Back '
+        'control that returns to the previous route', (tester) async {
+      await tester.pumpWidget(app(pushedFromHome: true));
+      await tester.tap(find.text('Open post'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(requests, hasLength(1));
+
+      requests.single.completer.completeError(
+        NotFoundException('Post not found', errorCode: 'RootNotFound'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(unavailableCopy), findsWidgets);
+
+      expect(
+        find.byTooltip('Back'),
+        findsOneWidget,
+        reason: 'the unavailable state must offer a way back',
+      );
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PostDetailScreen), findsNothing);
+      expect(find.text('Open post'), findsOneWidget);
+    });
+
+    testScreen('W8c: with no previous route, the Back control of a first '
+        'load that fails with RootNotFound goes to the feed', (tester) async {
+      await tester.pumpWidget(routedApp());
+      await tester.pump();
+      expect(requests, hasLength(1));
+
+      requests.single.completer.completeError(
+        NotFoundException('Post not found', errorCode: 'RootNotFound'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(unavailableCopy), findsWidgets);
+
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PostDetailScreen), findsNothing);
+      expect(find.text('Feed home'), findsOneWidget);
+    });
+
+    testScreen('W9: tapping a comment opens the reply composer until the '
+        'thread learns the post is gone, after which no comment is left to '
+        'tap', (tester) async {
+      when(auth.isAuthenticated).thenReturn(true);
+      when(auth.did).thenReturn('did:plc:viewer');
+      // The card awaits a haptic before calling onTap; answer the platform
+      // channel so that await completes under the test binding.
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (methodCall) async => null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      final comments = await openWithFirstPage(tester, page('first', 1));
+
+      // Tap the card's own bottom-left padding, clear of the author link,
+      // the body text, the menu and the vote controls.
+      Future<void> tapComment() async {
+        await tester.ensureVisible(find.byType(CommentCard));
+        await tester.pumpAndSettle();
+        await tester.tapAt(
+          tester.getBottomLeft(find.byType(CommentCard)) + const Offset(30, -4),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await tapComment();
+      expect(
+        find.byType(ReplyScreen),
+        findsOneWidget,
+        reason: 'a live post accepts replies',
+      );
+      Navigator.of(tester.element(find.byType(ReplyScreen))).pop();
+      await tester.pumpAndSettle();
+      expect(find.byType(ReplyScreen), findsNothing);
+
+      unawaited(comments.refreshComments());
+      await tester.pump();
+      expect(requests, hasLength(2));
+      requests[1].completer.completeError(
+        NotFoundException('Post not found', errorCode: 'RootNotFound'),
+      );
+      await flush(tester);
+      await tester.pumpAndSettle();
+      expect(find.text(unavailableCopy), findsWidgets);
+
+      expect(
+        find.byType(CommentCard),
+        findsNothing,
+        reason: 'a post that is gone cannot take replies',
+      );
+    });
+
+    testScreen('W10: the unavailable state offers Check again, which shows '
+        'the thread once the server serves the post again', (tester) async {
+      await tester.pumpWidget(app());
+      await tester.pump();
+      expect(requests, hasLength(1));
+
+      requests.single.completer.completeError(
+        NotFoundException('Post not found', errorCode: 'RootNotFound'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(unavailableCopy), findsWidgets);
+      expect(find.text('Retry'), findsNothing);
+      expect(
+        find.text('Check again'),
+        findsOneWidget,
+        reason: 'RootNotFound also means not indexed yet or not visible',
+      );
+
+      await tester.tap(find.text('Check again'));
+      await tester.pump();
+      expect(requests, hasLength(2), reason: 'Check again fetches the thread');
+      expect(requests[1].cursor, isNull);
+
+      requests[1].completer.complete(page('back', 1));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Comment back-0'), findsOneWidget);
+      expect(find.text(unavailableCopy), findsNothing);
+    });
+
+    testScreen('W11: a just-created post whose comments fail with '
+        'RootNotFound shows an ordinary load error and keeps the action '
+        'bar', (tester) async {
+      await tester.pumpWidget(app(isOptimistic: true));
+      await tester.pump();
+      expect(requests, isEmpty, reason: 'an optimistic post skips the load');
+
+      unawaited(
+        tester
+            .state<RefreshIndicatorState>(find.byType(RefreshIndicator))
+            .show(),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(requests, hasLength(1), reason: 'pull-to-refresh fetches');
+
+      requests.single.completer.completeError(
+        NotFoundException('Post not found', errorCode: 'RootNotFound'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(unavailableCopy),
+        findsNothing,
+        reason: 'a post just created may not be indexed yet',
+      );
+      expect(find.byType(PostActionBar), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+    });
+
+    testScreen('W8b: a first load that fails with RootNotFound hides the '
+        'comment and vote action bar; other failures keep it', (tester) async {
+      final cases = <(String?, bool)>[
+        // (server error code, action bar shown)
+        ('RootNotFound', false),
+        ('NotFound', true),
+        (null, true),
+      ];
+
+      for (final (errorCode, actionBarShown) in cases) {
+        final row = 'errorCode $errorCode';
+        // Each row needs a fresh provider: the cache keeps the failed one.
+        await tester.pumpWidget(const SizedBox.shrink());
+        cache.dispose();
+        cache = CommentsProviderCache(
+          authProvider: auth,
+          voteProvider: votes,
+          commentService: MockCommentService(),
+          apiService: api,
+        );
+        requests.clear();
+
+        await tester.pumpWidget(app());
+        await tester.pump();
+        expect(requests, hasLength(1), reason: row);
+
+        requests.single.completer.completeError(
+          NotFoundException('Post not found', errorCode: errorCode),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byType(PostActionBar),
+          actionBarShown ? findsOneWidget : findsNothing,
+          reason: row,
+        );
+      }
+    });
   });
 }

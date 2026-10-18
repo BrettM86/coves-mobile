@@ -129,9 +129,8 @@ void main() {
     when(mockVoteProvider.isLiked(any)).thenReturn(false);
     when(mockVoteProvider.getVoteState(any)).thenReturn(null);
     when(mockVoteProvider.isPending(any)).thenReturn(false);
-    when(mockVoteProvider.getAdjustedScore(any, any)).thenAnswer(
-      (invocation) => invocation.positionalArguments[1] as int,
-    );
+    when(mockVoteProvider.getAdjustedScore(any, any))
+        .thenAnswer((invocation) => invocation.positionalArguments[1] as int);
     blockProvider = BlockProvider(
       apiService: MockCovesApiService(),
       authProvider: mockAuthProvider,
@@ -192,7 +191,11 @@ void main() {
 
     await tester.pumpWidget(
       wrap(
-        CommentCard(comment: view ?? comment(), parentPost: post),
+        CommentCard(
+          comment: view ?? comment(),
+          sessionStamp: null,
+          parentPost: post,
+        ),
         sharer: sharer,
       ),
     );

@@ -95,6 +95,8 @@ void main() {
   setUp(() {
     authProvider = FakeAuthProvider(signedInDid: myDid);
     apiService = MockCovesApiService();
+    // The screen's ViewerAuthorityProvider asks once per signed-in session.
+    when(apiService.getViewerAuthority()).thenAnswer((_) async => false);
     profileResponses = [];
 
     when(apiService.getProfile(actor: anyNamed('actor'))).thenAnswer((_) {

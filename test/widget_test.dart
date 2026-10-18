@@ -4,9 +4,12 @@ import 'package:coves_flutter/providers/community_guidelines_provider.dart';
 import 'package:coves_flutter/providers/eula_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+
+import 'test_helpers/fake_providers.dart' show unchangingSessionKey;
 
 // Fakes mirror test/router/post_route_test.dart: gates report accepted so the
 // router doesn't redirect to /eula before MaterialApp settles.
@@ -56,6 +59,8 @@ void main() {
             create: (context) => MultiFeedProvider(
               authProvider,
               apiService: context.read<CovesApiService>(),
+              postChangeBroadcast: PostChangeBroadcast(),
+              sessionKeyOf: unchangingSessionKey,
             ),
           ),
         ],

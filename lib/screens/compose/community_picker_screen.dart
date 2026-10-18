@@ -21,14 +21,17 @@ import '../../widgets/community_avatar.dart';
 /// - Returns selected community on tap via Navigator.pop
 ///
 /// Design:
-/// - Header: "Post to" with X close button
+/// - Header: [title] ("Post to" by default) with X close button
 /// - Search bar: "Search for a community" with search icon
 /// - List of communities showing:
 ///   - Avatar (CircleAvatar with first letter fallback)
 ///   - Community name (bold)
 ///   - Member count + optional description
 class CommunityPickerScreen extends StatefulWidget {
-  const CommunityPickerScreen({super.key});
+  const CommunityPickerScreen({super.key, this.title = 'Post to'});
+
+  /// Header text. Compose uses the default; other callers name their purpose.
+  final String title;
 
   @override
   State<CommunityPickerScreen> createState() => _CommunityPickerScreenState();
@@ -201,7 +204,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.background,
         foregroundColor: Colors.white,
-        title: const Text('Post to'),
+        title: Text(widget.title),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close),

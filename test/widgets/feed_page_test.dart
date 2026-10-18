@@ -88,6 +88,7 @@ void main() {
             onRetryLoadMore: onRetryLoadMore,
             isAuthenticated: false,
             currentTime: DateTime.parse('2025-01-01T13:00:00Z'),
+            sessionStamp: null,
           ),
         ),
       ),

@@ -11,6 +11,17 @@ class CursorPage<T> {
   final String? cursor;
 }
 
+/// The first-page error when the signed-in session kept changing while the
+/// first page loaded, so no request finished under the session it started
+/// in.
+class SessionChangedDuringLoadException implements Exception {
+  const SessionChangedDuringLoadException();
+
+  @override
+  String toString() =>
+      'The account changed while the page was loading. Pull to refresh.';
+}
+
 /// Shared cursor pagination state machine.
 ///
 /// Owns the items/cursor/loading/error state every paginated surface needs,
@@ -52,6 +63,25 @@ class CursorPage<T> {
 /// `onUnexpectedError` receives every error the controller swallows —
 /// fetch failures, hydration failures, and failures of superseded requests
 /// — so they reach crash reporting instead of only the debug console.
+/// `sessionKeyOf` returns the current signed-in session's key. When
+/// supplied, a page is accepted only if the session that requested it is
+/// still current when it lands (and, for a load-more, is the session that
+/// loaded the first page). [sessionStamp] is the session the loaded items
+/// belong to. The controller never reloads on its own when the session
+/// changes; the loaded items keep their old stamp until the next first-page
+/// load. Two paths lead to that load:
+///
+/// - a first page whose session changed while it was in flight is requested
+///   again under the current session, up to [maximumFirstPageAttempts]
+///   requests in all, ending in [error] if the session never settles;
+/// - a [loadMore] once the session differs from [sessionStamp] loads the
+///   first page under the current session instead of appending, so a feed
+///   the user scrolls to the end keeps paginating after a sign-in, sign-out
+///   or account switch. A load-more page whose session changed in flight is
+///   dropped, and the next [loadMore] takes this path. While [error] is set
+///   this path sends nothing, whatever caused the error, so a reload that
+///   keeps failing is not re-fired by the scroll trigger; only [retry] or
+///   [refresh] (Retry or pull-to-refresh) clears it and reloads.
 class CursorPaginationController<T> extends ChangeNotifier {
   CursorPaginationController({
     required this._fetchPage,
@@ -59,6 +89,7 @@ class CursorPaginationController<T> extends ChangeNotifier {
     this._errorMapper,
     this._idOf,
     this._onUnexpectedError,
+    this._sessionKeyOf,
   });
 
   final Future<CursorPage<T>> Function(String? cursor) _fetchPage;
@@ -66,18 +97,30 @@ class CursorPaginationController<T> extends ChangeNotifier {
   final String Function(Object error)? _errorMapper;
   final String Function(T item)? _idOf;
   final void Function(Object error, StackTrace stack)? _onUnexpectedError;
+  final Object? Function()? _sessionKeyOf;
+  Object? _sessionStamp;
 
   List<T> _items = List<T>.unmodifiable(const <Never>[]);
+  final Set<String> _removedIds = {};
   String? _cursor;
   bool _isLoading = false;
   bool _isLoadingMore = false;
   String? _error;
+  Object? _errorCause;
   String? _loadMoreError;
   bool _disposed = false;
+
+  /// Requests one [refresh] makes for the first page while the session keeps
+  /// changing under it, before it gives up with an error.
+  static const int maximumFirstPageAttempts = 3;
 
   /// Bumped by every [refresh] and [reset] so in-flight requests started
   /// under a previous generation can recognise themselves as stale.
   int _generation = 0;
+
+  /// The session key the loaded first page was requested and accepted
+  /// under; null before one is accepted or without `sessionKeyOf`.
+  Object? get sessionStamp => _sessionStamp;
 
   /// The loaded items (unmodifiable; a new instance on every change).
   List<T> get items => _items;
@@ -102,6 +145,10 @@ class CursorPaginationController<T> extends ChangeNotifier {
   /// in the list footer otherwise (`PaginatedSliverList.refreshError`).
   String? get error => _error;
 
+  /// The thrown object behind [error], for callers that branch on its type
+  /// (e.g. a server error code); null whenever [error] is null.
+  Object? get errorCause => _errorCause;
+
   /// Pagination error — the footer error channel.
   String? get loadMoreError => _loadMoreError;
 
@@ -120,45 +167,79 @@ class CursorPaginationController<T> extends ChangeNotifier {
   /// never landed.
   Future<bool> refresh() async {
     final generation = ++_generation;
+    _removedIds.clear();
     _isLoading = true;
     // Any load-more in flight now belongs to a previous generation.
     _isLoadingMore = false;
     _error = null;
+    _errorCause = null;
     _loadMoreError = null;
     _notify();
 
-    try {
-      final page = await _fetchPage(null);
-      if (_isStale(generation)) {
-        return false;
-      }
+    for (var attempt = 1; ; attempt++) {
+      final sessionKey = _currentSessionKey();
+      try {
+        final page = await _fetchPage(null);
+        if (_isStale(generation)) {
+          return false;
+        }
+        if (_sessionChangedSince(sessionKey)) {
+          // The page belongs to the previous session; ask again under the
+          // current one, staying in the loading state.
+          if (attempt < maximumFirstPageAttempts) {
+            continue;
+          }
+          _failFirstPageForUnsettledSession();
+          return false;
+        }
 
-      final fresh = _withoutDuplicates(page.items, const <Never>[]);
-      _items = List<T>.unmodifiable(fresh);
-      _cursor = page.cursor;
-      _isLoading = false;
-      _notify();
+        final fresh = _withoutDuplicates(page.items, const <Never>[]);
+        _items = List<T>.unmodifiable(fresh);
+        _cursor = page.cursor;
+        _sessionStamp = sessionKey;
+        _isLoading = false;
+        _notify();
 
-      await _hydrate(fresh);
-      return true;
-    } on Object catch (error, stack) {
-      if (_isStale(generation)) {
+        await _hydrate(fresh);
+        return true;
+      } on Object catch (error, stack) {
+        if (_isStale(generation)) {
+          _report(error, stack);
+          return false;
+        }
+        if (_sessionChangedSince(sessionKey)) {
+          _report(error, stack);
+          if (attempt < maximumFirstPageAttempts) {
+            continue;
+          }
+          _failFirstPageForUnsettledSession();
+          return false;
+        }
+
+        // Flags first: everything below can run user-supplied code, and a
+        // throw there must not leave the feed stuck in a loading state.
+        _isLoading = false;
+        _error = _messageFor(error);
+        _errorCause = error;
+        _notify();
         _report(error, stack);
+
+        if (kDebugMode) {
+          debugPrint('❌ Pagination first page failed: $error');
+        }
         return false;
       }
-
-      // Flags first: everything below can run user-supplied code, and a
-      // throw there must not leave the feed stuck in a loading state.
-      _isLoading = false;
-      _error = _messageFor(error);
-      _notify();
-      _report(error, stack);
-
-      if (kDebugMode) {
-        debugPrint('❌ Pagination first page failed: $error');
-      }
-      return false;
     }
+  }
+
+  /// End a [refresh] whose session changed under every attempt in a visible
+  /// first-page error, never in an empty list that reads as "no items".
+  void _failFirstPageForUnsettledSession() {
+    const error = SessionChangedDuringLoadException();
+    _isLoading = false;
+    _error = _messageFor(error);
+    _errorCause = error;
+    _notify();
   }
 
   /// Append the next page.
@@ -168,10 +249,26 @@ class CursorPaginationController<T> extends ChangeNotifier {
   /// scroll tick, and without that last guard a failing page is retried
   /// continuously while the user sits at the bottom of the list.
   ///
+  /// With `sessionKeyOf`, once the session differs from [sessionStamp] the
+  /// next page would belong to another session than the loaded ones, so
+  /// this loads the first page under the current session instead ([refresh]).
+  /// While [error] is set it sends nothing at all: the scroll trigger would
+  /// otherwise re-fire a failing reload continuously. Only [retry] or
+  /// [refresh] (Retry or pull-to-refresh) clears [error] and reloads.
+  ///
   /// Never rethrows; failures land on [loadMoreError] and leave the loaded
   /// items, cursor and [hasMore] intact so a retry can resume.
   Future<void> loadMore() async {
     if (_isLoading || _isLoadingMore || _loadMoreError != null || !hasMore) {
+      return;
+    }
+
+    final sessionKey = _currentSessionKey();
+    if (_sessionKeyOf != null && sessionKey != _sessionStamp) {
+      if (_error != null) {
+        return;
+      }
+      await refresh();
       return;
     }
 
@@ -182,6 +279,11 @@ class CursorPaginationController<T> extends ChangeNotifier {
     try {
       final page = await _fetchPage(_cursor);
       if (_isStale(generation)) {
+        return;
+      }
+      if (_sessionChangedSince(sessionKey)) {
+        _isLoadingMore = false;
+        _notify();
         return;
       }
 
@@ -197,6 +299,12 @@ class CursorPaginationController<T> extends ChangeNotifier {
       await _hydrate(fresh);
     } on Object catch (error, stack) {
       if (_isStale(generation)) {
+        _report(error, stack);
+        return;
+      }
+      if (_sessionChangedSince(sessionKey)) {
+        _isLoadingMore = false;
+        _notify();
         _report(error, stack);
         return;
       }
@@ -236,11 +344,14 @@ class CursorPaginationController<T> extends ChangeNotifier {
   /// in-flight request.
   void reset() {
     _generation++;
+    _removedIds.clear();
     _items = List<T>.unmodifiable(const <Never>[]);
     _cursor = null;
+    _sessionStamp = null;
     _isLoading = false;
     _isLoadingMore = false;
     _error = null;
+    _errorCause = null;
     _loadMoreError = null;
     _notify();
   }
@@ -250,7 +361,36 @@ class CursorPaginationController<T> extends ChangeNotifier {
   /// Leaves the cursor alone: the server-side page boundaries do not move
   /// just because the client stopped showing a row.
   void removeWhere(bool Function(T item) test) {
-    final remaining = _items.where((item) => !test(item)).toList();
+    final remaining = <T>[];
+    for (final item in _items) {
+      if (test(item)) {
+        final idOf = _idOf;
+        if (idOf != null) {
+          _removedIds.add(idOf(item));
+        }
+      } else {
+        remaining.add(item);
+      }
+    }
+    if (remaining.length == _items.length) {
+      return;
+    }
+    _items = List<T>.unmodifiable(remaining);
+    _notify();
+  }
+
+  /// Drop the item with [id], and keep it out of any page that lands later,
+  /// including one already in flight, even when no loaded item has [id] yet.
+  ///
+  /// Requires `idOf`. Leaves the cursor alone, like [removeWhere].
+  void removeById(String id) {
+    final idOf = _idOf;
+    assert(idOf != null, 'removeById requires idOf');
+    if (idOf == null) {
+      return;
+    }
+    _removedIds.add(id);
+    final remaining = _items.where((item) => idOf(item) != id).toList();
     if (remaining.length == _items.length) {
       return;
     }
@@ -284,6 +424,7 @@ class CursorPaginationController<T> extends ChangeNotifier {
       return;
     }
     _error = null;
+    _errorCause = null;
     _notify();
   }
 
@@ -291,6 +432,13 @@ class CursorPaginationController<T> extends ChangeNotifier {
   /// has taken over. Stale results are dropped whole: no state, no error,
   /// no hydration hook.
   bool _isStale(int generation) => _disposed || generation != _generation;
+
+  Object? _currentSessionKey() => _sessionKeyOf?.call();
+
+  /// Whether the session that started a request is no longer current.
+  /// Its page or error is never applied: no items, no error, no hydration.
+  bool _sessionChangedSince(Object? sessionKey) =>
+      _sessionKeyOf != null && _currentSessionKey() != sessionKey;
 
   /// [incoming] minus anything whose id is already in [existing] or earlier
   /// in [incoming] itself. Identity-free (no `idOf`) collections are taken
@@ -301,7 +449,7 @@ class CursorPaginationController<T> extends ChangeNotifier {
       return incoming;
     }
 
-    final seen = existing.map(idOf).toSet();
+    final seen = {...existing.map(idOf), ..._removedIds};
     final result = <T>[];
     for (final item in incoming) {
       if (seen.add(idOf(item))) {

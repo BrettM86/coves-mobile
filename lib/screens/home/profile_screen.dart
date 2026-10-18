@@ -11,10 +11,11 @@ import '../../models/post.dart';
 import '../../models/user_profile.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/block_provider.dart';
-import '../../providers/multi_feed_provider.dart';
 import '../../providers/user_profile_provider.dart';
+import '../../providers/viewer_authority_provider.dart';
 import '../../services/comment_service.dart';
 import '../../services/coves_api_service.dart';
+import '../../services/post_change_broadcast.dart';
 import '../../services/profile_cache.dart';
 import '../../services/viewer_state_hydrator.dart';
 import '../../utils/pagination_scroll_listener.dart';
@@ -52,15 +53,20 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<UserProfileProvider>(
       key: ValueKey<String?>(actor),
-      create: (context) => UserProfileProvider(
-        context.read<AuthProvider>(),
-        apiService: context.read<CovesApiService>(),
-        commentService: context.read<CommentService>(),
-        profileCache: context.read<ProfileCache>(),
-        // Fully wired, subscriptions included: profile posts seed both
-        // votes and community subscriptions through hydrateFeed.
-        hydrator: context.read<ViewerStateHydrator>(),
-      ),
+      create: (context) {
+        final authority = context.read<ViewerAuthorityProvider>();
+        return UserProfileProvider(
+          context.read<AuthProvider>(),
+          apiService: context.read<CovesApiService>(),
+          commentService: context.read<CommentService>(),
+          profileCache: context.read<ProfileCache>(),
+          postChangeBroadcast: context.read<PostChangeBroadcast>(),
+          // Fully wired, subscriptions included: profile posts seed both
+          // votes and community subscriptions through hydrateFeed.
+          hydrator: context.read<ViewerStateHydrator>(),
+          sessionKeyOf: () => authority.sessionKey,
+        );
+      },
       child: _ProfileView(actor: actor),
     );
   }
@@ -84,18 +90,12 @@ class _ProfileViewState extends State<_ProfileView> {
   final ScrollController _scrollController = ScrollController();
   late final PaginationScrollListener _paginationListener;
 
-  // App-wide home feeds, which stay alive beside the Profile tab and under a
-  // pushed profile: a post deleted here must leave them too. Read once, since
-  // a delete can finish after this screen has closed.
-  late final MultiFeedProvider _multiFeedProvider;
-
   // One pending post-frame "does the content fill the viewport?" check.
   bool _viewportFillCheckScheduled = false;
 
   @override
   void initState() {
     super.initState();
-    _multiFeedProvider = context.read<MultiFeedProvider>();
     // Pagination is driven by the scroll position, not by the item builder:
     // triggering a load from build() re-enters the provider mid-frame.
     _paginationListener = PaginationScrollListener(
@@ -637,10 +637,7 @@ class _ProfileViewState extends State<_ProfileView> {
       itemBuilder: (context, feedViewPost, index) {
         final postCard = PostCard(
           post: feedViewPost,
-          onDeleted: () {
-            profileProvider.removePost(feedViewPost.post.uri);
-            _multiFeedProvider.removePost(feedViewPost.post.uri);
-          },
+          sessionStamp: profileProvider.postsSessionStamp,
         );
 
         // Constrain width on tablets for better readability
@@ -909,6 +906,8 @@ class _ProfileCommentCard extends StatelessWidget {
 
     return CommentCard(
       comment: comment,
+      // A profile's comment list offers no admin tools.
+      sessionStamp: null,
       onTap: () {
         // Open the parent post's thread, scrolled to and highlighting this
         // comment. The post is cold-loaded by URI (no FeedViewPost here).

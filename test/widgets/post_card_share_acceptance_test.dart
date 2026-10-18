@@ -74,7 +74,8 @@ void main() {
       routes: [
         GoRoute(
           path: '/',
-          builder: (context, state) => Scaffold(body: PostCard(post: post)),
+          builder: (context, state) =>
+              Scaffold(body: PostCard(post: post, sessionStamp: null)),
         ),
       ],
     );

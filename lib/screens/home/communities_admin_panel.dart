@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
@@ -460,6 +461,13 @@ class _AdminMenu extends StatelessWidget {
             title: 'Change Profile Pic',
             subtitle: 'Update a community\'s profile picture',
             onTap: () => onSelectPage(AdminPage.changeProfilePic),
+          ),
+          const SizedBox(height: 12),
+          _AdminMenuItem(
+            icon: Icons.history,
+            title: 'Moderation log',
+            subtitle: 'Review moderation actions',
+            onTap: () => context.push('/modlog'),
           ),
         ],
       ),

@@ -23,6 +23,7 @@ import 'package:coves_flutter/screens/home/profile_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:coves_flutter/services/streamable_service.dart';
 import 'package:coves_flutter/services/viewer_state_hydrator.dart';
@@ -108,6 +109,8 @@ void main() {
       signedInHandle: myHandle,
     );
     apiService = MockCovesApiService();
+    // The screen's ViewerAuthorityProvider asks once per signed-in session.
+    when(apiService.getViewerAuthority()).thenAnswer((_) async => false);
     commentService = MockCommentService();
     otherProfileCompleter = null;
 
@@ -222,6 +225,11 @@ void main() {
           Provider<ProfileCache>(
             create: (_) => ProfileCache(authProvider),
             dispose: (_, cache) => cache.dispose(),
+          ),
+          Provider<PostChangeBroadcast>(create: (_) => PostChangeBroadcast()),
+          viewerAuthorityRegistration(
+            auth: authProvider,
+            apiService: apiService,
           ),
           unloadedMultiFeedProvider(auth: authProvider, apiService: apiService),
         ],

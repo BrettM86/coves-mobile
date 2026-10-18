@@ -11,6 +11,7 @@ import 'package:coves_flutter/screens/home/post_detail_loader.dart';
 import 'package:coves_flutter/screens/landing_screen.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:coves_flutter/services/coves_auth_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/widgets/loading_error_states.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/fake_providers.dart';
 import '../test_helpers/sign_in_flow_fakes.dart';
 import '../test_helpers/test_mocks.dart';
 
@@ -41,6 +43,8 @@ class _LoginHarness {
     // keeping the comments cache and its sign-in handling out of these
     // navigation tests. Mockito cannot build a placeholder of the sealed
     // result type while stubbing.
+    // The cold-load loader stamps the post with the viewer's authority.
+    when(api.getViewerAuthority()).thenAnswer((_) async => false);
     provideDummy<PostGetResult>(const PostGetNotFound(_missingPostUri));
     when(api.getPost(any))
         .thenAnswer((_) async => const PostGetNotFound(_missingPostUri));
@@ -56,9 +60,11 @@ class _LoginHarness {
   Widget app() {
     return MultiProvider(
       providers: [
+        Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
         ChangeNotifierProvider<AuthProvider>.value(value: auth),
         ChangeNotifierProvider<MultiFeedProvider>.value(value: feeds),
         Provider<CovesApiService>.value(value: api),
+        viewerAuthorityRegistration(auth: auth, apiService: api),
       ],
       child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
     );

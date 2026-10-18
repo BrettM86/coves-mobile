@@ -9,12 +9,15 @@ import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/main_shell_screen.dart';
 import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:coves_flutter/services/viewer_state_hydrator.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+
+import '../test_helpers/fake_providers.dart' show unchangingSessionKey;
 
 // Fake AuthProvider for testing (see test/widgets/feed_screen_test.dart).
 // Unauthenticated: FeedScreen shows the Discover empty state and
@@ -56,7 +59,12 @@ class FakeCommunitySubscriptionProvider extends CommunitySubscriptionProvider {
 // Fake MultiFeedProvider that never touches the network
 class FakeMultiFeedProvider extends MultiFeedProvider {
   FakeMultiFeedProvider()
-    : super(FakeAuthProvider(), apiService: CovesApiService());
+    : super(
+        FakeAuthProvider(),
+        apiService: CovesApiService(),
+        postChangeBroadcast: PostChangeBroadcast(),
+        sessionKeyOf: unchangingSessionKey,
+      );
 
   @override
   FeedState getState(FeedType type) => FeedState.initial();

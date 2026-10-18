@@ -1,0 +1,119 @@
+# Section G — admin tools in the post detail ⋮ menu (chunk 20 of the
+# mobile moderation admin PRD): as the instance admin, detail's "More
+# options" lists Mark NSFW / Remove NSFW label and Remove post, gated by the
+# post's viewer.moderation. NSFW changes blur and unblur the post in place;
+# Remove turns detail into the "Post Removed" tombstone in place, and
+# "Restore post" on that tombstone brings the post back.
+#
+# Self-contained round-trip: the flow ends with the post restored and with
+# no NSFW label, so it can be re-run.
+#
+# Target: the older aggregator post "Breaking news from an RSS feed"
+# (at://did:plc:3wg2tzv7we7znyi6utfbxq6f/social.coves.community.postv2/3mxgyu4nu4ez5)
+# in !pwxb3jp3s48, the only post in that community feed. Human-authored
+# posts stay pending admission on the local stack, so an aggregator post is
+# needed. Do not point this at the newest Discover aggregator post; other
+# sessions keep fixtures there.
+#
+# NOT in config.yaml's flowsOrder: the community is reachable only by adb
+# deep link (MainActivity has no VIEW intent filter), so fire it BEFORE
+# running this flow. Signed in as mari.local.coves.dev (instance admin):
+#   adb shell am force-stop social.coves.dev
+#   adb shell am start -n social.coves.dev/social.coves.MainActivity \
+#     -a android.intent.action.VIEW \
+#     -d 'social.coves:///community/did%3Aplc%3Aefzuhwf2xytqu4gzj3kldlcc'
+# The `standalone` tag is excluded in config.yaml.
+appId: social.coves.dev
+tags:
+  - standalone
+---
+- extendedWaitUntil:
+    visible: "Breaking news from an RSS feed"
+    timeout: 30000
+- tapOn: "Breaking news from an RSS feed"
+- extendedWaitUntil:
+    visible: "More options"
+    timeout: 15000
+- assertVisible: "[\\s\\S]*1 Comments?[\\s\\S]*"
+
+# Check 1: the menu lists the admin items between Report and Hide post
+- tapOn: "More options"
+- extendedWaitUntil:
+    visible: "Copy link"
+    timeout: 10000
+- assertVisible: "Report"
+- assertVisible: "Mark NSFW"
+- assertVisible: "Remove post"
+- assertVisible: "Hide post"
+- takeScreenshot: build/maestro/g5_menu_label
+
+# Check 2a: Mark NSFW blurs detail in place
+- tapOn: "Mark NSFW"
+- extendedWaitUntil:
+    visible: "Moderator discretion"
+    timeout: 10000
+- tapOn: "Moderator discretion"
+# The sheet title and its confirm button share the label; the button is last
+- tapOn:
+    text: "Mark NSFW"
+    index: 1
+- extendedWaitUntil:
+    visible: "Marked NSFW"
+    timeout: 20000
+- assertVisible: "NSFW Content"
+- takeScreenshot: build/maestro/g5_marked_nsfw
+
+# Check 2b: the menu now offers Remove NSFW label; it unblurs in place
+- tapOn: "More options"
+- extendedWaitUntil:
+    visible: "Remove NSFW label"
+    timeout: 10000
+- assertNotVisible: "Mark NSFW"
+- takeScreenshot: build/maestro/g5_menu_retract
+- tapOn: "Remove NSFW label"
+- extendedWaitUntil:
+    visible: "Moderator discretion"
+    timeout: 10000
+- tapOn: "Moderator discretion"
+- tapOn:
+    text: "Remove NSFW label"
+    index: 1
+- extendedWaitUntil:
+    visible: "NSFW label removed"
+    timeout: 20000
+- assertNotVisible: "NSFW Content"
+- assertVisible: "[\\s\\S]*syndicated from a feed[\\s\\S]*"
+
+# Check 3: Remove post with a private note shows the tombstone in place
+- tapOn: "More options"
+- extendedWaitUntil:
+    visible: "Remove post"
+    timeout: 10000
+- tapOn: "Remove post"
+- extendedWaitUntil:
+    visible: "Moderator discretion"
+    timeout: 10000
+- tapOn: "Moderator discretion"
+- tapOn: "Private note.*"
+- inputText: "maestro g5"
+- hideKeyboard
+- tapOn: "Remove"
+- extendedWaitUntil:
+    visible: "\\[Removed by server admin\\][\\s\\S]*"
+    timeout: 20000
+- assertVisible: "View moderation log"
+- assertVisible: "Restore post"
+- takeScreenshot: build/maestro/g5_tombstone
+
+# Check 4: Restore post from that tombstone brings the post back
+- tapOn: "Restore post"
+- extendedWaitUntil:
+    visible: "Moderator discretion"
+    timeout: 10000
+- tapOn: "Moderator discretion"
+- tapOn: "Restore"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*syndicated from a feed[\\s\\S]*"
+    timeout: 20000
+- assertNotVisible: "\\[Removed by server admin\\][\\s\\S]*"
+- takeScreenshot: build/maestro/g5_restored

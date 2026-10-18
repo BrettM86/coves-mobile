@@ -9,6 +9,14 @@
 /// endpoints on the strength of this function alone.
 library;
 
+/// Private moderation routes must log only request metadata. listActions is
+/// the public exception; query values never affect the classification.
+bool isPrivateModerationPath(String requestPath) {
+  final path = requestPath.split('?').first;
+  return path.contains('social.coves.moderation.') &&
+      path != '/xrpc/social.coves.moderation.listActions';
+}
+
 /// Matches a bearer scheme (case-insensitive) followed by any run of
 /// non-whitespace characters. Greedy on purpose: a charset-based match
 /// would leak the tail of tokens containing characters outside the set.

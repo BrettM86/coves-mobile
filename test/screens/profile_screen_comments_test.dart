@@ -56,6 +56,8 @@ void main() {
       signedInHandle: myHandle,
     );
     apiService = MockCovesApiService();
+    // The screen's ViewerAuthorityProvider asks once per signed-in session.
+    when(apiService.getViewerAuthority()).thenAnswer((_) async => false);
     commentService = MockCommentService();
 
     when(apiService.getProfile(actor: myDid))

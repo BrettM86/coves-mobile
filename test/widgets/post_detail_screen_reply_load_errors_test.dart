@@ -10,6 +10,7 @@ import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/focused_thread_screen.dart';
 import 'package:coves_flutter/screens/home/post_detail_screen.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/widgets/post_action_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -126,6 +127,7 @@ void main() {
   Widget app({String? focusCommentUri, bool screenMounted = true}) =>
       MultiProvider(
         providers: [
+          Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
           ChangeNotifierProvider<AuthProvider>.value(value: auth),
           ChangeNotifierProvider<VoteProvider>.value(value: votes),
           ChangeNotifierProvider<BlockProvider>.value(value: blocks),
@@ -136,6 +138,7 @@ void main() {
           home: !screenMounted
               ? const Scaffold(body: Text('Left the post'))
               : PostDetailScreen(
+                  sessionStamp: null,
                   focusCommentUri: focusCommentUri,
                   post: FeedViewPost(
                     post: PostView(

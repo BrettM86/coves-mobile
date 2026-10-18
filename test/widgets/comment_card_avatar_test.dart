@@ -77,7 +77,7 @@ void main() {
         ChangeNotifierProvider<BlockProvider>.value(value: blockProvider),
       ],
       child: MaterialApp(
-        home: Scaffold(body: CommentCard(comment: comment)),
+        home: Scaffold(body: CommentCard(comment: comment, sessionStamp: null)),
       ),
     );
   }

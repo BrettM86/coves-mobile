@@ -23,12 +23,14 @@ import 'package:coves_flutter/providers/community_subscription_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/providers/user_profile_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:coves_flutter/services/viewer_state_hydrator.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 
+import '../test_helpers/fake_providers.dart' show unchangingSessionKey;
 import '../test_helpers/test_mocks.dart';
 
 /// A VoteService that answers locally instead of hitting the network.
@@ -238,6 +240,8 @@ void main() {
       apiService: mockApiService,
       voteProvider: votes,
       subscriptionProvider: subscriptions,
+      postChangeBroadcast: PostChangeBroadcast(),
+      sessionKeyOf: unchangingSessionKey,
     );
     addTearDown(provider.dispose);
     return provider;
@@ -257,6 +261,8 @@ void main() {
       hydrator: hydrator,
       commentService: MockCommentService(),
       profileCache: profileCache,
+      postChangeBroadcast: PostChangeBroadcast(),
+      sessionKeyOf: unchangingSessionKey,
     );
     addTearDown(provider.dispose);
 

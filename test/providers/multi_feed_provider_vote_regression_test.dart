@@ -11,10 +11,12 @@
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 
+import '../test_helpers/fake_providers.dart' show unchangingSessionKey;
 import '../test_helpers/test_mocks.dart';
 
 /// A VoteService that answers locally instead of hitting the network.
@@ -104,6 +106,8 @@ void main() {
         mockAuthProvider,
         apiService: mockApiService,
         voteProvider: voteProvider,
+        postChangeBroadcast: PostChangeBroadcast(),
+        sessionKeyOf: unchangingSessionKey,
       );
     });
 

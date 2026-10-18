@@ -36,6 +36,7 @@ class CommentsProviderCache {
     required this._apiService,
     this._hydrator,
     this.maxSize = 15,
+    this._sessionKeyOf,
   }) {
     _signedInDid = _authProvider.did;
     _authProvider.addListener(_syncSignedInDid);
@@ -51,6 +52,11 @@ class CommentsProviderCache {
   /// only place the app-wide hydrator can reach them. Null lets each
   /// provider fall back to one built from [_voteProvider].
   final ViewerStateHydrator? _hydrator;
+
+  /// The current viewer session's key, forwarded to every
+  /// [CommentsProvider] this cache builds so each can stamp its thread with
+  /// the session it was loaded under.
+  final Object? Function()? _sessionKeyOf;
 
   /// Maximum number of providers to cache
   final int maxSize;
@@ -147,6 +153,7 @@ class CommentsProviderCache {
       postUri: postUri,
       postCid: postCid,
       hydrator: _hydrator,
+      sessionKeyOf: _sessionKeyOf,
     );
 
     _cache[postUri] = provider;

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
@@ -14,9 +15,9 @@ import '../../providers/comments_provider.dart';
 import '../../providers/vote_provider.dart';
 import '../../services/comments_provider_cache.dart';
 import '../../services/coves_api_service.dart';
+import '../../services/post_change_broadcast.dart';
 import '../../services/viewer_state_hydrator.dart';
 import '../../utils/community_handle_utils.dart';
-import '../../utils/copy_link.dart';
 import '../../utils/error_messages.dart';
 import '../../utils/pagination_scroll_listener.dart';
 import '../../utils/post_web_link.dart';
@@ -28,15 +29,18 @@ import '../../widgets/community_avatar.dart';
 import '../../widgets/detailed_post_view.dart';
 import '../../widgets/loading_error_states.dart';
 import '../../widgets/post_action_bar.dart';
-import '../../widgets/report_dialog.dart';
+import '../../widgets/post_options_menu.dart';
 import '../../widgets/share_button.dart';
-import '../../widgets/sign_in_dialog.dart';
 import '../../widgets/status_bar_overlay.dart';
 import '../../widgets/tappable_community.dart';
 import '../compose/reply_screen.dart';
 import 'focused_thread_screen.dart';
 
 const _commentThreadMaxDepth = 6;
+
+/// Shown when getComments reports RootNotFound: the post was removed or
+/// deleted after it was opened.
+const _postUnavailableCopy = 'This post is no longer available';
 
 bool _isCommentDisplayable(
   Iterable<ThreadViewComment> comments,
@@ -87,13 +91,22 @@ enum _PostVoteHydration {
 class PostDetailScreen extends StatefulWidget {
   const PostDetailScreen({
     required this.post,
+    required this.sessionStamp,
     this.isOptimistic = false,
     this.focusCommentUri,
+    this.onPostRemoved,
     super.key,
   });
 
   /// Post to display (passed via route extras)
   final FeedViewPost post;
+
+  /// The session the post was loaded under; null denies admin tools.
+  final Object? sessionStamp;
+
+  /// Called when the shown post is removed, so the owner (the
+  /// post detail loader) can show the server's answer in its place.
+  final VoidCallback? onPostRemoved;
 
   /// Optional AT-URI of a comment to scroll to and highlight after the
   /// thread loads (e.g. tapping one of your comments on your profile).
@@ -172,9 +185,23 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   bool _focusPending = false;
   bool _focusInProgress = false;
 
+  /// The shown post: [PostDetailScreen.post] until a replacement of the same
+  /// post is published, such as one carrying a new server NSFW label.
+  late FeedViewPost _post;
+  late final PostChangeBroadcast _postChangeBroadcast;
+
+  /// Set once the viewer's delete of the shown post is accepted while detail
+  /// is the current route and detail is leaving, so the removal it broadcasts
+  /// does not reload the route on its way out. Left unset when another route
+  /// is above detail, so the broadcast reloads detail as "Post Not Found".
+  bool _leavingAfterDelete = false;
+
   @override
   void initState() {
     super.initState();
+    _post = widget.post;
+    _postChangeBroadcast = context.read<PostChangeBroadcast>();
+    _postChangeBroadcast.addPostChangeListener(_onPostChanged);
     // ScrollController and provider initialization moved to
     // didChangeDependencies
     // where we have access to context for synchronous provider acquisition
@@ -251,8 +278,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     _commentsProvider.removeListener(_onProviderChanged);
     setState(() {
       _commentsProvider = _commentsCache!.acquireProvider(
-        postUri: widget.post.post.uri,
-        postCid: widget.post.post.cid,
+        postUri: _post.post.uri,
+        postCid: _post.post.cid,
       );
     });
     _commentsProvider.addListener(_onProviderChanged);
@@ -295,7 +322,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         generation != _accountChangeGeneration;
 
     try {
-      final result = await fetchPost(widget.post.post.uri);
+      final result = await fetchPost(_post.post.uri);
       if (isSuperseded()) {
         return;
       }
@@ -371,8 +398,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final cache = context.read<CommentsProviderCache>();
     _commentsCache = cache;
     _commentsProvider = cache.acquireProvider(
-      postUri: widget.post.post.uri,
-      postCid: widget.post.post.cid,
+      postUri: _post.post.uri,
+      postCid: _post.post.cid,
     );
 
     // Focus scans downward from the top, so cached scroll restoration must
@@ -447,7 +474,32 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   @override
+  void didUpdateWidget(PostDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // FeedViewPost has no value equality and parents (the cold-load loader,
+    // router page rebuilds) rebuild it from a stale snapshot; adopting it
+    // for the same post would revert a published replacement.
+    if (widget.post.post.uri != _post.post.uri) {
+      _post = widget.post;
+    }
+  }
+
+  void _onPostChanged(PostChange change) {
+    switch (change) {
+      case PostReplaced(:final post) when post.uri == _post.post.uri:
+        setState(() => _post = _post.copyWith(post: post));
+      case PostRemoved(:final uri) when uri == _post.post.uri:
+        if (!_leavingAfterDelete) {
+          widget.onPostRemoved?.call();
+        }
+      case PostReplaced() || PostRemoved():
+        break;
+    }
+  }
+
+  @override
   void dispose() {
+    _postChangeBroadcast.removePostChangeListener(_onPostChanged);
     // Remove auth listener via the stored reference — context.read here is
     // unsafe once the ancestor is deactivated (tree finalization) and throws
     // a FlutterError that `on Exception` cannot catch.
@@ -460,7 +512,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     // none and a release would consume another owner's.
     if (_isInitialized && !_providerInvalidated) {
       try {
-        _commentsCache?.releaseProvider(widget.post.post.uri);
+        _commentsCache?.releaseProvider(_post.post.uri);
       } on Exception catch (e) {
         // Cache may already be disposed - expected behavior
         if (kDebugMode) {
@@ -638,8 +690,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Future<void> _onSortChanged(String newSort) async {
     final success = await _commentsProvider.setSortOption(newSort);
 
-    // Show error snackbar if sort change failed
-    if (!success && mounted) {
+    // Show error snackbar if sort change failed. A post that is gone shows
+    // its unavailable state instead: retrying the sort cannot help.
+    if (!success && mounted && !_isPostUnavailable(_commentsProvider)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Failed to change sort order. Please try again.'),
@@ -680,6 +733,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     _commentsProvider.loadMoreComments();
   }
 
+  /// Whether the server reported the post gone (getComments RootNotFound).
+  ///
+  /// RootNotFound also covers a post the AppView has not indexed yet, so a
+  /// post this client just created ([PostDetailScreen.isOptimistic]) treats
+  /// it as an ordinary load error instead.
+  bool _isPostUnavailable(CommentsProvider provider) =>
+      !widget.isOptimistic &&
+      provider.errorCode == CommentsProvider.rootNotFoundErrorCode;
+
   /// Handle pull-to-refresh
   Future<void> _onRefresh() async {
     // Don't interact with disposed provider
@@ -715,7 +777,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: _buildContent(),
-        bottomNavigationBar: _buildActionBar(),
+        // Commenting on or voting for a post that is gone can never succeed.
+        bottomNavigationBar: Selector<CommentsProvider, bool>(
+          selector: (_, provider) => _isPostUnavailable(provider),
+          builder: (context, postUnavailable, actionBar) =>
+              postUnavailable ? const SizedBox.shrink() : actionBar!,
+          child: _buildActionBar(),
+        ),
       ),
     );
   }
@@ -724,7 +792,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   ///
   /// Tapping the title navigates to the community's feed.
   Widget _buildCommunityTitle() {
-    final community = widget.post.post.community;
+    final community = _post.post.community;
 
     final displayHandle = CommunityHandleUtils.resolveDisplayHandle(
       name: community.name,
@@ -786,86 +854,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
-  /// The post's link on the web client, shared and copied from here. Null
+  /// The post's link on the web client, shared from here. Null
   /// when the post's at-URI yields no canonical URL.
-  String? get _postWebUrl => widget.post.post.webUrl(WebLinkBuilder.current());
-
-  /// Handle menu action selection
-  Future<void> _handleMenuAction(String action) async {
-    // Haptic feedback is non-essential, silently fail if unsupported
-    try {
-      await HapticFeedback.lightImpact();
-    } on PlatformException {
-      // Haptics not supported on this platform - ignore
-    }
-
-    switch (action) {
-      case 'copy_link':
-        if (mounted) {
-          await copyLinkToClipboard(context, _postWebUrl);
-        }
-      case 'report':
-        await _handleReport();
-      case 'hide':
-        // TODO: Implement hide functionality
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Hide feature coming soon!'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-    }
-  }
-
-  /// Report the post via the shared report dialog (mirrors the feed card's
-  /// report action — regression: the menu item used to be a dead
-  /// "coming soon" stub while ReportDialog already existed).
-  Future<void> _handleReport() async {
-    final authProvider = context.read<AuthProvider>();
-    if (!authProvider.isAuthenticated) {
-      if (!mounted) {
-        return;
-      }
-      final shouldSignIn = await SignInDialog.show(
-        context,
-        message: 'You need to sign in to report content.',
-      );
-      if (shouldSignIn != true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sign in required to report content'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-      return;
-    }
-
-    if (!mounted) {
-      return;
-    }
-    final messenger = ScaffoldMessenger.of(context);
-
-    final reported = await ReportDialog.show(
-      context,
-      targetUri: widget.post.post.uri,
-      contentType: 'post',
-    );
-
-    if ((reported ?? false) && mounted) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Report submitted. Thank you for helping keep our '
-            'community safe.',
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
+  String? get _postWebUrl => _post.post.webUrl(WebLinkBuilder.current());
 
   Future<void> _handleVote(
     VoteProvider voteProvider, {
@@ -897,8 +888,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
     try {
       await voteProvider.toggleVote(
-        postUri: widget.post.post.uri,
-        postCid: widget.post.post.cid,
+        postUri: _post.post.uri,
+        postCid: _post.post.cid,
         direction: direction,
       );
     } on Exception catch (e) {
@@ -917,17 +908,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Widget _buildActionBar() {
     return Consumer<VoteProvider>(
       builder: (context, voteProvider, child) {
-        final isVoted = voteProvider.isLiked(widget.post.post.uri);
-        final isVotePending = voteProvider.isPending(widget.post.post.uri);
+        final isVoted = voteProvider.isLiked(_post.post.uri);
+        final isVotePending = voteProvider.isPending(_post.post.uri);
         final adjustedScore = voteProvider.getAdjustedScore(
-          widget.post.post.uri,
-          widget.post.post.stats.score,
+          _post.post.uri,
+          _post.post.stats.score,
         );
 
         // Create a modified post with adjusted score for display
-        final displayPost = widget.post.copyWith(
-          post: widget.post.post.copyWith(
-            stats: widget.post.post.stats.copyWith(score: adjustedScore),
+        final displayPost = _post.copyWith(
+          post: _post.post.copyWith(
+            stats: _post.post.stats.copyWith(score: adjustedScore),
           ),
         );
 
@@ -982,7 +973,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => ReplyScreen(
-          post: widget.post,
+          post: _post,
           onSubmit: _handleCommentSubmit,
           commentsProvider: _commentsProvider,
         ),
@@ -1064,6 +1055,34 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
+  /// Leave the unavailable state: pop when there is a route to return to,
+  /// otherwise (a deep link opened the post directly) go to the feed, as
+  /// PostDetailLoader does.
+  void _goBack() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      context.go('/feed');
+    }
+  }
+
+  /// Leaves detail once the viewer's delete of the shown post has been
+  /// accepted by the server, as [_goBack] does, when detail is the current
+  /// route. When the viewer opened another route over detail while the
+  /// delete was pending, detail stays where it is, and the removal broadcast
+  /// reloads it so the viewer finds it as "Post Not Found" on coming back.
+  void _leaveAfterDelete() {
+    if (!mounted) {
+      return;
+    }
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) {
+      return;
+    }
+    _leavingAfterDelete = true;
+    _goBack();
+  }
+
   /// Open reply screen for replying to a comment
   void _openReplyToComment(ThreadViewComment comment) {
     // Check authentication
@@ -1102,7 +1121,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           thread: thread,
           ancestors: ancestors,
           commentsProvider: _commentsProvider,
-          parentPost: widget.post.post,
+          parentPost: _post.post,
         ),
       ),
     );
@@ -1140,6 +1159,38 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         final comments = commentsProvider.comments;
         final isLoadingMore = commentsProvider.isLoadingMore;
         final loadMoreError = commentsProvider.loadMoreError;
+
+        // The post is gone: replace the post and any loaded thread, whose
+        // content the server no longer serves. Stays up while Check again
+        // is in flight, and clears once a refresh succeeds.
+        if (_isPostUnavailable(commentsProvider)) {
+          // The action bar is hidden and there is no app bar here, so the
+          // state carries its own way back.
+          return SafeArea(
+            child: Column(
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: BackButton(
+                    color: AppColors.textPrimary,
+                    onPressed: _goBack,
+                  ),
+                ),
+                Expanded(
+                  // RootNotFound also means not indexed yet or not visible
+                  // to this viewer, so the state can be checked again.
+                  child: FullScreenError(
+                    title: _postUnavailableCopy,
+                    message: 'It may have been deleted or removed.',
+                    onRetry: null,
+                    secondaryActionLabel: 'Check again',
+                    onSecondaryAction: _onRefresh,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
 
         // Loading state (only show full-screen loader for initial load)
         if (isLoading && comments.isEmpty) {
@@ -1181,47 +1232,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         useIconButton: true,
                         color: AppColors.textPrimary,
                       ),
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert),
-                        tooltip: 'More options',
-                        color: AppColors.backgroundSecondary,
-                        onSelected: _handleMenuAction,
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(
-                            value: 'copy_link',
-                            child: Row(
-                              children: [
-                                Icon(Icons.link, size: 20),
-                                SizedBox(width: 12),
-                                Text('Copy link'),
-                              ],
-                            ),
-                          ),
-                          // Report is hidden on the viewer's own posts
-                          // (parity with the feed card menu).
-                          if (context.read<AuthProvider>().did !=
-                              widget.post.post.author.did)
-                            const PopupMenuItem(
-                              value: 'report',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.flag_outlined, size: 20),
-                                  SizedBox(width: 12),
-                                  Text('Report'),
-                                ],
-                              ),
-                            ),
-                          const PopupMenuItem(
-                            value: 'hide',
-                            child: Row(
-                              children: [
-                                Icon(Icons.visibility_off_outlined, size: 20),
-                                SizedBox(width: 12),
-                                Text('Hide post'),
-                              ],
-                            ),
-                          ),
-                        ],
+                      PostOptionsMenu(
+                        post: _post,
+                        sessionStamp: widget.sessionStamp,
+                        onDeleted: _leaveAfterDelete,
+                        anchorBuilder: (context, controller) => IconButton(
+                          icon: const Icon(Icons.more_vert),
+                          tooltip: 'More options',
+                          onPressed: () {
+                            if (controller.isOpen) {
+                              controller.close();
+                            } else {
+                              controller.open();
+                            }
+                          },
+                        ),
                       ),
                     ],
                   ),
@@ -1243,7 +1268,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   // Use ValueListenableBuilder to only rebuild
                                   // when time changes
                                   _PostHeader(
-                                    post: widget.post,
+                                    post: _post,
                                     currentTimeNotifier:
                                         commentsProvider.currentTimeNotifier,
                                   ),
@@ -1339,7 +1364,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               ),
                               focusedCommentUri: widget.focusCommentUri,
                               focusedCommentKey: _focusedCommentKey,
-                              parentPost: widget.post.post,
+                              parentPost: _post.post,
+                              sessionStamp: commentsProvider.sessionStamp,
+                              reloadAfterModeration: () async {
+                                await commentsProvider.loadComments(
+                                  refresh: true,
+                                  quiet: true,
+                                );
+                                return commentsProvider.error == null;
+                              },
                             ),
                           );
                         },
@@ -1395,6 +1428,7 @@ class _CommentItem extends StatelessWidget {
   const _CommentItem({
     required this.comment,
     required this.currentTimeNotifier,
+    required this.sessionStamp,
     this.onCommentTap,
     this.collapsedComments = const {},
     this.onCollapseToggle,
@@ -1405,9 +1439,17 @@ class _CommentItem extends StatelessWidget {
     this.focusedCommentUri,
     this.focusedCommentKey,
     this.parentPost,
+    this.reloadAfterModeration,
   });
 
   final ThreadViewComment comment;
+
+  /// The session key the thread was loaded under.
+  final Object? sessionStamp;
+
+  /// Reloads the thread quietly after a moderation action finds a comment
+  /// changed or gone, completing with whether the reload landed.
+  final Future<bool> Function()? reloadAfterModeration;
 
   /// The post these comments belong to. Supplies what a comment permalink
   /// needs.
@@ -1443,6 +1485,8 @@ class _CommentItem extends StatelessWidget {
           focusedCommentUri: focusedCommentUri,
           focusedCommentKey: focusedCommentKey,
           parentPost: parentPost,
+          sessionStamp: sessionStamp,
+          reloadAfterModeration: reloadAfterModeration,
         );
       },
     );

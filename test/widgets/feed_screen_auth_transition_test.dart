@@ -8,12 +8,14 @@ import 'package:coves_flutter/providers/community_subscription_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/feed_screen.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/fake_providers.dart' show unchangingSessionKey;
 import '../test_helpers/test_mocks.dart';
 
 class _MutableAuthProvider extends AuthProvider {
@@ -69,7 +71,10 @@ class _NoTimerMultiFeedProvider extends MultiFeedProvider {
     required super.apiService,
     required super.voteProvider,
     required super.subscriptionProvider,
-  });
+  }) : super(
+         postChangeBroadcast: PostChangeBroadcast(),
+         sessionKeyOf: unchangingSessionKey,
+       );
 
   @override
   void startTimeUpdates() {}

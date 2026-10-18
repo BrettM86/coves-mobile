@@ -85,6 +85,8 @@ void main() {
       signedInHandle: 'me.coves.test',
     );
     apiService = MockCovesApiService();
+    // The screen's ViewerAuthorityProvider asks once per signed-in session.
+    when(apiService.getViewerAuthority()).thenAnswer((_) async => false);
     actor = ValueNotifier<String>(didA);
     pendingProfiles = {};
 

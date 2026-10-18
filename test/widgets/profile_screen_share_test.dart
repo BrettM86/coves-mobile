@@ -11,6 +11,7 @@ import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:coves_flutter/services/link_sharer.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:coves_flutter/services/viewer_state_hydrator.dart';
 import 'package:coves_flutter/widgets/share_button.dart';
@@ -58,6 +59,8 @@ void main() {
     mockAuthProvider = MockAuthProvider();
     mockVoteProvider = MockVoteProvider();
     mockApiService = MockCovesApiService();
+    // The screen's ViewerAuthorityProvider asks once per signed-in session.
+    when(mockApiService.getViewerAuthority()).thenAnswer((_) async => false);
     mockCommentService = MockCommentService();
     linkSharer = RecordingLinkSharer();
 
@@ -111,6 +114,11 @@ void main() {
           dispose: (_, cache) => cache.dispose(),
         ),
         Provider<LinkSharer>.value(value: linkSharer),
+        Provider<PostChangeBroadcast>(create: (_) => PostChangeBroadcast()),
+        viewerAuthorityRegistration(
+          auth: mockAuthProvider,
+          apiService: mockApiService,
+        ),
         unloadedMultiFeedProvider(
           auth: mockAuthProvider,
           apiService: mockApiService,

@@ -2,13 +2,13 @@
 // when that page lands: the page is appended to the feed as it is now, not
 // to the snapshot taken when the request started.
 //
-// Bounded scenario: the page that lands does not itself contain the removed
-// post (a server re-delivering a deleted post is out of scope).
+// The pending page also contains the removed post and a new survivor.
 
 import 'dart:async';
 
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 
@@ -51,6 +51,7 @@ void main() {
   late FakeVoteProvider voteProvider;
   late FakeSubscriptionProvider subscriptionProvider;
   late MultiFeedProvider provider;
+  late PostChangeBroadcast broadcast;
 
   setUp(() {
     authProvider = FakeAuthProvider(signedInDid: myDid);
@@ -60,12 +61,15 @@ void main() {
       authProvider: authProvider,
       apiService: apiService,
     );
+    broadcast = PostChangeBroadcast();
     provider = MultiFeedProvider(
       authProvider,
       apiService: apiService,
       voteProvider: voteProvider,
       subscriptionProvider: subscriptionProvider,
       clock: () => DateTime.utc(2026, 9, 29, 12),
+      postChangeBroadcast: broadcast,
+      sessionKeyOf: unchangingSessionKey,
     );
   });
 
@@ -119,7 +123,7 @@ void main() {
     final feedType = scenario.feedType;
     final pageThreeCursor = scenario.pageThreeCursor;
 
-    test('${feedType.name}: a post removed while load-more is in flight '
+    test('B4 ${feedType.name}: a post removed while load-more is in flight '
         'does not come back when the page lands', () async {
       final pageTwo = Completer<TimelineResponse>();
       final requestedCursors = <String?>[];
@@ -150,19 +154,24 @@ void main() {
       expect(provider.getState(feedType).isLoadingMore, isTrue);
 
       // The post is removed while page two is pending, and disappears now.
-      provider.removePost(removedPostUri);
-      expect(_uris(provider.getState(feedType).posts), [keptPostUri]);
+      broadcast.removePost(removedPostUri);
+      expect(_uris(provider.getState(feedType).posts), [
+        'at://did:plc:community/social.coves.community.post/kept',
+      ]);
 
       pageTwo.complete(
         TimelineResponse(
-          feed: [_post(pageTwoPostUri)],
+          feed: [_post(removedPostUri), _post(pageTwoPostUri)],
           cursor: pageThreeCursor,
         ),
       );
       await loadMore;
 
       final state = provider.getState(feedType);
-      expect(_uris(state.posts), [keptPostUri, pageTwoPostUri]);
+      expect(_uris(state.posts), [
+        'at://did:plc:community/social.coves.community.post/kept',
+        'at://did:plc:community/social.coves.community.post/page-two',
+      ]);
       expect(state.cursor, pageThreeCursor);
       expect(state.hasMore, pageThreeCursor != null);
       expect(state.isLoadingMore, isFalse);
@@ -170,4 +179,39 @@ void main() {
       expect(requestedCursors, [null, pageTwoCursor]);
     });
   }
+
+  test('B4 discover: a post removed before its page is loaded does not '
+      'appear when the in-flight page lands', () async {
+    final pageTwo = Completer<TimelineResponse>();
+    stubFeed(FeedType.discover, (cursor) {
+      if (cursor == null) {
+        return Future.value(
+          TimelineResponse(feed: [_post(keptPostUri)], cursor: pageTwoCursor),
+        );
+      }
+      return pageTwo.future;
+    });
+
+    await provider.loadFeed(FeedType.discover, refresh: true);
+    expect(_uris(provider.getState(FeedType.discover).posts), [keptPostUri]);
+
+    final loadMore = provider.loadMore(FeedType.discover);
+    expect(provider.getState(FeedType.discover).isLoadingMore, isTrue);
+
+    broadcast.removePost(removedPostUri);
+    expect(_uris(provider.getState(FeedType.discover).posts), [keptPostUri]);
+
+    pageTwo.complete(
+      TimelineResponse(
+        feed: [_post(removedPostUri), _post(pageTwoPostUri)],
+        cursor: 'page-3',
+      ),
+    );
+    await loadMore;
+
+    expect(_uris(provider.getState(FeedType.discover).posts), [
+      'at://did:plc:community/social.coves.community.post/kept',
+      'at://did:plc:community/social.coves.community.post/page-two',
+    ]);
+  });
 }

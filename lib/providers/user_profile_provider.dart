@@ -10,6 +10,7 @@ import '../models/user_profile.dart';
 import '../services/api_exceptions.dart';
 import '../services/comment_service.dart';
 import '../services/coves_api_service.dart';
+import '../services/post_change_broadcast.dart';
 import '../services/profile_cache.dart';
 import '../services/viewer_state_hydrator.dart';
 import '../utils/cursor_pagination_controller.dart';
@@ -30,6 +31,8 @@ class UserProfileProvider with ChangeNotifier {
     required this._apiService,
     required this._commentService,
     required this._profileCache,
+    required this._postChangeBroadcast,
+    required Object? Function() sessionKeyOf,
     VoteProvider? voteProvider,
     ViewerStateHydrator? hydrator,
   }) : _authProvider = authProvider,
@@ -52,6 +55,7 @@ class UserProfileProvider with ChangeNotifier {
       // keys its rows by this same URI and asserts on duplicates.
       idOf: (feedItem) => feedItem.post.uri,
       onUnexpectedError: _reportUnexpected,
+      sessionKeyOf: sessionKeyOf,
     )..addListener(_syncPostsState);
 
     _commentsController = CursorPaginationController<CommentView>(
@@ -65,6 +69,7 @@ class UserProfileProvider with ChangeNotifier {
     // Listen to auth state changes
     _authProvider.addListener(_onAuthChanged);
     _profileCache.addPutListener(_onProfileCached);
+    _postChangeBroadcast.addPostChangeListener(_onPostChanged);
   }
 
   late final CursorPaginationController<FeedViewPost> _postsController;
@@ -87,6 +92,7 @@ class UserProfileProvider with ChangeNotifier {
   }
 
   final AuthProvider _authProvider;
+  final PostChangeBroadcast _postChangeBroadcast;
 
   /// The signed-in DID the last auth notification left, or null when signed
   /// out. Only a change to it resets this provider.
@@ -137,6 +143,10 @@ class UserProfileProvider with ChangeNotifier {
   String? get profileError => _profileError;
   String? get currentProfileDid => _currentProfileDid;
   FeedState get postsState => _postsState;
+
+  /// The session key the loaded posts were fetched under, for their admin
+  /// tools; null before a page is loaded.
+  Object? get postsSessionStamp => _postsController.sessionStamp;
   CommentsState get commentsState => _commentsState;
 
   /// Check if currently viewing own profile
@@ -550,19 +560,27 @@ class UserProfileProvider with ChangeNotifier {
     }
   }
 
-  /// Remove the post with [uri] from the loaded posts without refetching,
-  /// e.g. after the author deletes it from its card.
-  ///
-  /// Every other part of the posts state (cursor, loading flags, errors) is
-  /// kept, and a load-more already in flight still appends its page. Notifies
-  /// only when the post was loaded. A no-op after [dispose]: the screen that
-  /// owns this provider can close while the delete is in flight.
-  void removePost(String uri) {
+  void _onPostChanged(PostChange change) {
     if (_disposed) {
       return;
     }
-    // The controller notifies, which re-projects _postsState.
-    _postsController.removeWhere((feedPost) => feedPost.post.uri == uri);
+    switch (change) {
+      case PostRemoved(:final uri):
+        // The controller notifies, which re-projects _postsState.
+        _postsController.removeById(uri);
+      case PostReplaced(:final post):
+        final items = _postsController.items;
+        if (!items.any((feedPost) => feedPost.post.uri == post.uri)) {
+          return;
+        }
+        _postsController.replaceItems([
+          for (final feedPost in items)
+            if (feedPost.post.uri == post.uri)
+              feedPost.copyWith(post: post)
+            else
+              feedPost,
+        ]);
+    }
   }
 
   /// Clear current profile and reset state
@@ -707,6 +725,7 @@ class UserProfileProvider with ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _postChangeBroadcast.removePostChangeListener(_onPostChanged);
     _profileLoadGeneration++;
     _authProvider.removeListener(_onAuthChanged);
     _profileCache.removePutListener(_onProfileCached);

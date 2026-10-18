@@ -6,10 +6,12 @@ import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 
+import '../test_helpers/fake_providers.dart' show unchangingSessionKey;
 import '../test_helpers/test_mocks.dart';
 
 typedef _FeedAnswer = Future<TimelineResponse> Function();
@@ -126,6 +128,8 @@ class _Harness {
       apiService: apiService,
       voteProvider: voteProvider,
       clock: clock,
+      postChangeBroadcast: PostChangeBroadcast(),
+      sessionKeyOf: unchangingSessionKey,
     );
   }
 

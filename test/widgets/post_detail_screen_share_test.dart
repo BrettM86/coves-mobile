@@ -5,6 +5,7 @@ import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/post_detail_screen.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/services/link_sharer.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/widgets/share_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -38,7 +39,6 @@ void main() {
   late MockVoteProvider mockVoteProvider;
   late CommentsProviderCache commentsCache;
   late RecordingLinkSharer linkSharer;
-  late List<Object?> clipboardTexts;
 
   /// A post in the author's own repo, with a valid handle and a community
   /// served by this instance.
@@ -72,16 +72,14 @@ void main() {
     mockAuthProvider = MockAuthProvider();
     mockVoteProvider = MockVoteProvider();
     linkSharer = RecordingLinkSharer();
-    clipboardTexts = [];
 
     when(mockAuthProvider.isAuthenticated).thenReturn(true);
     when(mockAuthProvider.did).thenReturn('did:plc:viewer999');
     when(mockVoteProvider.isLiked(any)).thenReturn(false);
     when(mockVoteProvider.getVoteState(any)).thenReturn(null);
     when(mockVoteProvider.isPending(any)).thenReturn(false);
-    when(mockVoteProvider.getAdjustedScore(any, any)).thenAnswer(
-      (invocation) => invocation.positionalArguments[1] as int,
-    );
+    when(mockVoteProvider.getAdjustedScore(any, any))
+        .thenAnswer((invocation) => invocation.positionalArguments[1] as int);
 
     commentsCache = CommentsProviderCache(
       authProvider: mockAuthProvider,
@@ -95,24 +93,10 @@ void main() {
   ///
   /// The post is marked optimistic so the screen skips its initial comment
   /// load: no API call, no pending timers.
-  ///
-  /// The single mock handler on `SystemChannels.platform` records every
-  /// `Clipboard.setData` payload and answers the menu's haptic calls with
-  /// null. A handler that only returned null would let a clipboard assertion
-  /// pass with no copy happening, so this one is installed last and owns the
-  /// channel for the whole test.
   Future<void> pumpScreen(WidgetTester tester, FeedViewPost post) async {
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.platform,
-      (methodCall) async {
-        if (methodCall.method == 'Clipboard.setData') {
-          final arguments = Map<Object?, Object?>.from(
-            methodCall.arguments as Map<Object?, Object?>,
-          );
-          clipboardTexts.add(arguments['text']);
-        }
-        return null;
-      },
+      (_) async => null,
     );
     addTearDown(() async {
       await tester.pumpWidget(
@@ -128,6 +112,7 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
           ChangeNotifierProvider<AuthProvider>.value(value: mockAuthProvider),
           ChangeNotifierProvider<VoteProvider>.value(value: mockVoteProvider),
           Provider<CommentsProviderCache>.value(value: commentsCache),
@@ -135,17 +120,14 @@ void main() {
         ],
         child: MaterialApp(
           theme: AppTheme.dark,
-          home: PostDetailScreen(post: post, isOptimistic: true),
+          home: PostDetailScreen(
+            sessionStamp: null,
+            post: post,
+            isOptimistic: true,
+          ),
         ),
       ),
     );
-    await tester.pumpAndSettle();
-  }
-
-  Future<void> openOverflowMenu(WidgetTester tester) async {
-    final trigger = find.byTooltip('More options');
-    expect(trigger, findsOneWidget);
-    await tester.tap(trigger);
     await tester.pumpAndSettle();
   }
 
@@ -163,45 +145,6 @@ void main() {
 
       expect(linkSharer.sharedUrls, [expectedWebUrl]);
       expect(find.text("Couldn't create link"), findsNothing);
-    });
-
-    testWidgets('Copy link copies the web link, not the at-URI', (
-      tester,
-    ) async {
-      await pumpScreen(tester, authorOwnedPost());
-
-      await openOverflowMenu(tester);
-
-      final copyLink = find.text('Copy link');
-      expect(copyLink, findsOneWidget);
-
-      await tester.tap(copyLink);
-      await tester.pumpAndSettle();
-
-      expect(clipboardTexts, hasLength(1));
-      expect(clipboardTexts.single, isNot(startsWith('at://')));
-      expect(clipboardTexts.single, expectedWebUrl);
-      expect(find.text('Link copied to clipboard'), findsOneWidget);
-      // Copying is not sharing: the share sheet must stay shut.
-      expect(linkSharer.sharedUrls, isEmpty);
-    });
-
-    testWidgets('Copy link reports failure when no link can be built', (
-      tester,
-    ) async {
-      await pumpScreen(tester, authorOwnedPost(uri: 'not-an-at-uri'));
-
-      await openOverflowMenu(tester);
-
-      final copyLink = find.text('Copy link');
-      expect(copyLink, findsOneWidget);
-
-      await tester.tap(copyLink);
-      await tester.pumpAndSettle();
-
-      expect(clipboardTexts, isEmpty);
-      expect(find.text("Couldn't create link"), findsOneWidget);
-      expect(find.text('Link copied to clipboard'), findsNothing);
     });
   });
 }

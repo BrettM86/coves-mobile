@@ -539,6 +539,8 @@ class _ContextPreview extends StatelessWidget {
         builder: (context, commentsProvider, child) {
           return PostCard(
             post: post!,
+            // The parent post is shown for context only: no admin tools.
+            sessionStamp: null,
             currentTime: commentsProvider.currentTimeNotifier.value,
             showCommentButton: false,
             disableNavigation: true,
@@ -560,6 +562,8 @@ class _ContextPreview extends StatelessWidget {
         builder: (context, commentsProvider, child) {
           return CommentThread(
             thread: comment!,
+            // The comment is shown for context only: no admin tools.
+            sessionStamp: null,
             currentTime: commentsProvider.currentTimeNotifier.value,
             maxDepth: 6,
           );

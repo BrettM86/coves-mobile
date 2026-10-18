@@ -68,7 +68,11 @@ void main() {
         GoRoute(
           path: '/',
           builder: (context, state) => Scaffold(
-            body: PostCard(post: post, disableNavigation: disableNavigation),
+            body: PostCard(
+              post: post,
+              sessionStamp: null,
+              disableNavigation: disableNavigation,
+            ),
           ),
         ),
         GoRoute(

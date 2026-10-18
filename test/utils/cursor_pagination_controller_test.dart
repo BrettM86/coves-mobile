@@ -70,6 +70,7 @@ void main() {
     String Function(Object error)? errorMapper,
     String Function(String item)? idOf,
     void Function(Object error, StackTrace stack)? onUnexpectedError,
+    Object? Function()? sessionKeyOf,
   }) {
     return CursorPaginationController<String>(
       fetchPage: fetcher.call,
@@ -77,6 +78,7 @@ void main() {
       errorMapper: errorMapper,
       idOf: idOf,
       onUnexpectedError: onUnexpectedError,
+      sessionKeyOf: sessionKeyOf,
     );
   }
 
@@ -807,6 +809,24 @@ void main() {
   });
 
   group('removeWhere', () {
+    test(
+      'B4 removed id in a pending page stays gone while survivor appends',
+      () async {
+        final controller = build(idOf: (item) => item);
+        addTearDown(controller.dispose);
+        await loadFirstPage(controller, items: <String>['a', 'b', 'c']);
+
+        final loadingMore = controller.loadMore();
+        expect(controller.isLoadingMore, isTrue);
+        controller.removeWhere((item) => item == 'a');
+        expect(controller.items, <String>['b', 'c']);
+
+        fetcher.complete(1, page(<String>['a', 'd'], cursor: 'cursor-2'));
+        await loadingMore;
+        expect(controller.items, <String>['b', 'c', 'd']);
+      },
+    );
+
     test('drops the matching items and notifies', () async {
       final controller = build();
       addTearDown(controller.dispose);
@@ -849,6 +869,43 @@ void main() {
 
       expect(controller.cursor, 'cursor-1');
       expect(controller.hasMore, isTrue);
+    });
+  });
+
+  group('removeById', () {
+    test('an id removed before its page lands stays gone when the page '
+        'arrives', () async {
+      final controller = build(idOf: (item) => item);
+      addTearDown(controller.dispose);
+      await loadFirstPage(controller, items: <String>['b', 'c']);
+
+      final loadingMore = controller.loadMore();
+      expect(controller.isLoadingMore, isTrue);
+      var notifications = 0;
+      controller
+        ..addListener(() => notifications++)
+        ..removeById('a');
+      expect(controller.items, <String>['b', 'c']);
+      expect(notifications, 0);
+
+      fetcher.complete(1, page(<String>['a', 'd'], cursor: 'cursor-2'));
+      await loadingMore;
+      expect(controller.items, <String>['b', 'c', 'd']);
+    });
+
+    test('drops a loaded item, notifies once and keeps the cursor', () async {
+      final controller = build(idOf: (item) => item);
+      addTearDown(controller.dispose);
+      await loadFirstPage(controller, items: <String>['a', 'b', 'c']);
+
+      var notifications = 0;
+      controller
+        ..addListener(() => notifications++)
+        ..removeById('b');
+
+      expect(controller.items, <String>['a', 'c']);
+      expect(notifications, 1);
+      expect(controller.cursor, 'cursor-1');
     });
   });
 
@@ -1161,6 +1218,314 @@ void main() {
       fetcher.complete(0, page(<String>['a'], cursor: 'c1'));
 
       await expectLater(future, completes);
+    });
+  });
+
+  group('session key', () {
+    // Opaque per-session keys owned by the test; the controller only
+    // compares them.
+    final k1 = Object();
+    final k2 = Object();
+    late Object? currentKey;
+
+    setUp(() => currentKey = k1);
+
+    CursorPaginationController<String> buildKeyed({
+      Future<void> Function(List<String> newItems)? onPageLoaded,
+    }) {
+      final controller = build(
+        onPageLoaded: onPageLoaded,
+        sessionKeyOf: () => currentKey,
+      );
+      addTearDown(controller.dispose);
+      return controller;
+    }
+
+    /// Records every notified state in which the feed would render its
+    /// "No posts yet" empty state: not loading, no items, no error.
+    List<String> recordFalseEmptyStates(
+      CursorPaginationController<String> controller,
+    ) {
+      final falseEmptyStates = <String>[];
+      controller.addListener(() {
+        if (!controller.isLoading &&
+            controller.items.isEmpty &&
+            controller.error == null) {
+          falseEmptyStates.add('requests=${fetcher.requestCount}');
+        }
+      });
+      return falseEmptyStates;
+    }
+
+    test('S5 a first page requested before a session change is replaced by '
+        'a first page requested under the current session', () async {
+      final hydrated = <List<String>>[];
+      final controller = buildKeyed(
+        onPageLoaded: (newItems) async => hydrated.add(newItems),
+      );
+      final falseEmptyStates = recordFalseEmptyStates(controller);
+
+      final first = controller.refresh();
+      currentKey = k2;
+      fetcher.complete(0, page(<String>['a', 'b'], cursor: 'cursor-1'));
+      await pumpEventQueue();
+
+      expect(fetcher.requestCount, 2);
+      expect(fetcher.requestedCursors, <String?>[null, null]);
+      expect(controller.isLoading, isTrue);
+      expect(controller.items, isEmpty);
+      expect(controller.sessionStamp, isNot(same(k1)));
+
+      fetcher.complete(1, page(<String>['c'], cursor: 'cursor-2'));
+      expect(await first, isTrue);
+
+      expect(controller.items, <String>['c']);
+      expect(controller.cursor, 'cursor-2');
+      expect(controller.sessionStamp, same(k2));
+      expect(controller.isLoading, isFalse);
+      expect(hydrated, <List<String>>[
+        <String>['c'],
+      ]);
+      expect(falseEmptyStates, isEmpty);
+    });
+
+    test('S5 the stamp stays on the accepted session until '
+        'a refresh under the next session lands', () async {
+      final controller = buildKeyed();
+
+      await loadFirstPage(controller);
+      expect(controller.sessionStamp, same(k1));
+
+      currentKey = k2;
+      final refreshed = controller.refresh();
+      expect(controller.sessionStamp, same(k1));
+
+      fetcher.complete(1, page(<String>['c'], cursor: 'cursor-2'));
+      expect(await refreshed, isTrue);
+      expect(controller.items, <String>['c']);
+      expect(controller.sessionStamp, same(k2));
+    });
+
+    test(
+      'S5 a load-more page from another session is dropped, and the '
+      'next load-more reloads the first page under the current session',
+      () async {
+        final controller = buildKeyed();
+        await loadFirstPage(controller);
+        expect(controller.items, <String>['a', 'b']);
+
+        final more = controller.loadMore();
+        currentKey = k2;
+        fetcher.complete(1, page(<String>['c'], cursor: 'cursor-2'));
+        await more;
+
+        expect(controller.items, <String>['a', 'b']);
+        expect(controller.cursor, 'cursor-1');
+        expect(controller.isLoadingMore, isFalse);
+        expect(controller.sessionStamp, same(k1));
+
+        final next = controller.loadMore();
+        expect(fetcher.requestCount, 3);
+        expect(fetcher.requestedCursors[2], isNull);
+        fetcher.complete(2, page(<String>['d'], cursor: 'cursor-3'));
+        await next;
+
+        expect(controller.items, <String>['d']);
+        expect(controller.sessionStamp, same(k2));
+      },
+    );
+
+    test('S5 a load-more under a stale stamp reloads the first page under '
+        'the current session, and pagination resumes', () async {
+      currentKey = null;
+      final controller = buildKeyed();
+      await loadFirstPage(controller);
+      expect(controller.sessionStamp, isNull);
+      expect(controller.hasMore, isTrue);
+
+      // A guest signs in through a gate and returns to the same feed.
+      currentKey = k1;
+      final more = controller.loadMore();
+
+      expect(fetcher.requestCount, 2);
+      expect(fetcher.requestedCursors[1], isNull);
+      fetcher.complete(1, page(<String>['c', 'd'], cursor: 'cursor-2'));
+      await more;
+
+      expect(controller.items, <String>['c', 'd']);
+      expect(controller.cursor, 'cursor-2');
+      expect(controller.sessionStamp, same(k1));
+      expect(controller.error, isNull);
+      expect(controller.loadMoreError, isNull);
+
+      final next = controller.loadMore();
+      expect(fetcher.requestCount, 3);
+      expect(fetcher.requestedCursors[2], 'cursor-2');
+      fetcher.complete(2, page(<String>['e'], cursor: 'cursor-3'));
+      await next;
+
+      expect(controller.items, <String>['c', 'd', 'e']);
+      expect(controller.sessionStamp, same(k1));
+    });
+
+    test('S5 a first-page failure after a session change is replaced by '
+        'a first page requested under the current session', () async {
+      final controller = buildKeyed();
+      final falseEmptyStates = recordFalseEmptyStates(controller);
+
+      final first = controller.refresh();
+      currentKey = k2;
+      fetcher.fail(0, NetworkFailure());
+      await pumpEventQueue();
+
+      expect(fetcher.requestCount, 2);
+      expect(fetcher.requestedCursors, <String?>[null, null]);
+      expect(controller.isLoading, isTrue);
+      expect(controller.error, isNull);
+      expect(controller.errorCause, isNull);
+
+      fetcher.complete(1, page(<String>['c'], cursor: 'cursor-2'));
+      expect(await first, isTrue);
+
+      expect(controller.items, <String>['c']);
+      expect(controller.sessionStamp, same(k2));
+      expect(controller.error, isNull);
+      expect(controller.isLoading, isFalse);
+      expect(falseEmptyStates, isEmpty);
+    });
+
+    test('S5 a session that keeps changing ends the first-page load in a '
+        'visible error after three requests', () async {
+      final controller = buildKeyed();
+      final falseEmptyStates = recordFalseEmptyStates(controller);
+
+      final first = controller.refresh();
+      for (var attempt = 0; attempt < 3; attempt++) {
+        await pumpEventQueue();
+        expect(fetcher.requestCount, attempt + 1);
+        currentKey = Object();
+        fetcher.complete(attempt, page(<String>['x$attempt'], cursor: 'c'));
+      }
+      expect(await first, isFalse);
+      await pumpEventQueue();
+
+      expect(fetcher.requestCount, 3);
+      expect(controller.isLoading, isFalse);
+      expect(controller.items, isEmpty);
+      expect(controller.error, isNotNull);
+      expect(controller.errorCause, isNotNull);
+      expect(controller.sessionStamp, isNull);
+      expect(falseEmptyStates, isEmpty);
+    });
+
+    // Each row leaves page one ['a', 'b'] (cursor-1, stamped k1) on screen
+    // with a first-page error while the session is k2; expectedRequests is
+    // how many requests that took.
+    final staleErrorRows = [
+      (
+        name: 'the reload a load-more starts fails',
+        reachError: (CursorPaginationController<String> controller) async {
+          await loadFirstPage(controller);
+          currentKey = k2;
+          final reload = controller.loadMore();
+          expect(fetcher.requestCount, 2, reason: 'the reload was sent');
+          expect(fetcher.requestedCursors[1], isNull);
+          fetcher.fail(1, NetworkFailure());
+          await reload;
+        },
+        expectedRequests: 2,
+      ),
+      (
+        name: 'the reload a load-more starts ends with the session error',
+        reachError: (CursorPaginationController<String> controller) async {
+          await loadFirstPage(controller);
+          currentKey = k2;
+          final reload = controller.loadMore();
+          expect(fetcher.requestCount, 2, reason: 'the reload was sent');
+          expect(fetcher.requestedCursors[1], isNull);
+          fetcher.fail(1, const SessionChangedDuringLoadException());
+          await reload;
+        },
+        expectedRequests: 2,
+      ),
+      (
+        name: 'a refresh failed before the session changed',
+        reachError: (CursorPaginationController<String> controller) async {
+          await loadFirstPage(controller);
+          final failed = controller.refresh();
+          fetcher.fail(1, NetworkFailure());
+          await failed;
+          currentKey = k2;
+          // Not awaited: on a controller that reloads here, the reload
+          // never lands and the request count below says so.
+          unawaited(controller.loadMore());
+          await pumpEventQueue();
+        },
+        expectedRequests: 2,
+      ),
+    ];
+    for (final row in staleErrorRows) {
+      test('S5 after ${row.name}, a load-more under the stale stamp sends '
+          'nothing until retry reloads page one', () async {
+        final controller = buildKeyed();
+        await row.reachError(controller);
+
+        for (var call = 0; call < 3; call++) {
+          // Not awaited, for the same reason as above.
+          unawaited(controller.loadMore());
+          await pumpEventQueue();
+        }
+
+        expect(
+          fetcher.requestCount,
+          row.expectedRequests,
+          reason:
+              'a load-more under the stale stamp sends nothing while '
+              'the first-page error shows',
+        );
+        expect(controller.items, <String>['a', 'b']);
+        expect(controller.cursor, 'cursor-1');
+        expect(controller.hasMore, isTrue);
+        expect(controller.error, isNotNull);
+        expect(controller.loadMoreError, isNull);
+        expect(controller.sessionStamp, same(k1));
+
+        final retried = controller.retry();
+        expect(fetcher.requestCount, 3);
+        expect(fetcher.requestedCursors[2], isNull);
+        fetcher.complete(2, page(<String>['z'], cursor: 'cursor-9'));
+        expect(await retried, isTrue);
+
+        expect(controller.error, isNull);
+        expect(controller.sessionStamp, same(k2));
+        expect(controller.items, <String>['z']);
+
+        final next = controller.loadMore();
+        expect(fetcher.requestCount, 4);
+        expect(fetcher.requestedCursors[3], 'cursor-9');
+        fetcher.complete(3, page(<String>['y']));
+        await next;
+        expect(controller.items, <String>['z', 'y']);
+      });
+    }
+
+    test('S5 under an unchanged session, a load-more after a failed refresh '
+        'with items on screen still appends', () async {
+      final controller = buildKeyed();
+      await loadFirstPage(controller);
+      final failed = controller.refresh();
+      fetcher.fail(1, NetworkFailure());
+      await failed;
+      expect(controller.error, isNotNull);
+
+      final more = controller.loadMore();
+      expect(fetcher.requestCount, 3);
+      expect(fetcher.requestedCursors[2], 'cursor-1');
+      fetcher.complete(2, page(<String>['c'], cursor: 'cursor-2'));
+      await more;
+
+      expect(controller.items, <String>['a', 'b', 'c']);
+      expect(controller.sessionStamp, same(k1));
     });
   });
 }

@@ -320,7 +320,10 @@ void main() {
         'PostCard',
         (theme) => MultiProvider(
           providers: postCardProviders(auth: FakeAuthProvider()),
-          child: _wrapRouted(PostCard(post: _post()), theme),
+          child: _wrapRouted(
+            PostCard(post: _post(), sessionStamp: null),
+            theme,
+          ),
         ),
       );
     });
@@ -332,7 +335,11 @@ void main() {
         (theme) => MultiProvider(
           providers: postCardProviders(auth: FakeAuthProvider()),
           child: _wrap(
-            CommentCard(comment: _comment(), currentTime: _now),
+            CommentCard(
+              comment: _comment(),
+              sessionStamp: null,
+              currentTime: _now,
+            ),
             theme,
           ),
         ),
@@ -348,7 +355,12 @@ void main() {
         (theme) => MultiProvider(
           providers: postCardProviders(auth: FakeAuthProvider()),
           child: _wrap(
-            CommentCard(comment: _comment(), depth: 5, currentTime: _now),
+            CommentCard(
+              comment: _comment(),
+              sessionStamp: null,
+              depth: 5,
+              currentTime: _now,
+            ),
             theme,
           ),
         ),
@@ -380,7 +392,10 @@ void main() {
         'PostCard(short)',
         (theme) => MultiProvider(
           providers: postCardProviders(auth: FakeAuthProvider()),
-          child: _wrapRouted(PostCard(post: _post(long: false)), theme),
+          child: _wrapRouted(
+            PostCard(post: _post(long: false), sessionStamp: null),
+            theme,
+          ),
         ),
       );
     });
@@ -392,7 +407,11 @@ void main() {
         (theme) => MultiProvider(
           providers: postCardProviders(auth: FakeAuthProvider()),
           child: _wrap(
-            CommentCard(comment: _comment(long: false), currentTime: _now),
+            CommentCard(
+              comment: _comment(long: false),
+              sessionStamp: null,
+              currentTime: _now,
+            ),
             theme,
           ),
         ),

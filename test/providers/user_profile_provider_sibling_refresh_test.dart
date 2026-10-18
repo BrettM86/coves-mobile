@@ -10,6 +10,7 @@ import 'package:coves_flutter/models/user_profile.dart';
 import 'package:coves_flutter/providers/user_profile_provider.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
@@ -93,6 +94,8 @@ void main() {
       apiService: apiService,
       commentService: MockCommentService(),
       profileCache: profileCache,
+      postChangeBroadcast: PostChangeBroadcast(),
+      sessionKeyOf: unchangingSessionKey,
     );
     addTearDown(provider.dispose);
     return provider;
@@ -427,6 +430,8 @@ void main() {
         apiService: apiService,
         commentService: MockCommentService(),
         profileCache: profileCache,
+        postChangeBroadcast: PostChangeBroadcast(),
+        sessionKeyOf: unchangingSessionKey,
       );
       await providerA.loadProfile(myDid);
       await providerB.loadProfile(myDid);

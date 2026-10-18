@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:coves_flutter/models/user_profile.dart';
 import 'package:coves_flutter/providers/user_profile_provider.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
@@ -28,17 +29,16 @@ void main() {
     profileCache = ProfileCache(authProvider);
     profileResponses = [];
 
-    when(mockApiService.getProfile(actor: anyNamed('actor'))).thenAnswer((
-      invocation,
-    ) {
-      if (profileResponses.isEmpty) {
-        final actor = invocation.namedArguments[#actor] as String;
-        return Future.value(
-          UserProfile(did: actor, displayName: 'Unexpected extra fetch'),
-        );
-      }
-      return profileResponses.removeAt(0);
-    });
+    when(mockApiService.getProfile(actor: anyNamed('actor')))
+        .thenAnswer((invocation) {
+          if (profileResponses.isEmpty) {
+            final actor = invocation.namedArguments[#actor] as String;
+            return Future.value(
+              UserProfile(did: actor, displayName: 'Unexpected extra fetch'),
+            );
+          }
+          return profileResponses.removeAt(0);
+        });
   });
 
   tearDown(() {
@@ -53,6 +53,8 @@ void main() {
       apiService: mockApiService,
       commentService: MockCommentService(),
       profileCache: profileCache,
+      postChangeBroadcast: PostChangeBroadcast(),
+      sessionKeyOf: unchangingSessionKey,
     );
     addTearDown(provider.dispose);
     return provider;

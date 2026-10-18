@@ -12,6 +12,7 @@ import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:coves_flutter/services/link_sharer.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:coves_flutter/services/viewer_state_hydrator.dart';
 import 'package:coves_flutter/widgets/comment_card.dart';
@@ -263,6 +264,7 @@ void main() {
               body: SingleChildScrollView(
                 child: CommentThread(
                   thread: nestedThread(),
+                  sessionStamp: null,
                   parentPost: parentPost(),
                 ),
               ),
@@ -347,10 +349,14 @@ void main() {
             ChangeNotifierProvider<BlockProvider>.value(value: blockProvider),
             Provider<CommentsProviderCache>.value(value: commentsCache),
             Provider<LinkSharer>.value(value: linkSharer),
+            Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
           ],
           child: MaterialApp(
             theme: AppTheme.dark,
-            home: PostDetailScreen(post: FeedViewPost(post: parentPost())),
+            home: PostDetailScreen(
+              sessionStamp: null,
+              post: FeedViewPost(post: parentPost()),
+            ),
           ),
         ),
       );
@@ -567,6 +573,11 @@ void main() {
               dispose: (_, cache) => cache.dispose(),
             ),
             Provider<LinkSharer>.value(value: linkSharer),
+            Provider<PostChangeBroadcast>(create: (_) => PostChangeBroadcast()),
+            viewerAuthorityRegistration(
+              auth: mockAuthProvider,
+              apiService: mockApiService,
+            ),
             unloadedMultiFeedProvider(
               auth: mockAuthProvider,
               apiService: mockApiService,

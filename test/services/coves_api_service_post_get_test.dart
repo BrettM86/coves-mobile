@@ -153,6 +153,65 @@ void main() {
       expect((results[2] as PostGetBlocked).blockedBy, BlockedBy.moderator);
     });
 
+    test('a 25-item batch with one moderatedPost yields 24 posts and one '
+        'moderated result in its position', () async {
+      final uris = List.generate(
+        25,
+        (i) => 'at://did:plc:author/social.coves.community.post/p$i',
+      );
+      const moderatedIndex = 12;
+      final items = <Map<String, dynamic>>[
+        for (var i = 0; i < 25; i++)
+          if (i == moderatedIndex)
+            {
+              r'$type': 'social.coves.community.post.defs#moderatedPost',
+              'uri': uris[i],
+              'moderation': {
+                'state': 'removed',
+                'sources': [
+                  {
+                    'authorityDid': 'did:web:coves.social',
+                    'scope': {'kind': 'instance'},
+                  },
+                ],
+              },
+              'authorDid': 'did:plc:author',
+              'community': {
+                'did': 'did:plc:comm',
+                'handle': 'c-gaming.coves.social',
+                'name': 'gaming',
+              },
+            }
+          else
+            postViewJson(uris[i]),
+      ];
+      dioAdapter.onGet(
+        endpoint,
+        (server) => server.reply(200, {'posts': items}),
+        queryParameters: {'uris': uris},
+      );
+
+      final results = await apiService.getPosts(uris: uris);
+
+      expect(results.length, 25);
+      expect(results[moderatedIndex], isA<PostGetModerated>());
+      expect(
+        results[moderatedIndex].uri,
+        'at://did:plc:author/social.coves.community.post/p12',
+      );
+      for (var i = 0; i < 25; i++) {
+        if (i == moderatedIndex) {
+          continue;
+        }
+        expect(results[i], isA<PostGetSuccess>(), reason: 'index $i');
+        expect(
+          results[i].uri,
+          'at://did:plc:author/social.coves.community.post/p$i',
+          reason: 'index $i',
+        );
+      }
+    });
+
     test(r'should discriminate via booleans when $type is missing '
         r'(backend omits $type) and via $type when present', () {
       // Backend reality: no $type, booleans discriminate
@@ -174,14 +233,14 @@ void main() {
       // Defensive: standard atproto $type discriminators also work
       expect(
         PostGetResult.fromJson({
-          r'$type': 'social.coves.community.post.get#notFoundPost',
+          r'$type': 'social.coves.community.post.defs#notFoundPost',
           'uri': uri1,
           'notFound': true,
         }),
         isA<PostGetNotFound>(),
       );
       final blocked = PostGetResult.fromJson({
-        r'$type': 'social.coves.community.post.get#blockedPost',
+        r'$type': 'social.coves.community.post.defs#blockedPost',
         'uri': uri1,
         'blocked': true,
         'blockedBy': 'author',

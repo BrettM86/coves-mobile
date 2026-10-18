@@ -10,6 +10,7 @@ import 'package:coves_flutter/screens/community/community_feed_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:coves_flutter/services/link_sharer.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/streamable_service.dart';
 import 'package:coves_flutter/widgets/share_button.dart';
 import 'package:flutter/material.dart';
@@ -62,6 +63,8 @@ void main() {
 
   setUp(() {
     mockApiService = MockCovesApiService();
+    // The screen's ViewerAuthorityProvider asks once per signed-in session.
+    when(mockApiService.getViewerAuthority()).thenAnswer((_) async => false);
     linkSharer = RecordingLinkSharer();
   });
 
@@ -118,6 +121,8 @@ void main() {
         ChangeNotifierProvider<BlockProvider>.value(value: blocks),
         Provider<StreamableService>(create: (_) => StreamableService()),
         Provider<LinkSharer>.value(value: linkSharer),
+        Provider<PostChangeBroadcast>(create: (_) => PostChangeBroadcast()),
+        viewerAuthorityRegistration(auth: auth, apiService: mockApiService),
         unloadedMultiFeedProvider(auth: auth, apiService: mockApiService),
       ],
       child: const CommunityFeedScreen(identifier: communityDid),

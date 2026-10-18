@@ -141,6 +141,7 @@ void main() {
           body: SingleChildScrollView(
             child: CommentThread(
               thread: thread,
+              sessionStamp: null,
               depth: depth,
               maxDepth: maxDepth,
               onCommentTap: onCommentTap,
@@ -343,7 +344,7 @@ void main() {
       await tester.pumpWidget(createTestWidget(thread));
 
       // Placeholder shown instead of content; reply still renders
-      expect(find.text('[deleted by user]'), findsOneWidget);
+      expect(find.text('[Deleted by user]'), findsOneWidget);
       expect(find.text('Surviving reply'), findsOneWidget);
     });
   });

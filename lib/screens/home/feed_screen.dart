@@ -423,7 +423,16 @@ class FeedScreenState extends State<FeedScreen> {
   Widget _buildFeedPage(FeedType feedType, bool isAuthenticated) {
     return Selector<
       MultiFeedProvider,
-      (List<FeedViewPost>, bool, bool, bool, String?, String?, DateTime?)
+      (
+        List<FeedViewPost>,
+        bool,
+        bool,
+        bool,
+        String?,
+        String?,
+        DateTime?,
+        Object?,
+      )
     >(
       selector: (_, provider) {
         final state = provider.getState(feedType);
@@ -435,6 +444,7 @@ class FeedScreenState extends State<FeedScreen> {
           state.error,
           state.loadMoreError,
           provider.currentTime,
+          provider.sessionStampFor(feedType),
         );
       },
       builder: (context, selected, _) {
@@ -446,6 +456,7 @@ class FeedScreenState extends State<FeedScreen> {
           error,
           loadMoreError,
           currentTime,
+          sessionStamp,
         ) = selected;
         final provider = context.read<MultiFeedProvider>();
 
@@ -467,9 +478,9 @@ class FeedScreenState extends State<FeedScreen> {
             ..clearError(feedType)
             ..loadMore(feedType),
           onRetryLoadMore: () => provider.retryLoadMore(feedType),
-          onPostDeleted: provider.removePost,
           isAuthenticated: isAuthenticated,
           currentTime: currentTime,
+          sessionStamp: sessionStamp,
         );
       },
     );

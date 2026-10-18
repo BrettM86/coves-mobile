@@ -20,6 +20,7 @@ import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/community/community_feed_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/streamable_service.dart';
 import 'package:coves_flutter/widgets/icons/app_icons.dart';
 import 'package:flutter/material.dart';
@@ -115,6 +116,8 @@ void main() {
           ),
           ChangeNotifierProvider<BlockProvider>.value(value: blocks),
           Provider<StreamableService>(create: (_) => StreamableService()),
+          Provider<PostChangeBroadcast>(create: (_) => PostChangeBroadcast()),
+          viewerAuthorityRegistration(auth: auth, apiService: mockApiService),
           unloadedMultiFeedProvider(auth: auth, apiService: mockApiService),
         ],
         child: const CommunityFeedScreen(identifier: communityDid),

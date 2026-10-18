@@ -1,4 +1,5 @@
 import 'package:coves_flutter/constants/embed_types.dart';
+import 'package:coves_flutter/models/moderation.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,6 +11,7 @@ void main() {
     String? deletionReason,
     PostEmbed? embed,
     ViewerState? viewer,
+    ModerationView? moderation,
   }) {
     return PostView(
       uri: 'at://did:plc:test/social.coves.community.post/123',
@@ -31,6 +33,7 @@ void main() {
           PostStats(upvotes: 12, downvotes: 2, score: 10, commentCount: 3),
       embed: embed,
       viewer: viewer,
+      moderation: moderation,
     );
   }
 
@@ -130,6 +133,34 @@ void main() {
         expect(copy.indexedAt, post.indexedAt);
       },
     );
+
+    test('should preserve moderation and isSensitive when only stats is '
+        'replaced', () {
+      const moderation = ModerationView(
+        state: ModerationState.clear,
+        contentLabels: [
+          ContentLabelView(
+            value: 'nsfw',
+            sources: [
+              ModerationSource(
+                authorityDid: 'did:web:coves.social',
+                scope: ModerationScope(kind: ModerationScopeKind.instance),
+              ),
+            ],
+          ),
+        ],
+      );
+      final post = buildPostView(
+        record: const PostRecord(title: 'Title', content: 'Body'),
+        moderation: moderation,
+      );
+
+      final copy = post.copyWith(stats: post.stats.copyWith(score: 11));
+
+      expect(copy.stats.score, 11);
+      expect(copy.moderation, same(moderation));
+      expect(copy.isSensitive, isTrue);
+    });
 
     test('should preserve deletion state when only stats is replaced', () {
       final post = buildPostView(isDeleted: true, deletionReason: 'moderator');
@@ -333,6 +364,7 @@ void main() {
     Map<String, dynamic> postJson({
       Map<String, dynamic>? record,
       bool isDeleted = false,
+      Object? moderation,
     }) {
       return <String, dynamic>{
         'uri': 'at://did:plc:test/social.coves.community.post/123',
@@ -350,6 +382,7 @@ void main() {
         'indexedAt': '2025-01-01T12:00:05Z',
         'record': ?record,
         'isDeleted': isDeleted,
+        'moderation': ?moderation,
         'stats': <String, dynamic>{
           'upvotes': 0,
           'downvotes': 0,
@@ -521,6 +554,108 @@ void main() {
 
       expect(post.isSensitive, isFalse);
       expect(post.record!.labels, isEmpty);
+    });
+
+    group('server moderation content labels', () {
+      // Moderator labels arrive on postView.moderation, never in the record.
+      const plainRecord = <String, dynamic>{
+        'title': 'Title',
+        'content': 'Body',
+      };
+      final rows = <String, (Object?, bool)>{
+        'an instance nsfw label marks the post sensitive': (
+          <String, dynamic>{
+            'state': 'clear',
+            'contentLabels': <dynamic>[
+              <String, dynamic>{
+                'value': 'nsfw',
+                'sources': <dynamic>[
+                  <String, dynamic>{
+                    'authorityDid': 'did:web:coves.social',
+                    'scope': <String, dynamic>{'kind': 'instance'},
+                  },
+                ],
+              },
+            ],
+          },
+          true,
+        ),
+        'a community nsfw label with truncated sources marks it sensitive': (
+          <String, dynamic>{
+            'state': 'clear',
+            'contentLabels': <dynamic>[
+              <String, dynamic>{
+                'value': 'nsfw',
+                'sources': <dynamic>[
+                  <String, dynamic>{
+                    'authorityDid': 'did:plc:comm',
+                    'scope': <String, dynamic>{
+                      'kind': 'community',
+                      'communityDid': 'did:plc:comm',
+                    },
+                  },
+                ],
+                'sourcesTruncated': true,
+              },
+            ],
+          },
+          true,
+        ),
+        'a non-nsfw moderator label is not sensitive': (
+          <String, dynamic>{
+            'state': 'clear',
+            'contentLabels': <dynamic>[
+              <String, dynamic>{
+                'value': 'spoiler',
+                'sources': <dynamic>[
+                  <String, dynamic>{
+                    'authorityDid': 'did:web:coves.social',
+                    'scope': <String, dynamic>{'kind': 'instance'},
+                  },
+                ],
+              },
+            ],
+          },
+          false,
+        ),
+        'malformed source and label entries are skipped and a valid nsfw '
+            'label still marks it sensitive': (
+          <String, dynamic>{
+            'state': 'clear',
+            'sources': <dynamic>[
+              <String, dynamic>{
+                'scope': <String, dynamic>{'kind': 'instance'},
+              },
+              'x',
+            ],
+            'contentLabels': <dynamic>[
+              <String, dynamic>{'sources': <dynamic>[]},
+              'y',
+              <String, dynamic>{'value': 'nsfw'},
+            ],
+          },
+          true,
+        ),
+        'a malformed moderation field parses and is not sensitive': (
+          <String, dynamic>{'state': 42, 'contentLabels': 'nsfw'},
+          false,
+        ),
+      };
+
+      for (final MapEntry(key: name, value: (moderation, sensitive))
+          in rows.entries) {
+        test(name, () {
+          late PostView post;
+          expect(
+            () => post = PostView.fromJson(
+              postJson(record: plainRecord, moderation: moderation),
+            ),
+            returnsNormally,
+          );
+
+          expect(post.isSensitive, sensitive);
+        });
+      }
     });
 
     test('a deleted post with no record is not sensitive', () {

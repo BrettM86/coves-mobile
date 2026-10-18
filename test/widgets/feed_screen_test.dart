@@ -7,10 +7,13 @@ import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/feed_screen.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+
+import '../test_helpers/fake_providers.dart' show unchangingSessionKey;
 
 // Fake AuthProvider for testing
 class FakeAuthProvider extends AuthProvider {
@@ -70,7 +73,12 @@ class FakeCommunitySubscriptionProvider extends CommunitySubscriptionProvider {
 // Fake MultiFeedProvider for testing
 class FakeMultiFeedProvider extends MultiFeedProvider {
   FakeMultiFeedProvider()
-    : super(FakeAuthProvider(), apiService: CovesApiService());
+    : super(
+        FakeAuthProvider(),
+        apiService: CovesApiService(),
+        postChangeBroadcast: PostChangeBroadcast(),
+        sessionKeyOf: unchangingSessionKey,
+      );
 
   final Map<FeedType, FeedState> _states = {
     FeedType.discover: FeedState.initial(),

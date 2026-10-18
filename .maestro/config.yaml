@@ -55,6 +55,7 @@ executionOrder:
     - e6_delete_post_from_feed
     - e7_delete_post_from_profile
     - e8_reply_draft_system_back
+    - e9_delete_post_profile_open
     - f1_own_profile
     - f2_author_profile
     - f3_edit_profile_persist
@@ -65,5 +66,6 @@ executionOrder:
     - h2_rich_text_linkbars
     - a2_signout_landing
     - d4_discovery_guest
+    - d6_modlog_guest
     - a3_wrong_password
     - a4_oauth_cancel

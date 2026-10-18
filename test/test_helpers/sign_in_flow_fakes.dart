@@ -4,6 +4,9 @@ import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/community_guidelines_provider.dart';
 import 'package:coves_flutter/providers/eula_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
+
+import 'fake_providers.dart';
 
 /// Test doubles for driving a sign-in through the production router
 /// (`createRouter` in main.dart).
@@ -82,7 +85,11 @@ class AcceptedGuidelinesProvider extends CommunityGuidelinesProvider {
 
 /// Feed provider that never loads, so /feed renders its empty state.
 class IdleFeedProvider extends MultiFeedProvider {
-  IdleFeedProvider(super.authProvider, {required super.apiService});
+  IdleFeedProvider(super.authProvider, {required super.apiService})
+    : super(
+        postChangeBroadcast: PostChangeBroadcast(),
+        sessionKeyOf: unchangingSessionKey,
+      );
 
   @override
   Future<void> loadFeed(FeedType type, {bool refresh = false}) async {}

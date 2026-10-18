@@ -6,6 +6,7 @@ import '../models/feed_state.dart';
 import '../models/post.dart';
 import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
+import '../services/post_change_broadcast.dart';
 import '../services/viewer_state_hydrator.dart';
 import 'auth_provider.dart';
 import 'community_subscription_provider.dart';
@@ -31,6 +32,8 @@ class MultiFeedProvider with ChangeNotifier {
   MultiFeedProvider(
     AuthProvider authProvider, {
     required this._apiService,
+    required this._postChangeBroadcast,
+    required this._sessionKeyOf,
     VoteProvider? voteProvider,
     CommunitySubscriptionProvider? subscriptionProvider,
     ViewerStateHydrator? hydrator,
@@ -49,6 +52,7 @@ class MultiFeedProvider with ChangeNotifier {
 
     // Feed responses contain viewer state and cannot cross identities.
     _authProvider.addListener(_onAuthChanged);
+    _postChangeBroadcast.addPostChangeListener(_onPostChanged);
   }
 
   /// Handle authentication state changes
@@ -66,6 +70,8 @@ class MultiFeedProvider with ChangeNotifier {
     if (_authDid != authDid) {
       FeedType.values.forEach(_invalidateRequests);
       _feedStates.clear();
+      _sessionStamps.clear();
+      _removedPostUris.clear();
 
       if (!isAuthenticated) {
         _currentFeedType = FeedType.discover;
@@ -91,7 +97,13 @@ class MultiFeedProvider with ChangeNotifier {
 
   final AuthProvider _authProvider;
   final CovesApiService _apiService;
+  final PostChangeBroadcast _postChangeBroadcast;
   final DateTime Function() _clock;
+
+  /// The current signed-in session's key. Each feed records the session its
+  /// first page was requested under, for admin tools, and drops a page that
+  /// lands under another session.
+  final Object? Function() _sessionKeyOf;
 
   /// Seeds vote/subscription state from each response. Injected app-wide;
   /// when omitted, built from the raw vote/subscription providers this
@@ -104,9 +116,11 @@ class MultiFeedProvider with ChangeNotifier {
 
   // Per-feed state storage
   final Map<FeedType, FeedState> _feedStates = {};
+  final Map<FeedType, Set<String>> _removedPostUris = {};
   final Map<FeedType, int> _requestGenerations = {};
   final Set<FeedType> _pageOneRetryTargets = {};
   final Map<FeedType, DateTime> _cooldownDeadlines = {};
+  final Map<FeedType, Object?> _sessionStamps = {};
 
   // Currently active feed
   FeedType _currentFeedType = FeedType.discover;
@@ -132,6 +146,10 @@ class MultiFeedProvider with ChangeNotifier {
   FeedState getState(FeedType type) {
     return _feedStates[type] ?? FeedState.initial();
   }
+
+  /// The session key [type]'s posts were loaded under, for their admin
+  /// tools; null before a page is loaded.
+  Object? sessionStampFor(FeedType type) => _sessionStamps[type];
 
   /// Set the current active feed type
   ///
@@ -359,6 +377,7 @@ class MultiFeedProvider with ChangeNotifier {
 
     if (refresh) {
       _cooldownDeadlines.remove(type);
+      _removedPostUris.remove(type);
     }
 
     final requestGeneration = _beginRequest(type);
@@ -370,6 +389,7 @@ class MultiFeedProvider with ChangeNotifier {
     // Capture session identity before fetch to detect any auth change
     // (sign-out, or sign-in as different user) during the request
     final sessionDidBeforeFetch = _authProvider.did;
+    final sessionKeyBeforeFetch = _sessionKeyOf();
 
     try {
       if (refresh) {
@@ -394,7 +414,12 @@ class MultiFeedProvider with ChangeNotifier {
       try {
         response = await fetcher(requestedCursor);
       } on ApiException catch (error) {
-        if (!_ownsRequest(type, requestGeneration, sessionDidBeforeFetch)) {
+        if (!_ownsRequest(
+          type,
+          requestGeneration,
+          sessionDidBeforeFetch,
+          sessionKeyBeforeFetch,
+        )) {
           return;
         }
         if (!refresh &&
@@ -404,6 +429,7 @@ class MultiFeedProvider with ChangeNotifier {
             error.statusCode == 400 &&
             error.errorCode == 'InvalidCursor') {
           _pageOneRetryTargets.add(type);
+          _removedPostUris.remove(type);
           _feedStates[type] = getState(type)
               .copyWith(cursor: null, hasMore: true, loadMoreError: null);
           notifyListeners();
@@ -414,7 +440,12 @@ class MultiFeedProvider with ChangeNotifier {
         }
       }
 
-      if (!_ownsRequest(type, requestGeneration, sessionDidBeforeFetch)) {
+      if (!_ownsRequest(
+        type,
+        requestGeneration,
+        sessionDidBeforeFetch,
+        sessionKeyBeforeFetch,
+      )) {
         return;
       }
 
@@ -436,13 +467,20 @@ class MultiFeedProvider with ChangeNotifier {
           : getState(type).posts;
       final newPosts = [
         ...existing,
-        ..._withoutDuplicates(response.feed, existing),
+        ..._withoutDuplicates(
+          response.feed,
+          existing,
+          _removedPostUris[type] ?? const <String>{},
+        ),
       ];
 
       final hasMore = response.cursor != null;
 
       _pageOneRetryTargets.remove(type);
       _cooldownDeadlines.remove(type);
+      if (replacePosts) {
+        _sessionStamps[type] = sessionKeyBeforeFetch;
+      }
       _feedStates[type] = currentState.copyWith(
         posts: newPosts,
         cursor: response.cursor,
@@ -475,7 +513,12 @@ class MultiFeedProvider with ChangeNotifier {
       // this caller, not to the hydrator.
       _hydrator.hydrateFeed(response.feed);
     } on Exception catch (e) {
-      if (!_ownsRequest(type, requestGeneration, sessionDidBeforeFetch)) {
+      if (!_ownsRequest(
+        type,
+        requestGeneration,
+        sessionDidBeforeFetch,
+        sessionKeyBeforeFetch,
+      )) {
         return;
       }
 
@@ -513,7 +556,12 @@ class MultiFeedProvider with ChangeNotifier {
       // otherwise leave isLoading/isLoadingMore stuck true forever.
       // Guarantee the flags are cleared so the feed can retry.
       final latestState = _feedStates[type];
-      if (_ownsRequest(type, requestGeneration, sessionDidBeforeFetch) &&
+      if (_ownsRequest(
+            type,
+            requestGeneration,
+            sessionDidBeforeFetch,
+            sessionKeyBeforeFetch,
+          ) &&
           latestState != null &&
           (latestState.isLoading || latestState.isLoadingMore)) {
         _feedStates[type] = latestState.copyWith(
@@ -521,7 +569,12 @@ class MultiFeedProvider with ChangeNotifier {
           isLoadingMore: false,
         );
       }
-      if (_ownsRequest(type, requestGeneration, sessionDidBeforeFetch)) {
+      if (_ownsRequest(
+        type,
+        requestGeneration,
+        sessionDidBeforeFetch,
+        sessionKeyBeforeFetch,
+      )) {
         notifyListeners();
       }
     }
@@ -533,10 +586,16 @@ class MultiFeedProvider with ChangeNotifier {
     return generation;
   }
 
-  bool _ownsRequest(FeedType type, int generation, String? authDid) {
+  bool _ownsRequest(
+    FeedType type,
+    int generation,
+    String? authDid,
+    Object? sessionKey,
+  ) {
     return !_isDisposed &&
         _requestGenerations[type] == generation &&
-        _authProvider.did == authDid;
+        _authProvider.did == authDid &&
+        _sessionKeyOf() == sessionKey;
   }
 
   void _invalidateRequests(FeedType type) {
@@ -558,8 +617,9 @@ class MultiFeedProvider with ChangeNotifier {
   static List<FeedViewPost> _withoutDuplicates(
     List<FeedViewPost> incoming,
     List<FeedViewPost> existing,
+    Set<String> removedUris,
   ) {
-    final seen = existing.map((p) => p.post.uri).toSet();
+    final seen = {...existing.map((p) => p.post.uri), ...removedUris};
     return [
       for (final post in incoming)
         if (seen.add(post.post.uri)) post,
@@ -661,33 +721,45 @@ class MultiFeedProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Remove the post with [uri] from every loaded feed without refetching,
-  /// e.g. after the author deletes it.
-  ///
-  /// Each affected feed gets a new posts list; every other part of its state
-  /// is kept. Notifies once when any feed held the post, and not at all
-  /// otherwise.
-  void removePost(String uri) {
+  void _onPostChanged(PostChange change) {
     if (_isDisposed) {
       return;
     }
 
-    var removedAny = false;
+    var changedAny = false;
     for (final type in FeedType.values) {
       final state = _feedStates[type];
       if (state == null) {
         continue;
       }
-      final remainingPosts = state.posts
-          .where((feedPost) => feedPost.post.uri != uri)
-          .toList();
-      if (remainingPosts.length != state.posts.length) {
-        _feedStates[type] = state.copyWith(posts: remainingPosts);
-        removedAny = true;
+      switch (change) {
+        case PostRemoved(:final uri):
+          _removedPostUris.putIfAbsent(type, () => <String>{}).add(uri);
+          final remainingPosts = state.posts
+              .where((feedPost) => feedPost.post.uri != uri)
+              .toList();
+          if (remainingPosts.length != state.posts.length) {
+            _feedStates[type] = state.copyWith(posts: remainingPosts);
+            changedAny = true;
+          }
+        case PostReplaced(:final post):
+          if (!state.posts.any((feedPost) => feedPost.post.uri == post.uri)) {
+            continue;
+          }
+          _feedStates[type] = state.copyWith(
+            posts: [
+              for (final feedPost in state.posts)
+                if (feedPost.post.uri == post.uri)
+                  feedPost.copyWith(post: post)
+                else
+                  feedPost,
+            ],
+          );
+          changedAny = true;
       }
     }
 
-    if (removedAny) {
+    if (changedAny) {
       notifyListeners();
     }
   }
@@ -699,7 +771,9 @@ class MultiFeedProvider with ChangeNotifier {
     }
 
     _invalidateRequests(type);
+    _removedPostUris.remove(type);
     _feedStates[type] = FeedState.initial();
+    _sessionStamps.remove(type);
     notifyListeners();
   }
 
@@ -711,12 +785,15 @@ class MultiFeedProvider with ChangeNotifier {
 
     FeedType.values.forEach(_invalidateRequests);
     _feedStates.clear();
+    _sessionStamps.clear();
+    _removedPostUris.clear();
     notifyListeners();
   }
 
   @override
   void dispose() {
     _isDisposed = true;
+    _postChangeBroadcast.removePostChangeListener(_onPostChanged);
     FeedType.values.forEach(_invalidateRequests);
     // Stop time updates and cancel timer
     _stopTimeUpdates();

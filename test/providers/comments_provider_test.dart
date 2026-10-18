@@ -751,6 +751,268 @@ void main() {
       });
     });
 
+    group('errorCode', () {
+      void stubGetCommentsThrows(Object error) {
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+          ),
+        ).thenThrow(error);
+      }
+
+      void stubGetCommentsReturns(List<ThreadViewComment> comments) {
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+          ),
+        ).thenAnswer(
+          (_) async => CommentsResponse(post: {}, comments: comments),
+        );
+      }
+
+      // RootNotFound (the post itself is gone) must stay distinguishable
+      // from any other 404 code.
+      for (final serverCode in const ['RootNotFound', 'NotFound']) {
+        test('initial load 404 exposes the server code $serverCode', () async {
+          stubGetCommentsThrows(
+            NotFoundException('Not found', errorCode: serverCode),
+          );
+
+          await commentsProvider.loadComments(refresh: true);
+
+          expect(commentsProvider.errorCode, serverCode);
+        });
+      }
+
+      test('a refresh of a loaded thread that fails with RootNotFound '
+          'exposes it, and a successful retry clears it', () async {
+        stubGetCommentsReturns([_createMockThreadComment('comment1')]);
+        await commentsProvider.loadComments(refresh: true);
+        expect(commentsProvider.comments, hasLength(1));
+
+        stubGetCommentsThrows(
+          NotFoundException('Post not found', errorCode: 'RootNotFound'),
+        );
+        await commentsProvider.refreshComments();
+
+        expect(commentsProvider.errorCode, 'RootNotFound');
+
+        stubGetCommentsReturns([_createMockThreadComment('comment1')]);
+        await commentsProvider.retry();
+
+        expect(commentsProvider.errorCode, isNull);
+      });
+
+      group('once the post is gone', () {
+        // While [rootGone] is false the first page loads with a next-page
+        // cursor; once true, every getComments request fails RootNotFound.
+        late bool rootGone;
+
+        void stubComments(
+          Future<CommentsResponse> Function(Invocation invocation) answer,
+        ) {
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: anyNamed('cursor'),
+              parentRkey: anyNamed('parentRkey'),
+            ),
+          ).thenAnswer(answer);
+        }
+
+        setUp(() {
+          rootGone = false;
+          stubComments((invocation) async {
+            if (rootGone) {
+              throw NotFoundException(
+                'Post not found',
+                errorCode: 'RootNotFound',
+              );
+            }
+            final cursor = invocation.namedArguments[#cursor] as String?;
+            return CommentsResponse(
+              post: {},
+              comments: [_createMockThreadComment(cursor ?? 'comment1')],
+              cursor: cursor == null ? 'cursor-1' : null,
+            );
+          });
+        });
+
+        void verifyNoCommentsRequest() {
+          verifyNever(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: anyNamed('cursor'),
+              parentRkey: anyNamed('parentRkey'),
+            ),
+          );
+        }
+
+        test('a sort change of a loaded thread that fails with RootNotFound '
+            'exposes it', () async {
+          await commentsProvider.loadComments(refresh: true);
+          expect(commentsProvider.comments, hasLength(1));
+
+          rootGone = true;
+          await commentsProvider.setSortOption('new');
+
+          expect(commentsProvider.errorCode, 'RootNotFound');
+        });
+
+        test('a load-more that fails with RootNotFound exposes it and a '
+            'later load-more requests nothing', () async {
+          await commentsProvider.loadComments(refresh: true);
+          expect(commentsProvider.hasMore, isTrue);
+
+          rootGone = true;
+          await commentsProvider.loadMoreComments();
+
+          expect(commentsProvider.errorCode, 'RootNotFound');
+
+          clearInteractions(mockApiService);
+          await commentsProvider.loadMoreComments();
+
+          verifyNoCommentsRequest();
+        });
+
+        test('after a refresh fails with RootNotFound while a next-page '
+            'cursor is retained, load-more requests nothing', () async {
+          await commentsProvider.loadComments(refresh: true);
+          expect(commentsProvider.hasMore, isTrue);
+
+          rootGone = true;
+          await commentsProvider.refreshComments();
+          expect(commentsProvider.errorCode, 'RootNotFound');
+
+          clearInteractions(mockApiService);
+          await commentsProvider.loadMoreComments();
+
+          verifyNoCommentsRequest();
+        });
+
+        // A refresh that cannot reach the server says nothing about the
+        // post, so the thread stays unavailable.
+        final otherFailures = <String, ApiException>{
+          'a 500': ServerException('Internal error', statusCode: 500),
+          'no connection': NetworkException('Network error'),
+        };
+        for (final MapEntry(key: label, value: failure)
+            in otherFailures.entries) {
+          test('a refresh of a gone post that fails with $label keeps '
+              'RootNotFound and load-more still requests nothing', () async {
+            await commentsProvider.loadComments(refresh: true);
+            expect(commentsProvider.hasMore, isTrue);
+            rootGone = true;
+            await commentsProvider.refreshComments();
+            expect(commentsProvider.errorCode, 'RootNotFound');
+
+            stubComments((_) async => throw failure);
+            await commentsProvider.refreshComments();
+
+            expect(commentsProvider.errorCode, 'RootNotFound');
+
+            clearInteractions(mockApiService);
+            await commentsProvider.loadMoreComments();
+
+            verifyNoCommentsRequest();
+          });
+        }
+
+        test('a load-more superseded by a successful refresh that then fails '
+            'with RootNotFound leaves the new thread live', () async {
+          final staleLoadMore = Completer<CommentsResponse>();
+          var firstPages = 0;
+          stubComments((invocation) {
+            final cursor = invocation.namedArguments[#cursor] as String?;
+            if (cursor == 'cursor-1') {
+              return staleLoadMore.future;
+            }
+            firstPages++;
+            return Future.value(
+              CommentsResponse(
+                post: {},
+                comments: [_createMockThreadComment('page-$firstPages')],
+                cursor: firstPages == 1 ? 'cursor-1' : 'cursor-2',
+              ),
+            );
+          });
+          await commentsProvider.loadComments(refresh: true);
+          expect(commentsProvider.hasMore, isTrue);
+
+          final loadMore = commentsProvider.loadMoreComments();
+          await Future<void>.delayed(Duration.zero);
+          await commentsProvider.refreshComments();
+          expect(
+            commentsProvider.comments.map((thread) => thread.comment.uri),
+            ['page-2'],
+          );
+
+          staleLoadMore.completeError(
+            NotFoundException('Post not found', errorCode: 'RootNotFound'),
+          );
+          await loadMore;
+
+          expect(commentsProvider.errorCode, isNull);
+          expect(
+            commentsProvider.hasMore,
+            isTrue,
+            reason: 'the new page carries cursor-2',
+          );
+        });
+
+        test('a refresh of a gone post keeps RootNotFound while in flight '
+            'and clears it once it succeeds', () async {
+          await commentsProvider.loadComments(refresh: true);
+          rootGone = true;
+          await commentsProvider.refreshComments();
+          expect(commentsProvider.errorCode, 'RootNotFound');
+
+          final response = Completer<CommentsResponse>();
+          stubComments((_) => response.future);
+          final refresh = commentsProvider.refreshComments();
+          await Future<void>.delayed(Duration.zero);
+
+          expect(
+            commentsProvider.errorCode,
+            'RootNotFound',
+            reason: 'the post is still gone until a refresh lands',
+          );
+
+          response.complete(
+            CommentsResponse(
+              post: {},
+              comments: [_createMockThreadComment('comment-back')],
+            ),
+          );
+          await refresh;
+
+          expect(commentsProvider.errorCode, isNull);
+          expect(
+            commentsProvider.comments.map((thread) => thread.comment.uri),
+            ['comment-back'],
+          );
+        });
+      });
+    });
+
     // Note: "Auth state changes" group removed
     // Sign-out cleanup is now handled by CommentsProviderCache which disposes
     // all cached providers when the user signs out. Individual providers no

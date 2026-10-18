@@ -15,8 +15,10 @@ import 'package:coves_flutter/screens/home/main_shell_screen.dart';
 import 'package:coves_flutter/screens/home/post_detail_screen.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/viewer_state_hydrator.dart';
 import 'package:coves_flutter/services/vote_service.dart';
+import 'package:coves_flutter/utils/post_detail_route.dart';
 import 'package:coves_flutter/widgets/comment_card.dart';
 import 'package:coves_flutter/widgets/sign_in_dialog.dart';
 import 'package:flutter/material.dart';
@@ -25,6 +27,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/fake_providers.dart';
 import '../test_helpers/sign_in_flow_fakes.dart';
 import '../test_helpers/test_mocks.dart';
 
@@ -138,6 +141,8 @@ class _RouterHarness {
     // A post pushed with an extra is rebuilt through the cold path on the
     // router's first refresh, which loads the post by URI. Mockito cannot
     // build a placeholder of the sealed result type while stubbing.
+    // The cold-load loader stamps the post with the viewer's authority.
+    when(api.getViewerAuthority()).thenAnswer((_) async => false);
     provideDummy<PostGetResult>(const PostGetNotFound(_postUri));
     when(api.getPost(any))
         .thenAnswer((_) async => PostGetSuccess(_feedPost().post));
@@ -160,12 +165,14 @@ class _RouterHarness {
   Widget app() {
     return MultiProvider(
       providers: [
+        Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
         ChangeNotifierProvider<AuthProvider>.value(value: auth),
         ChangeNotifierProvider<VoteProvider>.value(value: votes),
         ChangeNotifierProvider<BlockProvider>.value(value: blocks),
         ChangeNotifierProvider<MultiFeedProvider>.value(value: feeds),
         Provider<CovesApiService>.value(value: api),
         Provider<CommentsProviderCache>.value(value: cache),
+        viewerAuthorityRegistration(auth: auth, apiService: api),
       ],
       child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
     );
@@ -254,7 +261,12 @@ Future<void> _openPostFromFeed(
   await tester.pumpAndSettle();
   expect(find.byType(MainShellScreen), findsOneWidget);
 
-  unawaited(harness.router.push(_postLocation, extra: _feedPost()));
+  unawaited(
+    harness.router.push(
+      _postLocation,
+      extra: PostDetailRouteExtra(post: _feedPost(), sessionStamp: null),
+    ),
+  );
   await tester.pumpAndSettle();
   _expectNoErrors(tester, 'after opening the post');
   expect(find.text('First comment'), findsOneWidget);
