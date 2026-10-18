@@ -1,0 +1,74 @@
+# Section C — moderation read side: removed comment placeholder next to a
+# live reply, and an NSFW post concealed in the feed card, the community
+# feed and on detail. Assumes a signed-in session as mari and the seeded
+# "Mod seed B/C" posts in !news. (The removed-post tombstone, "Mod seed A",
+# is reachable only by deep link, which Maestro cannot drive here: the
+# custom scheme raises an app chooser.)
+appId: social.coves.dev
+---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+# Discover feed card is concealed
+- scrollUntilVisible:
+    element:
+      text: "NSFW Content"
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: build/maestro/c8_nsfw_discover_card
+- assertNotVisible: "[\\s\\S]*Mod seed A[\\s\\S]*"
+# Community feed card is concealed and the removed post is absent
+- tapOn: "Me"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*@mari.local.coves.dev[\\s\\S]*"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "!news@coves.social"
+    direction: DOWN
+    timeout: 60000
+- tapOn:
+    text: "!news@coves.social"
+    index: 0
+- extendedWaitUntil:
+    visible: "Search posts"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "NSFW Content"
+    direction: DOWN
+    timeout: 60000
+- takeScreenshot: build/maestro/c8_nsfw_community_card
+- assertNotVisible: "[\\s\\S]*Mod seed A[\\s\\S]*"
+# Detail of the concealed post
+- tapOn: "Mod seed C.*"
+- extendedWaitUntil:
+    visible: "NSFW Content"
+    timeout: 20000
+- assertVisible: "Show"
+- takeScreenshot: build/maestro/c8_nsfw_detail
+- back
+- back
+# Removed comment placeholder with a live reply under it
+- tapOn: "Me"
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*Mod seed B[\\s\\S]*"
+    direction: DOWN
+    timeout: 60000
+- tapOn: "[\\s\\S]*Mod seed B[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*Seed live reply under the removed comment[\\s\\S]*"
+    timeout: 20000
+- assertVisible: "[\\s\\S]*Removed by server admin[\\s\\S]*"
+- takeScreenshot: build/maestro/c8_removed_comment
+# The placeholder does not open the composer; the live reply does
+- tapOn: "[\\s\\S]*Removed by server admin[\\s\\S]*"
+- assertNotVisible: "Send comment[\\s\\S]*"
+- tapOn: "[\\s\\S]*Seed live reply under the removed comment[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Send comment[\\s\\S]*"
+    timeout: 10000
+- back
