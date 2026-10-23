@@ -128,13 +128,14 @@ class _Harness {
       apiService: apiService,
       voteProvider: voteProvider,
       clock: clock,
-      postChangeBroadcast: PostChangeBroadcast(),
+      postChangeBroadcast: postChangeBroadcast,
       sessionKeyOf: unchangingSessionKey,
     );
   }
 
   late final AuthProvider authProvider;
   final MockCovesApiService apiService = MockCovesApiService();
+  final PostChangeBroadcast postChangeBroadcast = PostChangeBroadcast();
   final List<_FeedAnswer> _discoverAnswers = [];
   final List<_FeedAnswer> _timelineAnswers = [];
   final List<_FeedRequest> discoverRequests = [];
@@ -257,7 +258,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Discover Hot InvalidCursor recovery', () {
-    test('retries page one exactly once and replaces the stale page', () async {
+    test('retries page one exactly once and appends it deduplicated', () async {
       final harness = _Harness();
       addTearDown(harness.dispose);
       await harness.seedDiscover(posts: [feedPost('stale'), feedPost('kept')]);
@@ -282,7 +283,7 @@ void main() {
       await harness.provider.loadMore(FeedType.discover);
 
       expect(_cursors(harness.discoverRequests), [null, 'stale-cursor', null]);
-      expect(postIds(harness.provider), ['kept', 'fresh']);
+      expect(postIds(harness.provider), ['stale', 'kept', 'fresh']);
       final state = harness.provider.getState(FeedType.discover);
       expect(state.cursor, 'fresh-cursor');
       expect(state.hasMore, isTrue);
@@ -293,7 +294,7 @@ void main() {
           'at://did:plc:author/social.coves.community.post/kept',
         ),
         isTrue,
-        reason: 'the replacement response must still hydrate viewer state',
+        reason: 'the recovery response must still hydrate viewer state',
       );
 
       harness.discoverPage(
@@ -302,7 +303,7 @@ void main() {
       await harness.provider.loadMore(FeedType.discover);
 
       expect(harness.discoverRequests.last.cursor, 'fresh-cursor');
-      expect(postIds(harness.provider), ['kept', 'fresh', 'next']);
+      expect(postIds(harness.provider), ['stale', 'kept', 'fresh', 'next']);
       expect(harness.provider.getState(FeedType.discover).cursor, 'after-next');
     });
 
@@ -311,10 +312,12 @@ void main() {
       ('second InvalidCursor', invalidCursor()),
     ]) {
       test('${recoveryFailure.$1} does not recurse and '
-          'manual retry targets page one', () async {
+          'manual retry appends page one', () async {
         final harness = _Harness();
         addTearDown(harness.dispose);
-        await harness.seedDiscover();
+        await harness.seedDiscover(
+          posts: [feedPost('stale'), feedPost('kept')],
+        );
         harness
           ..discoverError(invalidCursor())
           ..discoverError(recoveryFailure.$2);
@@ -326,7 +329,7 @@ void main() {
           'stale-cursor',
           null,
         ], reason: 'the page-one recovery must not recursively recover');
-        expect(postIds(harness.provider), ['stale']);
+        expect(postIds(harness.provider), ['stale', 'kept']);
         final failedState = harness.provider.getState(FeedType.discover);
         expect(failedState.cursor, isNull);
         expect(failedState.hasMore, isTrue);
@@ -334,12 +337,15 @@ void main() {
         expect(failedState.loadMoreError, isNotNull);
 
         harness.discoverPage(
-          TimelineResponse(feed: [feedPost('retried')], cursor: 'next'),
+          TimelineResponse(
+            feed: [feedPost('kept'), feedPost('retried')],
+            cursor: 'next',
+          ),
         );
         await harness.provider.retryLoadMore(FeedType.discover);
 
         expect(harness.discoverRequests.last.cursor, isNull);
-        expect(postIds(harness.provider), ['retried']);
+        expect(postIds(harness.provider), ['stale', 'kept', 'retried']);
         expect(harness.provider.getState(FeedType.discover).cursor, 'next');
         expect(
           harness.provider.getState(FeedType.discover).loadMoreError,
@@ -347,6 +353,36 @@ void main() {
         );
       });
     }
+
+    test('a removed post stays hidden when recovery re-delivers it', () async {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      await harness.seedDiscover(
+        posts: [feedPost('stale'), feedPost('kept'), feedPost('gone')],
+      );
+      harness.postChangeBroadcast.removePost(
+        'at://did:plc:author/social.coves.community.post/gone',
+      );
+      expect(postIds(harness.provider), ['stale', 'kept']);
+
+      harness
+        ..discoverError(invalidCursor())
+        ..discoverPage(
+          TimelineResponse(
+            feed: [feedPost('gone'), feedPost('fresh')],
+            cursor: 'fresh-cursor',
+          ),
+        );
+
+      await harness.provider.loadMore(FeedType.discover);
+
+      expect(_cursors(harness.discoverRequests), [null, 'stale-cursor', null]);
+      expect(postIds(harness.provider), ['stale', 'kept', 'fresh']);
+      expect(
+        harness.provider.getState(FeedType.discover).cursor,
+        'fresh-cursor',
+      );
+    });
   });
 
   group('load-more errors require explicit retry', () {
@@ -457,11 +493,13 @@ void main() {
     );
 
     test(
-      'failed InvalidCursor recovery blocks scroll and retries page one',
+      'failed InvalidCursor recovery blocks scroll and Retry appends page one',
       () async {
         final harness = _Harness();
         addTearDown(harness.dispose);
-        await harness.seedDiscover();
+        await harness.seedDiscover(
+          posts: [feedPost('stale'), feedPost('kept')],
+        );
         harness
           ..discoverError(invalidCursor())
           ..discoverError(ApiException('page one failed'));
@@ -473,7 +511,7 @@ void main() {
           'stale-cursor',
           null,
         ]);
-        expect(postIds(harness.provider), ['stale']);
+        expect(postIds(harness.provider), ['stale', 'kept']);
         expect(
           harness.provider.getState(FeedType.discover).loadMoreError,
           'page one failed',
@@ -481,7 +519,7 @@ void main() {
         harness
           ..discoverPage(
             TimelineResponse(
-              feed: [feedPost('retried-page-one')],
+              feed: [feedPost('kept'), feedPost('retried-page-one')],
               cursor: 'new-cursor',
             ),
           )
@@ -504,7 +542,11 @@ void main() {
         await harness.provider.retryLoadMore(FeedType.discover);
 
         expect(harness.discoverRequests.last.cursor, isNull);
-        expect(postIds(harness.provider), ['retried-page-one']);
+        expect(postIds(harness.provider), [
+          'stale',
+          'kept',
+          'retried-page-one',
+        ]);
         final state = harness.provider.getState(FeedType.discover);
         expect(state.cursor, 'new-cursor');
         expect(state.loadMoreError, isNull);
@@ -783,7 +825,7 @@ void main() {
         await harness.provider.retryLoadMore(FeedType.discover);
 
         expect(harness.discoverRequests.last.cursor, isNull);
-        expect(postIds(harness.provider), ['recovered']);
+        expect(postIds(harness.provider), ['stale', 'recovered']);
         state = harness.provider.getState(FeedType.discover);
         expect(state.cursor, 'new-cursor');
         expect(state.loadMoreError, isNull);
@@ -841,10 +883,7 @@ void main() {
 
           expect(harness.discoverRequests.length, requestCount + 1);
           expect(harness.discoverRequests.last.cursor, scenario.target);
-          expect(
-            postIds(harness.provider),
-            scenario.pageOne ? ['deadline-retry'] : ['stale', 'deadline-retry'],
-          );
+          expect(postIds(harness.provider), ['stale', 'deadline-retry']);
           expect(
             harness.provider.getState(FeedType.discover).loadMoreError,
             isNull,
@@ -1558,6 +1597,241 @@ void main() {
           );
         },
       );
+    }
+  });
+
+  group('empty load-more pages fetch onward', () {
+    test('InvalidCursor recovery whose page one is all on-screen posts '
+        'fetches the next page with the recovery cursor', () async {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      await harness.seedDiscover(posts: [feedPost('stale'), feedPost('kept')]);
+      harness
+        ..discoverError(invalidCursor())
+        ..discoverPage(
+          TimelineResponse(
+            feed: [feedPost('stale'), feedPost('kept')],
+            cursor: 'fresh-cursor',
+          ),
+        )
+        ..discoverPage(
+          TimelineResponse(
+            feed: [feedPost('kept'), feedPost('next')],
+            cursor: 'after-next',
+          ),
+        );
+
+      await harness.provider.loadMore(FeedType.discover);
+
+      expect(_cursors(harness.discoverRequests), [
+        null,
+        'stale-cursor',
+        null,
+        'fresh-cursor',
+      ]);
+      expect(postIds(harness.provider), ['stale', 'kept', 'next']);
+      final state = harness.provider.getState(FeedType.discover);
+      expect(state.cursor, 'after-next');
+      expect(state.hasMore, isTrue);
+      expect(state.isLoadingMore, isFalse);
+      expect(state.error, isNull);
+      expect(state.loadMoreError, isNull);
+    });
+
+    for (final scenario in <(String, List<String>, List<String>)>[
+      ('only duplicates', ['timeline', 'kept'], []),
+      ('an empty feed list', [], []),
+      ('only removed posts', ['gone'], ['gone']),
+    ]) {
+      final (name, pageIds, removedIds) = scenario;
+      test(
+        'For You load-more with $name and a cursor fetches onward',
+        () async {
+          final harness = _Harness();
+          addTearDown(harness.dispose);
+          await harness.seedForYou(
+            posts: [feedPost('timeline'), feedPost('kept'), feedPost('gone')],
+          );
+          for (final id in removedIds) {
+            harness.postChangeBroadcast.removePost(
+              'at://did:plc:author/social.coves.community.post/$id',
+            );
+          }
+          harness
+            ..timelinePage(
+              TimelineResponse(
+                feed: [for (final id in pageIds) feedPost(id)],
+                cursor: 'page-2',
+              ),
+            )
+            ..timelinePage(
+              TimelineResponse(
+                feed: [feedPost('timeline-next')],
+                cursor: 'page-3',
+              ),
+            );
+
+          await harness.provider.loadMore(FeedType.forYou);
+
+          expect(_cursors(harness.timelineRequests), [
+            null,
+            'timeline-cursor',
+            'page-2',
+          ]);
+          final state = harness.provider.getState(FeedType.forYou);
+          expect(state.posts.map((post) => post.post.rkey).toList(), [
+            'timeline',
+            'kept',
+            if (removedIds.isEmpty) 'gone',
+            'timeline-next',
+          ]);
+          expect(state.cursor, 'page-3');
+          expect(state.hasMore, isTrue);
+          expect(state.loadMoreError, isNull);
+        },
+      );
+    }
+
+    test('stops after three automatic follow-ups with the cursor kept '
+        'for the next scroll', () async {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      await harness.seedDiscover();
+      harness
+        ..discoverPage(
+          TimelineResponse(feed: [feedPost('stale')], cursor: 'c1'),
+        )
+        ..discoverPage(TimelineResponse(feed: [], cursor: 'c2'))
+        ..discoverPage(
+          TimelineResponse(feed: [feedPost('stale')], cursor: 'c3'),
+        )
+        ..discoverPage(
+          TimelineResponse(feed: [feedPost('stale')], cursor: 'c4'),
+        )
+        ..discoverPage(
+          TimelineResponse(feed: [feedPost('next')], cursor: 'c5'),
+        );
+
+      await harness.provider.loadMore(FeedType.discover);
+
+      expect(_cursors(harness.discoverRequests), [
+        null,
+        'stale-cursor',
+        'c1',
+        'c2',
+        'c3',
+      ]);
+      expect(postIds(harness.provider), ['stale']);
+      final state = harness.provider.getState(FeedType.discover);
+      expect(state.cursor, 'c4');
+      expect(state.hasMore, isTrue);
+      expect(state.isLoadingMore, isFalse);
+      expect(state.loadMoreError, isNull);
+
+      await harness.provider.loadMore(FeedType.discover);
+
+      expect(harness.discoverRequests.last.cursor, 'c4');
+      expect(postIds(harness.provider), ['stale', 'next']);
+      expect(harness.provider.getState(FeedType.discover).cursor, 'c5');
+    });
+
+    test('a failed automatic follow-up sets loadMoreError and stops '
+        'until retry', () async {
+      final harness = _Harness();
+      addTearDown(harness.dispose);
+      await harness.seedDiscover();
+      harness
+        ..discoverPage(
+          TimelineResponse(feed: [feedPost('stale')], cursor: 'c1'),
+        )
+        ..discoverError(ApiException('offline'))
+        ..discoverPage(
+          TimelineResponse(feed: [feedPost('retried')], cursor: 'c2'),
+        );
+
+      await harness.provider.loadMore(FeedType.discover);
+
+      expect(_cursors(harness.discoverRequests), [null, 'stale-cursor', 'c1']);
+      expect(postIds(harness.provider), ['stale']);
+      final state = harness.provider.getState(FeedType.discover);
+      expect(state.loadMoreError, 'offline');
+      expect(state.isLoadingMore, isFalse);
+
+      await harness.provider.retryLoadMore(FeedType.discover);
+
+      expect(harness.discoverRequests.last.cursor, 'c1');
+      expect(postIds(harness.provider), ['stale', 'retried']);
+      expect(
+        harness.provider.getState(FeedType.discover).loadMoreError,
+        isNull,
+      );
+    });
+
+    for (final boundary in ['refresh', 'sort change', 'dispose']) {
+      test('$boundary during an automatic follow-up stops the chain', () async {
+        final harness = _Harness();
+        if (boundary == 'dispose') {
+          addTearDown(harness.voteProvider.dispose);
+        } else {
+          addTearDown(harness.dispose);
+        }
+        await harness.seedDiscover();
+        final followUp = Completer<TimelineResponse>();
+        harness
+          ..discoverPage(
+            TimelineResponse(feed: [feedPost('stale')], cursor: 'c1'),
+          )
+          ..discoverFuture(followUp.future);
+
+        final pending = harness.provider.loadMore(FeedType.discover);
+        await pumpEventQueue();
+
+        expect(_cursors(harness.discoverRequests), [
+          null,
+          'stale-cursor',
+          'c1',
+        ]);
+
+        switch (boundary) {
+          case 'refresh':
+            harness.discoverPage(
+              TimelineResponse(
+                feed: [feedPost('fresh')],
+                cursor: 'refresh-cursor',
+              ),
+            );
+            await harness.provider.loadFeed(FeedType.discover, refresh: true);
+          case 'sort change':
+            harness.provider.setSort('new');
+          case 'dispose':
+            harness.provider.dispose();
+        }
+        final requestsAfterBoundary = _cursors(harness.discoverRequests);
+        harness.discoverPage(
+          TimelineResponse(feed: [feedPost('extra')], cursor: 'extra-cursor'),
+        );
+
+        followUp.complete(
+          TimelineResponse(feed: [feedPost('stale')], cursor: 'late-cursor'),
+        );
+        await pending;
+        await pumpEventQueue();
+
+        expect(
+          _cursors(harness.discoverRequests),
+          requestsAfterBoundary,
+          reason: 'no request may follow the boundary',
+        );
+        if (boundary == 'refresh') {
+          expect(requestsAfterBoundary, [null, 'stale-cursor', 'c1', null]);
+          expect(postIds(harness.provider), ['fresh']);
+          final state = harness.provider.getState(FeedType.discover);
+          expect(state.cursor, 'refresh-cursor');
+          expect(state.isLoading, isFalse);
+          expect(state.isLoadingMore, isFalse);
+          expect(state.loadMoreError, isNull);
+        }
+      });
     }
   });
 }

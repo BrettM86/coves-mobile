@@ -119,6 +119,9 @@ class MultiFeedProvider with ChangeNotifier {
   final Map<FeedType, Set<String>> _removedPostUris = {};
   final Map<FeedType, int> _requestGenerations = {};
   final Set<FeedType> _pageOneRetryTargets = {};
+  // The subset of page-one retries a sort change requested: their page one
+  // replaces the list, where an InvalidCursor recovery's page one appends.
+  final Set<FeedType> _pageOneReplacementTargets = {};
   final Map<FeedType, DateTime> _cooldownDeadlines = {};
   final Map<FeedType, Object?> _sessionStamps = {};
 
@@ -360,6 +363,14 @@ class MultiFeedProvider with ChangeNotifier {
     await loadFeed(type);
   }
 
+  /// Most pages a load-more fetches on its own after a page that added no
+  /// posts. Load-more only runs when the user scrolls or taps the error
+  /// row, so a page that adds nothing (all duplicates or removed posts, as
+  /// right after an expired Discover snapshot's page one is appended) would
+  /// otherwise leave a user at the bottom of the feed stalled. The cap
+  /// bounds the request burst; past it, the next scroll continues.
+  static const int _maxEmptyPageFollowUps = 3;
+
   /// Common feed fetching logic (DRY principle - eliminates code
   /// duplication)
   Future<void> _fetchFeed({
@@ -368,6 +379,7 @@ class MultiFeedProvider with ChangeNotifier {
     required Future<TimelineResponse> Function(String? cursor) fetcher,
     required String feedName,
     required bool isDiscoverHot,
+    int followUps = 0,
   }) async {
     final currentState = getState(type);
 
@@ -390,6 +402,7 @@ class MultiFeedProvider with ChangeNotifier {
     // (sign-out, or sign-in as different user) during the request
     final sessionDidBeforeFetch = _authProvider.did;
     final sessionKeyBeforeFetch = _sessionKeyOf();
+    var fetchOnward = false;
 
     try {
       if (refresh) {
@@ -409,8 +422,10 @@ class MultiFeedProvider with ChangeNotifier {
       }
       notifyListeners();
 
+      final replacePosts =
+          refresh ||
+          (isPageOneRetry && _pageOneReplacementTargets.contains(type));
       TimelineResponse response;
-      var replacePosts = refresh || isPageOneRetry;
       try {
         response = await fetcher(requestedCursor);
       } on ApiException catch (error) {
@@ -429,12 +444,10 @@ class MultiFeedProvider with ChangeNotifier {
             error.statusCode == 400 &&
             error.errorCode == 'InvalidCursor') {
           _pageOneRetryTargets.add(type);
-          _removedPostUris.remove(type);
           _feedStates[type] = getState(type)
               .copyWith(cursor: null, hasMore: true, loadMoreError: null);
           notifyListeners();
           response = await fetcher(null);
-          replacePosts = true;
         } else {
           rethrow;
         }
@@ -462,6 +475,13 @@ class MultiFeedProvider with ChangeNotifier {
       // A load-more page is appended to the feed's posts as they are now,
       // not to the pre-request snapshot, so a removePost that ran while the
       // page was in flight stays applied.
+      //
+      // Only a refresh or a sort change's page one replaces the list. When
+      // Discover Hot's ranking snapshot expires (InvalidCursor), the fresh
+      // page one, from either the immediate recovery or a later retry of it,
+      // is appended like any load-more page so the feed does not jump; it
+      // and later pages can re-deliver posts already on screen or removed,
+      // and the dedup drops them.
       final existing = replacePosts
           ? const <FeedViewPost>[]
           : getState(type).posts;
@@ -477,6 +497,7 @@ class MultiFeedProvider with ChangeNotifier {
       final hasMore = response.cursor != null;
 
       _pageOneRetryTargets.remove(type);
+      _pageOneReplacementTargets.remove(type);
       _cooldownDeadlines.remove(type);
       if (replacePosts) {
         _sessionStamps[type] = sessionKeyBeforeFetch;
@@ -512,6 +533,12 @@ class MultiFeedProvider with ChangeNotifier {
       // the page and report. Both differences are deliberate and belong to
       // this caller, not to the hydrator.
       _hydrator.hydrateFeed(response.feed);
+
+      fetchOnward =
+          !refresh &&
+          newPosts.length == existing.length &&
+          response.cursor != null &&
+          followUps < _maxEmptyPageFollowUps;
     } on Exception catch (e) {
       if (!_ownsRequest(
         type,
@@ -578,6 +605,25 @@ class MultiFeedProvider with ChangeNotifier {
         notifyListeners();
       }
     }
+
+    // A refresh, sort change, auth change or dispose since this page took
+    // the feed ends the chain before it issues another request.
+    if (fetchOnward &&
+        _ownsRequest(
+          type,
+          requestGeneration,
+          sessionDidBeforeFetch,
+          sessionKeyBeforeFetch,
+        )) {
+      await _fetchFeed(
+        type: type,
+        refresh: false,
+        fetcher: fetcher,
+        feedName: feedName,
+        isDiscoverHot: isDiscoverHot,
+        followUps: followUps + 1,
+      );
+    }
   }
 
   int _beginRequest(FeedType type) {
@@ -601,6 +647,7 @@ class MultiFeedProvider with ChangeNotifier {
   void _invalidateRequests(FeedType type) {
     _requestGenerations[type] = (_requestGenerations[type] ?? 0) + 1;
     _pageOneRetryTargets.remove(type);
+    _pageOneReplacementTargets.remove(type);
     _cooldownDeadlines.remove(type);
   }
 
@@ -683,6 +730,7 @@ class MultiFeedProvider with ChangeNotifier {
     for (final type in FeedType.values) {
       _invalidateRequests(type);
       _pageOneRetryTargets.add(type);
+      _pageOneReplacementTargets.add(type);
       final state = _feedStates[type];
       if (state != null) {
         _feedStates[type] = state.copyWith(
