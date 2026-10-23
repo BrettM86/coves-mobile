@@ -28,10 +28,13 @@ import '../test_helpers/test_mocks.dart';
 /// One getComments request the screen made, held open until the test
 /// completes it.
 class _CommentsRequest {
-  _CommentsRequest({required this.cursor, required this.sort});
+  _CommentsRequest({required this.cursor, required this.sort, this.parentRkey});
 
   final String? cursor;
   final String sort;
+
+  /// The comment whose subtree was requested; null for a thread page.
+  final String? parentRkey;
   final Completer<CommentsResponse> completer = Completer<CommentsResponse>();
 }
 
@@ -104,6 +107,7 @@ void main() {
       final request = _CommentsRequest(
         cursor: invocation.namedArguments[#cursor] as String?,
         sort: invocation.namedArguments[#sort] as String? ?? 'hot',
+        parentRkey: invocation.namedArguments[#parentRkey] as String?,
       );
       requests.add(request);
       return request.completer.future;
@@ -212,11 +216,13 @@ void main() {
   }
 
   /// Jump to the end of the lazy list; the extent is an estimate until the
-  /// tail has been laid out, so repeat until it stops moving.
+  /// tail has been laid out, so repeat until it stops moving. The extent
+  /// can also shrink under the current offset, so stop only on an exact
+  /// match.
   Future<void> scrollToBottom(WidgetTester tester) async {
     for (var attempt = 0; attempt < 10; attempt++) {
       final scroll = position(tester);
-      if (scroll.pixels >= scroll.maxScrollExtent) {
+      if (scroll.pixels == scroll.maxScrollExtent) {
         break;
       }
       scroll.jumpTo(scroll.maxScrollExtent);
@@ -981,6 +987,284 @@ void main() {
           reason: row,
         );
       }
+    });
+
+    /// Every comment vote control, enabled or not.
+    Finder commentVoteControls() => find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics &&
+          const {
+            'Upvote comment',
+            'Remove upvote',
+            'Downvote comment',
+            'Remove downvote',
+          }.contains(widget.properties.label),
+    );
+
+    Iterable<bool> commentVotingEnabled(WidgetTester tester) => tester
+        .widgetList<CommentCard>(find.byType(CommentCard))
+        .map((card) => card.votingEnabled);
+
+    /// The Semantics `enabled` flag of each vote control on the nested
+    /// reply 'nested'; empty when that reply is not built.
+    List<bool?> nestedReplyVoteEnabled(WidgetTester tester) {
+      final nestedCard = find.byWidgetPredicate(
+        (widget) =>
+            widget is CommentCard && widget.comment.uri.endsWith('/nested'),
+      );
+      expect(nestedCard, findsOneWidget);
+      final controls = tester.widgetList<Semantics>(
+        find.descendant(of: nestedCard, matching: commentVoteControls()),
+      );
+      expect(controls, hasLength(2), reason: 'an upvote and a downvote');
+      return controls.map((control) => control.properties.enabled).toList();
+    }
+
+    testScreen('W12: a load-more-replies that fails with RootNotFound '
+        'replaces the thread with the unavailable state, without the action '
+        'bar or comment votes', (tester) async {
+      await openWithFirstPage(
+        tester,
+        CommentsResponse(
+          post: null,
+          comments: [
+            ThreadViewComment(comment: thread('parent').comment, hasMore: true),
+          ],
+        ),
+      );
+      expect(find.text('Comment parent'), findsOneWidget);
+      expect(find.byType(PostActionBar), findsOneWidget);
+      expect(commentVoteControls(), findsWidgets);
+
+      await tester.tap(find.text('Load more replies'));
+      await tester.pump();
+      expect(requests, hasLength(2));
+      expect(requests[1].parentRkey, 'parent');
+
+      requests[1].completer.completeError(
+        NotFoundException('Post not found', errorCode: 'RootNotFound'),
+      );
+      await flush(tester);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text(unavailableCopy), findsWidgets);
+      expect(find.byType(PostActionBar), findsNothing);
+      expect(commentVoteControls(), findsNothing);
+      expect(find.text('Comment parent'), findsNothing);
+    });
+
+    testScreen('W13: on a just-created post, a load-more that fails with '
+        'RootNotFound makes comment votes inert, and the footer Retry '
+        'reloads the thread from its first page with votes live again', (
+      tester,
+    ) async {
+      await tester.pumpWidget(app(isOptimistic: true));
+      await tester.pump();
+      expect(requests, isEmpty, reason: 'an optimistic post skips the load');
+      unawaited(
+        tester
+            .state<RefreshIndicatorState>(find.byType(RefreshIndicator))
+            .show(),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(requests, hasLength(1), reason: 'pull-to-refresh fetches');
+      // The first comment carries a nested reply, whose card is built by
+      // the recursive CommentThread rather than the screen.
+      final firstPage = page('first', 80, cursor: firstCursor);
+      requests.single.completer.complete(
+        CommentsResponse(
+          post: null,
+          cursor: firstPage.cursor,
+          comments: [
+            ThreadViewComment(
+              comment: firstPage.comments.first.comment,
+              replies: [thread('nested')],
+            ),
+            ...firstPage.comments.skip(1),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(nestedReplyVoteEnabled(tester), everyElement(isTrue));
+
+      await scrollToBottom(tester);
+      expect(requests, hasLength(2), reason: 'reaching the bottom loads more');
+      expect(requests[1].cursor, firstCursor);
+      expect(commentVotingEnabled(tester), everyElement(isTrue));
+
+      requests[1].completer.completeError(
+        NotFoundException('Post not found', errorCode: 'RootNotFound'),
+      );
+      await flush(tester);
+      await scrollToBottom(tester);
+
+      expect(find.text(unavailableCopy), findsNothing);
+      expect(footerRetry(), findsOneWidget);
+      expect(
+        commentVotingEnabled(tester),
+        everyElement(isFalse),
+        reason: 'the server reports the post gone, so votes cannot land',
+      );
+
+      position(tester).jumpTo(0);
+      await tester.pump();
+      expect(
+        nestedReplyVoteEnabled(tester),
+        everyElement(isFalse),
+        reason: "a nested reply's votes cannot land either",
+      );
+      await scrollToBottom(tester);
+
+      await tapFooterRetry(tester);
+      expect(requests, hasLength(3), reason: 'Retry fetches the thread');
+      expect(
+        requests[2].cursor,
+        isNull,
+        reason: 'the next page of a post reported gone cannot be fetched',
+      );
+      expect(requests[2].parentRkey, isNull);
+
+      requests[2].completer.complete(page('again', 2));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(InlineError), findsNothing);
+      expect(find.text('Comment again-0'), findsOneWidget);
+      expect(find.text('Comment again-1'), findsOneWidget);
+      expect(commentVotingEnabled(tester), [true, true]);
+    });
+
+    testScreen('W13b: on a just-created post, a load-more-replies that fails '
+        'with RootNotFound makes comment votes inert, keeps a footer Retry '
+        'and a snackbar Retry, and either reloads the thread with votes live '
+        'again', (tester) async {
+      const replyLoadFailureMessage =
+          'Failed to load replies. Please try again.';
+      await tester.pumpWidget(app(isOptimistic: true));
+      await tester.pump();
+      expect(requests, isEmpty, reason: 'an optimistic post skips the load');
+      unawaited(
+        tester
+            .state<RefreshIndicatorState>(find.byType(RefreshIndicator))
+            .show(),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(requests, hasLength(1), reason: 'pull-to-refresh fetches');
+      requests.single.completer.complete(
+        CommentsResponse(
+          post: null,
+          comments: [
+            ThreadViewComment(comment: thread('parent').comment, hasMore: true),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(commentVotingEnabled(tester), everyElement(isTrue));
+
+      await tester.tap(find.text('Load more replies'));
+      await tester.pump();
+      expect(requests, hasLength(2));
+      expect(requests[1].parentRkey, 'parent');
+
+      requests[1].completer.completeError(
+        NotFoundException('Post not found', errorCode: 'RootNotFound'),
+      );
+      await flush(tester);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text(unavailableCopy), findsNothing);
+      expect(find.text('Comment parent'), findsOneWidget);
+      expect(
+        commentVotingEnabled(tester),
+        everyElement(isFalse),
+        reason: 'the server reports the post gone, so votes cannot land',
+      );
+      final snackBarRetry = find.descendant(
+        of: find.byType(SnackBar),
+        matching: find.text('Retry'),
+      );
+      expect(find.text(replyLoadFailureMessage), findsWidgets);
+      expect(
+        snackBarRetry,
+        findsOneWidget,
+        reason: 'the snackbar must offer a way to reload the thread',
+      );
+      expect(
+        footerRetry(),
+        findsOneWidget,
+        reason: 'the footer keeps a Retry once the snackbar is gone',
+      );
+
+      // A further load-more-replies requests nothing but still says why and
+      // offers the way out.
+      ScaffoldMessenger.of(tester.element(find.byType(CustomScrollView)))
+          .removeCurrentSnackBar();
+      await tester.pump();
+      expect(snackBarRetry, findsNothing);
+      await tester.tap(find.text('Load more replies'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(requests, hasLength(2));
+      expect(snackBarRetry, findsOneWidget);
+
+      await tester.tap(snackBarRetry);
+      await tester.pump();
+      expect(requests, hasLength(3), reason: 'Retry fetches the thread');
+      expect(requests[2].cursor, isNull);
+      expect(requests[2].parentRkey, isNull);
+
+      requests[2].completer.complete(page('again', 2));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(InlineError), findsNothing);
+      expect(find.text('Comment again-0'), findsOneWidget);
+      expect(commentVotingEnabled(tester), [true, true]);
+    });
+
+    testScreen('W13c: the footer Retry after a load-more-replies RootNotFound '
+        'on a just-created post reloads the thread with votes live again', (
+      tester,
+    ) async {
+      await tester.pumpWidget(app(isOptimistic: true));
+      await tester.pump();
+      unawaited(
+        tester
+            .state<RefreshIndicatorState>(find.byType(RefreshIndicator))
+            .show(),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      requests.single.completer.complete(
+        CommentsResponse(
+          post: null,
+          comments: [
+            ThreadViewComment(comment: thread('parent').comment, hasMore: true),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Load more replies'));
+      await tester.pump();
+      requests[1].completer.completeError(
+        NotFoundException('Post not found', errorCode: 'RootNotFound'),
+      );
+      await flush(tester);
+      ScaffoldMessenger.of(tester.element(find.byType(CustomScrollView)))
+          .removeCurrentSnackBar();
+      await tester.pump();
+
+      await tapFooterRetry(tester);
+      expect(requests, hasLength(3), reason: 'Retry fetches the thread');
+      expect(requests[2].cursor, isNull);
+      expect(requests[2].parentRkey, isNull);
+
+      requests[2].completer.complete(page('again', 1));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(InlineError), findsNothing);
+      expect(commentVotingEnabled(tester), [true]);
     });
   });
 }

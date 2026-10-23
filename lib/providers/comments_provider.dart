@@ -341,9 +341,10 @@ class CommentsProvider with ChangeNotifier {
   // Superseded refreshes never get here: their results are dropped whole.
   int? _failedRefreshRequest;
 
-  // Set when a comments request of the current refresh (its first page or
-  // a later page) fails with [rootNotFoundErrorCode]: the post is gone, so
-  // pagination stops and [errorCode] reports it. Cleared only when the
+  // Set when a comments request of the current refresh (its first page, a
+  // later page, or a subtree load against the current tree) fails with
+  // [rootNotFoundErrorCode]: the post is gone, so pagination and subtree
+  // loads stop and [errorCode] reports it. Cleared only when the
   // current refresh's first page succeeds; a refresh that fails any other
   // way (a 500, no connection) says nothing about the post.
   bool _postGone = false;
@@ -416,13 +417,14 @@ class CommentsProvider with ChangeNotifier {
   String? get error => _controller.error;
 
   /// Server error code of the last first-page load or refresh failure, or
-  /// [rootNotFoundErrorCode] when a next page failed with it; null on
-  /// success or when the failure carried no code.
+  /// [rootNotFoundErrorCode] when a next page or subtree load failed with
+  /// it; null on success or when the failure carried no code.
   ///
   /// [rootNotFoundErrorCode] whenever any comments request of the current
-  /// refresh (first page, sort change, or next page) failed with it. That
-  /// state is terminal for the thread until a refresh lands: [hasMore] is
-  /// false and load-more requests nothing.
+  /// refresh (first page, sort change, next page, or a subtree load against
+  /// the current tree) failed with it. That state is terminal for the thread
+  /// until a refresh lands: [hasMore] is false, and load-more and
+  /// [loadMoreReplies] request nothing.
   String? get errorCode {
     if (_postGone) {
       return rootNotFoundErrorCode;
@@ -878,11 +880,18 @@ class CommentsProvider with ChangeNotifier {
   /// node's hasMore/cursor are cleared on an empty response so the UI stops
   /// offering a load-more that can never succeed), when the response became
   /// stale (a whole-tree refresh landed mid-flight), or when the provider
-  /// was disposed.
+  /// was disposed. Also returns null, without a request, while the post is
+  /// gone ([errorCode] is [rootNotFoundErrorCode]).
+  ///
+  /// A failure with [rootNotFoundErrorCode] against the current tree marks
+  /// the post gone, as a failed first or next page does, then rethrows.
   ///
   /// Throws [MalformedCommentUriException] for a comment URI with no rkey.
   /// Throws ApiException/AuthenticationException on network or auth errors.
   Future<ThreadViewComment?> loadMoreReplies(String commentUri) {
+    if (_postGone) {
+      return Future.value();
+    }
     final inFlight = _loadingMoreReplies[commentUri];
     if (inFlight != null && inFlight.generation == _treeGeneration) {
       return inFlight.future;
@@ -1027,6 +1036,14 @@ class CommentsProvider with ChangeNotifier {
       }
 
       return subtree;
+    } on ApiException catch (error) {
+      if (error.errorCode == rootNotFoundErrorCode &&
+          !_isDisposed &&
+          _treeGeneration == startGeneration) {
+        _postGone = true;
+        _safeNotifyListeners();
+      }
+      rethrow;
     } finally {
       // Remove only this fetch's own entry: a stale fetch must not remove
       // the fresh fetch that replaced it after a refresh.

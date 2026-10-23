@@ -415,6 +415,14 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
     return threadReloaded && snapshotsRefreshed;
   }
 
+  /// Check again from the unavailable state: reload the thread. Once it
+  /// lands, [_onCommentsChanged] fetches the anchor's subtree again, so the
+  /// failure that showed the state must not show as a replies error.
+  void _checkPostAgain() {
+    setState(() => _hydrationFailed = false);
+    widget.commentsProvider.refreshComments();
+  }
+
   /// Retry from the error shown in place of the previous session's
   /// snapshot: back to the loader while the subtree is fetched again.
   void _retryNewSessionSubtree() {
@@ -527,7 +535,10 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
         setState(() => _thread = _thread.replaceDescendant(subtree));
       }
     } on Exception {
-      _showLoadRepliesFailed(messenger);
+      // A post that is gone shows its unavailable state instead.
+      if (provider.errorCode != CommentsProvider.rootNotFoundErrorCode) {
+        _showLoadRepliesFailed(messenger);
+      }
     }
   }
 
@@ -593,6 +604,12 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
     final screenHeight = MediaQuery.of(context).size.height;
     final minBottomPadding = screenHeight * 0.6;
 
+    // The server reports the post gone: its thread is no longer served, so
+    // nothing of it stays on screen. RootNotFound also means not indexed yet
+    // or not visible to this viewer, so the state can be checked again.
+    final postGone =
+        commentsProvider.errorCode == CommentsProvider.rootNotFoundErrorCode;
+
     return Stack(
       children: [
         CustomScrollView(
@@ -613,95 +630,108 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
               snap: true,
             ),
 
-            // Content
-            SliverSafeArea(
-              top: false,
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  // Ancestor comments (shown flat, not nested)
-                  for (final ancestor in _ancestors)
-                    _buildAncestorComment(
-                      commentsProvider.applyRemovalOverlay(
-                        ancestor.row,
-                        since: ancestor.removalsSeen,
-                      ),
-                      ancestor.sessionStamp,
-                      commentsProvider,
-                    ),
-
-                  // The previous session's snapshot has no vote state for
-                  // this one: a loader, or a retryable error, stands in for
-                  // the anchor and its replies until the new subtree lands.
-                  if (_awaitingNewSessionSubtree)
-                    if (_hydrationFailed)
-                      InlineError(
-                        message:
-                            'Could not load this thread. Please try again.',
-                        onRetry: _retryNewSessionSubtree,
-                      )
-                    else
-                      const InlineLoading()
-                  else ...[
-                    // Anchor comment (the focused comment) - made prominent
-                    KeyedSubtree(
-                      key: _anchorKey,
-                      child: _buildAnchorComment(
-                        thread,
-                        commentsProvider.sessionStamp,
-                      ),
-                    ),
-
-                    // Replies (if any)
-                    if (thread.replies != null && thread.replies!.isNotEmpty)
-                      ...thread.replies!.map((reply) {
-                        return CommentThread(
-                          key: ValueKey(reply.comment.uri),
-                          thread: reply,
-                          depth: 1,
-                          maxDepth: 6,
-                          onCommentTap: _openReplyScreen,
-                          collapsedComments: _collapsedComments,
-                          onCollapseToggle: _toggleCollapsed,
-                          onContinueThread: _onContinueThread,
-                          onLoadMoreReplies: _onLoadMoreReplies,
-                          loadingMoreReplies:
-                              commentsProvider.loadingMoreReplies,
-                          ancestors: [thread],
-                          onDelete: _onDelete,
-                          parentPost: widget.parentPost,
-                          sessionStamp: commentsProvider.sessionStamp,
-                          reloadAfterModeration: _reloadAfterModeration,
-                        );
-                      }),
-
-                    // More direct replies to the anchor beyond this page
-                    if (thread.hasMore &&
-                        !_collapsedComments.contains(thread.comment.uri))
-                      LoadMoreRepliesButton(
-                        depth: 0,
-                        isLoading: commentsProvider.loadingMoreReplies.contains(
-                          thread.comment.uri,
+            if (postGone)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: FullScreenError(
+                  title: postUnavailableTitle,
+                  message: postUnavailableMessage,
+                  onRetry: null,
+                  secondaryActionLabel: 'Check again',
+                  onSecondaryAction: _checkPostAgain,
+                ),
+              )
+            else
+              // Content
+              SliverSafeArea(
+                top: false,
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    // Ancestor comments (shown flat, not nested)
+                    for (final ancestor in _ancestors)
+                      _buildAncestorComment(
+                        commentsProvider.applyRemovalOverlay(
+                          ancestor.row,
+                          since: ancestor.removalsSeen,
                         ),
-                        onTap: () => _onLoadMoreReplies(thread),
+                        ancestor.sessionStamp,
+                        commentsProvider,
                       ),
 
-                    // Empty state (or retryable error) if no replies loaded
-                    if (thread.replies == null || thread.replies!.isEmpty) ...[
+                    // The previous session's snapshot has no vote state for
+                    // this one: a loader, or a retryable error, stands in for
+                    // the anchor and its replies until the new subtree lands.
+                    if (_awaitingNewSessionSubtree)
                       if (_hydrationFailed)
                         InlineError(
-                          message: 'Could not load replies. Please try again.',
-                          onRetry: _refreshSubtree,
+                          message:
+                              'Could not load this thread. Please try again.',
+                          onRetry: _retryNewSessionSubtree,
                         )
-                      else if (!thread.hasMore)
-                        _buildNoReplies(),
-                    ],
-                  ],
+                      else
+                        const InlineLoading()
+                    else ...[
+                      // Anchor comment (the focused comment) - made prominent
+                      KeyedSubtree(
+                        key: _anchorKey,
+                        child: _buildAnchorComment(
+                          thread,
+                          commentsProvider.sessionStamp,
+                        ),
+                      ),
 
-                  // Bottom padding to allow anchor to scroll to top
-                  SizedBox(height: minBottomPadding),
-                ]),
+                      // Replies (if any)
+                      if (thread.replies != null && thread.replies!.isNotEmpty)
+                        ...thread.replies!.map((reply) {
+                          return CommentThread(
+                            key: ValueKey(reply.comment.uri),
+                            thread: reply,
+                            depth: 1,
+                            maxDepth: 6,
+                            onCommentTap: _openReplyScreen,
+                            collapsedComments: _collapsedComments,
+                            onCollapseToggle: _toggleCollapsed,
+                            onContinueThread: _onContinueThread,
+                            onLoadMoreReplies: _onLoadMoreReplies,
+                            loadingMoreReplies:
+                                commentsProvider.loadingMoreReplies,
+                            ancestors: [thread],
+                            onDelete: _onDelete,
+                            parentPost: widget.parentPost,
+                            sessionStamp: commentsProvider.sessionStamp,
+                            reloadAfterModeration: _reloadAfterModeration,
+                          );
+                        }),
+
+                      // More direct replies to the anchor beyond this page
+                      if (thread.hasMore &&
+                          !_collapsedComments.contains(thread.comment.uri))
+                        LoadMoreRepliesButton(
+                          depth: 0,
+                          isLoading: commentsProvider.loadingMoreReplies
+                              .contains(thread.comment.uri),
+                          onTap: () => _onLoadMoreReplies(thread),
+                        ),
+
+                      // Empty state (or retryable error) if no replies loaded
+                      if (thread.replies == null ||
+                          thread.replies!.isEmpty) ...[
+                        if (_hydrationFailed)
+                          InlineError(
+                            message:
+                                'Could not load replies. Please try again.',
+                            onRetry: _refreshSubtree,
+                          )
+                        else if (!thread.hasMore)
+                          _buildNoReplies(),
+                      ],
+                    ],
+
+                    // Bottom padding to allow anchor to scroll to top
+                    SizedBox(height: minBottomPadding),
+                  ]),
+                ),
               ),
-            ),
           ],
         ),
 

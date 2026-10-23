@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
 
+/// Title and message of the state shown when getComments reports
+/// RootNotFound: the post was removed or deleted after it was opened.
+const postUnavailableTitle = 'This post is no longer available';
+const postUnavailableMessage = 'It may have been deleted or removed.';
+
 /// Full-screen loading indicator
 class FullScreenLoading extends StatelessWidget {
   const FullScreenLoading({super.key});

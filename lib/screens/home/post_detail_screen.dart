@@ -38,10 +38,6 @@ import 'focused_thread_screen.dart';
 
 const _commentThreadMaxDepth = 6;
 
-/// Shown when getComments reports RootNotFound: the post was removed or
-/// deleted after it was opened.
-const _postUnavailableCopy = 'This post is no longer available';
-
 bool _isCommentDisplayable(
   Iterable<ThreadViewComment> comments,
   String targetUri,
@@ -1128,26 +1124,51 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   /// Load hidden replies for a comment (per-parent cap / depth cutoff)
+  ///
+  /// On a just-created post reported gone (see [_isPostUnavailable]) the
+  /// provider requests nothing, so every tap says so and offers a Retry that
+  /// reloads the thread, the only request that can clear that state.
   Future<void> _onLoadMoreReplies(ThreadViewComment thread) async {
     final messenger = ScaffoldMessenger.of(context);
+    if (_isOptimisticPostGone(_commentsProvider)) {
+      _showLoadRepliesFailed(messenger);
+      return;
+    }
     try {
       await _commentsProvider.loadMoreReplies(thread.comment.uri);
     } on Exception {
-      _showLoadRepliesFailed(messenger);
+      // A post that is gone shows its unavailable state instead.
+      if (!_isPostUnavailable(_commentsProvider)) {
+        _showLoadRepliesFailed(messenger);
+      }
     }
   }
+
+  bool _isOptimisticPostGone(CommentsProvider provider) =>
+      widget.isOptimistic &&
+      provider.errorCode == CommentsProvider.rootNotFoundErrorCode;
 
   void _showLoadRepliesFailed(ScaffoldMessengerState messenger) {
     if (!mounted) {
       return;
     }
+    final commentsProvider = _commentsProvider;
     messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Failed to load replies. Please try again.'),
+      SnackBar(
+        content: const Text(_loadRepliesFailedMessage),
         behavior: SnackBarBehavior.floating,
+        action: _isOptimisticPostGone(commentsProvider)
+            ? SnackBarAction(
+                label: 'Retry',
+                onPressed: commentsProvider.refreshComments,
+              )
+            : null,
       ),
     );
   }
+
+  static const _loadRepliesFailedMessage =
+      'Failed to load replies. Please try again.';
 
   /// Build main content area
   Widget _buildContent() {
@@ -1159,6 +1180,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         final comments = commentsProvider.comments;
         final isLoadingMore = commentsProvider.isLoadingMore;
         final loadMoreError = commentsProvider.loadMoreError;
+        // Only a just-created post gets here with the post reported gone
+        // (see [_isPostUnavailable]): votes cannot land, and the next page
+        // cannot be fetched, so Retry reloads the thread from the top.
+        final postGone =
+            commentsProvider.errorCode ==
+            CommentsProvider.rootNotFoundErrorCode;
 
         // The post is gone: replace the post and any loaded thread, whose
         // content the server no longer serves. Stays up while Check again
@@ -1180,8 +1207,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   // RootNotFound also means not indexed yet or not visible
                   // to this viewer, so the state can be checked again.
                   child: FullScreenError(
-                    title: _postUnavailableCopy,
-                    message: 'It may have been deleted or removed.',
+                    title: postUnavailableTitle,
+                    message: postUnavailableMessage,
                     onRetry: null,
                     secondaryActionLabel: 'Check again',
                     onSecondaryAction: _onRefresh,
@@ -1318,7 +1345,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 context,
                                 InlineError(
                                   message: loadMoreError,
-                                  onRetry: commentsProvider.retryLoadMore,
+                                  onRetry: postGone
+                                      ? commentsProvider.refreshComments
+                                      : commentsProvider.retryLoadMore,
                                 ),
                               );
                             }
@@ -1327,6 +1356,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 context,
                                 InlineError(
                                   message: error,
+                                  onRetry: commentsProvider.refreshComments,
+                                ),
+                              );
+                            }
+                            // A subtree load reported the post gone, which
+                            // sets no error: keep a way to reload the thread.
+                            if (postGone) {
+                              return ResponsiveUtils.wrapForTablet(
+                                context,
+                                InlineError(
+                                  message: _loadRepliesFailedMessage,
                                   onRetry: commentsProvider.refreshComments,
                                 ),
                               );
@@ -1364,6 +1404,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 );
                                 return commentsProvider.error == null;
                               },
+                              votingEnabled: !postGone,
                             ),
                           );
                         },
@@ -1373,7 +1414,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             (isLoadingMore ||
                                     isInitialLoading ||
                                     loadMoreError != null ||
-                                    error != null
+                                    error != null ||
+                                    postGone
                                 ? 1
                                 : 0),
                       ),
@@ -1432,9 +1474,13 @@ class _CommentItem extends StatelessWidget {
     this.focusedCommentKey,
     this.parentPost,
     this.reloadAfterModeration,
+    this.votingEnabled = true,
   });
 
   final ThreadViewComment comment;
+
+  /// See [CommentThread.votingEnabled].
+  final bool votingEnabled;
 
   /// The session key the thread was loaded under.
   final Object? sessionStamp;
@@ -1479,6 +1525,7 @@ class _CommentItem extends StatelessWidget {
           parentPost: parentPost,
           sessionStamp: sessionStamp,
           reloadAfterModeration: reloadAfterModeration,
+          votingEnabled: votingEnabled,
         );
       },
     );

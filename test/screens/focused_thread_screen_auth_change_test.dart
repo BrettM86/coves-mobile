@@ -293,7 +293,10 @@ class _FocusedThreadOverPost {
   }
 
   final FakeAuthProvider auth;
-  final bool anchorInFirstPage;
+
+  /// Whether the server's first page holds the anchor. Clearing it after
+  /// the focused thread opened drops the anchor from later first pages.
+  bool anchorInFirstPage;
   final api = MockCovesApiService();
   final commentService = MockCommentService();
   final navigatorKey = GlobalKey<NavigatorState>();
@@ -353,7 +356,12 @@ class _FocusedThreadOverPost {
   /// Pumps the base route, pushes the post over it and opens the focused
   /// thread on the anchor: the post opens it on its own, or with
   /// [anchorInFirstPage] the viewer taps the anchor's "Read 1 more reply".
-  Future<void> openFocusedThread(WidgetTester tester) async {
+  /// With [expectLoadedThread] false it does not require the anchor's
+  /// replies to show once opened, for a test whose subtree fetch fails.
+  Future<void> openFocusedThread(
+    WidgetTester tester, {
+    bool expectLoadedThread = true,
+  }) async {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -393,7 +401,9 @@ class _FocusedThreadOverPost {
     }
     _expectNoErrors(tester, 'after opening the focused thread');
     expect(find.byType(FocusedThreadScreen), findsOneWidget);
-    expect(_focusedCommentCard('level1'), findsOneWidget);
+    if (expectLoadedThread) {
+      expect(_focusedCommentCard('level1'), findsOneWidget);
+    }
   }
 
   /// Opens the focused thread, then a nested focused thread from its
@@ -1647,6 +1657,113 @@ void main() {
         expect(harness.votes.toggledCommentUris, [
           _commentUri('parent5'),
         ], reason: 'an ancestor in the new first page must keep its votes');
+      } finally {
+        await harness.dispose(tester);
+      }
+    },
+  );
+
+  testWidgets(
+    'given a signed-in viewer in a focused thread, when its anchor subtree '
+    'fetch fails with RootNotFound, then the thread is replaced by the '
+    'unavailable state, and Check again shows the anchor\'s replies with '
+    'live votes once the post is served again',
+    (tester) async {
+      _useTallViewport(tester);
+      final harness =
+          _FocusedThreadOverPost(
+              FakeAuthProvider(signedInDid: _firstDid),
+              anchorInFirstPage: true,
+            )
+            ..subtreeError = NotFoundException(
+              'Post not found',
+              errorCode: 'RootNotFound',
+            );
+      try {
+        await harness.openFocusedThread(tester, expectLoadedThread: false);
+        expect(
+          harness.requests,
+          contains((parentRkey: 'anchor', viewerDid: _firstDid)),
+          reason: 'control: the focused thread fetched the anchor subtree',
+        );
+
+        Finder inFocusedThread(Finder finder) => find.descendant(
+          of: find.byType(FocusedThreadScreen),
+          matching: finder,
+        );
+
+        expect(
+          inFocusedThread(find.text('This post is no longer available')),
+          findsOneWidget,
+        );
+        expect(inFocusedThread(find.text('Retry')), findsNothing);
+        for (final rkey in ['parent5', 'anchor', 'level1']) {
+          expect(
+            inFocusedThread(find.text('Comment $rkey', findRichText: true)),
+            findsNothing,
+            reason: 'the unavailable state replaces $rkey',
+          );
+        }
+        expect(
+          inFocusedThread(
+            find.byWidgetPredicate(
+              (widget) =>
+                  widget is Semantics &&
+                  _voteButtonLabels.contains(widget.properties.label),
+            ),
+          ),
+          findsNothing,
+        );
+        final checkAgain = inFocusedThread(find.text('Check again'));
+        expect(checkAgain, findsOneWidget);
+
+        // The post is served again, its first page no longer holds the
+        // anchor, and the anchor now has the viewer's reply.
+        harness
+          ..subtreeError = null
+          ..anchorInFirstPage = false
+          ..replyPosted = true;
+        final requestsBeforeCheck = harness.requests.length;
+        await tester.tap(checkAgain);
+        await tester.pumpAndSettle();
+        _expectNoErrors(tester, 'after Check again');
+
+        final requestsAfterCheck = harness.requests.skip(requestsBeforeCheck);
+        expect(
+          requestsAfterCheck,
+          contains((parentRkey: null, viewerDid: _firstDid)),
+          reason: 'Check again fetches the thread\'s first page',
+        );
+        expect(
+          requestsAfterCheck,
+          contains((parentRkey: 'anchor', viewerDid: _firstDid)),
+          reason: 'the anchor is not in that page, so its subtree is fetched',
+        );
+        expect(
+          inFocusedThread(find.text('This post is no longer available')),
+          findsNothing,
+        );
+        expect(
+          inFocusedThread(
+            find.text('Comment $_postedReplyRkey', findRichText: true),
+          ),
+          findsWidgets,
+        );
+        final replyVotes = _focusedVoteButtons(_postedReplyRkey);
+        expect(replyVotes, findsNWidgets(2));
+        expect(
+          tester
+              .widgetList<Semantics>(replyVotes)
+              .map((button) => button.properties.enabled),
+          [true, true],
+        );
+        expect(replyVotes.hitTestable(), findsNWidgets(2));
+        expect(
+          tester
+              .widget<CommentCard>(_focusedCommentCard(_postedReplyRkey))
+              .votingEnabled,
+          isTrue,
+        );
       } finally {
         await harness.dispose(tester);
       }

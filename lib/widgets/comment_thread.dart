@@ -42,6 +42,7 @@ class CommentThread extends StatelessWidget {
     this.focusedCommentKey,
     this.parentPost,
     this.reloadAfterModeration,
+    this.votingEnabled = true,
     super.key,
   }) : assert(
          sessionStamp == null || reloadAfterModeration != null,
@@ -101,6 +102,10 @@ class CommentThread extends StatelessWidget {
   /// `Scrollable.ensureVisible` it once it is built.
   final Key? focusedCommentKey;
 
+  /// Whether the vote controls of this comment and its replies respond to
+  /// taps. See [CommentCard.votingEnabled].
+  final bool votingEnabled;
+
   @override
   Widget build(BuildContext context) {
     // Check if this comment is collapsed
@@ -155,6 +160,7 @@ class CommentThread extends StatelessWidget {
                 parentPost: parentPost,
                 sessionStamp: sessionStamp,
                 reloadAfterModeration: reloadAfterModeration,
+                votingEnabled: votingEnabled,
               );
             }).toList(),
           )
@@ -181,6 +187,7 @@ class CommentThread extends StatelessWidget {
             parentPost: parentPost,
             sessionStamp: sessionStamp,
             reloadAfterModeration: reloadAfterModeration,
+            votingEnabled: votingEnabled,
           ),
         ),
 

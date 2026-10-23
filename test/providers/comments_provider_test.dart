@@ -2706,6 +2706,113 @@ void main() {
         // Tree is untouched on failure
         expect(commentsProvider.comments.single.replies, isNull);
       });
+
+      group('when the post is gone', () {
+        const otherUri =
+            'at://did:plc:author/social.coves.community.comment/otherrkey';
+        // Subtree requests wait on this; first pages answer at once with
+        // both comments (each with unloaded replies) and a next-page
+        // cursor that names the page number.
+        late Completer<CommentsResponse> subtreeResponse;
+        late int firstPages;
+
+        setUp(() {
+          subtreeResponse = Completer<CommentsResponse>();
+          firstPages = 0;
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: anyNamed('cursor'),
+              parentRkey: anyNamed('parentRkey'),
+            ),
+          ).thenAnswer((invocation) {
+            if (invocation.namedArguments[#parentRkey] != null) {
+              return subtreeResponse.future;
+            }
+            firstPages++;
+            return Future.value(
+              CommentsResponse(
+                post: {},
+                comments: [
+                  for (final uri in [parentUri, otherUri])
+                    ThreadViewComment(
+                      comment: _createMockThreadComment(uri).comment,
+                      hasMore: true,
+                    ),
+                ],
+                cursor: 'cursor-$firstPages',
+              ),
+            );
+          });
+        });
+
+        test('a subtree fetch that fails with RootNotFound marks the post '
+            'gone and stops pagination, and a later subtree fetch requests '
+            'nothing', () async {
+          await commentsProvider.loadComments(refresh: true);
+          expect(commentsProvider.hasMore, isTrue);
+          expect(commentsProvider.errorCode, isNull);
+
+          final failed = expectLater(
+            commentsProvider.loadMoreReplies(parentUri),
+            throwsA(
+              isA<ApiException>().having(
+                (error) => error.errorCode,
+                'errorCode',
+                'RootNotFound',
+              ),
+            ),
+          );
+          subtreeResponse.completeError(
+            NotFoundException('Post not found', errorCode: 'RootNotFound'),
+          );
+          await failed;
+
+          expect(commentsProvider.errorCode, 'RootNotFound');
+          expect(commentsProvider.hasMore, isFalse);
+
+          clearInteractions(mockApiService);
+          final result = await commentsProvider.loadMoreReplies(otherUri);
+
+          expect(result, isNull);
+          verifyNever(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: anyNamed('cursor'),
+              parentRkey: anyNamed('parentRkey'),
+            ),
+          );
+        });
+
+        test('a subtree fetch that fails with RootNotFound after a refresh '
+            'replaced the tree leaves the new thread live', () async {
+          await commentsProvider.loadComments(refresh: true);
+
+          final stale = commentsProvider.loadMoreReplies(parentUri);
+          final staleSettled = stale.then<Object?>(
+            (result) => result,
+            onError: (Object error) => error,
+          );
+          await commentsProvider.refreshComments();
+          expect(firstPages, 2, reason: 'control: the refresh landed');
+
+          subtreeResponse.completeError(
+            NotFoundException('Post not found', errorCode: 'RootNotFound'),
+          );
+          await staleSettled;
+
+          expect(commentsProvider.errorCode, isNull);
+          expect(commentsProvider.hasMore, isTrue);
+        });
+      });
     });
   });
 }
