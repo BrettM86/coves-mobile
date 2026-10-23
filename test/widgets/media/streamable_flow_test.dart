@@ -13,6 +13,7 @@
 // The remaining cases characterise behaviour that already holds and must
 // survive the extraction.
 
+import 'package:coves_flutter/config/environment_config.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/services/streamable_service.dart';
 import 'package:coves_flutter/widgets/detailed_post_view.dart';
@@ -28,7 +29,8 @@ import 'package:provider/provider.dart';
 import '../../test_helpers/fake_providers.dart';
 
 const _streamableUri = 'https://streamable.com/abc123';
-const _streamableApi = 'https://api.streamable.com/videos/abc123';
+final _streamableApi =
+    '${EnvironmentConfig.production.streamableApiUrl}/videos/abc123';
 const _thumb = 'https://cdn.test/video-thumb.jpg';
 const _resolvedVideoUrl = 'https://cdn.test/resolved.mp4';
 
@@ -68,7 +70,7 @@ StreamableService mockedStreamable({
   String? videoUrl,
   Duration delay = const Duration(milliseconds: 500),
 }) {
-  final dio = Dio(BaseOptions(baseUrl: 'https://api.streamable.com'));
+  final dio = Dio();
 
   DioAdapter(dio: dio).onGet(
     _streamableApi,
@@ -85,7 +87,7 @@ StreamableService mockedStreamable({
     ),
   );
 
-  return StreamableService(dio: dio);
+  return StreamableService(dio: dio, config: EnvironmentConfig.production);
 }
 
 FeedViewPost makePost({required ExternalEmbed external}) {

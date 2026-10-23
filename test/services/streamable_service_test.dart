@@ -1,9 +1,39 @@
+import 'package:coves_flutter/config/environment_config.dart';
 import 'package:coves_flutter/services/streamable_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
 
 void main() {
+  test(
+    'default config sends the Streamable request to the host-test loopback',
+    () async {
+      Uri? requestedUri;
+      final recordingDio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              requestedUri = options.uri;
+              handler.reject(
+                DioException.connectionError(
+                  requestOptions: options,
+                  reason: 'blocked by test',
+                ),
+              );
+            },
+          ),
+        );
+      final defaultService = StreamableService(dio: recordingDio);
+
+      final result = await defaultService.getVideoUrl(
+        'https://streamable.com/abc123',
+      );
+
+      expect(requestedUri, Uri.parse('http://127.0.0.1:1/videos/abc123'));
+      expect(result, null);
+    },
+  );
+
   group('StreamableService', () {
     late Dio dio;
     late DioAdapter dioAdapter;
@@ -12,7 +42,10 @@ void main() {
     setUp(() {
       dio = Dio();
       dioAdapter = DioAdapter(dio: dio);
-      service = StreamableService(dio: dio);
+      service = StreamableService(
+        dio: dio,
+        config: EnvironmentConfig.production,
+      );
     });
 
     group('extractShortcode', () {
@@ -80,7 +113,7 @@ void main() {
         const videoUrl = '//cdn.streamable.com/video/mp4/abc123.mp4';
 
         dioAdapter.onGet(
-          'https://api.streamable.com/videos/$shortcode',
+          '${EnvironmentConfig.production.streamableApiUrl}/videos/$shortcode',
           (server) => server.reply(200, {
             'files': {
               'mp4': {'url': videoUrl},
@@ -100,7 +133,7 @@ void main() {
         const videoUrl = '//cdn.streamable.com/video/mp4/xyz789.mp4';
 
         dioAdapter.onGet(
-          'https://api.streamable.com/videos/$shortcode',
+          '${EnvironmentConfig.production.streamableApiUrl}/videos/$shortcode',
           (server) => server.reply(200, {
             'files': {
               'mp4': {'url': videoUrl},
@@ -120,7 +153,7 @@ void main() {
         const videoUrl = '//cdn.streamable.com/video/mp4/cached123.mp4';
 
         dioAdapter.onGet(
-          'https://api.streamable.com/videos/$shortcode',
+          '${EnvironmentConfig.production.streamableApiUrl}/videos/$shortcode',
           (server) => server.reply(200, {
             'files': {
               'mp4': {'url': videoUrl},
@@ -145,7 +178,7 @@ void main() {
         const shortcode = 'invalid';
 
         dioAdapter.onGet(
-          'https://api.streamable.com/videos/$shortcode',
+          '${EnvironmentConfig.production.streamableApiUrl}/videos/$shortcode',
           (server) => server.reply(404, {'error': 'Not found'}),
         );
 
@@ -160,7 +193,7 @@ void main() {
         const shortcode = 'nofiles123';
 
         dioAdapter.onGet(
-          'https://api.streamable.com/videos/$shortcode',
+          '${EnvironmentConfig.production.streamableApiUrl}/videos/$shortcode',
           (server) => server.reply(200, {'status': 'ok'}),
         );
 
@@ -175,7 +208,7 @@ void main() {
         const shortcode = 'nomp4123';
 
         dioAdapter.onGet(
-          'https://api.streamable.com/videos/$shortcode',
+          '${EnvironmentConfig.production.streamableApiUrl}/videos/$shortcode',
           (server) => server.reply(200, {
             'files': {'webm': {}},
           }),
@@ -192,7 +225,7 @@ void main() {
         const shortcode = 'nourl123';
 
         dioAdapter.onGet(
-          'https://api.streamable.com/videos/$shortcode',
+          '${EnvironmentConfig.production.streamableApiUrl}/videos/$shortcode',
           (server) => server.reply(200, {
             'files': {
               'mp4': {'status': 'processing'},
@@ -211,12 +244,13 @@ void main() {
         const shortcode = 'error500';
 
         dioAdapter.onGet(
-          'https://api.streamable.com/videos/$shortcode',
+          '${EnvironmentConfig.production.streamableApiUrl}/videos/$shortcode',
           (server) => server.throws(
             500,
             DioException(
               requestOptions: RequestOptions(
-                path: 'https://api.streamable.com/videos/$shortcode',
+                path:
+                    '${EnvironmentConfig.production.streamableApiUrl}/videos/$shortcode',
               ),
             ),
           ),
@@ -239,7 +273,7 @@ void main() {
         const videoUrl = '//cdn.streamable.com/video/mp4/protocol123.mp4';
 
         dioAdapter.onGet(
-          'https://api.streamable.com/videos/$shortcode',
+          '${EnvironmentConfig.production.streamableApiUrl}/videos/$shortcode',
           (server) => server.reply(200, {
             'files': {
               'mp4': {'url': videoUrl},
@@ -261,7 +295,7 @@ void main() {
             'https://cdn.streamable.com/video/mp4/hasprotocol123.mp4';
 
         dioAdapter.onGet(
-          'https://api.streamable.com/videos/$shortcode',
+          '${EnvironmentConfig.production.streamableApiUrl}/videos/$shortcode',
           (server) => server.reply(200, {
             'files': {
               'mp4': {'url': videoUrl},

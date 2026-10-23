@@ -30,6 +30,7 @@ class EnvironmentConfig {
     required this.webUrl,
     required this.handleResolverUrl,
     required this.plcDirectoryUrl,
+    required this.streamableApiUrl,
   });
   final Environment environment;
   final String apiUrl;
@@ -40,6 +41,7 @@ class EnvironmentConfig {
   final String webUrl;
   final String handleResolverUrl;
   final String plcDirectoryUrl;
+  final String streamableApiUrl;
 
   /// Production configuration, selected when no define, flavor or test
   /// runner applies.
@@ -51,6 +53,7 @@ class EnvironmentConfig {
     handleResolverUrl:
         'https://bsky.social/xrpc/com.atproto.identity.resolveHandle',
     plcDirectoryUrl: 'https://plc.directory',
+    streamableApiUrl: 'https://api.streamable.com',
   );
 
   /// Local development configuration
@@ -79,6 +82,7 @@ class EnvironmentConfig {
     handleResolverUrl:
         'http://localhost:3001/xrpc/com.atproto.identity.resolveHandle',
     plcDirectoryUrl: 'http://localhost:3002',
+    streamableApiUrl: 'https://api.streamable.com',
   );
 
   /// Host-side `flutter test` configuration
@@ -97,6 +101,7 @@ class EnvironmentConfig {
     handleResolverUrl:
         'http://127.0.0.1:1/xrpc/com.atproto.identity.resolveHandle',
     plcDirectoryUrl: 'http://127.0.0.1:1',
+    streamableApiUrl: 'http://127.0.0.1:1',
   );
 
   /// Resolves the environment from build defines and the process

@@ -28,6 +28,7 @@
 //
 // COMPILE-RED until lib/widgets/media/streamable_video_embed.dart exists.
 
+import 'package:coves_flutter/config/environment_config.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/services/streamable_service.dart';
 import 'package:coves_flutter/widgets/media/streamable_video_embed.dart';
@@ -40,7 +41,8 @@ import 'package:url_launcher_platform_interface/url_launcher_platform_interface.
 import '../../test_helpers/mock_url_launcher_platform.dart';
 
 const _streamableUri = 'https://streamable.com/abc123';
-const _streamableApi = 'https://api.streamable.com/videos/abc123';
+final _streamableApi =
+    '${EnvironmentConfig.production.streamableApiUrl}/videos/abc123';
 const _thumb = 'https://cdn.test/video-thumb.jpg';
 const _failureCopy = 'Could not load video';
 
@@ -61,7 +63,7 @@ ExternalEmbed embedWith({
 /// A service whose single request resolves after a delay with no `files`
 /// entry, so `getVideoUrl` yields null and the widget takes the error branch.
 StreamableService failingStreamable() {
-  final dio = Dio(BaseOptions(baseUrl: 'https://api.streamable.com'));
+  final dio = Dio();
   DioAdapter(dio: dio).onGet(
     _streamableApi,
     (server) => server.reply(
@@ -70,19 +72,19 @@ StreamableService failingStreamable() {
       delay: const Duration(milliseconds: 500),
     ),
   );
-  return StreamableService(dio: dio);
+  return StreamableService(dio: dio, config: EnvironmentConfig.production);
 }
 
 /// A service whose request answers with a `files` field of the wrong shape,
 /// so the production cast inside `getVideoUrl` throws a [TypeError] — the
 /// non-Dio failure mode that used to escape the widget entirely.
 StreamableService malformedStreamable() {
-  final dio = Dio(BaseOptions(baseUrl: 'https://api.streamable.com'));
+  final dio = Dio();
   DioAdapter(dio: dio).onGet(
     _streamableApi,
     (server) => server.reply(200, <String, dynamic>{'files': 'not-a-map'}),
   );
-  return StreamableService(dio: dio);
+  return StreamableService(dio: dio, config: EnvironmentConfig.production);
 }
 
 void main() {

@@ -98,8 +98,9 @@ CovesApiService tokenlessApiService() =>
 ///
 /// The API services supplied are [tokenlessApiService]s. Pass a
 /// `streamableService` to inject a Dio-mocked one; otherwise a real
-/// [StreamableService] is supplied, which talks to api.streamable.com
-/// regardless of `EnvironmentConfig`, so tests must not trigger it.
+/// [StreamableService] is supplied. It uses `EnvironmentConfig.current`,
+/// which on host tests is the closed loopback, so a triggered call fails
+/// instead of reaching Streamable.
 List<SingleChildWidget> postCardProviders({
   required AuthProvider auth,
   StreamableService? streamableService,

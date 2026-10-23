@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../config/environment_config.dart';
+
 /// Service for interacting with Streamable API
 ///
 /// Fetches video data from Streamable to get direct MP4 URLs
@@ -8,7 +10,9 @@ import 'package:flutter/foundation.dart';
 ///
 /// Implements caching to reduce API calls for recently accessed videos.
 class StreamableService {
-  StreamableService({Dio? dio}) : _dio = dio ?? _sharedDio;
+  StreamableService({Dio? dio, EnvironmentConfig? config})
+    : _dio = dio ?? _sharedDio,
+      _apiUrl = (config ?? EnvironmentConfig.current).streamableApiUrl;
 
   // Singleton Dio instance for efficient connection reuse
   static final Dio _sharedDio = Dio(
@@ -20,6 +24,7 @@ class StreamableService {
   );
 
   final Dio _dio;
+  final String _apiUrl;
 
   // Cache for video URLs (shortcode -> {url, timestamp})
   // Short-lived cache (5 min) to reduce API calls
@@ -94,7 +99,7 @@ class StreamableService {
 
       // Fetch video data from Streamable API
       final response = await _dio.get<Map<String, dynamic>>(
-        'https://api.streamable.com/videos/$shortcode',
+        '$_apiUrl/videos/$shortcode',
       );
 
       if (response.statusCode == 200 && response.data != null) {

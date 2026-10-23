@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:coves_flutter/config/environment_config.dart';
 import 'package:coves_flutter/constants/app_colors.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
@@ -423,9 +424,12 @@ void main() {
     testWidgets(
       'shows loading indicator when fetching video URL for Streamable',
       (tester) async {
-        final dio = Dio(BaseOptions(baseUrl: 'https://api.streamable.com'));
+        final dio = Dio();
         final dioAdapter = DioAdapter(dio: dio);
-        final streamableService = StreamableService(dio: dio);
+        final streamableService = StreamableService(
+          dio: dio,
+          config: EnvironmentConfig.production,
+        );
 
         // The service requests the absolute URL, so the mock must be
         // registered against the full path, not a baseUrl-relative one.
@@ -437,7 +441,7 @@ void main() {
         // under flutter_test. The delay is what makes the loading state
         // observable before the request settles.
         dioAdapter.onGet(
-          'https://api.streamable.com/videos/abc123',
+          '${EnvironmentConfig.production.streamableApiUrl}/videos/abc123',
           (server) => server.reply(
             200,
             <String, dynamic>{},

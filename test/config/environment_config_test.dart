@@ -24,6 +24,19 @@ void main() {
     });
   });
 
+  group('EnvironmentConfig.streamableApiUrl', () {
+    test('production and local call the real Streamable API', () {
+      expect(
+        EnvironmentConfig.production.streamableApiUrl,
+        'https://api.streamable.com',
+      );
+      expect(
+        EnvironmentConfig.local.streamableApiUrl,
+        'https://api.streamable.com',
+      );
+    });
+  });
+
   group('EnvironmentConfig.test', () {
     test('points every requested endpoint at a closed loopback port', () {
       const config = EnvironmentConfig.test;
@@ -36,6 +49,7 @@ void main() {
         'http://127.0.0.1:1/xrpc/com.atproto.identity.resolveHandle',
       );
       expect(config.plcDirectoryUrl, 'http://127.0.0.1:1');
+      expect(config.streamableApiUrl, 'http://127.0.0.1:1');
       // Share links only; never requested.
       expect(config.webUrl, 'https://coves.social');
     });
