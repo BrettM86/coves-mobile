@@ -28,9 +28,8 @@ void main() {
     mockVoteProvider = MockVoteProvider();
 
     when(mockAuthProvider.isAuthenticated).thenReturn(true);
-    when(
-      mockAuthProvider.getAccessToken(),
-    ).thenAnswer((_) async => 'test-token');
+    when(mockAuthProvider.getAccessToken())
+        .thenAnswer((_) async => 'test-token');
 
     commentsProvider = CommentsProvider(
       mockAuthProvider,

@@ -146,7 +146,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.dark,
-          home: const Scaffold(body: Center(child: ShareButton(url: shareUrl))),
+          home: const Scaffold(
+            body: Center(child: ShareButton(url: shareUrl)),
+          ),
         ),
       );
 
@@ -214,7 +216,9 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.dark,
-          home: const Scaffold(body: Center(child: ShareButton(url: shareUrl))),
+          home: const Scaffold(
+            body: Center(child: ShareButton(url: shareUrl)),
+          ),
         ),
       );
 
@@ -228,9 +232,7 @@ void main() {
     testWidgets('a platform exception from the share sheet is reported too', (
       tester,
     ) async {
-      final sharer = FailingLinkSharer(
-        PlatformException(code: 'share_failed'),
-      );
+      final sharer = FailingLinkSharer(PlatformException(code: 'share_failed'));
       await pumpShareButtonWith(tester, sharer: sharer, url: shareUrl);
 
       await tester.tap(find.byType(ShareButton));
