@@ -1,0 +1,10 @@
+What's new in 1.5.0
+
+• Share links to posts, comments, profiles and communities
+• Save images from the image viewer to your photos
+• Images in embedded Bluesky posts now show
+• Type @user or !community to link them in posts and comments
+• Public moderation log at the bottom of Explore
+• Faster startup and fewer network requests
+• Post times and join dates now show in your local time
+• Fixes for sign-in, replies, links and deleted posts

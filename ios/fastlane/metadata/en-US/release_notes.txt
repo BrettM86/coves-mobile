@@ -1,9 +1,10 @@
-What's new in 1.4.0
+What's new in 1.5.0
 
-*New*
-• Search for posts within a community
-• Added Downvote for posts and comments
-• Added NSFW post handling
-• Smoother zoom and swipe gestures in the image viewer
-• Opening a comment now always refreshes feed
-• More reliable sign-in functionality
+• Share links to posts, comments, profiles and communities
+• Save images from the image viewer to your photos
+• Images in embedded Bluesky posts now show
+• Type @user or !community to link them in posts and comments
+• Public moderation log at the bottom of Explore
+• Faster startup and fewer network requests
+• Post times and join dates now show in your local time
+• Fixes for sign-in, replies, links and deleted posts
