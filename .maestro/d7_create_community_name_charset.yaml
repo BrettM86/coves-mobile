@@ -1,0 +1,63 @@
+# Section D — admin panel, Create Community name charset copy:
+# - The name field's helper text reads
+#   "Letters, numbers, hyphens; stored lowercase".
+# - A name with an underscore is rejected on submit with
+#   "Name must use letters, numbers, and hyphens only (stored lowercase)"
+#   and no request is sent.
+# Assumes a signed-in admin session (a1_login_session as mari). Creates no
+# community.
+# NOTE: never use hideKeyboard in the admin panel — Maestro implements it as
+# a BACK press, which switches the shell to the Home tab (see d1). The
+# single-line name field is filled last and closed with Enter instead.
+appId: social.coves.dev
+---
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as d1/d5).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Communities"
+      - extendedWaitUntil:
+          visible: "Admin Tools"
+          timeout: 15000
+- tapOn: "Create Community[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Display Name"
+    timeout: 10000
+- assertVisible: "Letters, numbers, hyphens; stored lowercase"
+# Submit stays disabled while any field is blank, so fill all three.
+- tapOn: "Global news and current events from around the world"
+- inputText: "QA d7 name charset check"
+- tapOn: "World News"
+- inputText: "QA d7 name charset"
+- tapOn: "worldnews"
+- inputText: "my_community"
+- pressKey: Enter
+- takeScreenshot: build/maestro/d7_filled
+# "Create Community" also matches the app bar title and the page heading,
+# both above the Description label; only the button is below it.
+- scrollUntilVisible:
+    element:
+      text: "Create Community"
+      below: "Description"
+    direction: DOWN
+- tapOn:
+    text: "Create Community"
+    below: "Description"
+- scrollUntilVisible:
+    element: "Name must use letters, numbers, and hyphens only \\(stored lowercase\\)"
+    direction: UP
+    timeout: 10000
+- assertNotVisible: "Community created.*"
+- assertNotVisible: "Failed to create community.*"
+- takeScreenshot: build/maestro/d7_rejected

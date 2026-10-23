@@ -6,14 +6,14 @@
 // had shipped uncovered.
 //
 // The trap worth stating out loud: the validator NORMALIZES - trims and
-// LOWERCASES - before it matches, so an uppercase name is VALID even though
-// the charset message talks about lowercase. A validator that rejected
-// uppercase would break the panel's happy path.
+// LOWERCASES - before it matches, so an uppercase name is VALID: it is
+// accepted and stored lowercase, as the charset message says. A validator
+// that rejected uppercase would break the panel's happy path.
 //
 // DELIBERATELY NOT PINNED: the exact wording of the length and charset
-// messages. Those are user-facing copy and are expected to be reworded - the
-// charset one especially, since it currently promises something the code
-// does not enforce. So the tests below identify an error by comparing
+// messages. Those are user-facing copy and are expected to be reworded (the
+// exact strings are pinned at widget level in the admin-panel
+// characterization test). So the tests below identify an error by comparing
 // against what the validator ITSELF returns for a known-bad input of that
 // class, and anchor each class with a stable fragment plus a
 // distinct-from-the-others check. Rewording the copy keeps them green;
@@ -166,6 +166,12 @@ void main() {
     test('non-ASCII letters are rejected', () {
       expect(CommunityNameValidator.validate('wörldnews'), charsetError);
     });
+
+    test('the charset message does not claim capitals are rejected', () {
+      // Uppercase is accepted and stored lowercase, so the copy must not
+      // say "lowercase letters ... only".
+      expect(charsetError, isNot(contains('lowercase letters')));
+    });
   });
 
   group('validate - accepted names', () {
@@ -174,9 +180,9 @@ void main() {
     });
 
     test('an UPPERCASE name is VALID, because it normalizes first', () {
-      // The charset copy talks about lowercase; the code does not enforce
-      // it. The create request normalizes the same way, so what is sent
-      // always matches what was validated.
+      // Accepted and stored lowercase, as the charset copy says. The create
+      // request normalizes the same way, so what is sent always matches
+      // what was validated.
       expect(CommunityNameValidator.validate('MyCommunity'), isNull);
       expect(CommunityNameValidator.validate('WORLDNEWS'), isNull);
     });

@@ -46,13 +46,9 @@ abstract final class CommunityNameValidator {
   /// message explaining why it is not.
   ///
   /// The name is [normalize]d — trimmed AND LOWERCASED — before it is
-  /// tested, so an uppercase name such as `MyCommunity` is ACCEPTED here and
-  /// stored as `mycommunity`, despite the charset message promising
-  /// "lowercase letters". That reads like a bug and is not: the create
-  /// request normalizes the same way, so what is sent always matches what
-  /// was validated. Rejecting uppercase instead would break the happy path.
-  /// Test-pinned; if the product wants uppercase rejected, change the
-  /// message and the test together.
+  /// tested, so uppercase is accepted and stored lowercase (`MyCommunity`
+  /// becomes `mycommunity`). The create request normalizes the same way, so
+  /// what is sent always matches what was validated.
   ///
   /// The empty-name branch is currently unreachable from the admin panel —
   /// its submit button is disabled while any field is blank, and
@@ -70,7 +66,8 @@ abstract final class CommunityNameValidator {
     }
 
     if (!_dnsNameRegex.hasMatch(name)) {
-      return 'Name must be lowercase letters, numbers, and hyphens only';
+      return 'Name must use letters, numbers, and hyphens only '
+          '(stored lowercase)';
     }
 
     return null;

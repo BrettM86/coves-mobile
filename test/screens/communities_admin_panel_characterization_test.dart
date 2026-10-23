@@ -9,8 +9,8 @@
 // Two behaviours here look like bugs and are not:
 //
 //  * The name validator LOWERCASES before matching its regex, so an
-//    uppercase name is ACCEPTED and sent lowercased, despite the error copy
-//    promising "must be lowercase letters" (A3/A10).
+//    uppercase name is ACCEPTED and sent lowercased; the charset error copy
+//    says names are "stored lowercase" (A3/A10).
 //  * All three create-form fields share ONE listener, so typing in the
 //    Description field clears an error raised against the Name field (A12).
 //    Giving each extracted field its own listener destroys that.
@@ -174,16 +174,23 @@ void main() {
     testWidgets('A3 an uppercase name is ACCEPTED and sent lowercased', (
       tester,
     ) async {
-      // The validator lowercases before matching, so the error copy's
-      // "must be lowercase letters" is a promise the code does not keep.
+      // The validator lowercases before matching, so capitals are accepted
+      // and the name is sent lowercased.
       stubCreateCommunity();
       await openCreateForm(tester);
+      // The helper text must not tell the admin capitals are disallowed.
+      expect(
+        find.text('Letters, numbers, hyphens; stored lowercase'),
+        findsOneWidget,
+      );
       await fillForm(tester, name: 'MyCommunity');
 
       await tapCreate(tester);
 
       expect(
-        find.text('Name must be lowercase letters, numbers, and hyphens only'),
+        find.text(
+          'Name must use letters, numbers, and hyphens only (stored lowercase)',
+        ),
         findsNothing,
       );
       verify(
@@ -217,7 +224,8 @@ void main() {
         await fillForm(tester, name: name);
         expect(
           find.text(
-            'Name must be lowercase letters, numbers, and hyphens only',
+            'Name must use letters, numbers, and hyphens only '
+            '(stored lowercase)',
           ),
           findsNothing,
           reason: 'typing should have cleared the previous error',
@@ -227,7 +235,8 @@ void main() {
 
         expect(
           find.text(
-            'Name must be lowercase letters, numbers, and hyphens only',
+            'Name must use letters, numbers, and hyphens only '
+            '(stored lowercase)',
           ),
           findsOneWidget,
           reason: '"$name" should be rejected by the charset rule',
@@ -401,7 +410,9 @@ void main() {
 
       await tapCreate(tester);
       expect(
-        find.text('Name must be lowercase letters, numbers, and hyphens only'),
+        find.text(
+          'Name must use letters, numbers, and hyphens only (stored lowercase)',
+        ),
         findsOneWidget,
       );
 
@@ -411,7 +422,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Name must be lowercase letters, numbers, and hyphens only'),
+        find.text(
+          'Name must use letters, numbers, and hyphens only (stored lowercase)',
+        ),
         findsNothing,
       );
       // The name itself is untouched - only the error was cleared.

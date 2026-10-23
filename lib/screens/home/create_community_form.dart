@@ -212,7 +212,7 @@ class _CreateCommunityFormState extends State<CreateCommunityForm> {
             controller: _nameController,
             label: 'Name (unique identifier)',
             hint: 'worldnews',
-            helperText: 'DNS-valid, lowercase, no spaces',
+            helperText: 'Letters, numbers, hyphens; stored lowercase',
             errorText: _nameError,
           ),
           const SizedBox(height: 16),
