@@ -537,19 +537,22 @@ void main() {
     expect(find.byType(InlineError), findsNothing);
   });
 
-  testScreen('W5: a failed first load shows the full-screen error', (
-    tester,
-  ) async {
-    await tester.pumpWidget(app());
-    await tester.pump();
-    expect(requests, hasLength(1));
+  testScreen(
+    'W5: a failed first load shows the inline error, not a full-screen one',
+    (tester) async {
+      await tester.pumpWidget(app());
+      await tester.pump();
+      expect(requests, hasLength(1));
 
-    requests.single.completer.completeError(ApiException('First load failed'));
-    await tester.pumpAndSettle();
+      requests.single.completer.completeError(
+        ApiException('First load failed'),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.byType(FullScreenError), findsOneWidget);
-    expect(find.byType(InlineError), findsNothing);
-  });
+      expect(find.byType(FullScreenError), findsNothing);
+      expect(find.byType(InlineError), findsOneWidget);
+    },
+  );
 
   group('error messages follow the failure type', () {
     const networkMessage = 'No connection. Please check your internet.';
@@ -619,7 +622,7 @@ void main() {
     );
 
     testScreen(
-      'W6c: a first load that fails with a server error says so full-screen',
+      'W6c: a first load that fails with a server error says so inline',
       (tester) async {
         await tester.pumpWidget(app());
         await tester.pump();
@@ -630,11 +633,11 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.byType(FullScreenError), findsOneWidget);
+        expect(find.byType(FullScreenError), findsNothing);
         expect(
-          textIn(FullScreenError, serverMessage),
+          textIn(InlineError, serverMessage),
           findsOneWidget,
-          reason: 'the full-screen error must describe a server failure as one',
+          reason: 'the inline error must describe a server failure as one',
         );
       },
     );

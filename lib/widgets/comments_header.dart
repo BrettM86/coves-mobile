@@ -9,6 +9,10 @@ import '../utils/display_utils.dart';
 /// - Comment count with pluralization
 /// - Sort dropdown (Hot/Top/New)
 /// - Empty state when no comments
+///
+/// A null [commentCount] means the thread has not resolved yet (first load
+/// pending or failed): the header shows the sort dropdown with no count and
+/// never the empty state.
 class CommentsHeader extends StatelessWidget {
   const CommentsHeader({
     required this.commentCount,
@@ -17,7 +21,7 @@ class CommentsHeader extends StatelessWidget {
     super.key,
   });
 
-  final int commentCount;
+  final int? commentCount;
   final String currentSort;
   final void Function(String) onSortChanged;
 
@@ -72,7 +76,9 @@ class CommentsHeader extends StatelessWidget {
       );
     }
 
-    // Show comment count and sort dropdown
+    final count = commentCount;
+
+    // Show comment count (when resolved) and sort dropdown
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -96,8 +102,10 @@ class CommentsHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    '${DisplayUtils.formatCount(commentCount)} '
-                    '${commentCount == 1 ? 'Comment' : 'Comments'}',
+                    count == null
+                        ? 'Comments'
+                        : '${DisplayUtils.formatCount(count)} '
+                              '${count == 1 ? 'Comment' : 'Comments'}',
                     style: const TextStyle(
                       fontSize: 15,
                       color: AppColors.textSecondary,

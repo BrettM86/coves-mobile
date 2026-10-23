@@ -1192,19 +1192,22 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           );
         }
 
-        // Loading state (only show full-screen loader for initial load)
-        if (isLoading && comments.isEmpty) {
-          return const FullScreenLoading();
-        }
-
-        // Error state (only show full-screen error when no comments loaded yet)
-        if (error != null && comments.isEmpty) {
-          return FullScreenError(
-            title: 'Failed to load comments',
-            message: error,
-            onRetry: commentsProvider.retry,
-          );
-        }
+        // The post is already known, so the first comments load and its
+        // failure show in the footer below the post, never in place of it.
+        final isInitialLoading = isLoading && comments.isEmpty;
+        // Until the first load resolves (pending, or failed with nothing
+        // loaded), the header has no count and no empty state to show.
+        final threadUnresolved =
+            isInitialLoading || (error != null && comments.isEmpty);
+        final headerCommentCount = threadUnresolved
+            ? null
+            : PostDetailScreen.displayedCommentCount(
+                serverCount: widget.post.post.stats.commentCount,
+                isLoading: isLoading,
+                hasError: error != null,
+                hasComments: comments.isNotEmpty,
+                hasMore: commentsProvider.hasMore,
+              );
 
         // Content with RefreshIndicator and floating SliverAppBar
         // Wrapped in Stack to add solid status bar background overlay
@@ -1291,18 +1294,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   // of a count over an empty list.
                                   CommentsHeader(
                                     key: _commentsHeaderKey,
-                                    commentCount:
-                                        PostDetailScreen.displayedCommentCount(
-                                          serverCount: widget
-                                              .post
-                                              .post
-                                              .stats
-                                              .commentCount,
-                                          isLoading: isLoading,
-                                          hasError: error != null,
-                                          hasComments: comments.isNotEmpty,
-                                          hasMore: commentsProvider.hasMore,
-                                        ),
+                                    commentCount: headerCommentCount,
                                     currentSort: commentsProvider.sort,
                                     onSortChanged: _onSortChanged,
                                   ),
@@ -1313,15 +1305,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
                           // Loading indicator or error at the end
                           if (index == comments.length + 1) {
-                            if (isLoadingMore) {
+                            if (isLoadingMore || isInitialLoading) {
                               return ResponsiveUtils.wrapForTablet(
                                 context,
                                 const InlineLoading(),
                               );
                             }
                             // A load-more error wins over a refresh error,
-                            // as in PaginatedSliverList. A refresh error only
-                            // reaches here with comments on screen.
+                            // as in PaginatedSliverList.
                             if (loadMoreError != null) {
                               return ResponsiveUtils.wrapForTablet(
                                 context,
@@ -1380,6 +1371,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             1 +
                             comments.length +
                             (isLoadingMore ||
+                                    isInitialLoading ||
                                     loadMoreError != null ||
                                     error != null
                                 ? 1
