@@ -57,18 +57,11 @@ class _PostCardActionsState extends State<PostCardActions> {
     VoteProvider voteProvider, {
     required String direction,
   }) async {
-    final authProvider = context.read<AuthProvider>();
-    if (!authProvider.isAuthenticated) {
-      final shouldSignIn = await SignInDialog.show(
+    if (!context.read<AuthProvider>().isAuthenticated) {
+      await promptSignIn(
         context,
         message: 'You need to sign in to vote on posts.',
       );
-
-      if ((shouldSignIn ?? false) && context.mounted) {
-        if (kDebugMode) {
-          debugPrint('Navigate to sign-in screen');
-        }
-      }
       return;
     }
 

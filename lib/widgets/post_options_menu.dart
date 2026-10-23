@@ -79,32 +79,13 @@ class _PostOptionsMenuState extends State<PostOptionsMenu> {
     );
   }
 
-  /// Asks a signed-out viewer to sign in, returning true when they are not
-  /// signed in so the caller stops.
-  Future<bool> _requireSignIn({
-    required String message,
-    required String declinedMessage,
-  }) async {
-    if (context.read<AuthProvider>().isAuthenticated) {
-      return false;
-    }
-    final shouldSignIn = await SignInDialog.show(context, message: message);
-    if (shouldSignIn != true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(declinedMessage),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-    return true;
-  }
-
   Future<void> _toggleSubscription() async {
-    if (await _requireSignIn(
-      message: 'You need to sign in to subscribe to communities.',
-      declinedMessage: 'Sign in required to subscribe',
-    )) {
+    if (!context.read<AuthProvider>().isAuthenticated) {
+      await promptSignIn(
+        context,
+        message: 'You need to sign in to subscribe to communities.',
+        declinedMessage: 'Sign in required to subscribe',
+      );
       return;
     }
 
@@ -154,10 +135,12 @@ class _PostOptionsMenuState extends State<PostOptionsMenu> {
   }
 
   Future<void> _report() async {
-    if (await _requireSignIn(
-      message: 'You need to sign in to report content.',
-      declinedMessage: 'Sign in required to report content',
-    )) {
+    if (!context.read<AuthProvider>().isAuthenticated) {
+      await promptSignIn(
+        context,
+        message: 'You need to sign in to report content.',
+        declinedMessage: 'Sign in required to report content',
+      );
       return;
     }
 

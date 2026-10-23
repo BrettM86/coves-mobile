@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
@@ -997,16 +996,11 @@ class _CommentCardState extends State<CommentCard> {
     VoteProvider voteProvider, {
     required String direction,
   }) async {
-    final authProvider = context.read<AuthProvider>();
-    if (!authProvider.isAuthenticated) {
-      final shouldSignIn = await SignInDialog.show(
+    if (!context.read<AuthProvider>().isAuthenticated) {
+      await promptSignIn(
         context,
         message: 'You need to sign in to vote on comments.',
       );
-
-      if ((shouldSignIn ?? false) && context.mounted) {
-        await context.push('/login');
-      }
       return;
     }
 

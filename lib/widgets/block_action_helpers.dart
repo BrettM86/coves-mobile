@@ -49,24 +49,12 @@ Future<void> handleBlockUser({
   required String authorDid,
   required String authorHandle,
 }) async {
-  // Check authentication
-  final authProvider = context.read<AuthProvider>();
-  if (!authProvider.isAuthenticated) {
-    if (!context.mounted) {
-      return;
-    }
-    final shouldSignIn = await SignInDialog.show(
+  if (!context.read<AuthProvider>().isAuthenticated) {
+    await promptSignIn(
       context,
       message: 'You need to sign in to block users.',
+      declinedMessage: 'Sign in required to block users',
     );
-    if (shouldSignIn != true && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sign in required to block users'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
     return;
   }
 
@@ -150,24 +138,12 @@ Future<void> handleBlockCommunity({
   required String communityDid,
   required String communityName,
 }) async {
-  // Check authentication
-  final authProvider = context.read<AuthProvider>();
-  if (!authProvider.isAuthenticated) {
-    if (!context.mounted) {
-      return;
-    }
-    final shouldSignIn = await SignInDialog.show(
+  if (!context.read<AuthProvider>().isAuthenticated) {
+    await promptSignIn(
       context,
       message: 'You need to sign in to block communities.',
+      declinedMessage: 'Sign in required to block communities',
     );
-    if (shouldSignIn != true && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sign in required to block communities'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
     return;
   }
 

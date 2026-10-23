@@ -1,0 +1,55 @@
+# Section A — signed-out gates: the "Sign in required" dialog's Sign In
+# button opens the login screen, and Cancel shows the declined snackbar.
+# PRECONDITION: signed out (run after a2_signout_landing). Reaches the feed
+# via the landing page's "Explore communities" link. Does not sign in.
+# Leaves the app signed out.
+appId: social.coves.dev
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Sign in"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn: "Explore communities"
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+# Post-card vote gate: Sign In opens /login
+- extendedWaitUntil:
+    visible: "[\\s\\S]*Upvote post[\\s\\S]*"
+    timeout: 30000
+- tapOn:
+    text: "[\\s\\S]*Upvote post[\\s\\S]*"
+    index: 0
+- extendedWaitUntil:
+    visible: "You need to sign in to vote on posts."
+    timeout: 10000
+- tapOn: "Sign In"
+- extendedWaitUntil:
+    visible: "Welcome back"
+    timeout: 15000
+- takeScreenshot: build/maestro/a5_gate_opens_login
+- back
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000
+- assertNotVisible: "Welcome back"
+- waitForAnimationToEnd:
+    timeout: 5000
+# Card menu subscribe gate: Cancel shows the declined snackbar
+- tapOn:
+    text: "Post options"
+    index: 0
+- tapOn: "Subscribe to !.*"
+- extendedWaitUntil:
+    visible: "You need to sign in to subscribe to communities."
+    timeout: 10000
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "Sign in required to subscribe"
+    timeout: 10000
+- assertNotVisible: "Welcome back"
+- takeScreenshot: build/maestro/a5_gate_cancel_snackbar
