@@ -374,8 +374,35 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     await Future.wait([_loadCommunity(), _loadFeed()]);
   }
 
+  /// Pops when there is a route below; otherwise (deep-linked entry) goes to
+  /// the feed instead of failing to pop or exiting the app.
+  void _goBack() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      context.go('/feed');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      // Route-relative and dependency-registering: dialogs or sheets above
+      // this route must not count, and the value must refresh when they close.
+      canPop: ModalRoute.canPopOf(context) ?? false,
+      onPopInvokedWithResult: (didPop, _) {
+        // Re-check instead of inferring from !didPop alone: a pop blocked by
+        // another PopScope on a route with history must not jump to the feed.
+        if (didPop || !mounted || (ModalRoute.canPopOf(context) ?? false)) {
+          return;
+        }
+        context.go('/feed');
+      },
+      child: _buildScaffold(),
+    );
+  }
+
+  Widget _buildScaffold() {
     // Loading community info
     if (_isLoadingCommunity && _community == null) {
       return Scaffold(
@@ -423,10 +450,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
               expandedHeight: 220,
               pinned: true,
               stretch: true,
-              leading: IconButton(
-                icon: const BackIcon(),
-                onPressed: () => context.pop(),
-              ),
+              leading: IconButton(icon: const BackIcon(), onPressed: _goBack),
               actions: [
                 _buildSubscribeButton(),
                 if (community != null)
@@ -801,10 +825,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
       backgroundColor: AppColors.background,
       foregroundColor: AppColors.textPrimary,
       title: const Text('Community'),
-      leading: IconButton(
-        icon: const BackIcon(),
-        onPressed: () => context.pop(),
-      ),
+      leading: IconButton(icon: const BackIcon(), onPressed: _goBack),
     );
   }
 

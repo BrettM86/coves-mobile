@@ -1,0 +1,28 @@
+# Section D — a community opened by deep link is the only route on the
+# stack; system Back must go to the home feed instead of exiting the app.
+# (Pushed-from-origin back is covered by d2: back returns to mari's profile.)
+# NOT in config.yaml's flowsOrder: MainActivity has no VIEW intent filter,
+# so the community deep link must be fired via adb BEFORE running this flow,
+# with the app cold (this flow intentionally has no launchApp):
+#   adb shell am force-stop social.coves.dev
+#   adb shell am start -W -n social.coves.dev/social.coves.MainActivity \
+#     -a android.intent.action.VIEW \
+#     -d 'social.coves:///community/did:plc:4euiozirvhlrpoieujiwlyei'
+# (did:plc:4euiozirvhlrpoieujiwlyei is !science on the local AppView.)
+# Assumes a signed-in session.
+appId: social.coves.dev
+tags:
+  - standalone
+---
+- extendedWaitUntil:
+    visible: "Search posts"
+    timeout: 30000
+- assertVisible: "[\\s\\S]*Subscribers[\\s\\S]*"
+- takeScreenshot: build/maestro/d8_community_deeplinked
+- back
+# Landed on the home feed, app still in the foreground.
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 15000
+- assertNotVisible: "Search posts"
+- takeScreenshot: build/maestro/d8_back_to_feed
