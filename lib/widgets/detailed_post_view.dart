@@ -154,6 +154,10 @@ class _DetailedPostViewState extends State<DetailedPostView> {
 
   @override
   Widget build(BuildContext context) {
+    // The Bluesky card shows the quoted text, so a title that only repeats
+    // it is hidden while the card is visible.
+    final hidesTitle =
+        !_concealed && widget.post.post.titleDuplicatesBlueskyEmbed;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -161,7 +165,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
         _buildAuthorRow(),
 
         // Title - prominent but clean
-        if (widget.post.post.title != null) ...[
+        if (widget.post.post.title != null && !hidesTitle) ...[
           const SizedBox(height: 12),
           _buildTitle(),
         ],

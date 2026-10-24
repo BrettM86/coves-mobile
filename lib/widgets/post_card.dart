@@ -207,6 +207,11 @@ class _PostCardContent extends StatelessWidget {
     final showsBlueskyEmbed =
         !concealed && post.post.embed?.blueskyPost != null;
     final showsText = !concealed && post.post.text.isNotEmpty;
+    // The Bluesky card shows the quoted text, so a title that only repeats
+    // it is hidden while the card is visible.
+    final showsTitle =
+        post.post.title != null &&
+        !(showsBlueskyEmbed && post.post.titleDuplicatesBlueskyEmbed);
     // Everything that can sit under the title and therefore needs the gap
     // after it: the reveal banner, native media, either embed card, or the
     // post text.
@@ -296,15 +301,14 @@ class _PostCardContent extends StatelessWidget {
                 if (showAuthorFooter) _buildAuthorFooter(context),
 
                 // Title and text wrapped in InkWell for navigation
-                if (!disableNavigation &&
-                    (post.post.title != null || post.post.text.isNotEmpty))
+                if (!disableNavigation && (showsTitle || showsText))
                   InkWell(
                     onTap: () => _navigateToDetail(context),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Post title
-                        if (post.post.title != null) ...[
+                        if (showsTitle) ...[
                           Text(
                             post.post.title!,
                             style: TextStyle(
@@ -318,14 +322,14 @@ class _PostCardContent extends StatelessWidget {
                         ],
 
                         // Spacing after title
-                        if (post.post.title != null && hasContentBelowTitle)
+                        if (showsTitle && hasContentBelowTitle)
                           const SizedBox(height: 12),
                       ],
                     ),
                   )
                 else
                 // Title when navigation is disabled
-                if (post.post.title != null) ...[
+                if (showsTitle) ...[
                   Text(
                     post.post.title!,
                     style: TextStyle(

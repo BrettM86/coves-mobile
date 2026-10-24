@@ -294,6 +294,27 @@ class PostView {
       (moderation?.contentLabels.any((label) => label.value == 'nsfw') ??
           false);
 
+  /// Whether [title] repeats the text of the quoted Bluesky post.
+  ///
+  /// Full post views render the quoted post's text inside the embed card, so
+  /// they hide a title that merely restates it. Compact views keep the title.
+  /// Comparison ignores leading/trailing whitespace and treats any whitespace
+  /// run (including newlines) as a single space.
+  bool get titleDuplicatesBlueskyEmbed {
+    final resolved = embed?.blueskyPost?.resolved;
+    if (resolved == null || resolved.unavailable) {
+      return false;
+    }
+    final normalizedTitle = _normalizeWhitespace(title ?? '');
+    return normalizedTitle.isNotEmpty &&
+        normalizedTitle == _normalizeWhitespace(resolved.text);
+  }
+
+  static final _whitespaceRun = RegExp(r'\s+');
+
+  static String _normalizeWhitespace(String value) =>
+      value.trim().replaceAll(_whitespaceRun, ' ');
+
   /// Returns a copy with the given fields replaced.
   ///
   /// Omitted fields are carried over; passing null does not clear a field

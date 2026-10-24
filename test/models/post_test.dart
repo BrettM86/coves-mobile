@@ -3,6 +3,8 @@ import 'package:coves_flutter/models/moderation.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../test_helpers/bluesky_title_fixtures.dart';
+
 void main() {
   PostView buildPostView({
     PostStats? stats,
@@ -703,6 +705,125 @@ void main() {
           reason: 'labels: $labels',
         );
       }
+    });
+  });
+
+  group('PostView.titleDuplicatesBlueskyEmbed', () {
+    PostView sharePost({String? title, PostEmbed? embed}) {
+      return buildPostView(
+        record: PostRecord(title: title, content: ''),
+        embed: embed,
+      );
+    }
+
+    test('is true when the title equals the quoted post text', () {
+      final post = sharePost(
+        title: 'Hello world',
+        embed: blueskyQuoteEmbed(text: 'Hello world'),
+      );
+
+      expect(post.titleDuplicatesBlueskyEmbed, isTrue);
+    });
+
+    test('is true when only whitespace differs', () {
+      final post = sharePost(
+        title: 'Hello  world',
+        embed: blueskyQuoteEmbed(text: '  Hello\n\nworld \n'),
+      );
+
+      expect(post.titleDuplicatesBlueskyEmbed, isTrue);
+    });
+
+    test('is false when the title differs from the quoted post text', () {
+      final post = sharePost(
+        title: 'My take on this',
+        embed: blueskyQuoteEmbed(text: 'Hello world'),
+      );
+
+      expect(post.titleDuplicatesBlueskyEmbed, isFalse);
+    });
+
+    test('is false when only letter case differs', () {
+      final post = sharePost(
+        title: 'Hello World',
+        embed: blueskyQuoteEmbed(text: 'hello world'),
+      );
+
+      expect(post.titleDuplicatesBlueskyEmbed, isFalse);
+    });
+
+    test(
+      'is false when the title is only a prefix of the quoted post text',
+      () {
+        final post = sharePost(
+          title: 'Shipping the new release',
+          embed: blueskyQuoteEmbed(text: 'Shipping the new release today'),
+        );
+
+        expect(post.titleDuplicatesBlueskyEmbed, isFalse);
+      },
+    );
+
+    test('is false for a post without a title', () {
+      final post = sharePost(embed: blueskyQuoteEmbed(text: 'Hello world'));
+
+      expect(post.titleDuplicatesBlueskyEmbed, isFalse);
+    });
+
+    test('is false for an empty title over an empty quoted post', () {
+      final post = sharePost(
+        title: '',
+        embed: blueskyQuoteEmbed(text: ''),
+      );
+
+      expect(post.titleDuplicatesBlueskyEmbed, isFalse);
+    });
+
+    test('is false for a post without an embed', () {
+      final post = sharePost(title: 'Hello world');
+
+      expect(post.titleDuplicatesBlueskyEmbed, isFalse);
+    });
+
+    test('is false for a link embed', () {
+      final post = sharePost(
+        title: 'Hello world',
+        embed: PostEmbed.fromJson(<String, dynamic>{
+          r'$type': EmbedTypes.externalView,
+          'external': <String, dynamic>{
+            'uri': 'https://example.com',
+            'title': 'Hello world',
+            'description': 'Hello world',
+          },
+        }),
+      );
+
+      expect(post.titleDuplicatesBlueskyEmbed, isFalse);
+    });
+
+    test('is false when the quoted post was not resolved', () {
+      final post = sharePost(title: 'Hello world', embed: blueskyQuoteEmbed());
+
+      expect(post.titleDuplicatesBlueskyEmbed, isFalse);
+    });
+
+    test('is false when the quoted post is unavailable', () {
+      final post = sharePost(
+        title: 'Hello world',
+        embed: blueskyQuoteEmbed(text: 'Hello world', unavailable: true),
+      );
+
+      expect(post.titleDuplicatesBlueskyEmbed, isFalse);
+    });
+
+    test('leaves the title itself unchanged', () {
+      final post = sharePost(
+        title: 'Hello  world',
+        embed: blueskyQuoteEmbed(text: 'Hello world'),
+      );
+
+      expect(post.titleDuplicatesBlueskyEmbed, isTrue);
+      expect(post.title, 'Hello  world');
     });
   });
 }
