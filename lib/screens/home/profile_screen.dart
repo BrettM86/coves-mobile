@@ -438,7 +438,7 @@ class _ProfileViewState extends State<_ProfileView> {
               actions: [
                 if (profileProvider.isOwnProfile && profile != null)
                   IconButton(
-                    icon: const LucideGlyph(LucidePaths.pencil),
+                    icon: const LucideGlyph(LucidePaths.pencil, size: 18),
                     onPressed: () => _navigateToEditProfile(context, profile),
                     tooltip: 'Edit Profile',
                   ),
