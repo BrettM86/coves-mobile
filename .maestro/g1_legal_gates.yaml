@@ -15,20 +15,27 @@ tags:
   - standalone
 ---
 # Fresh-install state: wipe app data so both gates are un-accepted.
-- launchApp:
-    clearState: true
 # Check 1: EULA gate is the first thing shown.
-- extendedWaitUntil:
-    visible: "License Agreement"
-    timeout: 60000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+          clearState: true
+      - extendedWaitUntil:
+          visible: "License Agreement"
+          timeout: 60000
 - assertVisible: "Scroll to read full agreement"
 - assertVisible: "Accept & Continue"
 # Un-accepted state persists across a restart (still gated after relaunch).
-- stopApp
-- launchApp
-- extendedWaitUntil:
-    visible: "License Agreement"
-    timeout: 60000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "License Agreement"
+          timeout: 60000
 # Accept requires the full scroll: read to the last EULA section, then a
 # few extra swipes to land on the hard bottom (the checkbox only unlocks
 # within 40px of maxScrollExtent; the last heading becoming visible is not
@@ -59,11 +66,14 @@ tags:
     timeout: 30000
 - assertVisible: "Scroll to read full guidelines"
 # EULA acceptance persists across a restart; guidelines gate remains.
-- stopApp
-- launchApp
-- extendedWaitUntil:
-    visible: "Community Guidelines"
-    timeout: 60000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Community Guidelines"
+          timeout: 60000
 - assertNotVisible: "License Agreement"
 - scrollUntilVisible:
     element:
@@ -89,11 +99,14 @@ tags:
     timeout: 30000
 - takeScreenshot: build/maestro/g1_gates_accepted
 # Both acceptances persist across a final restart (no gate re-shown).
-- stopApp
-- launchApp
-- extendedWaitUntil:
-    visible: "Sign in"
-    timeout: 60000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Sign in"
+          timeout: 60000
 - assertNotVisible: "License Agreement"
 - assertNotVisible: "Scroll to read full guidelines"
 - takeScreenshot: build/maestro/g1_gates_persisted

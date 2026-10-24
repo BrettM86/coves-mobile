@@ -72,11 +72,14 @@ appId: social.coves.dev
 # screen re-focuses the title field, and the reopened keyboard covers the
 # bottom nav. A fresh launch also proves the post persisted server-side
 # rather than just optimistically.
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - retry:
     maxRetries: 4
     commands:

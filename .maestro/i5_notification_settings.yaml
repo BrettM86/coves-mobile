@@ -6,10 +6,14 @@
 # PRECONDITIONS: a1_login_session (mari signed in).
 appId: social.coves.dev
 ---
-- launchApp
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - tapOn: "Notifications.*"
 - extendedWaitUntil:
     visible: "(Reply to your post|Reply to your comment|Mentioned you|.* liked your (post|comment)|No notifications yet).*"

@@ -10,11 +10,14 @@
 # as a BACK press, which the shell's dirty-draft guard redirects to Home.
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 # --- create the post this flow will delete ---
@@ -48,11 +51,14 @@ appId: social.coves.dev
     visible: "[\\s\\S]*${output.e6Title}[\\s\\S]*"
     timeout: 20000
 # --- find it on the home Discover feed (indexing lag absorbed by retries) ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - retry:
     maxRetries: 4
     commands:

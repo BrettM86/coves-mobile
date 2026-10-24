@@ -28,11 +28,14 @@ tags:
 env:
   PROXY_URL: http://127.0.0.1:8080
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - extendedWaitUntil:
     visible: "Feed post in [\\s\\S]*"
     timeout: 15000

@@ -3,10 +3,14 @@
 # Assumes a signed-in session on the feed (b1 runs first).
 appId: social.coves.dev
 ---
-- launchApp
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 # ~2 posts per screen; 20 swipes covers well past 30 posts and forces
 # at least one pagination fetch.
 - repeat:

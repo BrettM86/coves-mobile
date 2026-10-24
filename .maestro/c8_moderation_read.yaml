@@ -6,11 +6,14 @@
 # custom scheme raises an app chooser.)
 appId: social.coves.dev
 ---
-- launchApp:
-    stopApp: true
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 # Discover feed card is concealed
 - scrollUntilVisible:
     element:

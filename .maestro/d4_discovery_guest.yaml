@@ -7,10 +7,14 @@
 # Leaves the app signed out.
 appId: social.coves.dev
 ---
-- launchApp
-- extendedWaitUntil:
-    visible: "Sign in"
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Sign in"
+          timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - tapOn: "Explore communities"

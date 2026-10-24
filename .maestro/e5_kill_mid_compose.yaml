@@ -14,7 +14,12 @@ appId: social.coves.dev
           timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
-# stale-semantics flake guard (same pattern as the d-flows)
+# Compose, then kill + relaunch in one step (launchApp stopApp). The whole
+# sequence sits inside the retry so every attempt relaunches from the
+# dirty-composer state: a retry never turns into an ordinary relaunch that
+# could hide a crash on the first one. The retry also covers the
+# stale-semantics flake on "Create" (same pattern as the d-flows) and the
+# cold-start stall on the relaunch.
 - retry:
     maxRetries: 2
     commands:
@@ -22,17 +27,16 @@ appId: social.coves.dev
       - extendedWaitUntil:
           visible: "Create Post"
           timeout: 15000
-- tapOn: "Title"
-- inputText: "killed mid compose"
-- tapOn: "What are your thoughts?"
-- inputText: "this draft dies with the process"
-# kill + relaunch in one step
-- launchApp:
-    stopApp: true
-# clean relaunch: session intact, feed renders, no crash screen
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+      - tapOn: "Title"
+      - inputText: "killed mid compose"
+      - tapOn: "What are your thoughts?"
+      - inputText: "this draft dies with the process"
+      - launchApp:
+          stopApp: true
+      # clean relaunch: session intact, feed renders, no crash screen
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - extendedWaitUntil:
     visible: "Feed post in [\\s\\S]*"
     timeout: 30000

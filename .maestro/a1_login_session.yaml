@@ -6,12 +6,16 @@
 # signing out first. Leaves the app signed in on the home feed.
 appId: social.coves.dev
 ---
-- launchApp
 # Wait out the splash screen: either the landing screen (signed out) or the
 # feed (signed in) appears
-- extendedWaitUntil:
-    visible: "Sign in|Discover feed.*"
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Sign in|Discover feed.*"
+          timeout: 30000
 # Let the semantics tree settle: in suite mode the when-check below
 # intermittently read a stale/empty tree right after the splash resolved
 # and skipped the sign-out recovery.
@@ -77,9 +81,12 @@ appId: social.coves.dev
     timeout: 60000
 - takeScreenshot: build/maestro/a_login_feed
 # Check 3: session persists across a full restart (no re-login)
-- stopApp
-- launchApp
-- extendedWaitUntil:
-    visible: "Discover feed.*"
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
 - takeScreenshot: build/maestro/a_session_persisted

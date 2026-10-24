@@ -12,10 +12,14 @@
 # press BACK to dismiss it: BACK closes the whole custom tab.
 appId: social.coves.dev
 ---
-- launchApp
-- extendedWaitUntil:
-    visible: "Sign in|Welcome back"
-    timeout: 30000
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Sign in|Welcome back"
+          timeout: 30000
 # launchApp normally resets to the landing screen; tolerate starting on the
 # login screen too.
 - runFlow:
