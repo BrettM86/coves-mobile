@@ -78,8 +78,10 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   // Tab state
   int _selectedTabIndex = 0;
 
-  // Feed sort state
+  // Feed sort state. The timeframe applies only to Top; it is kept while
+  // another sort is showing so returning to Top reuses it.
   String _feedSort = 'hot';
+  String _feedTimeframe = 'all';
 
   // Search state. The controller and focus node are owned here, not in the
   // header: `_FeedSortDelegate.shouldRebuild` fires on every screen rebuild,
@@ -219,12 +221,24 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     if (_feedSort == sort) {
       return;
     }
-    setState(() {
-      _feedSort = sort;
-    });
-    // Whatever is in flight for the previous sort — a first page or an
-    // append — is superseded by this refresh and discarded when it lands,
-    // so the new label can never sit above the old sort's posts.
+    _reloadFeedFor(() => _feedSort = sort);
+  }
+
+  void _onFeedTimeframeChanged(String timeframe) {
+    if (_feedTimeframe == timeframe) {
+      return;
+    }
+    _reloadFeedFor(() => _feedTimeframe = timeframe);
+  }
+
+  /// Applies a sort or timeframe change and reloads the feed for it.
+  void _reloadFeedFor(VoidCallback change) {
+    setState(change);
+    // The previous selection's posts and next-page cursor are dropped at
+    // once, so the new label never sits above the old selection's posts,
+    // even when the new first page fails. Whatever is still in flight for
+    // the previous selection is superseded and discarded when it lands.
+    _feedController.reset();
     _loadFeed();
   }
 
@@ -327,6 +341,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
         : await _apiService.getCommunityFeed(
             community: widget.identifier,
             sort: _feedSort,
+            timeframe: _feedSort == 'top' ? _feedTimeframe : null,
             cursor: cursor,
           );
 
@@ -428,6 +443,13 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      // An opaque strip over the system bottom inset (the Android navigation
+      // bar, the iOS home indicator), as the main shell's bottom bar gives
+      // the home feed, so posts never scroll behind it.
+      bottomNavigationBar: const ColoredBox(
+        color: AppColors.background,
+        child: SafeArea(top: false, child: SizedBox(width: double.infinity)),
+      ),
       body: RefreshIndicator(
         color: AppColors.primary,
         backgroundColor: AppColors.backgroundSecondary,
@@ -650,6 +672,14 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                   isSelected: _feedSort == 'top',
                   onTap: () => _onFeedSortChanged('top'),
                 ),
+                if (_feedSort == 'top') ...[
+                  const SizedBox(width: 8),
+                  _FeedTimeframeChip(
+                    key: const ValueKey('community_feed_timeframe_chip'),
+                    timeframe: _feedTimeframe,
+                    onSelected: _onFeedTimeframeChanged,
+                  ),
+                ],
               ],
             ),
           ),
@@ -1467,6 +1497,115 @@ class _FeedSortChip extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Period picker shown next to the Top chip
+class _FeedTimeframeChip extends StatelessWidget {
+  const _FeedTimeframeChip({
+    required this.timeframe,
+    required this.onSelected,
+    super.key,
+  });
+
+  /// Timeframe value to label, in menu order.
+  static const _labels = <String, String>{
+    'hour': 'Past hour',
+    'day': 'Past day',
+    'week': 'Past week',
+    'month': 'Past month',
+    'year': 'Past year',
+    'all': 'All time',
+  };
+
+  final String timeframe;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    // A MenuAnchor rather than a PopupMenuButton: it has no modal barrier,
+    // so a touch outside closes it and still scrolls the feed, like the
+    // post options menu.
+    return MenuAnchor(
+      style: MenuStyle(
+        backgroundColor: const WidgetStatePropertyAll(
+          AppColors.backgroundSecondary,
+        ),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+      alignmentOffset: const Offset(0, 4),
+      menuChildren: [
+        for (final MapEntry(key: value, value: label) in _labels.entries)
+          MenuItemButton(
+            onPressed: () => onSelected(value),
+            trailingIcon: timeframe == value
+                ? const Icon(Icons.check, color: AppColors.primary, size: 20)
+                : null,
+            child: Semantics(
+              selected: timeframe == value,
+              child: Text(
+                label,
+                style: const TextStyle(color: AppColors.textPrimary),
+              ),
+            ),
+          ),
+      ],
+      builder: (context, controller, _) => Tooltip(
+        message: 'Time period',
+        child: Semantics(
+          button: true,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: () =>
+                  controller.isOpen ? controller.close() : controller.open(),
+              customBorder: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Ink(
+                padding: const EdgeInsets.only(
+                  left: 12,
+                  right: 8,
+                  top: 6,
+                  bottom: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.teal.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.teal),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.access_time,
+                      size: 14,
+                      color: AppColors.teal,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _labels[timeframe]!,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.teal,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.arrow_drop_down,
+                      size: 16,
+                      color: AppColors.teal,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
