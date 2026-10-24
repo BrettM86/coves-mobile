@@ -157,7 +157,7 @@ platform :ios do
       # Screenshots are tied to the version and lock once it is submitted,
       # so they go up here, replacing the previous version's set.
       skip_screenshots: false,
-      screenshots_path: File.join(__dir__, "screenshots"),
+      screenshots_path: File.expand_path("screenshots", __dir__),
       overwrite_screenshots: true,
       # Without this deliver opens an HTML preview and waits for a "y" at the
       # terminal, which hangs (or, non-interactively, aborts) after Play has
@@ -213,7 +213,7 @@ platform :ios do
   lane :push_screenshots do
     upload_to_app_store(
       api_key: asc_api_key,
-      screenshots_path: File.join(__dir__, "screenshots"),
+      screenshots_path: File.expand_path("screenshots", __dir__),
       skip_binary_upload: true,
       skip_metadata: true,
       skip_screenshots: false,
