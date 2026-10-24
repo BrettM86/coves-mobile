@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
 import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
+import '../utils/error_messages.dart';
 
 /// Report reason categories matching backend enum.
 ///
@@ -127,23 +128,13 @@ class _ReportDialogState extends State<ReportDialog> {
       if (mounted) {
         Navigator.of(context).pop(true);
       }
-    } on AuthenticationException catch (e) {
-      if (kDebugMode) {
-        debugPrint('Auth error submitting report: $e');
-      }
-      if (mounted) {
-        setState(() {
-          _error = 'You must be signed in to report content';
-          _isSubmitting = false;
-        });
-      }
     } on ApiException catch (e) {
       if (kDebugMode) {
         debugPrint('API error submitting report: $e');
       }
       if (mounted) {
         setState(() {
-          _error = e.message;
+          _error = ErrorMessage.report(e);
           _isSubmitting = false;
         });
       }

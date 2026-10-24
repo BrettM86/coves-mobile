@@ -1135,15 +1135,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Future<void> _onLoadMoreReplies(ThreadViewComment thread) async {
     final messenger = ScaffoldMessenger.of(context);
     if (_isOptimisticPostGone(_commentsProvider)) {
-      _showLoadRepliesFailed(messenger);
+      _showLoadRepliesFailed(messenger, null);
       return;
     }
     try {
       await _commentsProvider.loadMoreReplies(thread.comment.uri);
-    } on Exception {
+    } on Exception catch (e) {
       // A post that is gone shows its unavailable state instead.
       if (!_isPostUnavailable(_commentsProvider)) {
-        _showLoadRepliesFailed(messenger);
+        _showLoadRepliesFailed(messenger, e);
       }
     }
   }
@@ -1152,14 +1152,23 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       widget.isOptimistic &&
       provider.errorCode == CommentsProvider.rootNotFoundErrorCode;
 
-  void _showLoadRepliesFailed(ScaffoldMessengerState messenger) {
+  /// A just-created post reported gone keeps [_loadRepliesFailedMessage],
+  /// matching the footer; any other failure is mapped from [error].
+  void _showLoadRepliesFailed(
+    ScaffoldMessengerState messenger,
+    Exception? error,
+  ) {
     if (!mounted) {
       return;
     }
     final commentsProvider = _commentsProvider;
     messenger.showSnackBar(
       SnackBar(
-        content: const Text(_loadRepliesFailedMessage),
+        content: Text(
+          error == null || _isOptimisticPostGone(commentsProvider)
+              ? _loadRepliesFailedMessage
+              : ErrorMessage.loadReplies(error),
+        ),
         behavior: SnackBarBehavior.floating,
         action: _isOptimisticPostGone(commentsProvider)
             ? SnackBarAction(

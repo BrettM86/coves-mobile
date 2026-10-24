@@ -203,6 +203,39 @@ void main() {
     expect(find.text('Something went wrong. Please try again'), findsNothing);
   });
 
+  testWidgets('full-screen and footer errors show provider copy verbatim', (
+    tester,
+  ) async {
+    const messages = <String>[
+      'You are banned from this community',
+      'Please sign in to continue.',
+      'Could not load feed. Pull to refresh.',
+    ];
+
+    for (final message in messages) {
+      await tester.pumpWidget(
+        host(posts: const <FeedViewPost>[], error: message),
+      );
+      expect(find.text(message), findsOneWidget, reason: 'full-screen');
+
+      await tester.pumpWidget(
+        host(
+          posts: <FeedViewPost>[buildPost('a')],
+          loadMoreError: message,
+          onRetryLoadMore: () {},
+        ),
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(footerKey),
+          matching: find.text(message),
+        ),
+        findsOneWidget,
+        reason: 'footer',
+      );
+    }
+  });
+
   testWidgets('load-more Retry uses only the dedicated callback', (
     tester,
   ) async {
@@ -234,7 +267,7 @@ void main() {
     expect(legacyPaginationRetries, 0);
   });
 
-  testWidgets('For You full-page errors keep friendly mapping and retry', (
+  testWidgets('For You full-page errors show the provider error and retry', (
     tester,
   ) async {
     var fullRefreshRetries = 0;
@@ -245,7 +278,7 @@ void main() {
       host(
         feedType: FeedType.forYou,
         posts: const <FeedViewPost>[],
-        error: 'SocketException: offline',
+        error: 'No connection. Please check your internet.',
         onRetry: () => fullRefreshRetries++,
         onClearErrorAndLoadMore: () => legacyPaginationRetries++,
         onRetryLoadMore: () => loadMoreRetries++,
@@ -253,8 +286,10 @@ void main() {
     );
 
     expect(find.text('Failed to load feed'), findsOneWidget);
-    expect(find.text('Please check your internet connection'), findsOneWidget);
-    expect(find.text('SocketException: offline'), findsNothing);
+    expect(
+      find.text('No connection. Please check your internet.'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.widgetWithText(ElevatedButton, 'Retry'));
     await tester.pump();
@@ -275,7 +310,7 @@ void main() {
       host(
         feedType: FeedType.forYou,
         posts: <FeedViewPost>[buildPost('a')],
-        error: 'Network error: offline',
+        error: 'No connection. Please check your internet.',
         onRetry: () => fullRefreshRetries++,
         onClearErrorAndLoadMore: () => legacyPaginationRetries++,
         onRetryLoadMore: () => loadMoreRetries++,
@@ -286,11 +321,10 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(footerKey),
-        matching: find.text('Please check your internet connection'),
+        matching: find.text('No connection. Please check your internet.'),
       ),
       findsOneWidget,
     );
-    expect(find.text('Network error: offline'), findsNothing);
 
     await tester.tap(
       find.descendant(

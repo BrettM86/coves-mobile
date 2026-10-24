@@ -11,6 +11,7 @@ import '../../models/picked_image.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../utils/community_name_validator.dart';
+import '../../utils/error_messages.dart';
 import '../../widgets/icons/back_icon.dart';
 import 'community_avatar_upload_page.dart';
 import 'create_community_form.dart';
@@ -142,7 +143,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
         debugPrint('API error creating community: ${e.message}');
       }
       _finishCreate(
-        message: 'Failed to create community: ${e.message}',
+        message: ErrorMessage.createCommunity(e),
         background: Colors.red[700],
       );
       return;
@@ -237,7 +238,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
         level: 1000,
       );
       _finishUpload(
-        message: 'Failed to upload avatar: ${e.message}',
+        message: ErrorMessage.uploadAvatar(e),
         background: Colors.red[700],
       );
       return false;
@@ -362,8 +363,8 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
           _isLoadingCommunities = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to load communities'),
+          SnackBar(
+            content: Text(ErrorMessage.loadCommunities(e)),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
           ),

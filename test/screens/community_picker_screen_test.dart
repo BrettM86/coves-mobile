@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/error_copy_rows.dart';
 import '../test_helpers/pump_helpers.dart';
 import '../test_helpers/test_mocks.dart';
 
@@ -36,6 +37,96 @@ void main() {
     await pumpFrames(tester);
 
     expect(find.text('Post to'), findsOneWidget);
+  });
+
+  group('CommunityPickerScreen load failure copy', () {
+    const fallback = 'Could not load communities. Please try again.';
+    final rows = [
+      for (final row in errorCopyRows(fallback))
+        (
+          name: 'initial load ${row.name}',
+          error: row.error,
+          expected: row.expected,
+          rawText: row.rawText,
+          onLoadMore: false,
+        ),
+      (
+        name: 'initial load non-API exception',
+        error: const FormatException('Unexpected character'),
+        expected: fallback,
+        rawText: 'Unexpected character',
+        onLoadMore: false,
+      ),
+      for (final row in errorCopyRows(fallback))
+        (
+          name: 'load more ${row.name}',
+          error: row.error,
+          expected: row.expected,
+          rawText: row.rawText,
+          onLoadMore: true,
+        ),
+    ];
+
+    for (final row in rows) {
+      testWidgets('a ${row.name} failure shows "${row.expected}"', (
+        tester,
+      ) async {
+        final api = MockCovesApiService();
+        final firstPage = when(
+          api.listCommunities(
+            limit: anyNamed('limit'),
+            cursor: argThat(isNull, named: 'cursor'),
+            sort: anyNamed('sort'),
+            subscribed: anyNamed('subscribed'),
+          ),
+        );
+        if (row.onLoadMore) {
+          firstPage.thenAnswer(
+            (_) async => CommunitiesResponse(
+              communities: [
+                for (var index = 0; index < 30; index++)
+                  CommunityView(
+                    did: 'did:plc:community$index',
+                    name: 'community$index',
+                  ),
+              ],
+              cursor: 'next-page',
+            ),
+          );
+          when(
+            api.listCommunities(
+              limit: anyNamed('limit'),
+              cursor: 'next-page',
+              sort: anyNamed('sort'),
+              subscribed: anyNamed('subscribed'),
+            ),
+          ).thenThrow(row.error);
+        } else {
+          firstPage.thenThrow(row.error);
+        }
+
+        await tester.pumpWidget(
+          Provider<CovesApiService>.value(
+            value: api,
+            child: MaterialApp(
+              theme: AppTheme.dark,
+              home: const CommunityPickerScreen(),
+            ),
+          ),
+        );
+        await pumpFrames(tester);
+        if (row.onLoadMore) {
+          await tester.drag(find.byType(ListView), const Offset(0, -20000));
+          await pumpFrames(tester);
+        }
+
+        expect(find.text(row.expected), findsOneWidget);
+        expect(find.textContaining('Failed to load communities'), findsNothing);
+        if (row.rawText case final rawText?) {
+          expect(find.textContaining(rawText), findsNothing);
+        }
+      });
+    }
   });
 
   // Note: Full widget tests for CommunityPickerScreen require mocking the API

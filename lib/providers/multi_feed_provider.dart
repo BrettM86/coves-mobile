@@ -8,6 +8,7 @@ import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
 import '../services/post_change_broadcast.dart';
 import '../services/viewer_state_hydrator.dart';
+import '../utils/error_messages.dart';
 import 'auth_provider.dart';
 import 'community_subscription_provider.dart';
 import 'vote_provider.dart';
@@ -583,7 +584,7 @@ class MultiFeedProvider with ChangeNotifier {
 
       final failedState = getState(type);
       if (!refresh) {
-        var message = e.toString();
+        var message = ErrorMessage.loadFeed(e);
         if (isDiscoverHot &&
             e is ApiException &&
             e.statusCode == 503 &&
@@ -600,7 +601,7 @@ class MultiFeedProvider with ChangeNotifier {
         );
       } else {
         _feedStates[type] = failedState.copyWith(
-          error: e.toString(),
+          error: ErrorMessage.loadFeed(e),
           isLoading: false,
           isLoadingMore: false,
         );

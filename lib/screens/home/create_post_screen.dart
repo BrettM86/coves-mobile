@@ -6,9 +6,9 @@ import '../../constants/embed_types.dart';
 import '../../models/community.dart';
 import '../../models/post.dart';
 import '../../providers/auth_provider.dart';
-import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../services/mention_resolver.dart';
+import '../../utils/error_messages.dart';
 import '../../utils/rich_text_composer.dart';
 import '../../utils/url_policy.dart';
 import '../compose/community_picker_screen.dart';
@@ -278,21 +278,11 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           ),
         );
       }
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to create post: ${e.message}'),
-            backgroundColor: Colors.red[700],
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to create post: ${e.toString()}'),
+            content: Text(ErrorMessage.createPost(e)),
             backgroundColor: Colors.red[700],
             behavior: SnackBarBehavior.floating,
           ),

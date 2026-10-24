@@ -220,14 +220,16 @@ void main() {
     });
 
     testWidgets('should display error state with retry button', (tester) async {
-      fakeFeedProvider.setError(FeedType.discover, 'Network error');
+      fakeFeedProvider.setError(
+        FeedType.discover,
+        'No connection. Please check your internet.',
+      );
 
       await tester.pumpWidget(createTestWidget());
 
       expect(find.text('Failed to load feed'), findsOneWidget);
-      // Error message is transformed to user-friendly message
       expect(
-        find.text('Please check your internet connection'),
+        find.text('No connection. Please check your internet.'),
         findsOneWidget,
       );
       expect(find.text('Retry'), findsOneWidget);

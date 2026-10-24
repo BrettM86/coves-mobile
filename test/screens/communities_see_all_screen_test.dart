@@ -21,6 +21,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/error_copy_rows.dart';
 import '../test_helpers/test_mocks.dart';
 
 CommunityView community(String id) {
@@ -141,7 +142,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('the refresh exploded'), findsOneWidget);
+    expect(
+      find.text('No connection. Please check your internet.'),
+      findsOneWidget,
+    );
     // ...without blanking the rows that are still perfectly readable.
     expect(find.text('Community a'), findsOneWidget);
   });
@@ -156,13 +160,36 @@ void main() {
     await pumpScreen(tester);
 
     expect(requests[0], 2);
-    // The screen's errorMapper passes a typed ApiException's message through.
-    expect(find.text('offline'), findsOneWidget);
+    // The screen's errorMapper shows the shared helper's copy.
+    expect(
+      find.text('No connection. Please check your internet.'),
+      findsOneWidget,
+    );
 
     // ...and the footer's Retry resumes it.
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
 
     expect(requests[0], greaterThan(2));
+  });
+
+  group('first page failure copy', () {
+    for (final row in errorCopyRows(
+      'Could not load communities. Please try again.',
+    )) {
+      testWidgets('a ${row.name} failure shows "${row.expected}"', (
+        tester,
+      ) async {
+        stubPages(<Object>[row.error]);
+
+        await pumpScreen(tester);
+
+        expect(find.text(row.expected), findsOneWidget);
+        expect(find.textContaining('Failed to load communities'), findsNothing);
+        if (row.rawText case final rawText?) {
+          expect(find.textContaining(rawText), findsNothing);
+        }
+      });
+    }
   });
 }

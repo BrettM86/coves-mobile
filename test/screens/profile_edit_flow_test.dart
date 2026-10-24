@@ -24,6 +24,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/error_copy_rows.dart';
 import '../test_helpers/fake_providers.dart';
 import '../test_helpers/pump_helpers.dart';
 import '../test_helpers/test_mocks.dart';
@@ -342,5 +343,38 @@ void main() {
     expect(profileCache.get(myDid), same(updatedProfile));
     // The own tab adopted the result without a refresh of its own.
     verifyNever(apiService.getProfile(actor: anyNamed('actor')));
+  });
+
+  group('save failure copy', () {
+    for (final row in errorCopyRows(
+      'Could not update profile. Please try again.',
+    )) {
+      testWidgets('a ${row.name} save failure shows "${row.expected}"', (
+        tester,
+      ) async {
+        when(
+          apiService.updateProfile(
+            displayName: anyNamed('displayName'),
+            bio: anyNamed('bio'),
+            avatarBytes: anyNamed('avatarBytes'),
+            avatarMimeType: anyNamed('avatarMimeType'),
+            bannerBytes: anyNamed('bannerBytes'),
+            bannerMimeType: anyNamed('bannerMimeType'),
+          ),
+        ).thenThrow(row.error);
+        await pumpApp(tester);
+
+        await editAndSave(tester, _ownScreen);
+
+        expect(
+          _within(find.byType(SnackBar), find.text(row.expected)),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Failed to update profile'), findsNothing);
+        if (row.rawText case final rawText?) {
+          expect(find.textContaining(rawText), findsNothing);
+        }
+      });
+    }
   });
 }

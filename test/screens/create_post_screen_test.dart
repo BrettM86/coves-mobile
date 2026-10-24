@@ -14,6 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/error_copy_rows.dart';
 import '../test_helpers/fake_providers.dart' show postCardProviders;
 import '../test_helpers/test_mocks.dart';
 
@@ -545,6 +546,58 @@ void main() {
       ).called(1);
     });
 
+    group('submit failure copy', () {
+      final rows = [
+        ...errorCopyRows('Could not create post. Please try again.'),
+        (
+          name: 'non-API exception',
+          error: const FormatException('Unexpected character'),
+          expected: 'Could not create post. Please try again.',
+          rawText: 'Unexpected character',
+        ),
+      ];
+      for (final row in rows) {
+        testWidgets('a ${row.name} failure shows "${row.expected}"', (
+          tester,
+        ) async {
+          when(
+            mockApiService.createPost(
+              community: anyNamed('community'),
+              title: anyNamed('title'),
+              content: anyNamed('content'),
+              facets: anyNamed('facets'),
+              embed: anyNamed('embed'),
+              langs: anyNamed('langs'),
+              labels: anyNamed('labels'),
+            ),
+          ).thenThrow(row.error);
+
+          await tester.pumpWidget(createTestWidget());
+          await tester.pumpAndSettle();
+          await selectCommunity(tester);
+          await tester.enterText(
+            find.widgetWithText(TextField, 'What are your thoughts?'),
+            'post body',
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.widgetWithText(TextButton, 'Post'));
+          await tester.pumpAndSettle();
+
+          expect(
+            find.descendant(
+              of: find.byType(SnackBar),
+              matching: find.text(row.expected),
+            ),
+            findsOneWidget,
+          );
+          expect(find.textContaining('Failed to create post'), findsNothing);
+          if (row.rawText case final rawText?) {
+            expect(find.textContaining(rawText), findsNothing);
+          }
+        });
+      }
+    });
+
     // Reuses the fixture above: the stubbed createPost still throws after
     // recording its arguments, so the screen never navigates away
     group('body link facets', () {
@@ -733,7 +786,7 @@ void main() {
         expect(
           find.descendant(
             of: find.byType(SnackBar),
-            matching: find.textContaining('Mention lookup unavailable'),
+            matching: find.text('Server error. Please try again later.'),
           ),
           findsOneWidget,
         );

@@ -19,7 +19,6 @@ import '../providers/viewer_authority_provider.dart';
 import '../providers/vote_provider.dart';
 import '../services/admin_moderation_flow.dart';
 import '../services/admin_tools_gate.dart';
-import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
 import '../services/moderation_errors.dart';
 import '../utils/copy_link.dart';
@@ -505,58 +504,14 @@ class _CommentCardState extends State<CommentCard> {
             ),
           );
         }
-      } on NetworkException catch (e) {
-        if (kDebugMode) {
-          debugPrint('Network error deleting comment: $e');
-        }
-        if (context.mounted) {
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Network error. Please check your connection and try again.',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } on NotFoundException catch (e) {
-        if (kDebugMode) {
-          debugPrint('Comment not found: $e');
-        }
-        if (context.mounted) {
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Comment not found. It may have already been deleted.',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      } on ApiException catch (e) {
-        if (kDebugMode) {
-          debugPrint('Failed to delete comment: $e');
-        }
-        if (context.mounted) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                e.statusCode == 403
-                    ? 'You can only delete your own comments'
-                    : 'Could not delete comment. Please try again.',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
       } on Exception catch (e) {
         if (kDebugMode) {
           debugPrint('Failed to delete comment: $e');
         }
         if (context.mounted) {
           messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Could not delete comment. Please try again.'),
+            SnackBar(
+              content: Text(ErrorMessage.deleteComment(e)),
               behavior: SnackBarBehavior.floating,
             ),
           );

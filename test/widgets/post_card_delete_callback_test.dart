@@ -1,5 +1,6 @@
 // A confirmed delete publishes once on the app-wide post change broadcast,
 // including when the card has left the tree before the request completes.
+// A failed delete shows the shared delete-post error copy.
 
 import 'dart:async';
 
@@ -21,6 +22,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/error_copy_rows.dart';
 import '../test_helpers/fake_providers.dart';
 import '../test_helpers/test_mocks.dart';
 
@@ -204,6 +206,39 @@ void main() {
         expect(changes, isEmpty);
         expect(tester.takeException(), isNull);
       });
+    }
+  });
+
+  testWidgets('a failed delete shows the shared delete-post copy', (
+    tester,
+  ) async {
+    for (final row in errorCopyRows(
+      'Could not delete post. Please try again.',
+    )) {
+      when(apiService.deletePost(uri: postUri))
+          .thenAnswer((_) async => throw row.error);
+
+      await pumpMyPostCard(tester);
+      await openDeleteDialog(tester);
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.text(row.expected),
+        ),
+        findsOneWidget,
+        reason: row.name,
+      );
+      if (row.rawText != null) {
+        expect(
+          find.textContaining(row.rawText!),
+          findsNothing,
+          reason: row.name,
+        );
+      }
+      await tester.pumpWidget(const SizedBox());
     }
   });
 

@@ -12,6 +12,7 @@ import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../utils/community_search_utils.dart';
 import '../../utils/cursor_pagination_controller.dart';
+import '../../utils/error_messages.dart';
 import '../../utils/pagination_scroll_listener.dart';
 import '../../widgets/community_list_tile.dart';
 import '../../widgets/paginated_sliver_list.dart';
@@ -62,7 +63,7 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
 
     _controller = CursorPaginationController<CommunityView>(
       fetchPage: _fetchCommunitiesPage,
-      errorMapper: _errorMessage,
+      errorMapper: ErrorMessage.loadCommunities,
       // Cursor drift hands back overlapping pages; the list keys its rows
       // by this DID and asserts on duplicates.
       idOf: (community) => community.did,
@@ -172,13 +173,6 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
       debugPrint('Failed to load communities: $error');
     }
     unawaited(Sentry.captureException(error, stackTrace: stackTrace));
-  }
-
-  String _errorMessage(Object error) {
-    if (error is ApiException) {
-      return error.message;
-    }
-    return 'Failed to load communities. Pull down to retry.';
   }
 
   @override

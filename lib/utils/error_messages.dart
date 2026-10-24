@@ -134,11 +134,32 @@ abstract final class ErrorMessage {
     fallback: 'Could not search posts. Pull to refresh.',
   );
 
-  /// Error message for profile operations
-  static String profile(Object error) => getErrorMessage(
+  /// Error message for profile loading
+  ///
+  /// A [NotFoundException] means the actor does not exist (the AppView
+  /// answers ActorNotFound for an account that never existed), so it gets
+  /// "User not found." rather than "content removed" copy.
+  static String profile(Object error) => _profileLoadMessage(
     error,
     fallback: 'Could not load profile. Please try again.',
   );
+
+  /// Error message for loading a profile's posts tab
+  static String loadProfilePosts(Object error) => _profileLoadMessage(
+    error,
+    fallback: 'Could not load posts. Please try again.',
+  );
+
+  /// Error message for loading a profile's comments tab
+  static String loadProfileComments(Object error) => _profileLoadMessage(
+    error,
+    fallback: 'Could not load comments. Please try again.',
+  );
+
+  static String _profileLoadMessage(Object error, {required String fallback}) =>
+      error is NotFoundException
+      ? 'User not found.'
+      : getErrorMessage(error, fallback: fallback);
 
   /// Error message for subscription operations (join/leave community)
   ///
@@ -182,6 +203,42 @@ abstract final class ErrorMessage {
   static String community(Object error) => getErrorMessage(
     error,
     fallback: 'Could not load community. Please try again.',
+  );
+
+  /// Error message for profile updates
+  static String updateProfile(Object error) => getErrorMessage(
+    error,
+    fallback: 'Could not update profile. Please try again.',
+  );
+
+  /// Error message for community list loading
+  static String loadCommunities(Object error) => getErrorMessage(
+    error,
+    fallback: 'Could not load communities. Please try again.',
+  );
+
+  /// Error message for community creation
+  static String createCommunity(Object error) => getErrorMessage(
+    error,
+    fallback: 'Could not create community. Please try again.',
+  );
+
+  /// Error message for avatar uploads
+  static String uploadAvatar(Object error) => getErrorMessage(
+    error,
+    fallback: 'Could not upload avatar. Please try again.',
+  );
+
+  /// Error message for comment deletion
+  static String deleteComment(Object error) => getErrorMessage(
+    error,
+    fallback: 'Could not delete comment. Please try again.',
+  );
+
+  /// Error message for reply loading
+  static String loadReplies(Object error) => getErrorMessage(
+    error,
+    fallback: 'Could not load replies. Please try again.',
   );
 }
 

@@ -345,6 +345,79 @@ void main() {
     });
   });
 
+  group('ErrorMessage operation fallbacks', () {
+    const cases = <(String, String Function(Object), String)>[
+      (
+        'updateProfile',
+        ErrorMessage.updateProfile,
+        'Could not update profile. Please try again.',
+      ),
+      (
+        'loadCommunities',
+        ErrorMessage.loadCommunities,
+        'Could not load communities. Please try again.',
+      ),
+      (
+        'createCommunity',
+        ErrorMessage.createCommunity,
+        'Could not create community. Please try again.',
+      ),
+      (
+        'uploadAvatar',
+        ErrorMessage.uploadAvatar,
+        'Could not upload avatar. Please try again.',
+      ),
+      (
+        'deleteComment',
+        ErrorMessage.deleteComment,
+        'Could not delete comment. Please try again.',
+      ),
+      (
+        'loadReplies',
+        ErrorMessage.loadReplies,
+        'Could not load replies. Please try again.',
+      ),
+      (
+        'loadProfilePosts',
+        ErrorMessage.loadProfilePosts,
+        'Could not load posts. Please try again.',
+      ),
+      (
+        'loadProfileComments',
+        ErrorMessage.loadProfileComments,
+        'Could not load comments. Please try again.',
+      ),
+    ];
+
+    for (final (name, helper, expected) in cases) {
+      test('ErrorMessage.$name of a 500 wrapper returns its fallback', () {
+        final error = ApiException(
+          'Unexpected error: FormatException: x',
+          statusCode: 500,
+        );
+
+        expect(helper(error), expected);
+      });
+    }
+  });
+
+  group('profile helpers name a missing actor', () {
+    // The AppView answers ActorNotFound (404) for an account that never
+    // existed, so "It may have been removed" copy would be wrong.
+    const cases = <(String, String Function(Object))>[
+      ('profile', ErrorMessage.profile),
+      ('loadProfilePosts', ErrorMessage.loadProfilePosts),
+      ('loadProfileComments', ErrorMessage.loadProfileComments),
+    ];
+
+    for (final (name, helper) in cases) {
+      test('ErrorMessage.$name of a NotFoundException returns "User not '
+          'found."', () {
+        expect(helper(NotFoundException('ActorNotFound')), 'User not found.');
+      });
+    }
+  });
+
   group('ErrorMessage.notificationPreferences', () {
     test('NetworkException returns the connection copy', () {
       expect(

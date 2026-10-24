@@ -21,6 +21,7 @@ import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 
+import '../test_helpers/error_copy_rows.dart';
 import '../test_helpers/fake_providers.dart' show unchangingSessionKey;
 import '../test_helpers/test_mocks.dart';
 
@@ -169,5 +170,98 @@ void main() {
 
     expect(provider.commentsState.loadMoreError, isNotNull);
     expect(provider.commentsState.error, isNull);
+  });
+
+  test(
+    'profile, posts and comments load failures expose their own copy',
+    () async {
+      List<ErrorCopyRow> rowsFor(String fallback) => <ErrorCopyRow>[
+        ...errorCopyRows(fallback),
+        (
+          name: 'server error',
+          error: ServerException('Internal Server Error', statusCode: 503),
+          expected: 'Server error. Please try again later.',
+          rawText: null,
+        ),
+      ];
+
+      final loads =
+          <
+            String,
+            ({String fallback, Future<String?> Function(Exception) fail})
+          >{
+            'profile': (
+              fallback: 'Could not load profile. Please try again.',
+              fail: (error) async {
+                when(mockApiService.getProfile(actor: anyNamed('actor')))
+                    .thenThrow(error);
+                await provider.loadProfile(_profileDid, forceRefresh: true);
+                return provider.profileError;
+              },
+            ),
+            'posts': (
+              fallback: 'Could not load posts. Please try again.',
+              fail: (error) async {
+                stubPosts(<Object>[error]);
+                await provider.loadPosts(refresh: true);
+                return provider.postsState.error;
+              },
+            ),
+            'comments': (
+              fallback: 'Could not load comments. Please try again.',
+              fail: (error) async {
+                when(
+                  mockApiService.getActorComments(
+                    actor: anyNamed('actor'),
+                    community: anyNamed('community'),
+                    limit: anyNamed('limit'),
+                    cursor: anyNamed('cursor'),
+                  ),
+                ).thenThrow(error);
+                await provider.loadComments(refresh: true);
+                return provider.commentsState.error;
+              },
+            ),
+          };
+
+      for (final MapEntry(key: load, value: (:fallback, :fail))
+          in loads.entries) {
+        for (final row in rowsFor(fallback)) {
+          final shown = await fail(row.error);
+          expect(shown, row.expected, reason: '$load: ${row.name}');
+          if (row.rawText != null) {
+            expect(
+              shown,
+              isNot(contains(row.rawText)),
+              reason: '$load: ${row.name}',
+            );
+          }
+        }
+      }
+    },
+  );
+
+  test('a profile refresh that 404s says "User not found." and drops the '
+      'loaded profile', () async {
+    expect(provider.profile, isNotNull);
+    when(mockApiService.getProfile(actor: anyNamed('actor')))
+        .thenThrow(NotFoundException('ActorNotFound'));
+
+    await provider.loadProfile(_profileDid, forceRefresh: true);
+
+    expect(provider.profileError, 'User not found.');
+    expect(provider.profile, isNull);
+  });
+
+  test('a profile refresh that fails for another reason keeps the loaded '
+      'profile', () async {
+    expect(provider.profile, isNotNull);
+    when(mockApiService.getProfile(actor: anyNamed('actor')))
+        .thenThrow(NetworkException('Connection refused'));
+
+    await provider.loadProfile(_profileDid, forceRefresh: true);
+
+    expect(provider.profileError, isNotNull);
+    expect(provider.profile?.did, _profileDid);
   });
 }

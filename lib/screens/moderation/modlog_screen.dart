@@ -15,6 +15,7 @@ import '../../services/moderation_errors.dart';
 import '../../services/profile_cache.dart';
 import '../../utils/community_handle_utils.dart';
 import '../../utils/cursor_pagination_controller.dart';
+import '../../utils/error_messages.dart';
 import '../../utils/moderation_copy.dart';
 import '../../utils/pagination_scroll_listener.dart';
 import '../../widgets/icons/lucide_icon_painter.dart';
@@ -116,9 +117,10 @@ class _ModlogScreenState extends State<ModlogScreen> {
     _controller = CursorPaginationController<AdminModerationActionView>(
       fetchPage: _fetchPage,
       idOf: _idOf,
-      errorMapper: (error) => error is ApiException
-          ? error.message
-          : 'Failed to load moderation actions. Please try again.',
+      errorMapper: (error) => getErrorMessage(
+        error,
+        fallback: 'Failed to load moderation actions. Please try again.',
+      ),
       sessionKeyOf: () => _viewerAuthority.sessionKey,
     )..addListener(_onPageChanged);
     _paginationListener = PaginationScrollListener(

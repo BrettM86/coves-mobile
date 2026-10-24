@@ -17,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/error_copy_rows.dart';
 import '../test_helpers/test_mocks.dart';
 
 // Reply-load failures on the post detail screen:
@@ -34,7 +35,7 @@ void main() {
   const targetContent = 'Deep-linked target comment';
   const focusFailureMessage =
       "Couldn't find that comment. It may have been deleted.";
-  const replyLoadFailureMessage = 'Failed to load replies. Please try again.';
+  const replyLoadFailureMessage = 'Could not load replies. Please try again.';
 
   late MockAuthProvider auth;
   late MockVoteProvider votes;
@@ -239,6 +240,46 @@ void main() {
       isEmpty,
       reason: 'a URI without an rkey must never reach the API',
     );
+  });
+
+  testScreen('a failed load more replies shows the shared load-replies copy', (
+    tester,
+  ) async {
+    treePages.add(completed([thread('parent', hasMore: true)]));
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+
+    for (final row in errorCopyRows(replyLoadFailureMessage)) {
+      // Completed after the tap, once the screen awaits it, so the error is
+      // never an unlistened future.
+      final failingSubtree = Completer<CommentsResponse>();
+      subtreePages.add(failingSubtree);
+      await tester.tap(find.text('Load more replies'));
+      await tester.pump();
+      failingSubtree.completeError(row.error);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 750));
+
+      expect(
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.text(row.expected),
+        ),
+        findsOneWidget,
+        reason: row.name,
+      );
+      if (row.rawText != null) {
+        expect(
+          find.textContaining(row.rawText!),
+          findsNothing,
+          reason: row.name,
+        );
+      }
+      tester
+          .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+          .clearSnackBars();
+      await tester.pumpAndSettle();
+    }
   });
 
   testScreen('a programming error inside load more replies escapes instead '

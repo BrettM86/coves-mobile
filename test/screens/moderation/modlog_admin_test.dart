@@ -838,7 +838,7 @@ void main() {
       ),
     );
     expect(find.byType(FullScreenError), findsOneWidget);
-    expect(find.text('Service unavailable'), findsOneWidget);
+    expect(find.text('Server error. Please try again later.'), findsOneWidget);
   });
 
   ApiException forbidden() =>

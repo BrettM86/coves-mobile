@@ -12,9 +12,9 @@ import '../providers/auth_provider.dart';
 import '../providers/block_provider.dart';
 import '../providers/community_subscription_provider.dart';
 import '../providers/viewer_authority_provider.dart';
-import '../services/api_exceptions.dart';
 import '../services/coves_api_service.dart';
 import '../services/post_change_broadcast.dart';
+import '../utils/error_messages.dart';
 import 'block_action_helpers.dart';
 import 'moderation/post_admin_tools.dart';
 import 'report_dialog.dart';
@@ -125,8 +125,8 @@ class _PostOptionsMenuState extends State<PostOptionsMenu> {
       }
       if (mounted) {
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Could not update subscription. Please try again.'),
+          SnackBar(
+            content: Text(ErrorMessage.subscription(e)),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -231,56 +231,14 @@ class _PostOptionsMenuState extends State<PostOptionsMenu> {
     try {
       await apiService.deletePost(uri: uri);
       deleted = true;
-    } on NetworkException catch (e) {
-      if (kDebugMode) {
-        debugPrint('Network error deleting post: $e');
-      }
-      if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Network error. Please check your connection and try again.',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } on NotFoundException catch (e) {
-      if (kDebugMode) {
-        debugPrint('Post not found: $e');
-      }
-      if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Post not found. It may have already been deleted.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } on ApiException catch (e) {
-      if (kDebugMode) {
-        debugPrint('Failed to delete post: $e');
-      }
-      if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              e.statusCode == 403
-                  ? 'You can only delete your own posts'
-                  : 'Could not delete post. Please try again.',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
     } on Exception catch (e) {
       if (kDebugMode) {
         debugPrint('Failed to delete post: $e');
       }
       if (mounted) {
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Could not delete post. Please try again.'),
+          SnackBar(
+            content: Text(ErrorMessage.deletePost(e)),
             behavior: SnackBarBehavior.floating,
           ),
         );

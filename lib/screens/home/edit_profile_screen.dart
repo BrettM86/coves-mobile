@@ -6,7 +6,7 @@ import '../../constants/app_colors.dart';
 import '../../models/picked_image.dart';
 import '../../models/user_profile.dart';
 import '../../providers/user_profile_provider.dart';
-import '../../services/api_exceptions.dart';
+import '../../utils/error_messages.dart';
 import '../../utils/image_crop_utils.dart';
 import '../../utils/image_picker_utils.dart';
 import '../../widgets/image_source_picker.dart';
@@ -191,17 +191,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
 
       Navigator.pop(context);
-    } on ApiException catch (e) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: Colors.red.shade700,
-        ),
-      );
     } on Object catch (e) {
       if (!mounted) {
         return;
@@ -209,7 +198,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update profile: $e'),
+          content: Text(ErrorMessage.updateProfile(e)),
           backgroundColor: Colors.red.shade700,
         ),
       );

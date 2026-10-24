@@ -11,6 +11,7 @@ import 'package:coves_flutter/services/vote_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 
+import '../test_helpers/error_copy_rows.dart';
 import '../test_helpers/fake_providers.dart' show unchangingSessionKey;
 import '../test_helpers/test_mocks.dart';
 
@@ -385,6 +386,49 @@ void main() {
     });
   });
 
+  test('refresh and load-more failures expose load-feed copy', () async {
+    final cases = <(String, ErrorCopyRow)>[
+      for (final row in errorCopyRows(
+        'Could not load feed. Pull to refresh.',
+      )) ...[('refresh', row), ('load more', row)],
+      (
+        'load more',
+        (
+          name: 'Discover cooldown',
+          error: discoverUnavailable(30),
+          expected: 'Try again in 30 seconds',
+          rawText: null,
+        ),
+      ),
+    ];
+
+    for (final (phase, row) in cases) {
+      final clock = _FakeClock(DateTime.utc(2026, 9, 13, 12));
+      final harness = _Harness(clock: clock.call);
+      await harness.seedDiscover();
+      harness.discoverError(row.error);
+
+      final String? shown;
+      if (phase == 'refresh') {
+        await harness.provider.loadFeed(FeedType.discover, refresh: true);
+        shown = harness.provider.getState(FeedType.discover).error;
+      } else {
+        await harness.provider.loadMore(FeedType.discover);
+        shown = harness.provider.getState(FeedType.discover).loadMoreError;
+      }
+      harness.dispose();
+
+      expect(shown, row.expected, reason: '$phase: ${row.name}');
+      if (row.rawText != null) {
+        expect(
+          shown,
+          isNot(contains(row.rawText)),
+          reason: '$phase: ${row.name}',
+        );
+      }
+    }
+  });
+
   group('load-more errors require explicit retry', () {
     test(
       'ordinary Discover failure blocks scroll until retry succeeds',
@@ -398,7 +442,7 @@ void main() {
 
         expect(
           harness.provider.getState(FeedType.discover).loadMoreError,
-          'offline',
+          'Could not load feed. Pull to refresh.',
         );
         harness
           ..discoverPage(
@@ -418,7 +462,7 @@ void main() {
         ], reason: 'scroll must not retry while its footer error is visible');
         expect(
           harness.provider.getState(FeedType.discover).loadMoreError,
-          'offline',
+          'Could not load feed. Pull to refresh.',
         );
 
         await harness.provider.retryLoadMore(FeedType.discover);
@@ -455,7 +499,7 @@ void main() {
 
         expect(
           harness.provider.getState(FeedType.forYou).loadMoreError,
-          'offline',
+          'Could not load feed. Pull to refresh.',
         );
         harness
           ..timelinePage(
@@ -514,7 +558,7 @@ void main() {
         expect(postIds(harness.provider), ['stale', 'kept']);
         expect(
           harness.provider.getState(FeedType.discover).loadMoreError,
-          'page one failed',
+          'Could not load feed. Pull to refresh.',
         );
         harness
           ..discoverPage(
@@ -570,7 +614,7 @@ void main() {
 
         var state = harness.provider.getState(FeedType.discover);
         expect(postIds(harness.provider), ['stale']);
-        expect(state.error, 'refresh failed');
+        expect(state.error, 'Could not load feed. Pull to refresh.');
         expect(state.cursor, isNull);
 
         harness
@@ -619,7 +663,7 @@ void main() {
 
         var state = harness.provider.getState(FeedType.discover);
         expect(postIds(harness.provider), ['stale']);
-        expect(state.error, 'refresh failed');
+        expect(state.error, 'Could not load feed. Pull to refresh.');
         expect(state.cursor, isNull);
 
         harness
@@ -1754,7 +1798,7 @@ void main() {
       expect(_cursors(harness.discoverRequests), [null, 'stale-cursor', 'c1']);
       expect(postIds(harness.provider), ['stale']);
       final state = harness.provider.getState(FeedType.discover);
-      expect(state.loadMoreError, 'offline');
+      expect(state.loadMoreError, 'Could not load feed. Pull to refresh.');
       expect(state.isLoadingMore, isFalse);
 
       await harness.provider.retryLoadMore(FeedType.discover);

@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/error_copy_rows.dart';
 import '../test_helpers/fake_providers.dart';
 import '../test_helpers/test_mocks.dart';
 
@@ -443,5 +444,32 @@ void main() {
 
       await unmount(tester);
     });
+  });
+
+  group('section load failure copy', () {
+    for (final row in errorCopyRows(
+      'Could not load communities. Please try again.',
+    )) {
+      testWidgets('a ${row.name} Popular load failure shows '
+          '"${row.expected}"', (tester) async {
+        when(
+          mockApiService.listCommunities(
+            limit: 8,
+            cursor: anyNamed('cursor'),
+            sort: anyNamed('sort'),
+            subscribed: anyNamed('subscribed'),
+          ),
+        ).thenThrow(row.error);
+
+        await pumpDiscovery(tester);
+
+        expect(find.text(row.expected), findsOneWidget);
+        if (row.rawText case final rawText?) {
+          expect(find.textContaining(rawText), findsNothing);
+        }
+
+        await unmount(tester);
+      });
+    }
   });
 }

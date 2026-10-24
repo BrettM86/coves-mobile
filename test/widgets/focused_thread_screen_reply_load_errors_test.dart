@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/error_copy_rows.dart';
 import '../test_helpers/test_mocks.dart';
 
 // Reply-load failures on the focused thread screen: a malformed comment URI
@@ -21,11 +22,12 @@ import '../test_helpers/test_mocks.dart';
 // - a "Load more replies" tap shows the failure snackbar;
 // - the entry hydration of the anchor subtree shows the retryable error
 //   state rather than claiming the anchor has no replies.
+// Both surfaces show the shared load-replies copy for an API failure.
 void main() {
   const postUri = 'at://did:plc:author/social.coves.community.post/post';
   const postCid = 'post-cid';
   const malformedUri = 'at://did:plc:author/social.coves.community.comment/';
-  const replyLoadFailureMessage = 'Failed to load replies. Please try again.';
+  const replyLoadFailureMessage = 'Could not load replies. Please try again.';
 
   late MockAuthProvider auth;
   late MockVoteProvider votes;
@@ -195,5 +197,68 @@ void main() {
       isEmpty,
       reason: 'a URI without an rkey must never reach the API',
     );
+  });
+
+  testWidgets('failed reply loads show the shared load-replies copy in the '
+      'snackbar and the hydration error state', (tester) async {
+    for (final row in errorCopyRows(replyLoadFailureMessage)) {
+      // Entry hydration fails: the retryable error state shows the copy.
+      stubGetComments((parentRkey) => throw row.error);
+      await tester.pumpWidget(app(thread('anchor', content: 'Anchor comment')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byType(InlineError),
+          matching: find.text(row.expected),
+        ),
+        findsOneWidget,
+        reason: 'hydration: ${row.name}',
+      );
+      if (row.rawText != null) {
+        expect(
+          find.textContaining(row.rawText!),
+          findsNothing,
+          reason: 'hydration: ${row.name}',
+        );
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+
+      // Hydration succeeds; loading a nested reply's replies fails.
+      stubGetComments((parentRkey) {
+        if (parentRkey == 'nested') {
+          throw row.error;
+        }
+        return response([
+          thread(
+            'anchor',
+            content: 'Anchor comment',
+            replies: [thread('nested', content: 'Nested reply', hasMore: true)],
+          ),
+        ]);
+      });
+      await tester.pumpWidget(app(thread('anchor', content: 'Anchor comment')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Load more replies'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 750));
+
+      expect(
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.text(row.expected),
+        ),
+        findsOneWidget,
+        reason: 'load more: ${row.name}',
+      );
+      if (row.rawText != null) {
+        expect(
+          find.textContaining(row.rawText!),
+          findsNothing,
+          reason: 'load more: ${row.name}',
+        );
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
   });
 }

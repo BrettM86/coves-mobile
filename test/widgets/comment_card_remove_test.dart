@@ -20,11 +20,13 @@ import 'package:coves_flutter/services/streamable_service.dart';
 import 'package:coves_flutter/widgets/comment_card.dart';
 import 'package:coves_flutter/widgets/loading_error_states.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
 import '../test_helpers/comment_removal_fixtures.dart';
+import '../test_helpers/error_copy_rows.dart';
 import '../test_helpers/fake_providers.dart';
 import '../test_helpers/test_mocks.dart';
 
@@ -1001,5 +1003,92 @@ void main() {
         },
       );
     });
+  });
+
+  testWidgets('a failed delete of the own comment shows the shared copy', (
+    tester,
+  ) async {
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (_) async => null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    final auth = FakeAuthProvider(
+      signedInDid: targetAuthorDid,
+      signedInHandle: 'commenter.coves.test',
+    );
+    addTearDown(auth.dispose);
+    final authority = ViewerAuthorityProvider(
+      apiService: api,
+      authProvider: auth,
+    );
+    addTearDown(authority.dispose);
+    final blocks = BlockProvider(apiService: api, authProvider: auth);
+    addTearDown(blocks.dispose);
+
+    for (final row in errorCopyRows(
+      'Could not delete comment. Please try again.',
+    )) {
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
+            Provider<CovesApiService>.value(value: api),
+            ChangeNotifierProvider<AuthProvider>.value(value: auth),
+            ChangeNotifierProvider<ViewerAuthorityProvider>.value(
+              value: authority,
+            ),
+            ChangeNotifierProvider<VoteProvider>(
+              create: (_) => FakeVoteProvider(auth),
+            ),
+            ChangeNotifierProvider<BlockProvider>.value(value: blocks),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.dark,
+            home: Scaffold(
+              body: CommentCard(
+                comment: fixtureComment(
+                  uri: targetUri,
+                  authorDid: targetAuthorDid,
+                  text: targetText,
+                  parentUri: rootUri,
+                ),
+                sessionStamp: null,
+                onDelete: (_) async => throw row.error,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Comment options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete comment'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Delete'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byType(SnackBar),
+          matching: find.text(row.expected),
+        ),
+        findsOneWidget,
+        reason: row.name,
+      );
+      if (row.rawText != null) {
+        expect(
+          find.textContaining(row.rawText!),
+          findsNothing,
+          reason: row.name,
+        );
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
   });
 }

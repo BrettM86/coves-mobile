@@ -14,6 +14,7 @@ import '../services/post_change_broadcast.dart';
 import '../services/profile_cache.dart';
 import '../services/viewer_state_hydrator.dart';
 import '../utils/cursor_pagination_controller.dart';
+import '../utils/error_messages.dart';
 import 'auth_provider.dart';
 import 'vote_provider.dart';
 
@@ -50,7 +51,7 @@ class UserProfileProvider with ChangeNotifier {
     _postsController = CursorPaginationController<FeedViewPost>(
       fetchPage: _fetchPostsPage,
       onPageLoaded: _hydratePostViewerState,
-      errorMapper: _postsErrorMessage,
+      errorMapper: ErrorMessage.loadProfilePosts,
       // Server-side cursor drift hands back overlapping pages; the list
       // keys its rows by this same URI and asserts on duplicates.
       idOf: (feedItem) => feedItem.post.uri,
@@ -61,7 +62,7 @@ class UserProfileProvider with ChangeNotifier {
     _commentsController = CursorPaginationController<CommentView>(
       fetchPage: _fetchCommentsPage,
       onPageLoaded: _hydrateCommentVotes,
-      errorMapper: _commentsErrorMessage,
+      errorMapper: ErrorMessage.loadProfileComments,
       idOf: (comment) => comment.uri,
       onUnexpectedError: _reportUnexpected,
     )..addListener(_syncCommentsState);
@@ -270,42 +271,16 @@ class UserProfileProvider with ChangeNotifier {
       if (kDebugMode) {
         debugPrint('✅ Profile loaded: ${profile.displayNameOrHandle}');
       }
-    } on NotFoundException {
-      _isLoadingProfile = false;
-      _profileError = 'User not found';
-      _profile = null;
-
-      if (kDebugMode) {
-        debugPrint('❌ Profile not found: $actor');
-      }
-    } on AuthenticationException {
-      _isLoadingProfile = false;
-      _profileError = 'Please sign in to view this profile';
-
-      if (kDebugMode) {
-        debugPrint('❌ Auth required to load profile: $actor');
-      }
-    } on NetworkException catch (e) {
-      _isLoadingProfile = false;
-      _profileError = 'Network error. Check your connection.';
-
-      if (kDebugMode) {
-        debugPrint('❌ Network error loading profile: ${e.message}');
-      }
-    } on ApiException catch (e) {
-      _isLoadingProfile = false;
-      _profileError = e.message;
-
-      if (kDebugMode) {
-        debugPrint('❌ Failed to load profile: ${e.message}');
-      }
     } on Exception catch (e) {
-      // Catch-all for other exceptions
       _isLoadingProfile = false;
-      _profileError = 'Failed to load profile. Please try again.';
+      _profileError = ErrorMessage.profile(e);
+      // A missing actor leaves no profile to show.
+      if (e is NotFoundException) {
+        _profile = null;
+      }
 
       if (kDebugMode) {
-        debugPrint('❌ Unexpected error loading profile: $e');
+        debugPrint('❌ Failed to load profile $actor: $e');
       }
     }
 
@@ -400,24 +375,6 @@ class UserProfileProvider with ChangeNotifier {
     _hydrator.hydrateFeed(newPosts);
   }
 
-  String _postsErrorMessage(Object error) {
-    // 404 means the actor doesn't exist (not "no posts") — an empty feed
-    // comes back as an empty array.
-    if (error is AuthenticationException) {
-      return 'Please sign in to view posts';
-    }
-    if (error is NotFoundException) {
-      return 'User not found';
-    }
-    if (error is NetworkException) {
-      return 'Network error. Check your connection.';
-    }
-    if (error is ApiException) {
-      return error.message;
-    }
-    return 'Failed to load posts. Please try again.';
-  }
-
   void _syncPostsState() {
     _postsState = FeedState(
       posts: _postsController.items,
@@ -494,23 +451,6 @@ class UserProfileProvider with ChangeNotifier {
   /// right one here - there are no nested replies to recurse into.
   Future<void> _hydrateCommentVotes(List<CommentView> newComments) async {
     _hydrator.hydrateComments(newComments);
-  }
-
-  String _commentsErrorMessage(Object error) {
-    // 404 means the actor doesn't exist (not "no comments").
-    if (error is AuthenticationException) {
-      return 'Please sign in to view comments';
-    }
-    if (error is NotFoundException) {
-      return 'User not found';
-    }
-    if (error is NetworkException) {
-      return 'Network error. Check your connection.';
-    }
-    if (error is ApiException) {
-      return error.message;
-    }
-    return 'Failed to load comments. Please try again.';
   }
 
   void _syncCommentsState() {

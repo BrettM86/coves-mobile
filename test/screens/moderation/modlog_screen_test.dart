@@ -18,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../../test_helpers/error_copy_rows.dart';
 import '../../test_helpers/fake_providers.dart';
 import '../../test_helpers/modlog_fixtures.dart';
 import '../../test_helpers/pump_helpers.dart';
@@ -1387,6 +1388,37 @@ void main() {
       expect(tile('did:web:coves.social', 'recovered'), findsOneWidget);
     },
   );
+
+  testWidgets('B7 first-page failure shows the shared error copy', (
+    tester,
+  ) async {
+    for (final row in errorCopyRows(
+      'Failed to load moderation actions. Please try again.',
+    )) {
+      when(
+        api.listModerationActions(
+          cursor: anyNamed('cursor'),
+          limit: anyNamed('limit'),
+        ),
+      ).thenAnswer((_) async => throw row.error);
+
+      await pumpModlog(tester);
+
+      final shown = find.descendant(
+        of: find.byType(FullScreenError),
+        matching: find.text(row.expected),
+      );
+      expect(shown, findsOneWidget, reason: row.name);
+      if (row.rawText != null) {
+        expect(
+          find.textContaining(row.rawText!),
+          findsNothing,
+          reason: row.name,
+        );
+      }
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
 
   testWidgets('B7 empty first page shows the modlog empty message', (
     tester,

@@ -16,15 +16,20 @@
 //    Giving each extracted field its own listener destroys that.
 
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:coves_flutter/models/community.dart';
+import 'package:coves_flutter/models/picked_image.dart';
 import 'package:coves_flutter/screens/home/communities_admin_panel.dart';
+import 'package:coves_flutter/screens/home/community_avatar_upload_page.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/error_copy_rows.dart';
 import '../test_helpers/test_mocks.dart';
 
 const String communityDid = 'did:plc:testcove';
@@ -507,5 +512,128 @@ void main() {
 
       await tester.pumpAndSettle();
     });
+  });
+
+  group('create community failure copy', () {
+    for (final row in errorCopyRows(
+      'Could not create community. Please try again.',
+    )) {
+      testWidgets('a ${row.name} failure shows "${row.expected}"', (
+        tester,
+      ) async {
+        when(
+          mockApiService.createCommunity(
+            name: anyNamed('name'),
+            displayName: anyNamed('displayName'),
+            description: anyNamed('description'),
+            visibility: anyNamed('visibility'),
+          ),
+        ).thenThrow(row.error);
+        await openCreateForm(tester);
+        await fillForm(tester, name: 'worldnews');
+
+        await tapCreate(tester);
+
+        expect(
+          find.descendant(
+            of: find.byType(SnackBar),
+            matching: find.text(row.expected),
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Failed to create community'), findsNothing);
+        if (row.rawText case final rawText?) {
+          expect(find.textContaining(rawText), findsNothing);
+        }
+        await tester.pumpAndSettle(const Duration(seconds: 5));
+      });
+    }
+  });
+
+  group('avatar upload failure copy', () {
+    for (final row in errorCopyRows(
+      'Could not upload avatar. Please try again.',
+    )) {
+      testWidgets('a ${row.name} failure shows "${row.expected}"', (
+        tester,
+      ) async {
+        final community = buildCommunity();
+        stubListCommunities([community]);
+        when(
+          mockApiService.updateCommunity(
+            communityDid: anyNamed('communityDid'),
+            imageBytes: anyNamed('imageBytes'),
+            mimeType: anyNamed('mimeType'),
+          ),
+        ).thenThrow(row.error);
+        await pumpPanel(tester);
+        await tester.tap(find.text('Change Profile Pic'));
+        await tester.pumpAndSettle();
+
+        // The platform picker has no injection point through the panel, so
+        // the upload is started through the page's callback into the panel,
+        // which owns the request and its error copy.
+        final page = tester.widget<CommunityAvatarUploadPage>(
+          find.byType(CommunityAvatarUploadPage),
+        );
+        await page.onUploadAvatar(
+          community: community,
+          image: PickedImage(
+            file: File('avatar.png'),
+            bytes: Uint8List.fromList([1, 2, 3]),
+            mimeType: 'image/png',
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.descendant(
+            of: find.byType(SnackBar),
+            matching: find.text(row.expected),
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Failed to upload avatar'), findsNothing);
+        if (row.rawText case final rawText?) {
+          expect(find.textContaining(rawText), findsNothing);
+        }
+        await tester.pumpAndSettle(const Duration(seconds: 5));
+      });
+    }
+  });
+
+  group('community list load failure copy', () {
+    for (final row in errorCopyRows(
+      'Could not load communities. Please try again.',
+    )) {
+      testWidgets('a ${row.name} failure shows "${row.expected}"', (
+        tester,
+      ) async {
+        when(
+          mockApiService.listCommunities(
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+            sort: anyNamed('sort'),
+            subscribed: anyNamed('subscribed'),
+          ),
+        ).thenThrow(row.error);
+        await pumpPanel(tester);
+        await tester.tap(find.text('Change Profile Pic'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.descendant(
+            of: find.byType(SnackBar),
+            matching: find.text(row.expected),
+          ),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Failed to load communities'), findsNothing);
+        if (row.rawText case final rawText?) {
+          expect(find.textContaining(rawText), findsNothing);
+        }
+        await tester.pumpAndSettle(const Duration(seconds: 5));
+      });
+    }
   });
 }

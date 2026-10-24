@@ -114,7 +114,7 @@ class _FeedPageState extends State<FeedPage>
               ),
               const SizedBox(height: 8),
               Text(
-                _getUserFriendlyError(widget.error!),
+                widget.error!,
                 style: const TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
@@ -308,9 +308,7 @@ class _FeedPageState extends State<FeedPage>
             const Icon(Icons.error_outline, color: AppColors.primary, size: 32),
             const SizedBox(height: 8),
             Text(
-              hasLoadMoreError
-                  ? paginationError
-                  : _getUserFriendlyError(paginationError),
+              paginationError,
               style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 14,
@@ -359,30 +357,5 @@ class _FeedPageState extends State<FeedPage>
     // to prevent scroll jumps when transitioning between loading/idle states.
     // Height matches: padding (16) + spinner (~48) + padding (16) = 80
     return const SizedBox(height: 80);
-  }
-
-  /// Transform technical error messages into user-friendly ones
-  String _getUserFriendlyError(String error) {
-    final lowerError = error.toLowerCase();
-
-    if (lowerError.contains('socketexception') ||
-        lowerError.contains('network') ||
-        lowerError.contains('connection refused')) {
-      return 'Please check your internet connection';
-    } else if (lowerError.contains('timeoutexception') ||
-        lowerError.contains('timeout')) {
-      return 'Request timed out. Please try again';
-    } else if (lowerError.contains('401') ||
-        lowerError.contains('unauthorized')) {
-      return 'Authentication failed. Please sign in again';
-    } else if (lowerError.contains('404') || lowerError.contains('not found')) {
-      return 'Content not found';
-    } else if (lowerError.contains('500') ||
-        lowerError.contains('internal server')) {
-      return 'Server error. Please try again later';
-    }
-
-    // Fallback to generic message for unknown errors
-    return 'Something went wrong. Please try again';
   }
 }

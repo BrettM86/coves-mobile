@@ -8,6 +8,7 @@ import '../../models/community.dart';
 import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../utils/display_utils.dart';
+import '../../utils/error_messages.dart';
 import '../../widgets/community_avatar.dart';
 
 /// Community Picker Screen
@@ -137,17 +138,10 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
           _isLoading = false;
         });
       }
-    } on ApiException catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.message;
-          _isLoading = false;
-        });
-      }
     } on Exception catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Failed to load communities: ${e.toString()}';
+          _error = ErrorMessage.loadCommunities(e);
           _isLoading = false;
         });
       }
@@ -180,7 +174,7 @@ class _CommunityPickerScreenState extends State<CommunityPickerScreen> {
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.message;
+          _error = ErrorMessage.loadCommunities(e);
           _isLoadingMore = false;
         });
       }

@@ -14,6 +14,7 @@ import '../../services/api_exceptions.dart';
 import '../../services/coves_api_service.dart';
 import '../../services/viewer_state_hydrator.dart';
 import '../../utils/community_search_utils.dart';
+import '../../utils/error_messages.dart';
 import '../../utils/responsive_utils.dart';
 import '../../widgets/community_chip.dart';
 import '../../widgets/community_hero_card.dart';
@@ -159,7 +160,7 @@ class _CommunitiesDiscoveryScreenState
       }
     } on ApiException catch (e) {
       if (mounted) {
-        onStateChange(isLoading: false, error: e.message);
+        onStateChange(isLoading: false, error: ErrorMessage.loadCommunities(e));
       }
     } on Exception catch (e, stackTrace) {
       if (kDebugMode) {

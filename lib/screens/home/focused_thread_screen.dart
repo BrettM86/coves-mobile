@@ -199,6 +199,10 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   /// while [_awaitingNewSessionSubtree] is set.
   bool _hydrationFailed = false;
 
+  /// What the most recent anchor-subtree hydration threw, or null when it
+  /// did not throw. Shown as the replies error state's copy.
+  Exception? _hydrationError;
+
   /// Whether [_thread] still belongs to the previous session: the signed-in
   /// account changed and no subtree fetched for the new session has landed.
   /// The vote provider holds no vote state for it, so the anchor and its
@@ -262,6 +266,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
           ),
       ];
       _hydrationFailed = false;
+      _hydrationError = null;
       _awaitingNewSessionSubtree = true;
       _ancestorsFromPreviousSession = true;
       // Fetch the anchor's subtree again so its replies carry the new
@@ -323,6 +328,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
         // A null subtree leaves the snapshot as it is, which must not show
         // in a new session.
         _hydrationFailed = subtree == null && _awaitingNewSessionSubtree;
+        _hydrationError = null;
         if (subtree != null) {
           _thread = subtree;
           _threadRemovalsSeen = removalsSeen;
@@ -337,7 +343,10 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
       if (!mounted || seq != _refreshSeq) {
         return false;
       }
-      setState(() => _hydrationFailed = true);
+      setState(() {
+        _hydrationFailed = true;
+        _hydrationError = e;
+      });
       return false;
     }
   }
@@ -419,14 +428,20 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   /// lands, [_onCommentsChanged] fetches the anchor's subtree again, so the
   /// failure that showed the state must not show as a replies error.
   void _checkPostAgain() {
-    setState(() => _hydrationFailed = false);
+    setState(() {
+      _hydrationFailed = false;
+      _hydrationError = null;
+    });
     widget.commentsProvider.refreshComments();
   }
 
   /// Retry from the error shown in place of the previous session's
   /// snapshot: back to the loader while the subtree is fetched again.
   void _retryNewSessionSubtree() {
-    setState(() => _hydrationFailed = false);
+    setState(() {
+      _hydrationFailed = false;
+      _hydrationError = null;
+    });
     _refreshSubtree();
   }
 
@@ -534,21 +549,24 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
       if (subtree != null && mounted && seq == _refreshSeq) {
         setState(() => _thread = _thread.replaceDescendant(subtree));
       }
-    } on Exception {
+    } on Exception catch (e) {
       // A post that is gone shows its unavailable state instead.
       if (provider.errorCode != CommentsProvider.rootNotFoundErrorCode) {
-        _showLoadRepliesFailed(messenger);
+        _showLoadRepliesFailed(messenger, e);
       }
     }
   }
 
-  void _showLoadRepliesFailed(ScaffoldMessengerState messenger) {
+  void _showLoadRepliesFailed(
+    ScaffoldMessengerState messenger,
+    Exception error,
+  ) {
     if (!mounted) {
       return;
     }
     messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Failed to load replies. Please try again.'),
+      SnackBar(
+        content: Text(ErrorMessage.loadReplies(error)),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -716,10 +734,9 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
                       // Empty state (or retryable error) if no replies loaded
                       if (thread.replies == null ||
                           thread.replies!.isEmpty) ...[
-                        if (_hydrationFailed)
+                        if (_hydrationError case final hydrationError?)
                           InlineError(
-                            message:
-                                'Could not load replies. Please try again.',
+                            message: ErrorMessage.loadReplies(hydrationError),
                             onRetry: _refreshSubtree,
                           )
                         else if (!thread.hasMore)
