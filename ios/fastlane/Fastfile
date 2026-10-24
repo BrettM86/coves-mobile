@@ -14,7 +14,9 @@
 #   cd ios && fastlane precheck        # run ASC precheck rules against the listing
 #   cd ios && fastlane pull_metadata   # download the ASC listing into fastlane/metadata
 #   cd ios && fastlane push_metadata   # upload fastlane/metadata text, no build
-#   cd ios && fastlane push_screenshots # replace ASC screenshots outside a release (ship also uploads them)
+#   cd ios && fastlane push_screenshots version:<name>
+#                                      # replace screenshots on an editable
+#                                      # version (ship also uploads them)
 #
 # The whole release, both platforms, is driven by tool/release -- see RELEASING.md.
 
@@ -32,6 +34,21 @@ APP_IDENTIFIER = "social.coves"
 # A plain release build resolves to bundle id social.coves and, because
 # EnvironmentConfig defaults to production, the production backend.
 IPA_DIR = File.join(PROJECT_ROOT, "build/ios/ipa")
+
+# Absolute: fastlane loads this file by a relative path, so __dir__ is "."
+# here, and actions run from ios/ rather than ios/fastlane/.
+SCREENSHOTS_DIR = File.expand_path("screenshots", __dir__)
+
+# deliver uploads nothing, silently, when it finds no screenshots, and a
+# partial set replaces every device set for the locale. Stop before either.
+def require_screenshots!
+  shots = Dir[File.join(SCREENSHOTS_DIR, "en-US", "*.png")]
+  UI.user_error!("No screenshots in #{SCREENSHOTS_DIR}/en-US") if shots.empty?
+  %w[iphone69 ipad13].each do |prefix|
+    next if shots.any? { |path| File.basename(path).start_with?(prefix) }
+    UI.user_error!("No #{prefix}_*.png screenshots in #{SCREENSHOTS_DIR}/en-US")
+  end
+end
 
 def asc_api_key
   app_store_connect_api_key(
@@ -146,6 +163,7 @@ platform :ios do
     version = pubspec_version(PROJECT_ROOT)
     name = version.split("+").first
     ipa = stashed_artifact(PROJECT_ROOT, version, "*.ipa")
+    require_screenshots!
 
     upload_to_app_store(
       api_key: asc_api_key,
@@ -157,7 +175,7 @@ platform :ios do
       # Screenshots are tied to the version and lock once it is submitted,
       # so they go up here, replacing the previous version's set.
       skip_screenshots: false,
-      screenshots_path: File.expand_path("screenshots", __dir__),
+      screenshots_path: SCREENSHOTS_DIR,
       overwrite_screenshots: true,
       # Without this deliver opens an HTML preview and waits for a "y" at the
       # terminal, which hangs (or, non-interactively, aborts) after Play has
@@ -208,12 +226,25 @@ platform :ios do
     )
   end
 
-  desc "Replace the App Store screenshots with fastlane/screenshots/en-US,"
-  desc "without a build or metadata. Deletes whatever is live first."
-  lane :push_screenshots do
+  desc "Replace the en-US screenshots on an editable App Store version with"
+  desc "fastlane/screenshots/en-US, without a build or metadata."
+  desc "Usage: fastlane push_screenshots version:1.6.0"
+  lane :push_screenshots do |options|
+    name = options[:version] || UI.user_error!("Pass the version to update: version:<name>")
+    require_screenshots!
+    key = asc_api_key
+    # deliver targets whatever version is editable and does not check that
+    # screenshots can still change, so pin both here.
+    app = Spaceship::ConnectAPI::App.find(APP_IDENTIFIER)
+    edit = app.get_edit_app_store_version
+    editable = %w[PREPARE_FOR_SUBMISSION DEVELOPER_REJECTED REJECTED METADATA_REJECTED]
+    unless edit&.version_string == name && editable.include?(edit.app_store_state)
+      UI.user_error!("#{name} is not editable on App Store Connect " \
+                     "(editable version: #{edit&.version_string.inspect}, #{edit&.app_store_state.inspect})")
+    end
     upload_to_app_store(
-      api_key: asc_api_key,
-      screenshots_path: File.expand_path("screenshots", __dir__),
+      api_key: key,
+      screenshots_path: SCREENSHOTS_DIR,
       skip_binary_upload: true,
       skip_metadata: true,
       skip_screenshots: false,

@@ -124,6 +124,14 @@ step "Preflight"
 dirty = capture("git", "status", "--porcelain").strip
 fail!("working tree is not clean:\n#{dirty}") unless dirty.empty?
 
+# iOS ship replaces the version's screenshots with these. Check here, before
+# Android ships, rather than in the iOS lane after it.
+screenshots = Dir[File.join(ROOT, "ios/fastlane/screenshots/en-US/*.png")]
+%w[iphone69 ipad13].each do |prefix|
+  next if screenshots.any? { |path| File.basename(path).start_with?(prefix) }
+  fail!("no #{prefix}_*.png in ios/fastlane/screenshots/en-US")
+end
+
 begin
   bundle = Gem.bin_path("bundler", "bundle")
 rescue Gem::Exception => error

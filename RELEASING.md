@@ -131,7 +131,9 @@ The script, in order:
      the changelog. Google's review runs first; the release goes live when it
      passes.
    - App Store: uploads the build, pushes the whole text listing from
-     `ios/fastlane/metadata` (not screenshots), creates the version, submits
+     `ios/fastlane/metadata`, replaces the version's en-US screenshots with
+     `ios/fastlane/screenshots/en-US` (they lock once the version is
+     submitted), creates the version, submits
      for review, releases automatically on approval, and then checks that the
      version is actually in a submitted state. Export compliance is answered
      by `ITSAppUsesNonExemptEncryption` in `Info.plist`. Precheck runs at
@@ -154,14 +156,22 @@ uploading.
 ### Store listings live in the repo
 
 `android/fastlane/metadata` and `ios/fastlane/metadata` hold the listing
-text, and Android's also holds the images; iOS screenshots are managed in App
-Store Connect and are never pushed from here. Both were seeded from the
+text, and Android's also holds the icon, feature graphic and phone
+screenshots. iOS screenshots (iPhone 6.9" `iphone69_*`, iPad 13" `ipad13_*`)
+live in `ios/fastlane/screenshots/en-US`. Both were seeded from the
 consoles. Android's `ship` pushes only the changelog; iOS's `ship` pushes the
-full text listing, so a console-side edit to the iOS listing is overwritten
-on the next release. Edit the files, not the console:
+full text listing and the screenshots, so a console-side edit to the iOS
+listing is overwritten on the next release. Edit the files, not the console.
+
+App Store screenshots belong to a version and lock once it is submitted, so
+`push_screenshots` only works on a version still in preparation (or pulled
+back from review). Play images are not tied to a release and can go up any
+time, but supply needs exactly one release on the production track.
 
 ```sh
+cd android && fastlane push_images              # Play icon, banner, screenshots
 cd android && fastlane supply                   # text + images
+cd ios     && fastlane push_screenshots version:<name>  # editable version only
 cd ios     && fastlane push_metadata            # text, no build
 cd ios     && fastlane pull_metadata            # re-seed from ASC
 cd ios     && fastlane precheck                 # Apple's metadata rules

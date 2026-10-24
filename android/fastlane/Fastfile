@@ -139,6 +139,8 @@ platform :android do
 
   desc "Replace the Play listing icon, feature graphic, and screenshots with"
   desc "the ones in fastlane/metadata/android, without a build, text, or changelogs."
+  # supply still looks up the production track's release before uploading
+  # images, and stops if that track has none or more than one release.
   lane :push_images do
     upload_to_play_store(
       metadata_path: File.expand_path("metadata/android", __dir__),
