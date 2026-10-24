@@ -17,23 +17,14 @@ void main() {
       expect(profile.bio, 'Bio from the wire');
     });
 
-    test('parses bio from "bio" key (lexicon field name)', () {
+    test('prefers "description" over "bio" when both present', () {
       final profile = UserProfile.fromJson(const {
         'did': 'did:plc:abc123',
-        'bio': 'Lexicon-style bio',
+        'bio': 'bio loses',
+        'description': 'description wins',
       });
 
-      expect(profile.bio, 'Lexicon-style bio');
-    });
-
-    test('prefers "bio" over "description" when both present', () {
-      final profile = UserProfile.fromJson(const {
-        'did': 'did:plc:abc123',
-        'bio': 'bio wins',
-        'description': 'description loses',
-      });
-
-      expect(profile.bio, 'bio wins');
+      expect(profile.bio, 'description wins');
     });
 
     test('bio is null when neither key present', () {
@@ -47,6 +38,18 @@ void main() {
         () => UserProfile.fromJson(const {'handle': 'x'}),
         throwsA(isA<FormatException>()),
       );
+    });
+  });
+
+  group('UserProfile.toJson', () {
+    test('writes the bio as "description", not "bio"', () {
+      final json = UserProfile(
+        did: 'did:plc:abc123',
+        bio: 'Bio on the wire',
+      ).toJson();
+
+      expect(json['description'], 'Bio on the wire');
+      expect(json.containsKey('bio'), isFalse);
     });
   });
 

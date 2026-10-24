@@ -1184,7 +1184,7 @@ class CovesApiService {
   ///
   /// Parameters:
   /// - [displayName]: New display name (optional, max 64 chars)
-  /// - [bio]: New bio text (optional, max 256 chars)
+  /// - [bio]: New bio text, sent as `description` (optional, max 256 chars)
   /// - [avatarBytes]: Avatar image bytes (optional, max 1 MB)
   /// - [avatarMimeType]: Avatar MIME type (required if avatarBytes provided)
   /// - [bannerBytes]: Banner image bytes (optional, max 2 MB)
@@ -1238,7 +1238,7 @@ class CovesApiService {
         '/xrpc/social.coves.actor.updateProfile',
         data: {
           'displayName': ?displayName,
-          'bio': ?bio,
+          'description': ?bio,
           if (avatarBytes != null) ...{
             'avatarBlob': base64Encode(avatarBytes),
             'avatarMimeType': avatarMimeType,
