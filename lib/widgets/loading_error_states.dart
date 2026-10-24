@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
+import 'icons/lucide_icon_painter.dart';
+import 'icons/lucide_paths.dart';
 
 /// Title and message of the state shown when getComments reports
 /// RootNotFound: the post was removed or deleted after it was opened.
@@ -55,7 +57,11 @@ class FullScreenError extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 64, color: AppColors.primary),
+            const LucideGlyph(
+              LucidePaths.circleAlert,
+              size: 64,
+              color: AppColors.primary,
+            ),
             const SizedBox(height: 16),
             Text(
               title,
@@ -146,7 +152,11 @@ class InlineError extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.error_outline, color: AppColors.primary, size: 32),
+          const LucideGlyph(
+            LucidePaths.circleAlert,
+            size: 32,
+            color: AppColors.primary,
+          ),
           const SizedBox(height: 8),
           Text(
             message,

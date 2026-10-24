@@ -168,6 +168,16 @@ abstract final class ErrorMessage {
   static String save(Object error) =>
       getErrorMessage(error, fallback: 'Could not save. Please try again.');
 
+  /// Error message for loading ([isLoad]) or updating notification
+  /// preferences
+  static String notificationPreferences(Object error, {bool isLoad = false}) =>
+      getErrorMessage(
+        error,
+        fallback: isLoad
+            ? "Couldn't load notification settings. Try again."
+            : "Couldn't update notification settings. Try again.",
+      );
+
   /// Error message for community operations
   static String community(Object error) => getErrorMessage(
     error,

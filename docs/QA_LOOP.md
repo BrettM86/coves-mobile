@@ -372,6 +372,60 @@ matching `dispose()`); `flutter test test/screens`.
 5. Share button produces a share sheet with a sensible URL.
 6. Rotate device during video playback → no crash, state preserved.
 
+## Section I — Notifications
+
+**Code**: `lib/screens/home/notifications_screen.dart`,
+`lib/screens/home/main_shell_screen.dart` (bell badge),
+`lib/screens/settings/settings_screen.dart`,
+`lib/providers/notifications_list_provider.dart`,
+`unread_notification_count_provider.dart`,
+`notification_preferences_change_signal.dart`,
+`lib/widgets/notifications/`, `lib/utils/notification_navigation.dart`
+
+**Two-account fixture.** Account B is mari (signed in on the emulator).
+Account A is `notifier.local.coves.dev` / `password`, which exists on the
+home-pc stack. To recreate it, call the AppView's
+`social.coves.actor.signup` (handle, email, password) on port 8081. Do not
+use the PDS's `com.atproto.server.createAccount`: the AppView never indexes
+that account, so its comments and votes are dropped.
+`.maestro/subflows/seed_notifications.yaml` runs
+`.maestro/scripts/seed_notifications.js` on the host. A writes three records
+straight to its repo on the PDS:
+- a reply comment on mari's "QA thread post"
+- a comment on the newest Discover post by someone else, starting with an
+  `@mari.local.coves.dev` mention facet
+- an upvote on the "QA thread post". A's earlier vote is deleted first, so
+  every run makes a new upvote event.
+
+Both comments carry `output.seedTag` (`QA notification <ISO time>`), which
+the flows match on. The AppView indexes the records through Jetstream
+(`coves-dev-jetstream`, port 6008). If Jetstream is stopped, the records
+reach the PDS but no notification appears, and i1, i3 and i4 time out
+waiting for the badge.
+
+**Flows** (all after `a1_login_session`, mari signed in):
+1. `i1_notifications_badge`: seed → the bell reads
+   `Notifications, N unread` → open the tab (the reply card shows) → leave
+   the tab → the bell reads `Notifications` again.
+2. `i2_notifications_list`: rows render (no empty or error state) → pull to
+   refresh → rows still render and no error shows. Needs rows, so run it
+   after i1.
+3. `i3_notification_rows`: seed → the reply card and upvote row render →
+   scroll to the mention card. The unread tint is a background colour with no
+   semantics, so check it by eye in `build/maestro/i3_unread_rows.png`:
+   fresh rows have a faint orange wash, and after a pull to refresh they are
+   plain.
+4. `i4_notification_navigation`: seed → tap the reply card → the focused
+   thread shows the reply and "QA thread post" → back returns to the list.
+5. `i5_notification_settings`: the gear opens Settings → switch "Upvotes" off
+   → back (the list reloads without an error) → reopen (the switch is still
+   off) → switch it on → back. It leaves mari's preferences as it found them,
+   and it passes on an empty list.
+
+**Manual (physical device)**: sign out → Notifications tab → Sign in →
+OAuth → back on the tab with the badge. Relaunch restores the session and
+the badge.
+
 ---
 
 ## Iteration protocol (what the loop does each wake)

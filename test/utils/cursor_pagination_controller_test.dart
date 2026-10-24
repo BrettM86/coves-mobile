@@ -71,6 +71,7 @@ void main() {
     String Function(String item)? idOf,
     void Function(Object error, StackTrace stack)? onUnexpectedError,
     Object? Function()? sessionKeyOf,
+    bool followCursorPastEmptyPages = false,
   }) {
     return CursorPaginationController<String>(
       fetchPage: fetcher.call,
@@ -79,6 +80,7 @@ void main() {
       idOf: idOf,
       onUnexpectedError: onUnexpectedError,
       sessionKeyOf: sessionKeyOf,
+      followCursorPastEmptyPages: followCursorPastEmptyPages,
     );
   }
 
@@ -725,9 +727,113 @@ void main() {
 
       expect(controller.items, <String>['a', 'c']);
     });
+
+    test('loadMoreErrorCause holds the failure until the footer error is '
+        'cleared by retry, dismissal, refresh, replacement or reset', () async {
+      // Callers treat a null cause as success: a stale cause would make the
+      // next successful page look like the old failure.
+      final controller = build();
+      addTearDown(controller.dispose);
+
+      await loadFirstPage(controller);
+      var request = 1;
+
+      Future<Object> failLoadMore() async {
+        final failure = Exception('page failure $request');
+        final failed = controller.loadMore();
+        fetcher.fail(request++, failure);
+        await failed;
+        expect(controller.loadMoreErrorCause, same(failure));
+        return failure;
+      }
+
+      await failLoadMore();
+      final retried = controller.retryLoadMore();
+      fetcher.complete(request++, page(<String>['c'], cursor: 'cursor-2'));
+      await retried;
+      expect(controller.loadMoreErrorCause, isNull, reason: 'retryLoadMore');
+
+      await failLoadMore();
+      controller.clearLoadMoreError();
+      expect(
+        controller.loadMoreErrorCause,
+        isNull,
+        reason: 'clearLoadMoreError',
+      );
+
+      await failLoadMore();
+      final refreshed = controller.refresh();
+      fetcher.complete(request++, page(<String>['a'], cursor: 'cursor-1'));
+      await refreshed;
+      expect(controller.loadMoreErrorCause, isNull, reason: 'refresh');
+
+      await failLoadMore();
+      final replaced = controller.replaceFirstPageForLoadMore();
+      fetcher.complete(request++, page(<String>['a'], cursor: 'cursor-1'));
+      await replaced;
+      expect(
+        controller.loadMoreErrorCause,
+        isNull,
+        reason: 'replaceFirstPageForLoadMore',
+      );
+
+      await failLoadMore();
+      controller.reset();
+      expect(controller.loadMoreErrorCause, isNull, reason: 'reset');
+    });
   });
 
   group('empty pages', () {
+    test('opt-in follows an empty page cursor until the final page', () async {
+      final controller = build(followCursorPastEmptyPages: true);
+      addTearDown(controller.dispose);
+
+      await loadFirstPage(controller, items: <String>['a'], cursor: 'c1');
+
+      final emptyPage = controller.loadMore();
+      expect(fetcher.requestedCursors, <String?>[null, 'c1']);
+      fetcher.complete(1, page(const <String>[], cursor: 'c2'));
+      await emptyPage;
+
+      expect(controller.items, <String>['a']);
+      expect(controller.cursor, 'c2');
+      expect(controller.hasMore, isTrue);
+
+      final lastPage = controller.loadMore();
+      expect(fetcher.requestedCursors, <String?>[null, 'c1', 'c2']);
+      fetcher.complete(2, page(<String>['b']));
+      await lastPage;
+
+      expect(controller.items, <String>['a', 'b']);
+      expect(controller.hasMore, isFalse);
+      await controller.loadMore();
+      expect(fetcher.requestedCursors, <String?>[null, 'c1', 'c2']);
+    });
+
+    test(
+      'opt-in ends the feed when an empty page repeats its cursor',
+      () async {
+        // Following a cursor that does not advance would poll the same empty
+        // page once per frame from the fill check.
+        final controller = build(followCursorPastEmptyPages: true);
+        addTearDown(controller.dispose);
+
+        await loadFirstPage(controller, items: <String>['a'], cursor: 'c1');
+
+        final emptyPage = controller.loadMore();
+        expect(fetcher.requestedCursors, <String?>[null, 'c1']);
+        fetcher.complete(1, page(const <String>[], cursor: 'c1'));
+        await emptyPage;
+
+        expect(controller.items, <String>['a']);
+        expect(controller.cursor, isNull);
+        expect(controller.hasMore, isFalse);
+
+        await controller.loadMore();
+        expect(fetcher.requestedCursors, <String?>[null, 'c1']);
+      },
+    );
+
     test('an empty load-more page ends the feed even with a cursor', () async {
       // Otherwise the cursor is polled forever by the scroll trigger.
       final controller = build();
@@ -1526,6 +1632,177 @@ void main() {
 
       expect(controller.items, <String>['a', 'b', 'c']);
       expect(controller.sessionStamp, same(k1));
+    });
+  });
+
+  group('replaceItemById during a first-page load', () {
+    // Items are 'id:version'; the id is the part before the colon.
+    String idOf(String item) => item.split(':').first;
+
+    test('a sort change whose first page overlaps a row replacement ends on '
+        'the new sort\'s page and cursor', () async {
+      var sort = 'hot';
+      final requests = <(String, String?)>[];
+      final firstNewPage = Completer<CursorPage<String>>();
+      var newFirstPageCalls = 0;
+
+      // A replacement is a confirmed server readback, so any first-page
+      // read made after it already carries the replaced row's new version.
+      Future<CursorPage<String>> fetch(String? cursor) {
+        requests.add((sort, cursor));
+        if (sort == 'hot') {
+          return Future.value(
+            page(<String>['h1:v1', 'h2:v1'], cursor: 'hot-c'),
+          );
+        }
+        if (cursor == null) {
+          newFirstPageCalls++;
+          if (newFirstPageCalls == 1) {
+            return firstNewPage.future;
+          }
+          return Future.value(
+            page(<String>['n1:v1', 'h1:v2'], cursor: 'new-c'),
+          );
+        }
+        return Future.value(page(<String>['n2:v1']));
+      }
+
+      final controller = CursorPaginationController<String>(
+        fetchPage: fetch,
+        idOf: idOf,
+      );
+      addTearDown(controller.dispose);
+
+      expect(await controller.refresh(), isTrue);
+      expect(controller.items, <String>['h1:v1', 'h2:v1']);
+      expect(controller.cursor, 'hot-c');
+
+      sort = 'new';
+      final switched = controller.refresh();
+      controller.replaceItemById('h1', (item) => 'h1:v2');
+      // The response was read before the replacement landed.
+      firstNewPage.complete(page(<String>['n1:v1', 'h1:v1'], cursor: 'new-c'));
+      final landed = await switched;
+
+      expect(controller.isLoading, isFalse);
+      expect(controller.error, isNull);
+      expect(controller.items, <String>['n1:v1', 'h1:v2']);
+      expect(controller.cursor, 'new-c');
+      expect(landed, isTrue);
+
+      await controller.loadMore();
+      expect(requests.last, ('new', 'new-c'));
+      expect(controller.items, <String>['n1:v1', 'h1:v2', 'n2:v1']);
+    });
+
+    test('a sort change whose first page lacks the replaced row ends on the '
+        'new sort\'s page and cursor', () async {
+      var sort = 'hot';
+      final requests = <(String, String?)>[];
+      final firstNewPage = Completer<CursorPage<String>>();
+      var newFirstPageCalls = 0;
+
+      Future<CursorPage<String>> fetch(String? cursor) {
+        requests.add((sort, cursor));
+        if (sort == 'hot') {
+          return Future.value(
+            page(<String>['h1:v1', 'h2:v1'], cursor: 'hot-c'),
+          );
+        }
+        if (cursor == null) {
+          newFirstPageCalls++;
+          if (newFirstPageCalls == 1) {
+            return firstNewPage.future;
+          }
+          return Future.value(
+            page(<String>['n1:v1', 'n2:v1'], cursor: 'new-c'),
+          );
+        }
+        return Future.value(page(<String>['n3:v1']));
+      }
+
+      final controller = CursorPaginationController<String>(
+        fetchPage: fetch,
+        idOf: idOf,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.refresh();
+
+      sort = 'new';
+      final switched = controller.refresh();
+      controller.replaceItemById('h1', (item) => 'h1:v2');
+      firstNewPage.complete(page(<String>['n1:v1', 'n2:v1'], cursor: 'new-c'));
+      final landed = await switched;
+
+      expect(controller.isLoading, isFalse);
+      expect(controller.error, isNull);
+      expect(controller.items, <String>['n1:v1', 'n2:v1']);
+      expect(controller.cursor, 'new-c');
+      expect(landed, isTrue);
+
+      await controller.loadMore();
+      expect(requests.last, ('new', 'new-c'));
+      expect(controller.items, <String>['n1:v1', 'n2:v1', 'n3:v1']);
+    });
+
+    test('a pull-to-refresh overlapping a row replacement replaces the old '
+        'list and cursor, so a removed row cannot come back', () async {
+      final requests = <String?>[];
+      final refreshedFirstPage = Completer<CursorPage<String>>();
+      var firstPageCalls = 0;
+
+      // The server deleted 'c' between the initial load and the refresh;
+      // the old cursor 'c1' would still page it back in.
+      Future<CursorPage<String>> fetch(String? cursor) {
+        requests.add(cursor);
+        if (cursor == null) {
+          firstPageCalls++;
+          if (firstPageCalls == 1) {
+            return Future.value(
+              page(<String>['a:v1', 'b:v1', 'c:v1'], cursor: 'c1'),
+            );
+          }
+          if (firstPageCalls == 2) {
+            return refreshedFirstPage.future;
+          }
+          return Future.value(
+            page(<String>['a:v2', 'b:v1', 'd:v1'], cursor: 'c2'),
+          );
+        }
+        if (cursor == 'c1') {
+          return Future.value(page(<String>['c:v1', 'e:v1']));
+        }
+        return Future.value(page(<String>['e:v1']));
+      }
+
+      final controller = CursorPaginationController<String>(
+        fetchPage: fetch,
+        idOf: idOf,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.refresh();
+      controller.removeById('c');
+      expect(controller.items, <String>['a:v1', 'b:v1']);
+
+      final refreshing = controller.refresh();
+      controller.replaceItemById('a', (item) => 'a:v2');
+      refreshedFirstPage.complete(
+        page(<String>['a:v1', 'b:v1', 'd:v1'], cursor: 'c2'),
+      );
+      final landed = await refreshing;
+
+      expect(controller.isLoading, isFalse);
+      expect(controller.error, isNull);
+      expect(controller.items, <String>['a:v2', 'b:v1', 'd:v1']);
+      expect(controller.cursor, 'c2');
+      expect(landed, isTrue);
+
+      await controller.loadMore();
+      expect(requests.last, 'c2');
+      expect(controller.items, <String>['a:v2', 'b:v1', 'd:v1', 'e:v1']);
+      expect(controller.items.map(idOf), isNot(contains('c')));
     });
   });
 }

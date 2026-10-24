@@ -73,6 +73,8 @@ class _SignInFlowAuthProvider extends FakeAuthProvider {
 
 /// Records the subject of every vote request instead of sending it.
 class _RecordingVoteService extends VoteService {
+  _RecordingVoteService() : super(sessionKeyOf: () => null);
+
   final List<String> votedSubjects = [];
 
   @override

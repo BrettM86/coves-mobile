@@ -44,6 +44,8 @@ void main() {
         when(mockDio.interceptors).thenReturn(Interceptors());
 
         commentService = CommentService(
+          sessionKeyOf: () =>
+              (did: 'did:plc:test', sessionId: 'test-session-id'),
           sessionGetter: () async => testSession,
           tokenRefresher: () async => true,
           signOutHandler: () async {},
@@ -104,6 +106,7 @@ void main() {
 
       test('should throw AuthenticationException when no session', () async {
         final serviceWithoutSession = CommentService(
+          sessionKeyOf: () => null,
           sessionGetter: () async => null,
           tokenRefresher: () async => true,
           signOutHandler: () async {},
@@ -406,6 +409,8 @@ void main() {
         mockDio = MockDio();
         when(mockDio.interceptors).thenReturn(Interceptors());
         commentService = CommentService(
+          sessionKeyOf: () =>
+              (did: 'did:plc:test', sessionId: 'test-session-id'),
           sessionGetter: () async => const CovesSession(
             token: 'test-token',
             did: 'did:plc:test',

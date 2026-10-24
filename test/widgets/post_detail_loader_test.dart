@@ -61,7 +61,10 @@ void main() {
     providers: [
       viewerAuthorityRegistration(
         auth: FakeAuthProvider(),
-        apiService: CovesApiService(tokenGetter: () async => null),
+        apiService: CovesApiService(
+          sessionKeyOf: () => null,
+          tokenGetter: () async => null,
+        ),
       ),
     ],
     child: child,
@@ -144,6 +147,7 @@ void main() {
     final fakeAuthProvider = FakeAuthProvider();
     final voteProvider = VoteProvider(
       voteService: VoteService(
+        sessionKeyOf: () => null,
         sessionGetter: () async => null,
         didGetter: () => null,
       ),
@@ -152,8 +156,8 @@ void main() {
     final commentsCache = CommentsProviderCache(
       authProvider: fakeAuthProvider,
       voteProvider: voteProvider,
-      commentService: CommentService(),
-      apiService: CovesApiService(),
+      commentService: CommentService(sessionKeyOf: () => null),
+      apiService: CovesApiService(sessionKeyOf: () => null),
     );
 
     await tester.pumpWidget(
@@ -165,7 +169,7 @@ void main() {
           Provider<CommentsProviderCache>.value(value: commentsCache),
           viewerAuthorityRegistration(
             auth: fakeAuthProvider,
-            apiService: CovesApiService(),
+            apiService: CovesApiService(sessionKeyOf: () => null),
           ),
         ],
         child: MaterialApp(
@@ -201,6 +205,7 @@ void main() {
     final fakeAuthProvider = FakeAuthProvider()..setAuthenticated(value: true);
     final voteProvider = VoteProvider(
       voteService: VoteService(
+        sessionKeyOf: () => null,
         sessionGetter: () async => null,
         didGetter: () => null,
       ),
@@ -209,8 +214,8 @@ void main() {
     final commentsCache = CommentsProviderCache(
       authProvider: fakeAuthProvider,
       voteProvider: voteProvider,
-      commentService: CommentService(),
-      apiService: CovesApiService(),
+      commentService: CommentService(sessionKeyOf: () => null),
+      apiService: CovesApiService(sessionKeyOf: () => null),
     );
 
     await tester.pumpWidget(
@@ -222,7 +227,7 @@ void main() {
           Provider<CommentsProviderCache>.value(value: commentsCache),
           viewerAuthorityRegistration(
             auth: fakeAuthProvider,
-            apiService: CovesApiService(),
+            apiService: CovesApiService(sessionKeyOf: () => null),
           ),
         ],
         child: MaterialApp(
@@ -550,7 +555,10 @@ void main() {
     // so the loader should land in a terminal (error or not-found) state
     // via a real fetch attempt - never hang on the loading state.
     final fakeAuthProvider = FakeAuthProvider();
-    final apiService = CovesApiService(tokenGetter: () async => null);
+    final apiService = CovesApiService(
+      sessionKeyOf: () => null,
+      tokenGetter: () async => null,
+    );
     addTearDown(apiService.dispose);
 
     await tester.pumpWidget(

@@ -8,6 +8,8 @@ import '../models/comment.dart';
 import '../models/community.dart';
 import '../models/moderation_action.dart';
 import '../models/moderation_subject_state.dart';
+import '../models/notification.dart';
+import '../models/notification_preferences.dart';
 import '../models/post.dart';
 import '../models/post_get_result.dart';
 import '../models/user_profile.dart';
@@ -18,10 +20,12 @@ import 'log_redaction.dart';
 import 'retry_interceptor.dart';
 
 /// Preserve Dio's debug logging for public routes while withholding private
-/// moderation headers, query values and bodies at the interceptor boundary.
+/// moderation and notification headers, query values and bodies.
 class _ModerationSafeLogInterceptor extends Interceptor {
   _ModerationSafeLogInterceptor()
     : _publicLogger = LogInterceptor(
+        // General request options include private auth origin metadata.
+        request: false,
         requestBody: true,
         responseBody: true,
         logPrint: (obj) => debugPrint(redactBearerTokens(obj.toString())),
@@ -31,7 +35,8 @@ class _ModerationSafeLogInterceptor extends Interceptor {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    if (isPrivateModerationPath(options.path)) {
+    if (isPrivateModerationPath(options.path) ||
+        isPrivateNotificationPath(options.path)) {
       debugPrint('${options.method} ${options.path.split('?').first}');
       handler.next(options);
     } else {
@@ -45,7 +50,8 @@ class _ModerationSafeLogInterceptor extends Interceptor {
     ResponseInterceptorHandler handler,
   ) {
     final options = response.requestOptions;
-    if (isPrivateModerationPath(options.path)) {
+    if (isPrivateModerationPath(options.path) ||
+        isPrivateNotificationPath(options.path)) {
       debugPrint(
         '${options.method} ${options.path.split('?').first} '
         '${response.statusCode}',
@@ -59,7 +65,8 @@ class _ModerationSafeLogInterceptor extends Interceptor {
   @override
   void onError(DioException error, ErrorInterceptorHandler handler) {
     final options = error.requestOptions;
-    if (isPrivateModerationPath(options.path)) {
+    if (isPrivateModerationPath(options.path) ||
+        isPrivateNotificationPath(options.path)) {
       debugPrint(
         '${options.method} ${options.path.split('?').first} '
         '${error.response?.statusCode ?? 'no status'}',
@@ -90,6 +97,7 @@ class _ModerationSafeLogInterceptor extends Interceptor {
 ///   only when a 401 persists after a successful refresh
 class CovesApiService {
   CovesApiService({
+    required Object? Function() sessionKeyOf,
     Future<String?> Function()? tokenGetter,
     Future<bool> Function()? tokenRefresher,
     Future<void> Function()? signOutHandler,
@@ -106,6 +114,7 @@ class CovesApiService {
     // Add shared auth interceptor (bearer token + 401 refresh/retry)
     _dio.interceptors.add(
       createAuthInterceptor(
+        sessionKeyOf: sessionKeyOf,
         tokenGetter: tokenGetter,
         tokenRefresher: tokenRefresher,
         signOutHandler: signOutHandler,
@@ -114,7 +123,8 @@ class CovesApiService {
       ),
     );
 
-    // Log private moderation requests without headers, queries or bodies.
+    // Log private moderation and notification requests without headers,
+    // queries or bodies.
     // All other routes keep the existing redacted Dio logging.
     if (kDebugMode) {
       _dio.interceptors.add(_ModerationSafeLogInterceptor());
@@ -143,6 +153,7 @@ class CovesApiService {
     required String operation,
     required Future<Response<dynamic>> Function() send,
     required T Function(Object? data) parse,
+    bool redactParseErrorDetail = false,
   }) async {
     try {
       if (kDebugMode) {
@@ -166,7 +177,10 @@ class CovesApiService {
       // etc.) are deliberately degraded to a parse ApiException so callers
       // only ever see the ApiException taxonomy.
       if (kDebugMode) {
-        debugPrint('❌ Error parsing $operation response: $e');
+        debugPrint(
+          '❌ Error parsing $operation response: '
+          '${redactParseErrorDetail ? e.runtimeType : e}',
+        );
       }
       throw ApiException('Failed to parse server response', originalError: e);
     }
@@ -644,6 +658,76 @@ class CovesApiService {
       );
     }
     return reasonToken;
+  }
+
+  Future<int> getUnreadCount() {
+    return _request(
+      operation: 'fetch unread notification count',
+      redactParseErrorDetail: true,
+      send: () => _dio.get('/xrpc/social.coves.notification.getUnreadCount'),
+      parse: (data) {
+        final count = _asJsonMap(data)['count'];
+        if (count is! int) {
+          throw ApiException('Invalid unread notification count response');
+        }
+        return count;
+      },
+    );
+  }
+
+  Future<NotificationPage> listNotifications({String? cursor}) {
+    return _request(
+      operation: 'fetch notifications',
+      redactParseErrorDetail: true,
+      send: () => _dio.get(
+        '/xrpc/social.coves.notification.listNotifications',
+        queryParameters: {'cursor': ?cursor},
+      ),
+      parse: (data) => NotificationPage.fromJson(_asJsonMap(data)),
+    );
+  }
+
+  Future<void> updateNotificationsSeen({required String seenAt}) {
+    return _request<void>(
+      operation: 'update notification seen time',
+      redactParseErrorDetail: true,
+      send: () => _dio.post(
+        '/xrpc/social.coves.notification.updateSeen',
+        data: {'seenAt': seenAt},
+      ),
+      parse: (_) {},
+    );
+  }
+
+  Future<NotificationPreferences> getNotificationPreferences() {
+    return _request(
+      operation: 'fetch notification preferences',
+      redactParseErrorDetail: true,
+      send: () => _dio.get('/xrpc/social.coves.notification.getPreferences'),
+      parse: (data) => NotificationPreferences.fromJson(_asJsonMap(data)),
+    );
+  }
+
+  Future<NotificationPreferences> putNotificationPreferences({
+    bool? postReply,
+    bool? commentReply,
+    bool? mention,
+    bool? upvote,
+  }) {
+    return _request(
+      operation: 'update notification preferences',
+      redactParseErrorDetail: true,
+      send: () => _dio.post(
+        '/xrpc/social.coves.notification.putPreferences',
+        data: {
+          'postReply': ?postReply,
+          'commentReply': ?commentReply,
+          'mention': ?mention,
+          'upvote': ?upvote,
+        },
+      ),
+      parse: (data) => NotificationPreferences.fromJson(_asJsonMap(data)),
+    );
   }
 
   Future<bool> getViewerAuthority() {

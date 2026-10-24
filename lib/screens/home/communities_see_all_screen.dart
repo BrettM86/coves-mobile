@@ -187,6 +187,7 @@ class _CommunitiesSeeAllScreenState extends State<CommunitiesSeeAllScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
         foregroundColor: AppColors.textPrimary,
         title: Text(widget.title),
       ),

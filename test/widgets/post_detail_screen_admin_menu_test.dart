@@ -214,6 +214,7 @@ MockCovesApiService _adminApi({FeedViewPost? feedPost}) {
     ],
   );
   when(api.getViewerAuthority()).thenAnswer((_) async => true);
+  when(api.getUnreadCount()).thenAnswer((_) async => 0);
   when(
     api.getProfile(actor: anyNamed('actor')),
   ).thenAnswer((_) async => UserProfile(did: _adminDid, handle: 'admin.test'));

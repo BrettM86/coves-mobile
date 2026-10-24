@@ -623,6 +623,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         _showFocusFailed(messenger);
         return;
       }
+      // A route pushed over this one while the subtree loaded stays on top.
+      if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) {
+        return;
+      }
       _onContinueThread(subtree, const []);
     } on Exception catch (e) {
       if (kDebugMode) {

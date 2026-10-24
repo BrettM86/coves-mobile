@@ -5,9 +5,9 @@ import 'package:coves_flutter/widgets/icons/lucide_paths.dart';
 import 'package:coves_flutter/widgets/media/media_aspect.dart';
 import 'package:coves_flutter/widgets/sensitive_content.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../test_helpers/semantics_helpers.dart';
 import '../test_helpers/theme_pump.dart';
 
 const _bannerKey = Key('sensitive-content-banner');
@@ -26,39 +26,6 @@ EmbedImage sensitiveImage() {
     alt: _alt,
     aspectRatio: EmbedAspectRatio(width: 1, height: 3),
   );
-}
-
-/// Every semantics node in the pumped tree that a screen reader could
-/// activate, in traversal order.
-///
-/// A control is only reachable if the node carrying its label is also the
-/// node carrying the tap, so the labels of the activatable nodes are the
-/// whole story.
-List<String> activatableLabels(WidgetTester tester, Finder anyNode) {
-  var root = tester.getSemantics(anyNode);
-  while (root.parent != null) {
-    root = root.parent!;
-  }
-
-  final labels = <String>[];
-  void visit(SemanticsNode node) {
-    if (node.getSemanticsData().hasAction(SemanticsAction.tap)) {
-      labels.add(node.label);
-    }
-    node.visitChildren((child) {
-      visit(child);
-      return true;
-    });
-  }
-
-  visit(root);
-  return labels;
-}
-
-/// Fires the screen-reader activation gesture on the node [finder] locates.
-void activateBySemantics(WidgetTester tester, Finder finder) {
-  final node = tester.getSemantics(finder);
-  node.owner!.performAction(node.id, SemanticsAction.tap);
 }
 
 void main() {

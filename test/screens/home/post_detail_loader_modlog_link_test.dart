@@ -58,7 +58,10 @@ void main() {
             // The loader stamps each request with the signed-out session.
             viewerAuthorityRegistration(
               auth: FakeAuthProvider(),
-              apiService: CovesApiService(tokenGetter: () async => null),
+              apiService: CovesApiService(
+                sessionKeyOf: () => null,
+                tokenGetter: () async => null,
+              ),
             ),
           ],
           child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
@@ -97,7 +100,10 @@ void main() {
           // The loader stamps each request with the signed-out session.
           viewerAuthorityRegistration(
             auth: FakeAuthProvider(),
-            apiService: CovesApiService(tokenGetter: () async => null),
+            apiService: CovesApiService(
+              sessionKeyOf: () => null,
+              tokenGetter: () async => null,
+            ),
           ),
         ],
         child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),

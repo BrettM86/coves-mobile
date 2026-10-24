@@ -205,6 +205,10 @@ List<SingleChildWidget> _appProviders({
     ),
     Provider<PostChangeBroadcast>(create: (_) => PostChangeBroadcast()),
     viewerAuthorityRegistration(auth: authProvider, apiService: apiService),
+    unreadNotificationCountRegistration(
+      auth: authProvider,
+      apiService: apiService,
+    ),
     ChangeNotifierProvider<MultiFeedProvider>(
       create: (context) {
         final authority = context.read<ViewerAuthorityProvider>();
@@ -233,6 +237,7 @@ void main() {
     apiService = MockCovesApiService();
     when(apiService.deletePost(uri: anyNamed('uri'))).thenAnswer((_) async {});
     when(apiService.getViewerAuthority()).thenAnswer((_) async => false);
+    when(apiService.getUnreadCount()).thenAnswer((_) async => 0);
   });
 
   tearDown(() {

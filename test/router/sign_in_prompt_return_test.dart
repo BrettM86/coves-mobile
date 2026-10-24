@@ -47,6 +47,8 @@ const _secondVoteUri = 'at://did:plc:bob/social.coves.feed.vote/down1';
 
 /// VoteService that records every vote request instead of sending it.
 class _RecordingVoteService extends VoteService {
+  _RecordingVoteService() : super(sessionKeyOf: () => null);
+
   final List<String> votedSubjects = [];
 
   @override
@@ -143,6 +145,7 @@ class _RouterHarness {
     // build a placeholder of the sealed result type while stubbing.
     // The cold-load loader stamps the post with the viewer's authority.
     when(api.getViewerAuthority()).thenAnswer((_) async => false);
+    when(api.getUnreadCount()).thenAnswer((_) async => 0);
     provideDummy<PostGetResult>(const PostGetNotFound(_postUri));
     when(api.getPost(any))
         .thenAnswer((_) async => PostGetSuccess(_feedPost().post));
@@ -173,6 +176,7 @@ class _RouterHarness {
         Provider<CovesApiService>.value(value: api),
         Provider<CommentsProviderCache>.value(value: cache),
         viewerAuthorityRegistration(auth: auth, apiService: api),
+        unreadNotificationCountRegistration(auth: auth, apiService: api),
       ],
       child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
     );

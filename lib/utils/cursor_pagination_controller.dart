@@ -60,6 +60,10 @@ class SessionChangedDuringLoadException implements Exception {
 /// already loaded are dropped instead of appended: overlapping pages from
 /// server-side cursor drift would otherwise crash the list, which keys its
 /// rows by that same id.
+/// `onFirstPageAccepted` receives the page object `fetchPage` returned for
+/// the first page, once that page is accepted and before listeners hear of
+/// it; a superseded first page never reaches it. Its failures are reported
+/// through `onUnexpectedError` and never undo the accepted page.
 /// `onUnexpectedError` receives every error the controller swallows —
 /// fetch failures, hydration failures, and failures of superseded requests
 /// — so they reach crash reporting instead of only the debug console.
@@ -90,6 +94,8 @@ class CursorPaginationController<T> extends ChangeNotifier {
     this._idOf,
     this._onUnexpectedError,
     this._sessionKeyOf,
+    this._onFirstPageAccepted,
+    this.followCursorPastEmptyPages = false,
   });
 
   final Future<CursorPage<T>> Function(String? cursor) _fetchPage;
@@ -98,6 +104,16 @@ class CursorPaginationController<T> extends ChangeNotifier {
   final String Function(T item)? _idOf;
   final void Function(Object error, StackTrace stack)? _onUnexpectedError;
   final Object? Function()? _sessionKeyOf;
+  final void Function(CursorPage<T> page)? _onFirstPageAccepted;
+
+  /// Whether [loadMore] keeps paging after a page with no items.
+  ///
+  /// Off by default: a page with no items ends the collection even when the
+  /// server hands back another cursor, because following it again could poll
+  /// the same empty page forever. When on, the cursor from an empty page is
+  /// followed only when it differs from the cursor that page was requested
+  /// with; a repeated cursor still ends the collection.
+  final bool followCursorPastEmptyPages;
   Object? _sessionStamp;
 
   List<T> _items = List<T>.unmodifiable(const <Never>[]);
@@ -108,6 +124,7 @@ class CursorPaginationController<T> extends ChangeNotifier {
   String? _error;
   Object? _errorCause;
   String? _loadMoreError;
+  Object? _loadMoreErrorCause;
   bool _disposed = false;
 
   /// Requests one [refresh] makes for the first page while the session keeps
@@ -117,6 +134,12 @@ class CursorPaginationController<T> extends ChangeNotifier {
   /// Bumped by every [refresh] and [reset] so in-flight requests started
   /// under a previous generation can recognise themselves as stale.
   int _generation = 0;
+
+  // Row replacements made since the in-flight first-page request was sent.
+  // Each is a confirmed server readback, newer than that request's page, so
+  // they are re-applied on top of it when it lands; a page requested after
+  // a replacement already carries it.
+  final List<(String, T Function(T item))> _replacementsDuringLoad = [];
 
   /// The session key the loaded first page was requested and accepted
   /// under; null before one is accepted or without `sessionKeyOf`.
@@ -152,6 +175,9 @@ class CursorPaginationController<T> extends ChangeNotifier {
   /// Pagination error — the footer error channel.
   String? get loadMoreError => _loadMoreError;
 
+  /// The thrown object behind [loadMoreError], or null when it is cleared.
+  Object? get loadMoreErrorCause => _loadMoreErrorCause;
+
   /// Load (or reload) the first page.
   ///
   /// Also the entry point for the initial load: there is no separate
@@ -165,7 +191,14 @@ class CursorPaginationController<T> extends ChangeNotifier {
   /// call's page reached the controller, false when it failed or was
   /// superseded, so awaiters do not stamp "refreshed at" for a fetch that
   /// never landed.
-  Future<bool> refresh() async {
+  Future<bool> refresh() => _replaceFirstPage(failureOnLoadMore: false);
+
+  /// Replace the list from page one after a pagination failure. A failed
+  /// replacement keeps the old rows and exposes Retry on the footer.
+  Future<bool> replaceFirstPageForLoadMore() =>
+      _replaceFirstPage(failureOnLoadMore: true);
+
+  Future<bool> _replaceFirstPage({required bool failureOnLoadMore}) async {
     final generation = ++_generation;
     _removedIds.clear();
     _isLoading = true;
@@ -174,10 +207,12 @@ class CursorPaginationController<T> extends ChangeNotifier {
     _error = null;
     _errorCause = null;
     _loadMoreError = null;
+    _loadMoreErrorCause = null;
     _notify();
 
     for (var attempt = 1; ; attempt++) {
       final sessionKey = _currentSessionKey();
+      _replacementsDuringLoad.clear();
       try {
         final page = await _fetchPage(null);
         if (_isStale(generation)) {
@@ -189,15 +224,20 @@ class CursorPaginationController<T> extends ChangeNotifier {
           if (attempt < maximumFirstPageAttempts) {
             continue;
           }
-          _failFirstPageForUnsettledSession();
+          _failFirstPageForUnsettledSession(
+            failureOnLoadMore: failureOnLoadMore,
+          );
           return false;
         }
 
-        final fresh = _withoutDuplicates(page.items, const <Never>[]);
+        final fresh = _withReplacementsDuringLoad(
+          _withoutDuplicates(page.items, const <Never>[]),
+        );
         _items = List<T>.unmodifiable(fresh);
         _cursor = page.cursor;
         _sessionStamp = sessionKey;
         _isLoading = false;
+        _announceFirstPage(page);
         _notify();
 
         await _hydrate(fresh);
@@ -212,20 +252,27 @@ class CursorPaginationController<T> extends ChangeNotifier {
           if (attempt < maximumFirstPageAttempts) {
             continue;
           }
-          _failFirstPageForUnsettledSession();
+          _failFirstPageForUnsettledSession(
+            failureOnLoadMore: failureOnLoadMore,
+          );
           return false;
         }
 
         // Flags first: everything below can run user-supplied code, and a
         // throw there must not leave the feed stuck in a loading state.
         _isLoading = false;
-        _error = _messageFor(error);
-        _errorCause = error;
+        if (failureOnLoadMore) {
+          _loadMoreError = _messageFor(error);
+          _loadMoreErrorCause = error;
+        } else {
+          _error = _messageFor(error);
+          _errorCause = error;
+        }
         _notify();
         _report(error, stack);
 
         if (kDebugMode) {
-          debugPrint('❌ Pagination first page failed: $error');
+          debugPrint('❌ Pagination first page failed: ${error.runtimeType}');
         }
         return false;
       }
@@ -234,11 +281,16 @@ class CursorPaginationController<T> extends ChangeNotifier {
 
   /// End a [refresh] whose session changed under every attempt in a visible
   /// first-page error, never in an empty list that reads as "no items".
-  void _failFirstPageForUnsettledSession() {
+  void _failFirstPageForUnsettledSession({required bool failureOnLoadMore}) {
     const error = SessionChangedDuringLoadException();
     _isLoading = false;
-    _error = _messageFor(error);
-    _errorCause = error;
+    if (failureOnLoadMore) {
+      _loadMoreError = _messageFor(error);
+      _loadMoreErrorCause = error;
+    } else {
+      _error = _messageFor(error);
+      _errorCause = error;
+    }
     _notify();
   }
 
@@ -276,8 +328,9 @@ class CursorPaginationController<T> extends ChangeNotifier {
     _isLoadingMore = true;
     _notify();
 
+    final requestedCursor = _cursor;
     try {
-      final page = await _fetchPage(_cursor);
+      final page = await _fetchPage(requestedCursor);
       if (_isStale(generation)) {
         return;
       }
@@ -289,10 +342,11 @@ class CursorPaginationController<T> extends ChangeNotifier {
 
       final fresh = _withoutDuplicates(page.items, _items);
       _items = List<T>.unmodifiable(<T>[..._items, ...fresh]);
-      // A page with no items ends the collection even when the server hands
-      // back another cursor: following it again would poll the same empty
-      // page forever.
-      _cursor = page.items.isEmpty ? null : page.cursor;
+      _cursor =
+          page.items.isEmpty &&
+              (!followCursorPastEmptyPages || page.cursor == requestedCursor)
+          ? null
+          : page.cursor;
       _isLoadingMore = false;
       _notify();
 
@@ -312,11 +366,12 @@ class CursorPaginationController<T> extends ChangeNotifier {
       // Flags first — see refresh().
       _isLoadingMore = false;
       _loadMoreError = _messageFor(error);
+      _loadMoreErrorCause = error;
       _notify();
       _report(error, stack);
 
       if (kDebugMode) {
-        debugPrint('❌ Pagination next page failed: $error');
+        debugPrint('❌ Pagination next page failed: ${error.runtimeType}');
       }
     }
   }
@@ -337,6 +392,7 @@ class CursorPaginationController<T> extends ChangeNotifier {
       return;
     }
     _loadMoreError = null;
+    _loadMoreErrorCause = null;
     _notify();
   }
 
@@ -353,6 +409,7 @@ class CursorPaginationController<T> extends ChangeNotifier {
     _error = null;
     _errorCause = null;
     _loadMoreError = null;
+    _loadMoreErrorCause = null;
     _notify();
   }
 
@@ -396,6 +453,25 @@ class CursorPaginationController<T> extends ChangeNotifier {
     }
     _items = List<T>.unmodifiable(remaining);
     _notify();
+  }
+
+  /// Replace a loaded row after a newer confirmed server readback.
+  /// A first page already in flight lands with [replacement] re-applied to
+  /// that row, so its older copy cannot overwrite the readback.
+  /// Requires `idOf` and keeps the row's identity and position.
+  void replaceItemById(String id, T Function(T item) replacement) {
+    final idOf = _idOf;
+    assert(idOf != null, 'replaceItemById requires idOf');
+    if (idOf == null || !_items.any((item) => idOf(item) == id)) {
+      return;
+    }
+    if (_isLoading) {
+      _replacementsDuringLoad.add((id, replacement));
+    }
+    replaceItems([
+      for (final item in _items)
+        if (idOf(item) == id) replacement(item) else item,
+    ]);
   }
 
   /// Swap in a rewritten list of the loaded items, for tree-shaped items
@@ -457,6 +533,36 @@ class CursorPaginationController<T> extends ChangeNotifier {
       }
     }
     return result;
+  }
+
+  /// [page] with every replacement recorded while it was in flight applied,
+  /// in the order they were made.
+  List<T> _withReplacementsDuringLoad(List<T> page) {
+    final idOf = _idOf;
+    if (idOf == null || _replacementsDuringLoad.isEmpty) {
+      return page;
+    }
+    var result = page;
+    for (final (id, replacement) in _replacementsDuringLoad) {
+      result = [
+        for (final item in result)
+          if (idOf(item) == id) replacement(item) else item,
+      ];
+    }
+    _replacementsDuringLoad.clear();
+    return result;
+  }
+
+  void _announceFirstPage(CursorPage<T> page) {
+    final hook = _onFirstPageAccepted;
+    if (hook == null) {
+      return;
+    }
+    try {
+      hook(page);
+    } on Object catch (error, stack) {
+      _report(error, stack);
+    }
   }
 
   Future<void> _hydrate(List<T> newItems) async {

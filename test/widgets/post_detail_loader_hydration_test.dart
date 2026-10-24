@@ -65,6 +65,7 @@ void main() {
   VoteProvider buildVoteProvider(AuthProvider auth) {
     final provider = VoteProvider(
       voteService: VoteService(
+        sessionKeyOf: () => null,
         sessionGetter: () async => null,
         didGetter: () => null,
       ),
@@ -80,7 +81,10 @@ void main() {
     required AuthProvider auth,
     required VoteProvider votes,
   }) async {
-    final apiService = CovesApiService(tokenGetter: () async => null);
+    final apiService = CovesApiService(
+      sessionKeyOf: () => null,
+      tokenGetter: () async => null,
+    );
     addTearDown(apiService.dispose);
 
     await tester.pumpWidget(
@@ -93,7 +97,7 @@ void main() {
             value: CommentsProviderCache(
               authProvider: auth,
               voteProvider: votes,
-              commentService: CommentService(),
+              commentService: CommentService(sessionKeyOf: () => null),
               apiService: apiService,
             ),
           ),
@@ -159,7 +163,10 @@ void main() {
     }) async {
       final auth = _FakeAuthProvider(authenticated: authenticated);
 
-      final apiService = CovesApiService(tokenGetter: () async => null);
+      final apiService = CovesApiService(
+        sessionKeyOf: () => null,
+        tokenGetter: () async => null,
+      );
       addTearDown(apiService.dispose);
 
       await tester.pumpWidget(

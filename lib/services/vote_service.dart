@@ -29,6 +29,7 @@ import 'retry_interceptor.dart';
 ///   votes
 class VoteService {
   VoteService({
+    required Object? Function() sessionKeyOf,
     Future<CovesSession?> Function()? sessionGetter,
     this._didGetter,
     Future<bool> Function()? tokenRefresher,
@@ -46,6 +47,7 @@ class VoteService {
     // Add shared 401 retry interceptor
     _dio.interceptors.add(
       createAuthInterceptor(
+        sessionKeyOf: sessionKeyOf,
         tokenGetter: () async => (await sessionGetter?.call())?.token,
         tokenRefresher: tokenRefresher,
         signOutHandler: signOutHandler,

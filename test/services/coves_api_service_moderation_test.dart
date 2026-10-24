@@ -26,7 +26,11 @@ void main() {
         ),
       );
       adapter = DioAdapter(dio: dio);
-      service = CovesApiService(dio: dio, tokenGetter: () async => null);
+      service = CovesApiService(
+        sessionKeyOf: () => null,
+        dio: dio,
+        tokenGetter: () async => null,
+      );
     });
 
     tearDown(() => service.dispose());
@@ -220,7 +224,11 @@ void main() {
         ),
       );
       adapter = DioAdapter(dio: dio);
-      service = CovesApiService(dio: dio, tokenGetter: () async => null);
+      service = CovesApiService(
+        sessionKeyOf: () => null,
+        dio: dio,
+        tokenGetter: () async => null,
+      );
     });
 
     tearDown(() => service.dispose());

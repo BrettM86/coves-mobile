@@ -17,6 +17,11 @@ bool isPrivateModerationPath(String requestPath) {
       path != '/xrpc/social.coves.moderation.listActions';
 }
 
+/// Notification responses, requests and errors can contain private account
+/// and activity data; query values do not affect classification.
+bool isPrivateNotificationPath(String requestPath) =>
+    requestPath.split('?').first.startsWith('/xrpc/social.coves.notification.');
+
 /// Matches a bearer scheme (case-insensitive) followed by any run of
 /// non-whitespace characters. Greedy on purpose: a charset-based match
 /// would leak the tail of tokens containing characters outside the set.

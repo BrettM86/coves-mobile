@@ -1,0 +1,27 @@
+# Section I — check 4: tapping a reply notification opens the focused thread
+# on the replied-to post, and back returns to the list.
+# PRECONDITIONS: a1_login_session (mari signed in), the local stack and the
+# second account (see i1_notifications_badge).
+appId: social.coves.dev
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- runFlow: subflows/seed_notifications.yaml
+- tapOn: "Notifications, .* unread"
+- extendedWaitUntil:
+    visible: "Reply to your post.*${output.seedTag} reply.*"
+    timeout: 30000
+- tapOn: "Reply to your post.*${output.seedTag} reply.*"
+# The focused thread shows the reply itself and the post it answers.
+- extendedWaitUntil:
+    visible: ".*${output.seedTag} reply.*"
+    timeout: 30000
+- assertVisible: ".*QA thread post.*"
+- assertNotVisible: "Reply to your post.*"
+- takeScreenshot: build/maestro/i4_focused_thread
+- back
+- extendedWaitUntil:
+    visible: "Reply to your post.*${output.seedTag} reply.*"
+    timeout: 15000

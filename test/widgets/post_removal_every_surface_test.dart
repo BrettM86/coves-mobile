@@ -130,6 +130,7 @@ class _LoadedSurfaces {
   void stub() {
     when(api.deletePost(uri: _removedUri)).thenAnswer((_) async {});
     when(api.getViewerAuthority()).thenAnswer((_) async => true);
+    when(api.getUnreadCount()).thenAnswer((_) async => 0);
     when(api.getProfile(actor: _authorDid)).thenAnswer(
       (_) async => UserProfile(did: _authorDid, handle: 'me.coves.test'),
     );

@@ -569,17 +569,10 @@ class UserProfileProvider with ChangeNotifier {
         // The controller notifies, which re-projects _postsState.
         _postsController.removeById(uri);
       case PostReplaced(:final post):
-        final items = _postsController.items;
-        if (!items.any((feedPost) => feedPost.post.uri == post.uri)) {
-          return;
-        }
-        _postsController.replaceItems([
-          for (final feedPost in items)
-            if (feedPost.post.uri == post.uri)
-              feedPost.copyWith(post: post)
-            else
-              feedPost,
-        ]);
+        _postsController.replaceItemById(
+          post.uri,
+          (feedPost) => feedPost.copyWith(post: post),
+        );
     }
   }
 

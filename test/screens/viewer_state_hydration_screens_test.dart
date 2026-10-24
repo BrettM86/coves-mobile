@@ -109,6 +109,7 @@ void main() {
   VoteProvider buildVoteProvider(AuthProvider auth) {
     final provider = VoteProvider(
       voteService: VoteService(
+        sessionKeyOf: () => null,
         sessionGetter: () async => null,
         didGetter: () => null,
       ),

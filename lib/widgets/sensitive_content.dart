@@ -35,8 +35,10 @@ class SensitiveContentBanner extends StatelessWidget {
     // a merged node would announce "NSFW Content Show" instead of the action.
     // Because the copy stays its own node, the tap has to sit on the labelled
     // node itself — a screen reader activates what it announced — and the
-    // GestureDetector is excluded so the copy is not a second, unlabelled
-    // target.
+    // InkWell is excluded so the copy is not a second, unlabelled target.
+    //
+    // An InkWell rather than a GestureDetector: a pressed child InkWell stops
+    // a tappable card around the banner from rippling too.
     return Semantics(
       key: _bannerKey,
       container: true,
@@ -44,15 +46,13 @@ class SensitiveContentBanner extends StatelessWidget {
       button: true,
       label: concealed ? 'Show sensitive content' : 'Hide sensitive content',
       onTap: onToggle,
-      child: GestureDetector(
-        onTap: onToggle,
-        excludeFromSemantics: true,
-        behavior: HitTestBehavior.opaque,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColors.backgroundSecondary,
-            borderRadius: BorderRadius.circular(8),
-          ),
+      child: Material(
+        color: AppColors.backgroundSecondary,
+        borderRadius: BorderRadius.circular(8),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onToggle,
+          excludeFromSemantics: true,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 56),
             child: Padding(

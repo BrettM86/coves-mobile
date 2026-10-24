@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import 'log_redaction.dart';
+
 /// Creates a Dio interceptor that handles authentication and automatic
 /// token refresh on 401 errors.
 ///
@@ -21,6 +23,12 @@ import 'package:flutter/foundation.dart';
 /// ```dart
 /// _dio.interceptors.add(
 ///   createAuthInterceptor(
+///     sessionKeyOf: () {
+///       final session = authProvider.session;
+///       return session == null
+///           ? null
+///           : (did: session.did, sessionId: session.sessionId);
+///     },
 ///     tokenGetter: () async => authProvider.session?.token,
 ///     tokenRefresher: authProvider.refreshToken,
 ///     signOutHandler: authProvider.signOut,
@@ -30,16 +38,50 @@ import 'package:flutter/foundation.dart';
 /// );
 /// ```
 InterceptorsWrapper createAuthInterceptor({
+  required Object? Function() sessionKeyOf,
   required Future<String?> Function()? tokenGetter,
   required Future<bool> Function()? tokenRefresher,
   required Future<void> Function()? signOutHandler,
   required String serviceName,
   required Dio dio,
 }) {
+  const originSessionKey = 'coves.authOriginSession';
+  bool ownsSession(RequestOptions options) =>
+      options.extra.containsKey(originSessionKey) &&
+      options.extra[originSessionKey] == sessionKeyOf();
+
   return InterceptorsWrapper(
     onRequest: (options, handler) async {
-      // Fetch fresh token before each request
+      // Only automatic replays inherit the original operation's identity.
+      // A caller manually reusing completed options starts a new operation.
+      final automaticReplay =
+          options.extra['retried'] == true ||
+          (options.extra['retryCount'] as int? ?? 0) > 0;
+      if (!automaticReplay || !options.extra.containsKey(originSessionKey)) {
+        // Stamp synchronously, before the token getter can yield. A null
+        // anonymous origin is a real stamp, distinct from an absent one.
+        options.extra[originSessionKey] = sessionKeyOf();
+      }
+      if (!ownsSession(options)) {
+        return handler.reject(
+          DioException(
+            requestOptions: options,
+            type: DioExceptionType.cancel,
+            message: 'The session changed before the request could be sent.',
+          ),
+        );
+      }
+      // Fetch fresh token before each request, within the originating session.
       final token = await tokenGetter?.call();
+      if (!ownsSession(options)) {
+        return handler.reject(
+          DioException(
+            requestOptions: options,
+            type: DioExceptionType.cancel,
+            message: 'The session changed before the request could be sent.',
+          ),
+        );
+      }
       if (token != null) {
         options.headers['Authorization'] = 'Bearer $token';
         if (kDebugMode) {
@@ -59,8 +101,19 @@ InterceptorsWrapper createAuthInterceptor({
       return handler.next(options);
     },
     onError: (error, handler) async {
+      final privateNotification = isPrivateNotificationPath(
+        error.requestOptions.path,
+      );
+      final notificationMetadata =
+          '${error.requestOptions.method} '
+          '${error.requestOptions.path.split('?').first} '
+          '${error.response?.statusCode ?? 'no status'}';
       // Handle 401 errors with automatic token refresh
       if (error.response?.statusCode == 401 && tokenRefresher != null) {
+        // Old requests cannot refresh or sign out the replacement session.
+        if (!ownsSession(error.requestOptions)) {
+          return handler.next(error);
+        }
         if (kDebugMode) {
           debugPrint(
             '🔄 $serviceName: 401 detected, attempting token refresh...',
@@ -103,6 +156,9 @@ InterceptorsWrapper createAuthInterceptor({
         try {
           // Attempt to refresh the token
           final refreshSucceeded = await tokenRefresher();
+          if (!ownsSession(error.requestOptions)) {
+            return handler.next(error);
+          }
 
           if (refreshSucceeded) {
             if (kDebugMode) {
@@ -113,6 +169,9 @@ InterceptorsWrapper createAuthInterceptor({
 
             // Get the new token
             final newToken = await tokenGetter?.call();
+            if (!ownsSession(error.requestOptions)) {
+              return handler.next(error);
+            }
 
             if (newToken != null) {
               // Mark this request as retried to prevent infinite loops
@@ -153,7 +212,12 @@ InterceptorsWrapper createAuthInterceptor({
           // taxonomy and surface as a misclassified network error instead
           // of the original 401.
           if (kDebugMode) {
-            debugPrint('❌ $serviceName: Error during token refresh: $e');
+            debugPrint(
+              privateNotification
+                  ? '❌ $serviceName: Error during token refresh: '
+                        '$notificationMetadata'
+                  : '❌ $serviceName: Error during token refresh: $e',
+            );
           }
         }
       }
@@ -161,7 +225,11 @@ InterceptorsWrapper createAuthInterceptor({
       // One brief line here; mapDioException prints the status and
       // redacted body when the owning service maps this error.
       if (kDebugMode) {
-        debugPrint('❌ $serviceName API Error: ${error.message}');
+        debugPrint(
+          privateNotification
+              ? '❌ $serviceName API Error: $notificationMetadata'
+              : '❌ $serviceName API Error: ${error.message}',
+        );
       }
       return handler.next(error);
     },

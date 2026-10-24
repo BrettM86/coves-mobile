@@ -1,0 +1,64 @@
+# Section I — check 5: the gear opens Settings, a notification switch
+# toggles, and returning to Notifications reloads the list without a crash
+# (NotificationPreferencesChangeSignal). The flow switches "Upvotes" off and
+# back on, so it leaves mari's preferences as it found them.
+# Rows are not required: the list may be empty ("No notifications yet").
+# PRECONDITIONS: a1_login_session (mari signed in).
+appId: social.coves.dev
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- tapOn: "Notifications.*"
+- extendedWaitUntil:
+    visible: "(Reply to your post|Reply to your comment|Mentioned you|.* liked your (post|comment)|No notifications yet).*"
+    timeout: 30000
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible:
+      text: "Upvotes"
+      checked: true
+    timeout: 15000
+- tapOn: "Upvotes"
+- assertVisible:
+    text: "Upvotes"
+    checked: false
+- waitForAnimationToEnd:
+    timeout: 5000
+- back
+- extendedWaitUntil:
+    visible: "(Reply to your post|Reply to your comment|Mentioned you|.* liked your (post|comment)|No notifications yet).*"
+    timeout: 30000
+- assertNotVisible: "Could not load notifications.*"
+- tapOn: "Settings"
+# The switch reopens off: the first toggle was saved on the server.
+- extendedWaitUntil:
+    visible:
+      text: "Upvotes"
+      checked: false
+    timeout: 15000
+- tapOn: "Upvotes"
+- assertVisible:
+    text: "Upvotes"
+    checked: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- back
+- extendedWaitUntil:
+    visible: "(Reply to your post|Reply to your comment|Mentioned you|.* liked your (post|comment)|No notifications yet).*"
+    timeout: 30000
+- assertNotVisible: "Could not load notifications.*"
+# Reopening Settings reloads from the server: the switch-back-on was saved
+# too, so mari's preferences end where they started.
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible:
+      text: "Upvotes"
+      checked: true
+    timeout: 15000
+- back
+- extendedWaitUntil:
+    visible: "(Reply to your post|Reply to your comment|Mentioned you|.* liked your (post|comment)|No notifications yet).*"
+    timeout: 30000
+- takeScreenshot: build/maestro/i5_after_settings

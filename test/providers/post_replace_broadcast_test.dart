@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:coves_flutter/models/moderation.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/models/user_profile.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
@@ -154,6 +157,134 @@ void main() {
     subscriptions.dispose();
     votes.dispose();
     auth.dispose();
+  });
+
+  test('P-C3 I3 older profile refresh cannot overwrite a newer replacement '
+      'but a later read remains authoritative', () async {
+    final older = Completer<TimelineResponse>();
+    when(
+      api.getAuthorPosts(
+        actor: anyNamed('actor'),
+        filter: anyNamed('filter'),
+        community: anyNamed('community'),
+        limit: anyNamed('limit'),
+        cursor: anyNamed('cursor'),
+      ),
+    ).thenAnswer((_) => older.future);
+    final pending = profile.loadPosts(refresh: true);
+    expect(profile.postsState.isLoading, isTrue);
+    final labeled = _post('p').copyWith(
+      cid: 'cid-labeled',
+      moderation: const ModerationView(
+        state: ModerationState.clear,
+        contentLabels: [ContentLabelView(value: 'nsfw')],
+      ),
+      viewer: ViewerState(moderation: {ModerationCapability.retractLabel}),
+    );
+    broadcast.replacePost(labeled);
+    expect(profile.postsState.posts.first.post, same(labeled));
+    expect(profile.postsState.posts.first.post.isSensitive, isTrue);
+    older.complete(TimelineResponse(feed: [profileP, d]));
+    await pending;
+    final retained = profile.postsState.posts.first;
+    expect(retained.post.isSensitive, isTrue);
+    expect(retained.post.cid, 'cid-labeled');
+    expect(retained.post.viewer?.moderation, {
+      ModerationCapability.retractLabel,
+    });
+    expect(retained.reason, same(profileP.reason));
+    expect(_uris(profile.postsState.posts), [
+      '${_postPrefix}p',
+      '${_postPrefix}d',
+    ]);
+    expect(profile.postsState.posts.last, same(d));
+    expect(profile.postsState.cursor, isNull);
+    expect(profile.postsState.isLoading, isFalse);
+    expect(profile.postsState.isLoadingMore, isFalse);
+
+    final newest = FeedViewPost(
+      post: _post(
+        'p',
+        title: 'Genuinely later read',
+      ).copyWith(cid: 'cid-later'),
+      reason: profileP.reason,
+    );
+    when(
+      api.getAuthorPosts(
+        actor: anyNamed('actor'),
+        filter: anyNamed('filter'),
+        community: anyNamed('community'),
+        limit: anyNamed('limit'),
+        cursor: anyNamed('cursor'),
+      ),
+    ).thenAnswer((_) async => TimelineResponse(feed: [newest, d]));
+    await profile.loadPosts(refresh: true);
+    expect(profile.postsState.posts.first.post.cid, 'cid-later');
+    expect(
+      profile.postsState.posts.first.post.record?.title,
+      'Genuinely later read',
+    );
+    expect(profile.postsState.posts.first.post.isSensitive, isFalse);
+    expect(profile.postsState.posts.first.post.viewer?.moderation, isNull);
+    expect(profile.postsState.isLoading, isFalse);
+  });
+
+  test('a home-feed refresh adopts its page and cursor and keeps a '
+      'replacement confirmed while it was in flight', () async {
+    final older = Completer<TimelineResponse>();
+    when(
+      api.getDiscover(
+        sort: anyNamed('sort'),
+        timeframe: anyNamed('timeframe'),
+        limit: anyNamed('limit'),
+        cursor: anyNamed('cursor'),
+      ),
+    ).thenAnswer((_) => older.future);
+    final pending = feeds.loadFeed(FeedType.discover, refresh: true);
+    final labeled = _post('p').copyWith(cid: 'cid-labeled');
+    broadcast.replacePost(labeled);
+    final fresh = FeedViewPost(post: _post('n'));
+    final refetchedP = FeedViewPost(
+      post: _post('p'),
+      reason: FeedReason(type: 'discover', data: {'source': 'refetch'}),
+    );
+    older.complete(TimelineResponse(feed: [refetchedP, fresh], cursor: 'next'));
+    await pending;
+    final state = feeds.getState(FeedType.discover);
+    expect(_uris(state.posts), ['${_postPrefix}p', '${_postPrefix}n']);
+    expect(state.posts.first.post, same(labeled));
+    expect(state.posts.first.reason, same(refetchedP.reason));
+    expect(state.cursor, 'next');
+    expect(state.hasMore, isTrue);
+    expect(state.isLoading, isFalse);
+  });
+
+  test('a replacement overlaid on a refreshed page is not hydrated as a '
+      'server vote snapshot', () async {
+    final older = Completer<TimelineResponse>();
+    when(
+      api.getDiscover(
+        sort: anyNamed('sort'),
+        timeframe: anyNamed('timeframe'),
+        limit: anyNamed('limit'),
+        cursor: anyNamed('cursor'),
+      ),
+    ).thenAnswer((_) => older.future);
+    final pending = feeds.loadFeed(FeedType.discover, refresh: true);
+    // A locally built copy (e.g. a moderation publish before its readback)
+    // can carry a stale viewer vote.
+    final staleCopy = _post('p').copyWith(
+      cid: 'cid-local',
+      viewer: ViewerState(vote: 'up', voteUri: 'at://did:plc:me/vote/old'),
+    );
+    broadcast.replacePost(staleCopy);
+    older.complete(TimelineResponse(feed: [FeedViewPost(post: _post('p'))]));
+    await pending;
+    expect(
+      feeds.getState(FeedType.discover).posts.single.post,
+      same(staleCopy),
+    );
+    expect(votes.isLiked('${_postPrefix}p'), isFalse);
   });
 
   test('B7 replace swaps every loaded copy in place preserving reason and '

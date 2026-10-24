@@ -128,7 +128,7 @@ class ViewerState {
 /// key is absent or its value is the boolean `false`. Anything else — an
 /// explicit `null` included — is not a value either side writes, so it is
 /// skipped rather than guessed at.
-List<String> _parseSelfLabels(Object? labels) {
+List<String> parseSelfLabels(Object? labels) {
   if (labels is! Map) {
     return const [];
   }
@@ -172,7 +172,7 @@ class PostRecord {
       title: json['title'] as String?,
       content: json['content'] as String?,
       facets: parseFacetsFromRecord(json),
-      labels: _parseSelfLabels(json['labels']),
+      labels: parseSelfLabels(json['labels']),
     );
   }
 

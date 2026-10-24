@@ -55,6 +55,7 @@ void main() {
       shouldRefreshThrow = false;
 
       apiService = CovesApiService(
+        sessionKeyOf: () => (did: 'did:plc:test', sessionId: 'session-1'),
         dio: dio,
         tokenGetter: mockTokenGetter,
         tokenRefresher: mockTokenRefresher,
@@ -203,6 +204,7 @@ void main() {
         );
         final adapterWithoutRefresh = DioAdapter(dio: dioWithoutRefresh);
         final apiServiceNoRefresh = CovesApiService(
+          sessionKeyOf: () => (did: 'did:plc:test', sessionId: 'session-1'),
           dio: dioWithoutRefresh,
           tokenGetter: mockTokenGetter,
           // No tokenRefresher provided

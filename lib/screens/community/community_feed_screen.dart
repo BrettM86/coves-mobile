@@ -169,17 +169,10 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
       case PostRemoved(:final uri):
         _feedController.removeById(uri);
       case PostReplaced(:final post):
-        final items = _feedController.items;
-        if (!items.any((feedPost) => feedPost.post.uri == post.uri)) {
-          return;
-        }
-        _feedController.replaceItems([
-          for (final feedPost in items)
-            if (feedPost.post.uri == post.uri)
-              feedPost.copyWith(post: post)
-            else
-              feedPost,
-        ]);
+        _feedController.replaceItemById(
+          post.uri,
+          (feedPost) => feedPost.copyWith(post: post),
+        );
     }
   }
 

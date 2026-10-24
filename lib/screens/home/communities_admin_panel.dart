@@ -383,6 +383,7 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
         foregroundColor: Colors.white,
         title: Text(_getAdminTitle()),
         automaticallyImplyLeading: false,

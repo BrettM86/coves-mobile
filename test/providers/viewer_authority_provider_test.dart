@@ -51,7 +51,11 @@ void main() {
         '/xrpc/social.coves.actor.getViewerAuthority',
         (server) => server.reply(200, {'instanceAdmin': true}),
       );
-      final service = CovesApiService(dio: dio, tokenGetter: () async => null);
+      final service = CovesApiService(
+        sessionKeyOf: () => null,
+        dio: dio,
+        tokenGetter: () async => null,
+      );
       final auth = FakeAuthProvider(signedInDid: 'did:plc:alice');
       final provider = ViewerAuthorityProvider(
         apiService: service,

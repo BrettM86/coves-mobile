@@ -226,14 +226,21 @@ ApiException mapDioException(DioException error, {required String operation}) {
     final privateModeration = isPrivateModerationPath(
       error.requestOptions.path,
     );
+    final privateNotification = isPrivateNotificationPath(
+      error.requestOptions.path,
+    );
     debugPrint(
-      privateModeration
+      privateNotification
+          ? '❌ Failed to $operation: ${error.requestOptions.method} '
+                '${error.requestOptions.path.split('?').first} '
+                '${error.response?.statusCode ?? 'no status'}'
+          : privateModeration
           ? '❌ Failed to $operation'
           : '❌ Failed to $operation: ${error.message}',
     );
     if (error.response != null) {
       debugPrint('   Status: ${error.response?.statusCode}');
-      if (!privateModeration) {
+      if (!privateModeration && !privateNotification) {
         // Response data can echo credentials — redact before printing.
         debugPrint(redactBearerTokens('   Data: ${error.response?.data}'));
       }

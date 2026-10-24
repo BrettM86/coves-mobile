@@ -18,6 +18,10 @@ import 'providers/community_guidelines_provider.dart';
 import 'providers/community_subscription_provider.dart';
 import 'providers/eula_provider.dart';
 import 'providers/multi_feed_provider.dart';
+import 'providers/notification_preferences_change_signal.dart';
+import 'providers/notification_preferences_provider.dart';
+import 'providers/notifications_list_provider.dart';
+import 'providers/unread_notification_count_provider.dart';
 import 'providers/viewer_authority_provider.dart';
 import 'providers/vote_provider.dart';
 import 'screens/auth/login_screen.dart';
@@ -29,6 +33,7 @@ import 'screens/home/post_detail_loader.dart';
 import 'screens/home/profile_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/moderation/modlog_screen.dart';
+import 'screens/settings/settings_screen.dart';
 import 'services/comment_service.dart';
 import 'services/comments_provider_cache.dart';
 import 'services/coves_api_service.dart';
@@ -39,6 +44,7 @@ import 'services/profile_cache.dart';
 import 'services/streamable_service.dart';
 import 'services/viewer_state_hydrator.dart';
 import 'services/vote_service.dart';
+import 'utils/app_route_observer.dart';
 import 'utils/post_detail_route.dart';
 import 'widgets/icons/lucide_paths.dart';
 import 'widgets/loading_error_states.dart';
@@ -106,7 +112,15 @@ Future<Widget> bootstrapCovesApp() async {
   // leak their Dio stack. This instance lives for the whole app and is
   // intentionally never disposed; CovesApiService.dispose() exists for
   // test-local instances only.
+  Object? currentSessionKey() {
+    final session = authProvider.session;
+    return session == null
+        ? null
+        : (did: session.did, sessionId: session.sessionId);
+  }
+
   final apiService = CovesApiService(
+    sessionKeyOf: currentSessionKey,
     tokenGetter: authProvider.getAccessToken,
     tokenRefresher: authProvider.refreshToken,
     signOutHandler: authProvider.signOut,
@@ -115,11 +129,22 @@ Future<Widget> bootstrapCovesApp() async {
     apiService: apiService,
     authProvider: authProvider,
   );
+  final unreadNotificationCountProvider = UnreadNotificationCountProvider(
+    apiService: apiService,
+    authProvider: authProvider,
+  );
+  final notificationsListProvider = NotificationsListProvider(
+    apiService: apiService,
+    authProvider: authProvider,
+    sessionKeyOf: () => viewerAuthorityProvider.sessionKey,
+    unreadNotificationCountProvider: unreadNotificationCountProvider,
+  );
 
   // Initialize vote service with auth callbacks
   // Votes go through the Coves backend (which proxies to PDS with DPoP)
   // Includes token refresh and sign-out handlers for automatic 401 recovery
   final voteService = VoteService(
+    sessionKeyOf: currentSessionKey,
     sessionGetter: () async => authProvider.session,
     didGetter: () => authProvider.did,
     tokenRefresher: authProvider.refreshToken,
@@ -129,6 +154,7 @@ Future<Widget> bootstrapCovesApp() async {
   // Initialize comment service with auth callbacks
   // Comments go through the Coves backend (which proxies to PDS with DPoP)
   final commentService = CommentService(
+    sessionKeyOf: currentSessionKey,
     sessionGetter: () async => authProvider.session,
     tokenRefresher: authProvider.refreshToken,
     signOutHandler: authProvider.signOut,
@@ -184,6 +210,21 @@ Future<Widget> bootstrapCovesApp() async {
       Provider<CommentService>.value(value: commentService),
       ChangeNotifierProvider.value(value: subscriptionProvider),
       ChangeNotifierProvider.value(value: viewerAuthorityProvider),
+      ChangeNotifierProvider.value(value: notificationsListProvider),
+      ChangeNotifierProvider.value(value: unreadNotificationCountProvider),
+      ChangeNotifierProvider(
+        create: (_) => NotificationPreferencesChangeSignal(),
+      ),
+      // App-wide so a toggle queue outlives the Settings screen.
+      ChangeNotifierProvider(
+        create: (context) => NotificationPreferencesProvider(
+          apiService: apiService,
+          authProvider: authProvider,
+          sessionKeyOf: () => viewerAuthorityProvider.sessionKey,
+          unreadNotificationCountProvider: unreadNotificationCountProvider,
+          changeSignal: context.read<NotificationPreferencesChangeSignal>(),
+        ),
+      ),
       ChangeNotifierProvider(
         create: (_) =>
             BlockProvider(apiService: apiService, authProvider: authProvider),
@@ -278,6 +319,7 @@ GoRouter createRouter(
   CommunityGuidelinesProvider guidelinesProvider,
 ) {
   return GoRouter(
+    observers: [appRouteObserver],
     routes: [
       GoRoute(path: '/', builder: (context, state) => const LandingScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
@@ -308,6 +350,7 @@ GoRouter createRouter(
           );
         },
       ),
+      GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
       GoRoute(
         path: '/profile/:actor',
         builder: (context, state) {

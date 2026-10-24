@@ -17,7 +17,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
-import '../test_helpers/fake_providers.dart' show unchangingSessionKey;
+import '../test_helpers/fake_providers.dart'
+    show unchangingSessionKey, unreadNotificationCountRegistration;
 
 // Fake AuthProvider for testing (see test/widgets/feed_screen_test.dart).
 // Unauthenticated: FeedScreen shows the Discover empty state and
@@ -35,6 +36,7 @@ class FakeVoteProvider extends VoteProvider {
   FakeVoteProvider()
     : super(
         voteService: VoteService(
+          sessionKeyOf: () => null,
           sessionGetter: () async => null,
           didGetter: () => null,
         ),
@@ -48,7 +50,7 @@ class FakeVoteProvider extends VoteProvider {
 // Fake CommunitySubscriptionProvider that never touches the network
 class FakeCommunitySubscriptionProvider extends CommunitySubscriptionProvider {
   FakeCommunitySubscriptionProvider({required super.authProvider})
-    : super(apiService: CovesApiService());
+    : super(apiService: CovesApiService(sessionKeyOf: () => null));
 
   @override
   Future<void> loadSubscribedCommunities() async {
@@ -61,7 +63,7 @@ class FakeMultiFeedProvider extends MultiFeedProvider {
   FakeMultiFeedProvider()
     : super(
         FakeAuthProvider(),
-        apiService: CovesApiService(),
+        apiService: CovesApiService(sessionKeyOf: () => null),
         postChangeBroadcast: PostChangeBroadcast(),
         sessionKeyOf: unchangingSessionKey,
       );
@@ -100,7 +102,7 @@ void main() {
         authProvider: fakeAuthProvider,
       );
       blockProvider = BlockProvider(
-        apiService: CovesApiService(),
+        apiService: CovesApiService(sessionKeyOf: () => null),
         authProvider: fakeAuthProvider,
       );
       profileCache = ProfileCache(fakeAuthProvider);
@@ -120,6 +122,7 @@ void main() {
     /// successful system back visibly pops (back to the base route) while a
     /// blocked back leaves the shell in place.
     Future<void> pumpShell(WidgetTester tester) async {
+      final apiService = CovesApiService(sessionKeyOf: () => null);
       // Force the phone layout (bottom navigation bar): shortestSide < 600
       tester.view.physicalSize = const Size(540, 960);
       tester.view.devicePixelRatio = 1.0;
@@ -129,8 +132,15 @@ void main() {
       await tester.pumpWidget(
         MultiProvider(
           providers: [
-            Provider<CovesApiService>(create: (_) => CovesApiService()),
+            Provider<CovesApiService>(
+              create: (_) => apiService,
+              dispose: (_, service) => service.dispose(),
+            ),
             ChangeNotifierProvider<AuthProvider>.value(value: fakeAuthProvider),
+            unreadNotificationCountRegistration(
+              auth: fakeAuthProvider,
+              apiService: apiService,
+            ),
             ChangeNotifierProvider<MultiFeedProvider>.value(
               value: fakeFeedProvider,
             ),
@@ -141,7 +151,9 @@ void main() {
             ChangeNotifierProvider<BlockProvider>.value(value: blockProvider),
             // App-level dependencies the Profile tab builds its own
             // UserProfileProvider from
-            Provider<CommentService>(create: (_) => CommentService()),
+            Provider<CommentService>(
+              create: (_) => CommentService(sessionKeyOf: () => null),
+            ),
             Provider<ViewerStateHydrator>(
               create: (_) => ViewerStateHydrator(
                 authProvider: fakeAuthProvider,

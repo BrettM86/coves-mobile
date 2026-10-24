@@ -57,7 +57,10 @@ void main() {
             create: (_) => FakeGuidelinesProvider(),
           ),
           Provider<CovesApiService>(
-            create: (_) => CovesApiService(tokenGetter: () async => null),
+            create: (_) => CovesApiService(
+              sessionKeyOf: () => null,
+              tokenGetter: () async => null,
+            ),
             dispose: (_, service) => service.dispose(),
           ),
           ChangeNotifierProvider(

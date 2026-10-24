@@ -45,6 +45,7 @@ void main() {
       dio = Dio(BaseOptions(baseUrl: 'https://api.test.coves.social'));
       dioAdapter = DioAdapter(dio: dio);
       apiService = CovesApiService(
+        sessionKeyOf: () => (did: 'did:plc:test', sessionId: 'session-1'),
         dio: dio,
         tokenGetter: () async => 'test-token',
       );
@@ -410,6 +411,7 @@ void main() {
       dio = Dio(BaseOptions(baseUrl: 'https://api.test.coves.social'));
       dioAdapter = DioAdapter(dio: dio);
       apiService = CovesApiService(
+        sessionKeyOf: () => (did: 'did:plc:test', sessionId: 'session-1'),
         dio: dio,
         tokenGetter: () async => 'test-token',
       );

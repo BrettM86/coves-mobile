@@ -1,0 +1,64 @@
+# Section I — check 3: a reply card, a mention card and an upvote row
+# render, and fresh (unread) rows carry the unread tint.
+# The tint is a background colour with no semantics, so Maestro cannot
+# assert it: inspect build/maestro/i3_unread_rows.png (unread rows have a
+# faint orange wash; after the pull to refresh in i2 they are plain).
+# PRECONDITIONS: a1_login_session (mari signed in), the local stack and the
+# second account (see i1_notifications_badge).
+appId: social.coves.dev
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- runFlow: subflows/seed_notifications.yaml
+- tapOn: "Notifications, .* unread"
+- extendedWaitUntil:
+    visible: "Reply to your post.*${output.seedTag} reply.*"
+    timeout: 30000
+- assertVisible: ".* liked your post.*"
+- takeScreenshot: build/maestro/i3_unread_rows
+- scrollUntilVisible:
+    element: "Mentioned you.*"
+    direction: DOWN
+    timeout: 20000
+- takeScreenshot: build/maestro/i3_mention_card
+# Sensitive content: the seed's nsfw-labelled mention and reply (just below
+# the plain rows, mention above reply) are concealed behind the banner.
+# Show reveals that row only and stays on the list; tapping a concealed
+# row's body still opens its thread. A concealed row's label leaves out the
+# concealed excerpt, so "(?!.*QA notification)" picks it over the plain row.
+- scrollUntilVisible:
+    element: "Show sensitive content"
+    direction: DOWN
+    timeout: 20000
+- assertVisible: "Mentioned you(?!.*QA notification).*"
+- assertNotVisible: ".*${output.seedTag} nsfw (reply|mention).*"
+- takeScreenshot: build/maestro/i3_sensitive_concealed
+- tapOn: "Show sensitive content"
+- extendedWaitUntil:
+    visible: "Mentioned you.*${output.seedTag} nsfw mention.*"
+    timeout: 5000
+- assertVisible: "Hide sensitive content"
+- scrollUntilVisible:
+    element: "Reply to your post(?!.*QA notification).*"
+    direction: DOWN
+    timeout: 20000
+- assertVisible: "Show sensitive content"
+- assertNotVisible: ".*${output.seedTag} nsfw reply.*"
+- takeScreenshot: build/maestro/i3_sensitive_revealed
+# Tap the concealed reply's header, away from its banner.
+- tapOn:
+    text: "Reply to your post(?!.*QA notification).*"
+    point: "50%,15%"
+- extendedWaitUntil:
+    visible: ".*QA thread post.*"
+    timeout: 30000
+- assertNotVisible: "Reply to your post.*"
+- assertNotVisible: "Hide sensitive content"
+# Back on the list, the tapped row is still concealed.
+- back
+- extendedWaitUntil:
+    visible: "Show sensitive content"
+    timeout: 15000
+- assertNotVisible: ".*${output.seedTag} nsfw reply.*"

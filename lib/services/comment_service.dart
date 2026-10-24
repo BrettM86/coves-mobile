@@ -28,6 +28,7 @@ import 'retry_interceptor.dart';
 /// - POST /xrpc/social.coves.community.comment.delete
 class CommentService {
   CommentService({
+    required Object? Function() sessionKeyOf,
     Future<CovesSession?> Function()? sessionGetter,
     Future<bool> Function()? tokenRefresher,
     Future<void> Function()? signOutHandler,
@@ -44,6 +45,7 @@ class CommentService {
     // Add shared 401 retry interceptor
     _dio.interceptors.add(
       createAuthInterceptor(
+        sessionKeyOf: sessionKeyOf,
         tokenGetter: () async => (await sessionGetter?.call())?.token,
         tokenRefresher: tokenRefresher,
         signOutHandler: signOutHandler,

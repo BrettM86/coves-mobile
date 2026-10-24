@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/models/comment.dart';
+import 'package:coves_flutter/models/moderation.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/models/post_get_result.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/comments_provider.dart';
+import 'package:coves_flutter/providers/viewer_authority_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/compose/reply_screen.dart';
 import 'package:coves_flutter/screens/home/focused_thread_screen.dart';
@@ -103,18 +105,35 @@ ThreadViewComment _comment(
   String? viewerDid, {
   List<ThreadViewComment>? replies,
   int replyCount = 0,
+  String? content,
+  bool isRemoved = false,
+  Set<ModerationCapability>? capabilities,
 }) {
+  final viewer = _viewerStateFor(rkey, viewerDid);
   return ThreadViewComment(
     comment: CommentView(
       uri: _commentUri(rkey),
       cid: 'cid-$rkey',
-      record: CommentRecord(content: 'Comment $rkey'),
+      record: isRemoved
+          ? null
+          : CommentRecord(content: content ?? 'Comment $rkey'),
+      isDeleted: isRemoved,
+      deletionReason: isRemoved ? 'moderator' : null,
+      moderation: isRemoved
+          ? const ModerationView(state: ModerationState.removed)
+          : null,
       createdAt: DateTime(2025),
       indexedAt: DateTime(2025),
       author: AuthorView(did: 'did:plc:author', handle: 'author.test'),
       post: CommentRef(uri: _postUri, cid: _postCid),
       stats: CommentStats(upvotes: 1, score: 1, replyCount: replyCount),
-      viewer: _viewerStateFor(rkey, viewerDid),
+      viewer: capabilities == null
+          ? viewer
+          : CommentViewerState(
+              vote: viewer?.vote,
+              voteUri: viewer?.voteUri,
+              moderation: capabilities,
+            ),
     ),
     replies: replies,
   );
@@ -229,7 +248,17 @@ class _FocusedThreadOverPost {
     this.auth, {
     int cacheSizeLimit = 15,
     this.anchorInFirstPage = false,
+    this.ancestorCapability,
+    this.secondAccountIsAdmin = false,
   }) {
+    when(api.getViewerAuthority()).thenAnswer(
+      (_) async =>
+          auth.did == _firstDid ||
+          (secondAccountIsAdmin && auth.did == _secondDid),
+    );
+    authority = ancestorCapability == null
+        ? null
+        : ViewerAuthorityProvider(apiService: api, authProvider: auth);
     votes = _RecordingVoteProvider(auth);
     blocks = BlockProvider(apiService: api, authProvider: auth);
     cache = CommentsProviderCache(
@@ -239,6 +268,7 @@ class _FocusedThreadOverPost {
       apiService: api,
       hydrator: ViewerStateHydrator(authProvider: auth, voteProvider: votes),
       maxSize: cacheSizeLimit,
+      sessionKeyOf: authority == null ? null : () => authority!.sessionKey,
     );
     when(
       api.getComments(
@@ -297,6 +327,12 @@ class _FocusedThreadOverPost {
   /// Whether the server's first page holds the anchor. Clearing it after
   /// the focused thread opened drops the anchor from later first pages.
   bool anchorInFirstPage;
+  final ModerationCapability? ancestorCapability;
+
+  /// Whether the second account is an instance admin too, so the server
+  /// returns it the same admin capability on the ancestor as the first.
+  final bool secondAccountIsAdmin;
+  late final ViewerAuthorityProvider? authority;
   final api = MockCovesApiService();
   final commentService = MockCommentService();
   final navigatorKey = GlobalKey<NavigatorState>();
@@ -345,6 +381,33 @@ class _FocusedThreadOverPost {
     } else {
       comments = _comment('top', request.viewerDid);
     }
+    final capability = ancestorCapability;
+    final ancestorRkey = anchorInFirstPage ? 'parent5' : 'level5';
+    final ancestor = comments.findByUri(_commentUri(ancestorRkey));
+    if (capability != null && ancestor != null) {
+      final isFirstAccount = request.viewerDid == _firstDid;
+      final isAdmin = isFirstAccount || secondAccountIsAdmin;
+      return CommentsResponse(
+        post: null,
+        comments: [
+          comments.replaceDescendant(
+            _comment(
+              ancestorRkey,
+              request.viewerDid,
+              replies: ancestor.replies,
+              replyCount: ancestor.comment.stats.replyCount,
+              content: isFirstAccount
+                  ? 'Admin ancestor'
+                  : isAdmin
+                  ? 'Fresh admin ancestor'
+                  : 'Fresh ordinary ancestor',
+              isRemoved: isAdmin && capability == ModerationCapability.restore,
+              capabilities: isAdmin ? {capability} : const {},
+            ),
+          ),
+        ],
+      );
+    }
     return CommentsResponse(post: null, comments: [comments]);
   }
 
@@ -367,6 +430,10 @@ class _FocusedThreadOverPost {
         providers: [
           Provider<PostChangeBroadcast>.value(value: PostChangeBroadcast()),
           ChangeNotifierProvider<AuthProvider>.value(value: auth),
+          if (authority != null)
+            ChangeNotifierProvider<ViewerAuthorityProvider>.value(
+              value: authority!,
+            ),
           ChangeNotifierProvider<VoteProvider>.value(value: votes),
           ChangeNotifierProvider<BlockProvider>.value(value: blocks),
           Provider<CovesApiService>.value(value: api),
@@ -471,6 +538,7 @@ class _FocusedThreadOverPost {
     cache.dispose();
     blocks.dispose();
     votes.dispose();
+    authority?.dispose();
     auth.dispose();
     postRouteContent.dispose();
   }
@@ -1662,6 +1730,304 @@ void main() {
       }
     },
   );
+
+  for (final capability in [
+    ModerationCapability.remove,
+    ModerationCapability.restore,
+  ]) {
+    for (final freshAncestor in [false, true]) {
+      final action = capability == ModerationCapability.remove
+          ? 'Remove comment'
+          : 'Restore comment';
+      final boundary = freshAncestor
+          ? 'fresh B ancestor replaces A content and capabilities'
+          : 'retained A ancestor absent from B tree has no admin action';
+      testWidgets('P-C1 admin A to ordinary B: $action, $boundary', (
+        tester,
+      ) async {
+        _useTallViewport(tester);
+        final harness = _FocusedThreadOverPost(
+          FakeAuthProvider(signedInDid: _firstDid),
+          anchorInFirstPage: freshAncestor,
+          ancestorCapability: capability,
+        );
+        final ancestorRkey = freshAncestor ? 'parent5' : 'level5';
+        Finder options() => find.descendant(
+          of: _focusedCommentCard(ancestorRkey),
+          matching: find.byTooltip('Comment options'),
+        );
+        Future<void> openOptions() async {
+          await tester.ensureVisible(options());
+          await tester.tap(options());
+          await _pumpFrames(tester);
+        }
+
+        try {
+          if (freshAncestor) {
+            await harness.openFocusedThread(tester);
+          } else {
+            await harness.openNestedFocusedThread(tester);
+          }
+          final firstProvider = harness.cache.peekProvider(_postUri)!;
+          final firstSession = harness.authority!.sessionKey;
+          expect(
+            harness.authority!.status,
+            ViewerAuthorityStatus.instanceAdmin,
+          );
+          expect(firstProvider.sessionStamp, firstSession);
+          await openOptions();
+          expect(
+            find.text(action),
+            findsOneWidget,
+            reason: 'control: the current admin A ancestor offers its tool',
+          );
+          await tester.tap(options());
+          await tester.pumpAndSettle();
+
+          harness.holdResponses = true;
+          harness.auth.setSignedInDid(_secondDid);
+          await _pumpFrames(tester);
+          _expectNoErrors(tester, 'during the account B loading boundary');
+          expect(harness.auth.did, _secondDid);
+          expect(harness.authority!.status, ViewerAuthorityStatus.notAdmin);
+          expect(harness.authority!.sessionKey, isNot(firstSession));
+          expect(
+            harness.cache.peekProvider(_postUri),
+            isNot(same(firstProvider)),
+          );
+          expect(
+            harness.heldRequests.map((held) => held.request),
+            contains((
+              parentRkey: freshAncestor ? 'anchor' : 'level6',
+              viewerDid: _secondDid,
+            )),
+          );
+          if (options().evaluate().isNotEmpty) {
+            await openOptions();
+            expect(
+              find.text(action),
+              findsNothing,
+              reason: 'A capabilities must stay unavailable while B loads',
+            );
+            await tester.tap(options());
+            await tester.pump();
+          }
+
+          await harness.answerAllAndSettle(tester);
+          _expectNoErrors(tester, 'after account B responses landed');
+          _expectExposesLiveCommentsProvider(
+            tester,
+            harness,
+            find.byType(FocusedThreadScreen),
+            'switching from admin A to B',
+          );
+          final provider = harness.cache.peekProvider(_postUri)!;
+          expect(provider.sessionStamp, harness.authority!.sessionKey);
+          final loadedAncestor = provider.comments
+              .map((root) => root.findByUri(_commentUri(ancestorRkey)))
+              .nonNulls;
+          expect(
+            loadedAncestor,
+            freshAncestor ? hasLength(1) : isEmpty,
+            reason: 'control: B actually loaded the selected ancestor input',
+          );
+          expect(_focusedCommentCard(ancestorRkey), findsOneWidget);
+          if (freshAncestor) {
+            expect(
+              loadedAncestor.single.comment.content,
+              'Fresh ordinary ancestor',
+            );
+            expect(loadedAncestor.single.comment.viewer!.moderation, isEmpty);
+            expect(
+              find.descendant(
+                of: _focusedCommentCard(ancestorRkey),
+                matching: find.text(
+                  'Fresh ordinary ancestor',
+                  findRichText: true,
+                ),
+              ),
+              findsOneWidget,
+              reason:
+                  'the rendered ancestor must use B content, not A snapshot',
+            );
+            expect(
+              tester
+                  .widget<CommentCard>(_focusedCommentCard(ancestorRkey))
+                  .comment
+                  .viewer!
+                  .moderation,
+              isEmpty,
+              reason: 'the rendered ancestor must use B capabilities',
+            );
+          }
+          if (options().evaluate().isNotEmpty) {
+            await openOptions();
+          }
+          verifyNever(harness.api.getModerationSubjectState(any));
+          expect(
+            find.text('Remove comment'),
+            findsNothing,
+            reason: 'retained A capabilities must not offer Remove under B',
+          );
+          expect(
+            find.text('Restore comment'),
+            findsNothing,
+            reason: 'retained A capabilities must not offer Restore under B',
+          );
+        } finally {
+          await harness.dispose(tester);
+        }
+      });
+    }
+  }
+
+  // Switching to another admin: an ancestor B's tree loaded carries B's
+  // stamp, so B's own capabilities on it are honored at once, while an
+  // ancestor retained from A's snapshot keeps A's stamp and offers nothing.
+  for (final capability in [
+    ModerationCapability.remove,
+    ModerationCapability.restore,
+  ]) {
+    for (final freshAncestor in [false, true]) {
+      final action = capability == ModerationCapability.remove
+          ? 'Remove comment'
+          : 'Restore comment';
+      final boundary = freshAncestor
+          ? 'fresh B ancestor offers B admin action and replies against B'
+          : 'retained A ancestor absent from B tree has no admin action';
+      testWidgets('P-C1 admin A to admin B: $action, $boundary', (
+        tester,
+      ) async {
+        _useTallViewport(tester);
+        final harness = _FocusedThreadOverPost(
+          FakeAuthProvider(signedInDid: _firstDid),
+          anchorInFirstPage: freshAncestor,
+          ancestorCapability: capability,
+          secondAccountIsAdmin: true,
+        );
+        final ancestorRkey = freshAncestor ? 'parent5' : 'level5';
+        Finder options() => find.descendant(
+          of: _focusedCommentCard(ancestorRkey),
+          matching: find.byTooltip('Comment options'),
+        );
+        Future<void> openOptions() async {
+          await tester.ensureVisible(options());
+          await tester.tap(options());
+          await _pumpFrames(tester);
+        }
+
+        try {
+          if (freshAncestor) {
+            await harness.openFocusedThread(tester);
+          } else {
+            await harness.openNestedFocusedThread(tester);
+          }
+          final firstSession = harness.authority!.sessionKey;
+          await openOptions();
+          expect(
+            find.text(action),
+            findsOneWidget,
+            reason: 'control: the current admin A ancestor offers its tool',
+          );
+          await tester.tap(options());
+          await tester.pumpAndSettle();
+
+          harness.auth.setSignedInDid(_secondDid);
+          await tester.pumpAndSettle();
+          _expectNoErrors(tester, 'after switching to admin B settled');
+          expect(harness.auth.did, _secondDid);
+          expect(
+            harness.authority!.status,
+            ViewerAuthorityStatus.instanceAdmin,
+            reason: 'control: B is an admin too',
+          );
+          expect(harness.authority!.sessionKey, isNot(firstSession));
+          final provider = harness.cache.peekProvider(_postUri)!;
+          expect(provider.sessionStamp, harness.authority!.sessionKey);
+          final loadedAncestor = provider.comments
+              .map((root) => root.findByUri(_commentUri(ancestorRkey)))
+              .nonNulls
+              .toList();
+          expect(
+            loadedAncestor,
+            freshAncestor ? hasLength(1) : isEmpty,
+            reason: 'control: B actually loaded the selected ancestor input',
+          );
+          expect(_focusedCommentCard(ancestorRkey), findsOneWidget);
+
+          if (!freshAncestor) {
+            if (options().evaluate().isNotEmpty) {
+              await openOptions();
+            }
+            expect(
+              find.text('Remove comment'),
+              findsNothing,
+              reason: 'a retained A ancestor must not offer Remove under B',
+            );
+            expect(
+              find.text('Restore comment'),
+              findsNothing,
+              reason: 'a retained A ancestor must not offer Restore under B',
+            );
+            return;
+          }
+
+          expect(loadedAncestor.single.comment.viewer!.moderation, {
+            capability,
+          }, reason: 'control: B\'s response grants B the capability');
+          expect(
+            options(),
+            findsOneWidget,
+            reason:
+                'the fresh ancestor loaded under B must offer B\'s admin '
+                'tools without waiting for a moderation reload',
+          );
+          await openOptions();
+          expect(
+            find.text(action),
+            findsOneWidget,
+            reason:
+                'the fresh ancestor loaded under B must offer B\'s admin '
+                'tools without waiting for a moderation reload',
+          );
+          await tester.tap(options());
+          await tester.pumpAndSettle();
+
+          if (capability == ModerationCapability.remove) {
+            // The ancestor is the reply entry point: its composer must
+            // preview and reply against B's loaded row, not A's snapshot.
+            _answerPlatformCalls(tester);
+            final ancestorText = find
+                .descendant(
+                  of: _focusedCommentCard(ancestorRkey),
+                  matching: find.text(
+                    'Fresh admin ancestor',
+                    findRichText: true,
+                  ),
+                )
+                .first;
+            await tester.ensureVisible(ancestorText);
+            await tester.pumpAndSettle();
+            await tester.tap(ancestorText);
+            await tester.pumpAndSettle();
+            _expectNoErrors(tester, 'after opening the ancestor composer');
+            final composer = find.byType(ReplyScreen);
+            expect(composer, findsOneWidget);
+            final replyTarget = tester.widget<ReplyScreen>(composer).comment;
+            expect(
+              replyTarget,
+              same(loadedAncestor.single),
+              reason: 'the composer must reply to B\'s freshly loaded row',
+            );
+            expect(replyTarget!.comment.content, 'Fresh admin ancestor');
+            expect(replyTarget.comment.viewer!.moderation, {capability});
+          }
+        } finally {
+          await harness.dispose(tester);
+        }
+      });
+    }
+  }
 
   testWidgets(
     'given a signed-in viewer in a focused thread, when its anchor subtree '

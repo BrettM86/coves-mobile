@@ -2079,6 +2079,161 @@ void main() {
       });
     });
 
+    group('P-C3 I2 subtree root availability', () {
+      const parentUri =
+          'at://did:plc:author/social.coves.community.comment/current-parent';
+
+      Future<void> proveStaleBoundaries() async {
+        for (final boundary in ['refresh-start', 'tree-landed', 'session']) {
+          Object? sessionKey = 'session-A';
+          commentsProvider.dispose();
+          commentsProvider = CommentsProvider(
+            mockAuthProvider,
+            postUri: testPostUri,
+            postCid: testPostCid,
+            apiService: mockApiService,
+            voteProvider: mockVoteProvider,
+            sessionKeyOf: () => sessionKey,
+          );
+          final parent = _createMockThreadComment(parentUri);
+          final held = Completer<CommentsResponse>();
+          final fresh = Completer<CommentsResponse>();
+          var wholeRequests = 0;
+          when(
+            mockApiService.getComments(
+              postUri: anyNamed('postUri'),
+              sort: anyNamed('sort'),
+              timeframe: anyNamed('timeframe'),
+              depth: anyNamed('depth'),
+              limit: anyNamed('limit'),
+              cursor: anyNamed('cursor'),
+              parentRkey: anyNamed('parentRkey'),
+            ),
+          ).thenAnswer((invocation) {
+            if (invocation.namedArguments[#parentRkey] != null) {
+              return held.future;
+            }
+            wholeRequests++;
+            return wholeRequests == 1
+                ? Future.value(CommentsResponse(post: {}, comments: [parent]))
+                : fresh.future;
+          });
+          await commentsProvider.loadComments(refresh: true);
+          final pending =
+              (boundary == 'refresh-start'
+                      ? commentsProvider.loadMoreReplies(parentUri)
+                      : commentsProvider.fetchCommentSnapshot(parentUri))
+                  .then<Object?>(
+                    (value) => value,
+                    onError: (Object error) => error,
+                  );
+          Future<void>? refresh;
+          if (boundary == 'session') {
+            sessionKey = 'session-B';
+          } else {
+            refresh = commentsProvider.loadComments(refresh: true);
+            if (boundary == 'tree-landed') {
+              fresh.complete(CommentsResponse(post: {}, comments: [parent]));
+              await refresh;
+            }
+          }
+          held.completeError(
+            NotFoundException('Old root missing', errorCode: 'RootNotFound'),
+          );
+          await pending;
+          expect(commentsProvider.errorCode, isNull);
+          expect(commentsProvider.comments.single.comment.uri, parentUri);
+          if (boundary == 'refresh-start') {
+            fresh.complete(CommentsResponse(post: {}, comments: [parent]));
+            await refresh;
+          }
+          expect(commentsProvider.isLoading, isFalse);
+        }
+      }
+
+      for (final snapshot in [false, true]) {
+        test(
+          '${snapshot ? 'snapshot' : 'loadMoreReplies'} current RootNotFound '
+          'blocks pagination until an explicit successful refresh',
+          () async {
+            if (!snapshot) {
+              await proveStaleBoundaries();
+            }
+            final parent = ThreadViewComment(
+              comment: _createMockThreadComment(parentUri).comment,
+              hasMore: true,
+            );
+            final held = Completer<CommentsResponse>();
+            var subtree = () => held.future;
+            var whole = () async => CommentsResponse(
+              post: {},
+              comments: [parent],
+              cursor: 'next-page',
+            );
+            final requests = <String?>[];
+            when(
+              mockApiService.getComments(
+                postUri: anyNamed('postUri'),
+                sort: anyNamed('sort'),
+                timeframe: anyNamed('timeframe'),
+                depth: anyNamed('depth'),
+                limit: anyNamed('limit'),
+                cursor: anyNamed('cursor'),
+                parentRkey: anyNamed('parentRkey'),
+              ),
+            ).thenAnswer((invocation) {
+              final rkey = invocation.namedArguments[#parentRkey] as String?;
+              requests.add(rkey);
+              return rkey == null ? whole() : subtree();
+            });
+            await commentsProvider.loadComments(refresh: true);
+            Future<ThreadViewComment?> read() => snapshot
+                ? commentsProvider.fetchCommentSnapshot(parentUri)
+                : commentsProvider.loadMoreReplies(parentUri);
+            final pending = read().then<Object?>(
+              (value) => value,
+              onError: (Object error) => error,
+            );
+            expect(requests.last, 'current-parent');
+            held.completeError(
+              NotFoundException('Root missing', errorCode: 'RootNotFound'),
+            );
+            await pending;
+            expect(commentsProvider.errorCode, 'RootNotFound');
+            expect(commentsProvider.hasMore, isFalse);
+            expect(commentsProvider.loadingMoreReplies, isEmpty);
+            final requestsWhenGone = List<String?>.of(requests);
+            await commentsProvider.loadMoreComments();
+            await commentsProvider.retryLoadMore();
+            await commentsProvider
+                .loadMoreReplies(parentUri)
+                .catchError((Object _) => null);
+            await commentsProvider
+                .fetchCommentSnapshot(parentUri)
+                .catchError((Object _) => null);
+            expect(requests, requestsWhenGone);
+
+            final recovery = Completer<CommentsResponse>();
+            whole = () => recovery.future;
+            final recovering = commentsProvider.loadComments(refresh: true);
+            expect(commentsProvider.errorCode, 'RootNotFound');
+            recovery.complete(CommentsResponse(post: {}, comments: [parent]));
+            await recovering;
+            expect(commentsProvider.errorCode, isNull);
+            subtree = () async =>
+                CommentsResponse(post: {}, comments: [parent]);
+            expect(await read(), isNotNull);
+            expect(requests.last, 'current-parent');
+
+            // A transient parent read is not evidence that its root is gone.
+            subtree = () => Future.error(ApiException('temporary'));
+            await read().catchError((Object _) => null);
+            expect(commentsProvider.errorCode, isNull);
+          },
+        );
+      }
+    });
+
     group('loadMoreReplies', () {
       const parentUri =
           'at://did:plc:author/social.coves.community.comment/parentrkey1';

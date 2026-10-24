@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
+import '../../constants/app_typography.dart';
+import '../../providers/unread_notification_count_provider.dart';
 import '../../utils/responsive_utils.dart';
 import '../../widgets/icons/app_icons.dart';
 import 'communities_screen.dart';
@@ -45,6 +50,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
   void _onItemTapped(int index) {
     // If already on feed tab, scroll to top
     if (index == 0 && _selectedIndex == 0) {
+      unawaited(context.read<UnreadNotificationCountProvider>().refresh());
       _feedScreenKey.currentState?.scrollToTop();
       return;
     }
@@ -60,6 +66,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
   }
 
   void _selectTab(int index) {
+    unawaited(context.read<UnreadNotificationCountProvider>().refresh());
     setState(() {
       _selectedIndex = index;
       _visitedTabs.add(index);
@@ -74,6 +81,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
   @override
   Widget build(BuildContext context) {
     final isTablet = ResponsiveUtils.isTablet(context);
+    final unreadCount = context.watch<UnreadNotificationCountProvider>().count;
 
     final body = IndexedStack(
       index: _selectedIndex,
@@ -90,7 +98,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
             onDirtyChanged: _onComposeDirtyChanged,
           ),
         ),
-        _lazyTab(3, const NotificationsScreen()),
+        _lazyTab(3, NotificationsScreen(isSelected: _selectedIndex == 3)),
         _lazyTab(4, const ProfileScreen()),
       ],
     );
@@ -146,13 +154,19 @@ class _MainShellScreenState extends State<MainShellScreen> {
                         label: const Text('Create'),
                       ),
                       NavigationRailDestination(
-                        icon: AppIcon.bellOutline(
+                        icon: _notificationIcon(
                           color: AppColors.textSecondary,
+                          unreadCount: unreadCount,
                         ),
-                        selectedIcon: AppIcon.bellOutline(
+                        selectedIcon: _notificationIcon(
                           color: AppColors.primary,
+                          unreadCount: unreadCount,
                         ),
-                        label: const Text('Notifications'),
+                        label: Semantics(
+                          label: _notificationLabel(unreadCount),
+                          excludeSemantics: true,
+                          child: const Text('Notifications'),
+                        ),
                       ),
                       NavigationRailDestination(
                         icon: AppIcon.personSimple(
@@ -199,7 +213,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
                   _buildNavItem(0, 'home', 'Home'),
                   _buildNavItem(1, 'communities', 'Communities'),
                   _buildNavItem(2, 'plus', 'Create'),
-                  _buildNavItem(3, 'bell', 'Notifications'),
+                  _buildNavItem(3, 'bell', 'Notifications', unreadCount),
                   _buildNavItem(4, 'person', 'Me'),
                 ],
               ),
@@ -233,7 +247,12 @@ class _MainShellScreenState extends State<MainShellScreen> {
     );
   }
 
-  Widget _buildNavItem(int index, String iconName, String label) {
+  Widget _buildNavItem(
+    int index,
+    String iconName,
+    String label, [
+    int unreadCount = 0,
+  ]) {
     final isSelected = _selectedIndex == index;
     final color = isSelected ? AppColors.primary : AppColors.textSecondary;
 
@@ -250,7 +269,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
         icon = AppIcon.create(color: color);
         break;
       case 'bell':
-        icon = AppIcon.bellOutline(color: color);
+        icon = _notificationIcon(color: color, unreadCount: unreadCount);
         break;
       case 'person':
         icon = AppIcon.personSimple(color: color);
@@ -261,15 +280,62 @@ class _MainShellScreenState extends State<MainShellScreen> {
 
     return Expanded(
       child: Semantics(
-        label: label,
+        label: index == 3 ? _notificationLabel(unreadCount) : label,
         button: true,
         selected: isSelected,
         child: InkWell(
           onTap: () => _onItemTapped(index),
           splashColor: Colors.transparent,
           highlightColor: Colors.transparent,
-          child: icon,
+          child: Center(child: icon),
         ),
+      ),
+    );
+  }
+
+  String _notificationLabel(int count) => count > 0
+      ? 'Notifications, ${count > 99 ? '99+' : count} unread'
+      : 'Notifications';
+
+  Widget _notificationIcon({required Color color, required int unreadCount}) {
+    final badgeText = unreadCount > 99 ? '99+' : '$unreadCount';
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          AppIcon.bellOutline(color: color),
+          // The badge overlaps the bell's upper right, as on the web: its
+          // left edge sits at the bell's centre for one digit and further
+          // left for longer counts.
+          if (unreadCount > 0)
+            Positioned(
+              top: -4,
+              left: badgeText.length == 1 ? 12 : 8,
+              child: ExcludeSemantics(
+                child: Container(
+                  height: 16,
+                  constraints: const BoxConstraints(minWidth: 16),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    badgeText,
+                    style: AppTypography.textTheme.labelSmall?.copyWith(
+                      color: AppColors.background,
+                      fontSize: 11,
+                      height: 1,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

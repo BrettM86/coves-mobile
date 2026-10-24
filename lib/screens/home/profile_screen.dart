@@ -246,10 +246,25 @@ class _ProfileViewState extends State<_ProfileView> {
                 ),
               ),
               const SizedBox(height: 16),
+              ListTile(
+                leading: const LucideGlyph(
+                  LucidePaths.settings,
+                  color: AppColors.textSecondary,
+                ),
+                title: const Text(
+                  'Settings',
+                  style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  context.push('/settings');
+                },
+              ),
+              const Divider(color: AppColors.border, height: 1),
               // View EULA
               ListTile(
-                leading: const Icon(
-                  Icons.description_outlined,
+                leading: const LucideGlyph(
+                  LucidePaths.fileText,
                   color: AppColors.textSecondary,
                 ),
                 title: const Text(
@@ -264,8 +279,8 @@ class _ProfileViewState extends State<_ProfileView> {
               const Divider(color: AppColors.border, height: 1),
               // View Community Guidelines
               ListTile(
-                leading: const Icon(
-                  Icons.groups_outlined,
+                leading: const LucideGlyph(
+                  LucidePaths.users,
                   color: AppColors.textSecondary,
                 ),
                 title: const Text(
@@ -280,7 +295,10 @@ class _ProfileViewState extends State<_ProfileView> {
               const Divider(color: AppColors.border, height: 1),
               // Sign out option
               ListTile(
-                leading: Icon(Icons.logout, color: Colors.red.shade400),
+                leading: LucideGlyph(
+                  LucidePaths.logOut,
+                  color: Colors.red.shade400,
+                ),
                 title: Text(
                   'Sign Out',
                   style: TextStyle(color: Colors.red.shade400, fontSize: 16),

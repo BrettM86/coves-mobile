@@ -344,4 +344,55 @@ void main() {
       );
     });
   });
+
+  group('ErrorMessage.notificationPreferences', () {
+    test('NetworkException returns the connection copy', () {
+      expect(
+        ErrorMessage.notificationPreferences(
+          NetworkException('Connection refused'),
+        ),
+        'No connection. Please check your internet.',
+      );
+    });
+
+    test('AuthenticationException returns the sign-in copy', () {
+      expect(
+        ErrorMessage.notificationPreferences(
+          AuthenticationException('Token expired'),
+        ),
+        'Please sign in to continue.',
+      );
+    });
+
+    test('a plain 400 ApiException returns the server message', () {
+      expect(
+        ErrorMessage.notificationPreferences(
+          ApiException('Preferences payload is invalid', statusCode: 400),
+        ),
+        'Preferences payload is invalid',
+      );
+    });
+
+    test('a plain ApiException without a status returns the update '
+        'fallback', () {
+      expect(
+        ErrorMessage.notificationPreferences(ApiException('Unexpected')),
+        "Couldn't update notification settings. Try again.",
+      );
+    });
+
+    test('a non-API error returns the update fallback', () {
+      expect(
+        ErrorMessage.notificationPreferences(StateError('x')),
+        "Couldn't update notification settings. Try again.",
+      );
+    });
+
+    test('a non-API error while loading returns the load fallback', () {
+      expect(
+        ErrorMessage.notificationPreferences(StateError('x'), isLoad: true),
+        "Couldn't load notification settings. Try again.",
+      );
+    });
+  });
 }

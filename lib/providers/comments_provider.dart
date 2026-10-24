@@ -734,12 +734,44 @@ class CommentsProvider with ChangeNotifier {
   /// Throws [MalformedCommentUriException] for a comment URI with no rkey.
   /// Throws ApiException/AuthenticationException on network or auth errors.
   Future<ThreadViewComment?> fetchCommentSnapshot(String commentUri) async {
-    final removalsBefore = _removalSequence;
-    final entry = await _fetchServedComment(commentUri);
-    if (_isDisposed || entry == null) {
+    if (_isDisposed || _postGone) {
       return null;
     }
-    return _overlay(entry, since: removalsBefore);
+    final removalsBefore = _removalSequence;
+    final refreshNumber = _latestRefresh.number;
+    final generation = _treeGeneration;
+    final sessionKey = _sessionKeyOf?.call();
+    try {
+      final entry = await _fetchServedComment(commentUri);
+      if (_isDisposed || entry == null) {
+        return null;
+      }
+      return _overlay(entry, since: removalsBefore);
+    } on ApiException catch (error) {
+      _recordSubtreeRootNotFound(
+        error,
+        refreshNumber: refreshNumber,
+        generation: generation,
+        sessionKey: sessionKey,
+      );
+      rethrow;
+    }
+  }
+
+  void _recordSubtreeRootNotFound(
+    ApiException error, {
+    required int refreshNumber,
+    required int generation,
+    required Object? sessionKey,
+  }) {
+    if (!_isDisposed &&
+        error.errorCode == rootNotFoundErrorCode &&
+        refreshNumber == _latestRefresh.number &&
+        generation == _treeGeneration &&
+        sessionKey == _sessionKeyOf?.call()) {
+      _postGone = true;
+      _safeNotifyListeners();
+    }
   }
 
   /// The server's current copy of the comment at [commentUri] with its
@@ -889,7 +921,7 @@ class CommentsProvider with ChangeNotifier {
   /// Throws [MalformedCommentUriException] for a comment URI with no rkey.
   /// Throws ApiException/AuthenticationException on network or auth errors.
   Future<ThreadViewComment?> loadMoreReplies(String commentUri) {
-    if (_postGone) {
+    if (_isDisposed || _postGone) {
       return Future.value();
     }
     final inFlight = _loadingMoreReplies[commentUri];
@@ -923,6 +955,8 @@ class CommentsProvider with ChangeNotifier {
     // flight does not make it stale - the fetch uses the loaded sort, which
     // only changes when a refresh lands and bumps the generation.
     final startGeneration = _treeGeneration;
+    final refreshNumber = _latestRefresh.number;
+    final sessionKey = _sessionKeyOf?.call();
 
     // Pass the stored cursor (if any) so a node with more than one page of
     // direct replies advances through pages instead of refetching page 1.
@@ -1037,12 +1071,12 @@ class CommentsProvider with ChangeNotifier {
 
       return subtree;
     } on ApiException catch (error) {
-      if (error.errorCode == rootNotFoundErrorCode &&
-          !_isDisposed &&
-          _treeGeneration == startGeneration) {
-        _postGone = true;
-        _safeNotifyListeners();
-      }
+      _recordSubtreeRootNotFound(
+        error,
+        refreshNumber: refreshNumber,
+        generation: startGeneration,
+        sessionKey: sessionKey,
+      );
       rethrow;
     } finally {
       // Remove only this fetch's own entry: a stale fetch must not remove

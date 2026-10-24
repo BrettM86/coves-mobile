@@ -118,6 +118,8 @@ class MultiFeedProvider with ChangeNotifier {
   final Map<FeedType, FeedState> _feedStates = {};
   final Map<FeedType, Set<String>> _removedPostUris = {};
   final Map<FeedType, int> _requestGenerations = {};
+  // Posts replaced since the feed's current first-page read started, by URI.
+  final Map<FeedType, Map<String, PostView>> _replacementsDuringLoad = {};
   final Set<FeedType> _pageOneRetryTargets = {};
   // The subset of page-one retries a sort change requested: their page one
   // replaces the list, where an InvalidCursor recovery's page one appends.
@@ -426,6 +428,9 @@ class MultiFeedProvider with ChangeNotifier {
           refresh ||
           (isPageOneRetry && _pageOneReplacementTargets.contains(type));
       TimelineResponse response;
+      if (replacePosts) {
+        _replacementsDuringLoad[type] = <String, PostView>{};
+      }
       try {
         response = await fetcher(requestedCursor);
       } on ApiException catch (error) {
@@ -447,6 +452,7 @@ class MultiFeedProvider with ChangeNotifier {
           _feedStates[type] = getState(type)
               .copyWith(cursor: null, hasMore: true, loadMoreError: null);
           notifyListeners();
+          _replacementsDuringLoad[type] = <String, PostView>{};
           response = await fetcher(null);
         } else {
           rethrow;
@@ -460,6 +466,32 @@ class MultiFeedProvider with ChangeNotifier {
         sessionKeyBeforeFetch,
       )) {
         return;
+      }
+
+      // A replacement confirmed while this first-page read was in flight is
+      // newer than the page's copy of that post, so it wins over the page.
+      // Mirrors CursorPaginationController's _withReplacementsDuringLoad.
+      // The replacement is not necessarily a server snapshot, so the
+      // replaced posts are left out of viewer-state hydration.
+      var hydrationFeed = response.feed;
+      if (replacePosts) {
+        final replacements = _replacementsDuringLoad.remove(type) ?? const {};
+        if (replacements.isNotEmpty) {
+          hydrationFeed = [
+            for (final feedPost in response.feed)
+              if (!replacements.containsKey(feedPost.post.uri)) feedPost,
+          ];
+          response = TimelineResponse(
+            feed: [
+              for (final feedPost in response.feed)
+                if (replacements[feedPost.post.uri] case final post?)
+                  feedPost.copyWith(post: post)
+                else
+                  feedPost,
+            ],
+            cursor: response.cursor,
+          );
+        }
       }
 
       // Only update state after successful fetch.
@@ -532,7 +564,7 @@ class MultiFeedProvider with ChangeNotifier {
       // the feed's error state - unlike the controller sites, which keep
       // the page and report. Both differences are deliberate and belong to
       // this caller, not to the hydrator.
-      _hydrator.hydrateFeed(response.feed);
+      _hydrator.hydrateFeed(hydrationFeed);
 
       fetchOnward =
           !refresh &&
@@ -602,6 +634,7 @@ class MultiFeedProvider with ChangeNotifier {
         sessionDidBeforeFetch,
         sessionKeyBeforeFetch,
       )) {
+        _replacementsDuringLoad.remove(type);
         notifyListeners();
       }
     }
@@ -647,6 +680,7 @@ class MultiFeedProvider with ChangeNotifier {
   void _invalidateRequests(FeedType type) {
     _requestGenerations[type] = (_requestGenerations[type] ?? 0) + 1;
     _pageOneRetryTargets.remove(type);
+    _replacementsDuringLoad.remove(type);
     _pageOneReplacementTargets.remove(type);
     _cooldownDeadlines.remove(type);
   }
@@ -791,6 +825,7 @@ class MultiFeedProvider with ChangeNotifier {
             changedAny = true;
           }
         case PostReplaced(:final post):
+          _replacementsDuringLoad[type]?[post.uri] = post;
           if (!state.posts.any((feedPost) => feedPost.post.uri == post.uri)) {
             continue;
           }

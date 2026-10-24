@@ -155,6 +155,7 @@ void main() {
     servedPost = _adminPost();
 
     when(api.getViewerAuthority()).thenAnswer((_) async => true);
+    when(api.getUnreadCount()).thenAnswer((_) async => 0);
     when(api.getProfile(actor: _signedInDid)).thenAnswer(
       (_) async => UserProfile(did: _signedInDid, handle: 'me.coves.test'),
     );
@@ -296,6 +297,129 @@ void main() {
     await pumpFrames(tester);
     return navigatorKey;
   }
+
+  testWidgets('P-C3 I3 an older Discover refresh cannot undo a completed '
+      'NSFW readback; a genuinely later read can replace it', (tester) async {
+    final labeled = _labeledAdminPost(cid: 'cid-labeled');
+    final readBack = Completer<PostGetResult>();
+    var readBackStarted = false;
+    when(api.getPost(_postUri)).thenAnswer((_) {
+      readBackStarted = true;
+      return readBack.future;
+    });
+    when(
+      api.labelContent(
+        subject: anyNamed('subject'),
+        expectedVersion: anyNamed('expectedVersion'),
+        idempotencyKey: anyNamed('idempotencyKey'),
+        reason: anyNamed('reason'),
+        privateNote: anyNamed('privateNote'),
+      ),
+    ).thenAnswer(
+      (_) async => const ModerationMutationResult(
+        outcome: ModerationMutationOutcome.applied,
+        state: ModerationSubjectState(
+          subject: _postUri,
+          version: 'v8',
+          moderation: ModerationView(
+            state: ModerationState.clear,
+            contentLabels: [ContentLabelView(value: 'nsfw')],
+          ),
+          recordState: ModerationRecordState.present,
+          currentSubject: StrongRef(uri: _postUri, cid: 'cid-p1'),
+        ),
+      ),
+    );
+    await pumpShell(tester);
+    final home = _home(FeedType.discover);
+    final card = _card(_postUri, within: home);
+    final feeds = tester.element(home).read<MultiFeedProvider>();
+    expect(tester.widget<PostCard>(card).post.post.isSensitive, isFalse);
+    final older = Completer<TimelineResponse>();
+    final oldPage = _page(_adminPost());
+    when(
+      api.getDiscover(
+        sort: anyNamed('sort'),
+        timeframe: anyNamed('timeframe'),
+        limit: anyNamed('limit'),
+        cursor: anyNamed('cursor'),
+      ),
+    ).thenAnswer((_) => older.future);
+    final pending = feeds.loadFeed(FeedType.discover, refresh: true);
+    await tester.pump();
+    expect(feeds.getState(FeedType.discover).isLoading, isTrue);
+    expect(card, findsOneWidget);
+
+    await tester.tap(
+      find.descendant(of: card, matching: find.byTooltip('Post options')),
+    );
+    await pumpFrames(tester);
+    await tester.tap(find.text('Mark NSFW'));
+    await pumpFrames(tester);
+    await tester.tap(
+      find.ancestor(
+        of: find.text('Mark NSFW'),
+        matching: find.bySubtype<ButtonStyleButton>(),
+      ),
+    );
+    await pumpFrames(tester);
+    expect(readBackStarted, isTrue);
+    readBack.complete(PostGetSuccess(labeled.post));
+    await pumpFrames(tester);
+    expect(tester.widget<PostCard>(card).post.post.cid, 'cid-labeled');
+    expect(_concealedBanner(within: card), findsOneWidget);
+    expect(
+      find.descendant(of: card, matching: find.text(_postBody)),
+      findsNothing,
+    );
+    expect(tester.widget<PostCard>(card).post.post.viewer?.moderation, {
+      ModerationCapability.remove,
+      ModerationCapability.retractLabel,
+    });
+    expect(older.isCompleted, isFalse);
+
+    older.complete(oldPage);
+    await pending;
+    await pumpFrames(tester);
+    expect(_concealedBanner(within: card), findsOneWidget);
+    expect(tester.widget<PostCard>(card).post.post.cid, 'cid-labeled');
+    expect(
+      find.descendant(of: card, matching: find.text(_postBody)),
+      findsNothing,
+    );
+    expect(tester.widget<PostCard>(card).post.post.viewer?.moderation, {
+      ModerationCapability.remove,
+      ModerationCapability.retractLabel,
+    });
+    expect(_card(_otherUri, within: home), findsOneWidget);
+    expect(feeds.getState(FeedType.discover).isLoading, isFalse);
+    expect(feeds.getState(FeedType.discover).isLoadingMore, isFalse);
+
+    final later = _post(
+      _postUri,
+      'Genuinely later content',
+      cid: 'cid-later',
+      viewer: ViewerState(moderation: {ModerationCapability.remove}),
+    );
+    when(
+      api.getDiscover(
+        sort: anyNamed('sort'),
+        timeframe: anyNamed('timeframe'),
+        limit: anyNamed('limit'),
+        cursor: anyNamed('cursor'),
+      ),
+    ).thenAnswer((_) async => _page(later));
+    await feeds.loadFeed(FeedType.discover, refresh: true);
+    await pumpFrames(tester);
+    expect(tester.widget<PostCard>(card).post.post.cid, 'cid-later');
+    expect(_concealedBanner(within: card), findsNothing);
+    expect(find.text('Genuinely later content'), findsOneWidget);
+    expect(tester.widget<PostCard>(card).post.post.viewer?.moderation, {
+      ModerationCapability.remove,
+    });
+    expect(feeds.getState(FeedType.discover).isLoading, isFalse);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('B6 Mark NSFW blurs the post in place on the home feed, the '
       'profile, the community feed and the open post detail', (tester) async {

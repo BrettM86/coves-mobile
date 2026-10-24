@@ -34,6 +34,7 @@ class CommunitiesScreen extends StatelessWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
         title: Row(

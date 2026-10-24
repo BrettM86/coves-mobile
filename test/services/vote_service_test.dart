@@ -45,6 +45,7 @@ void main() {
           );
           final dioAdapter = DioAdapter(dio: dio);
           final service = VoteService(
+            sessionKeyOf: () => (did: 'did:plc:test', sessionId: 'session-1'),
             sessionGetter: () async => const CovesSession(
               token: 'test-token',
               did: 'did:plc:test',

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:coves_flutter/models/comment.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
@@ -7,6 +9,7 @@ import 'package:coves_flutter/screens/home/focused_thread_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/widgets/comment_card.dart';
+import 'package:coves_flutter/widgets/comment_thread.dart';
 import 'package:coves_flutter/widgets/loading_error_states.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +19,7 @@ import 'package:provider/provider.dart';
 
 // Shared generated mockito mocks (real provider types) so provider lookups
 // inside the screen and CommentCard resolve correctly.
+import '../test_helpers/pump_helpers.dart';
 import '../test_helpers/test_mocks.dart';
 
 void main() {
@@ -140,6 +144,7 @@ void main() {
   Widget createTestWidget({
     required ThreadViewComment thread,
     List<ThreadViewComment> ancestors = const [],
+    bool routeFromLauncher = false,
   }) {
     // As in the app, the post screen underneath acquires the post's
     // provider from the cache and hands it to the focused thread. Acquired
@@ -147,6 +152,11 @@ void main() {
     final commentsProvider = commentsCache.acquireProvider(
       postUri: postUri,
       postCid: postCid,
+    );
+    final focused = FocusedThreadScreen(
+      thread: thread,
+      ancestors: ancestors,
+      commentsProvider: commentsProvider,
     );
     return MultiProvider(
       providers: [
@@ -156,11 +166,17 @@ void main() {
         Provider<CommentsProviderCache>.value(value: commentsCache),
       ],
       child: MaterialApp(
-        home: FocusedThreadScreen(
-          thread: thread,
-          ancestors: ancestors,
-          commentsProvider: commentsProvider,
-        ),
+        home: routeFromLauncher
+            ? Builder(
+                builder: (context) => Scaffold(
+                  body: TextButton(
+                    onPressed: () => Navigator.of(context)
+                        .push(MaterialPageRoute<void>(builder: (_) => focused)),
+                    child: const Text('Open focused fixture'),
+                  ),
+                ),
+              )
+            : focused,
       ),
     );
   }
@@ -172,6 +188,146 @@ void main() {
     await tester.drag(find.byType(CustomScrollView), const Offset(0, 800));
     await tester.pumpAndSettle();
   }
+
+  group('P-C3 I2 focused root unavailable', () {
+    testWidgets('current subtree RootNotFound hides populated snapshots and '
+        'recovers through Check again with Back retained', (tester) async {
+      try {
+        final ancestor = createThread(
+          rkey: 'ancestor',
+          content: 'Old ancestor',
+        );
+        final snapshot = createThread(
+          rkey: 'anchor',
+          content: 'Old anchor',
+          replies: [createThread(rkey: 'reply', content: 'Old reply')],
+          hasMore: true,
+        );
+        final hydration = Completer<CommentsResponse>();
+        final recovery = Completer<CommentsResponse>();
+        final freshAnchor = createThread(
+          rkey: 'anchor',
+          content: 'Recovered anchor',
+          replies: [createThread(rkey: 'reply', content: 'Recovered reply')],
+        );
+        var recovering = false;
+        final requests = <String?>[];
+        when(
+          mockApiService.getComments(
+            postUri: anyNamed('postUri'),
+            sort: anyNamed('sort'),
+            timeframe: anyNamed('timeframe'),
+            depth: anyNamed('depth'),
+            limit: anyNamed('limit'),
+            cursor: anyNamed('cursor'),
+            parentRkey: anyNamed('parentRkey'),
+          ),
+        ).thenAnswer((invocation) {
+          final rkey = invocation.namedArguments[#parentRkey] as String?;
+          requests.add(rkey);
+          if (rkey == null) {
+            return recovery.future;
+          }
+          if (!recovering) {
+            return hydration.future;
+          }
+          return Future.value(
+            response([
+              if (rkey == 'anchor')
+                freshAnchor
+              else
+                createThread(rkey: 'ancestor', content: 'Recovered ancestor'),
+            ]),
+          );
+        });
+        await tester.pumpWidget(
+          createTestWidget(
+            thread: snapshot,
+            ancestors: [ancestor],
+            routeFromLauncher: true,
+          ),
+        );
+        await tester.tap(find.text('Open focused fixture'));
+        await pumpFrames(tester);
+        expect(requests, ['anchor']);
+        expect(find.text('Old anchor'), findsOneWidget);
+        expect(find.text('Old reply'), findsOneWidget);
+        hydration.completeError(
+          NotFoundException('Root missing', errorCode: 'RootNotFound'),
+        );
+        await pumpFrames(tester);
+        expect(find.text('This post is no longer available'), findsOneWidget);
+        expect(find.byType(CommentCard), findsNothing);
+        expect(find.byType(CommentThread), findsNothing);
+        expect(find.byType(LoadMoreRepliesButton), findsNothing);
+        expect(find.text('Old ancestor'), findsNothing);
+        expect(find.text('Old anchor'), findsNothing);
+        expect(find.text('Old reply'), findsNothing);
+        expect(find.text('Retry'), findsNothing);
+        expect(find.byType(BackButton), findsOneWidget);
+        final whenGone = List<String?>.of(requests);
+        await pumpFrames(tester);
+        expect(requests, whenGone);
+
+        recovering = true;
+        await tester.tap(find.text('Check again'));
+        await tester.pump();
+        expect(find.text('This post is no longer available'), findsOneWidget);
+        recovery.complete(
+          response([
+            createThread(
+              rkey: 'ancestor',
+              content: 'Recovered ancestor',
+              replies: [freshAnchor],
+            ),
+          ]),
+        );
+        await pumpFrames(tester);
+        expect(find.text('This post is no longer available'), findsNothing);
+        expect(find.text('Recovered anchor'), findsOneWidget);
+        expect(find.text('Recovered reply'), findsOneWidget);
+        expect(find.byType(CommentCard), findsWidgets);
+        await tester.pageBack();
+        await pumpFrames(tester);
+        expect(find.text('Open focused fixture'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      } finally {
+        // The cache simulates the underlying post's pin. Dispose it before
+        // Flutter checks pending timers, which runs before tearDown.
+        await tester.pumpWidget(const SizedBox.shrink());
+        commentsCache.dispose();
+      }
+    });
+
+    testWidgets('existing provider RootNotFound hides an independently live '
+        'focused snapshot', (tester) async {
+      final snapshot = createThread(
+        rkey: 'anchor',
+        content: 'Cached focused anchor',
+        replies: [createThread(rkey: 'reply', content: 'Cached focused reply')],
+      );
+      stubGetComments((parentRkey) {
+        if (parentRkey == null) {
+          throw NotFoundException('Root missing', errorCode: 'RootNotFound');
+        }
+        return response([snapshot]);
+      });
+      await tester.pumpWidget(createTestWidget(thread: snapshot));
+      await pumpFrames(tester);
+      expect(find.text('Cached focused reply'), findsOneWidget);
+      final provider = commentsCache.peekProvider(postUri)!;
+      await provider.loadComments(refresh: true);
+      expect(provider.errorCode, 'RootNotFound');
+      await pumpFrames(tester);
+      expect(find.text('This post is no longer available'), findsOneWidget);
+      expect(find.text('Cached focused anchor'), findsNothing);
+      expect(find.text('Cached focused reply'), findsNothing);
+      expect(find.byType(CommentCard), findsNothing);
+      expect(find.byType(LoadMoreRepliesButton), findsNothing);
+      expect(find.text('Check again'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
 
   group('FocusedThreadScreen rendering', () {
     setUp(() {

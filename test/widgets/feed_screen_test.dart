@@ -42,6 +42,7 @@ class FakeVoteProvider extends VoteProvider {
   FakeVoteProvider()
     : super(
         voteService: VoteService(
+          sessionKeyOf: () => null,
           sessionGetter: () async => null,
           didGetter: () => null,
         ),
@@ -62,7 +63,7 @@ class FakeVoteProvider extends VoteProvider {
 // Fake CommunitySubscriptionProvider that never touches the network
 class FakeCommunitySubscriptionProvider extends CommunitySubscriptionProvider {
   FakeCommunitySubscriptionProvider({required super.authProvider})
-    : super(apiService: CovesApiService());
+    : super(apiService: CovesApiService(sessionKeyOf: () => null));
 
   @override
   Future<void> loadSubscribedCommunities() async {
@@ -75,7 +76,7 @@ class FakeMultiFeedProvider extends MultiFeedProvider {
   FakeMultiFeedProvider()
     : super(
         FakeAuthProvider(),
-        apiService: CovesApiService(),
+        apiService: CovesApiService(sessionKeyOf: () => null),
         postChangeBroadcast: PostChangeBroadcast(),
         sessionKeyOf: unchangingSessionKey,
       );
@@ -176,7 +177,7 @@ void main() {
         authProvider: fakeAuthProvider,
       );
       blockProvider = BlockProvider(
-        apiService: CovesApiService(),
+        apiService: CovesApiService(sessionKeyOf: () => null),
         authProvider: fakeAuthProvider,
       );
     });

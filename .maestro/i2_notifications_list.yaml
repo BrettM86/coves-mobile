@@ -1,0 +1,27 @@
+# Section I — check 2: the Notifications list renders rows and survives a
+# pull to refresh.
+# PRECONDITIONS: a1_login_session (mari signed in) and at least one
+# notification for mari (i1_notifications_badge seeds them).
+appId: social.coves.dev
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- tapOn: "Notifications.*"
+- extendedWaitUntil:
+    visible: "(Reply to your post|Reply to your comment|Mentioned you|.* liked your (post|comment)).*"
+    timeout: 30000
+- assertNotVisible: "No notifications yet"
+- assertNotVisible: "Could not load notifications.*"
+- swipe:
+    start: 50%, 30%
+    end: 50%, 85%
+    duration: 400
+- waitForAnimationToEnd:
+    timeout: 5000
+- extendedWaitUntil:
+    visible: "(Reply to your post|Reply to your comment|Mentioned you|.* liked your (post|comment)).*"
+    timeout: 30000
+- assertNotVisible: "Could not load notifications.*"
+- takeScreenshot: build/maestro/i2_list_refreshed

@@ -27,6 +27,7 @@ void main() {
       dio = Dio(BaseOptions(baseUrl: 'https://api.test.coves.social'));
       adapter = DioAdapter(dio: dio);
       service = CovesApiService(
+        sessionKeyOf: () => (did: 'did:plc:test', sessionId: 'session-1'),
         dio: dio,
         tokenGetter: () async => 'SECRET-TOKEN-MARKER',
       );

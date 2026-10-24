@@ -2,6 +2,10 @@ import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/community_subscription_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
+import 'package:coves_flutter/providers/notification_preferences_change_signal.dart';
+import 'package:coves_flutter/providers/notification_preferences_provider.dart';
+import 'package:coves_flutter/providers/notifications_list_provider.dart';
+import 'package:coves_flutter/providers/unread_notification_count_provider.dart';
 import 'package:coves_flutter/providers/viewer_authority_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/services/comment_service.dart';
@@ -64,6 +68,7 @@ class FakeVoteProvider extends VoteProvider {
   FakeVoteProvider(AuthProvider authProvider)
     : super(
         voteService: VoteService(
+          sessionKeyOf: () => null,
           sessionGetter: () async => null,
           didGetter: () => null,
         ),
@@ -92,7 +97,7 @@ class FakeSubscriptionProvider extends CommunitySubscriptionProvider {
 /// fails the test, so tests that exercise a fetch must inject a mocked
 /// service.
 CovesApiService tokenlessApiService() =>
-    CovesApiService(tokenGetter: () async => null);
+    CovesApiService(sessionKeyOf: () => null, tokenGetter: () async => null);
 
 /// The full provider set a `PostCard` needs to build.
 ///
@@ -155,6 +160,67 @@ SingleChildWidget viewerAuthorityRegistration({
   );
 }
 
+/// The app-wide unread count provider, owned and disposed by the widget tree.
+SingleChildWidget unreadNotificationCountRegistration({
+  required AuthProvider auth,
+  required CovesApiService apiService,
+}) {
+  return ChangeNotifierProvider<UnreadNotificationCountProvider>(
+    create: (_) => UnreadNotificationCountProvider(
+      apiService: apiService,
+      authProvider: auth,
+    ),
+  );
+}
+
+/// The app-wide notifications list, owned and disposed by the widget tree.
+///
+/// Stamps pages with the session key of the [ViewerAuthorityProvider]
+/// registered above it, as main.dart does.
+SingleChildWidget notificationsListRegistration({
+  required AuthProvider auth,
+  required CovesApiService apiService,
+}) {
+  return ChangeNotifierProvider<NotificationsListProvider>(
+    create: (context) {
+      final authority = context.read<ViewerAuthorityProvider>();
+      return NotificationsListProvider(
+        apiService: apiService,
+        authProvider: auth,
+        sessionKeyOf: () => authority.sessionKey,
+        unreadNotificationCountProvider: context
+            .read<UnreadNotificationCountProvider>(),
+      );
+    },
+  );
+}
+
+/// The app-wide notification preferences owner, owned and disposed by the
+/// widget tree.
+///
+/// Stamps requests with the session key of the [ViewerAuthorityProvider]
+/// registered above it, and reports to the [UnreadNotificationCountProvider]
+/// and [NotificationPreferencesChangeSignal] registered above it, as
+/// main.dart does.
+SingleChildWidget notificationPreferencesRegistration({
+  required AuthProvider auth,
+  required CovesApiService apiService,
+}) {
+  return ChangeNotifierProvider<NotificationPreferencesProvider>(
+    create: (context) {
+      final authority = context.read<ViewerAuthorityProvider>();
+      return NotificationPreferencesProvider(
+        apiService: apiService,
+        authProvider: auth,
+        sessionKeyOf: () => authority.sessionKey,
+        unreadNotificationCountProvider: context
+            .read<UnreadNotificationCountProvider>(),
+        changeSignal: context.read<NotificationPreferencesChangeSignal>(),
+      );
+    },
+  );
+}
+
 /// The app-wide [MultiFeedProvider] registration for a test that pumps a
 /// community or profile screen, which also removes a post its author deletes
 /// from the home feeds, but never shows those feeds.
@@ -198,10 +264,28 @@ List<SingleChildWidget> profileScreenProviders({
   required CommentService commentService,
   PostChangeBroadcast? postChangeBroadcast,
   ViewerAuthorityProvider? viewerAuthority,
+  NotificationPreferencesChangeSignal? notificationPreferencesChangeSignal,
 }) {
   return [
     ChangeNotifierProvider<AuthProvider>.value(value: auth),
+    if (notificationPreferencesChangeSignal != null)
+      ChangeNotifierProvider<NotificationPreferencesChangeSignal>.value(
+        value: notificationPreferencesChangeSignal,
+      )
+    else
+      ChangeNotifierProvider<NotificationPreferencesChangeSignal>(
+        create: (_) => NotificationPreferencesChangeSignal(),
+      ),
     Provider<CovesApiService>.value(value: apiService),
+    if (viewerAuthority != null)
+      ChangeNotifierProvider<ViewerAuthorityProvider>.value(
+        value: viewerAuthority,
+      )
+    else
+      viewerAuthorityRegistration(auth: auth, apiService: apiService),
+    unreadNotificationCountRegistration(auth: auth, apiService: apiService),
+    notificationsListRegistration(auth: auth, apiService: apiService),
+    notificationPreferencesRegistration(auth: auth, apiService: apiService),
     Provider<CommentService>.value(value: commentService),
     ChangeNotifierProvider<VoteProvider>(create: (_) => FakeVoteProvider(auth)),
     ChangeNotifierProvider<CommunitySubscriptionProvider>(
@@ -221,12 +305,6 @@ List<SingleChildWidget> profileScreenProviders({
     Provider<PostChangeBroadcast>.value(
       value: postChangeBroadcast ?? PostChangeBroadcast(),
     ),
-    if (viewerAuthority != null)
-      ChangeNotifierProvider<ViewerAuthorityProvider>.value(
-        value: viewerAuthority,
-      )
-    else
-      viewerAuthorityRegistration(auth: auth, apiService: apiService),
     ChangeNotifierProvider<MultiFeedProvider>(
       create: (context) {
         final authority = context.read<ViewerAuthorityProvider>();

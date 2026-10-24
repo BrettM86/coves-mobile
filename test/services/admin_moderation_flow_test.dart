@@ -80,7 +80,11 @@ void main() {
         ),
       );
       adapter = DioAdapter(dio: dio);
-      api = CovesApiService(dio: dio, tokenGetter: () async => null);
+      api = CovesApiService(
+        sessionKeyOf: () => null,
+        dio: dio,
+        tokenGetter: () async => null,
+      );
       var nextKey = 0;
       flow = AdminModerationFlow(
         api,

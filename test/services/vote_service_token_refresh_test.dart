@@ -67,6 +67,8 @@ void main() {
       shouldRefreshSucceed = true;
 
       voteService = VoteService(
+        sessionKeyOf: () =>
+            (did: currentSession.did, sessionId: currentSession.sessionId),
         dio: dio,
         sessionGetter: mockSessionGetter,
         didGetter: mockDidGetter,
@@ -169,6 +171,8 @@ void main() {
 
         // Create vote service without refresh capability
         final voteServiceNoRefresh = VoteService(
+          sessionKeyOf: () =>
+              (did: currentSession.did, sessionId: currentSession.sessionId),
           dio: dioNoRefresh,
           sessionGetter: mockSessionGetter,
           didGetter: mockDidGetter,
@@ -251,6 +255,7 @@ void main() {
     test('should throw ApiException when session is null', () async {
       // Create service that returns null session
       final voteServiceNoSession = VoteService(
+        sessionKeyOf: () => null,
         dio: dio,
         sessionGetter: () async => null,
         didGetter: () => null,

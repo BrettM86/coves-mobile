@@ -1,0 +1,23 @@
+# Section I fixture: runs scripts/seed_notifications.js, which has the second
+# local account (notifier.local.coves.dev) reply to, mention and upvote mari.
+# The script's output.seedTag is the text both comments carry. Afterwards it
+# waits for the bottom-nav bell to announce unread notifications (the unread
+# count refreshes on every tab change and every 30 s while resumed).
+appId: social.coves.dev
+---
+- runScript:
+    file: ../scripts/seed_notifications.js
+    env:
+      ACTOR_HANDLE: notifier.local.coves.dev
+      ACTOR_PASSWORD: password
+      RECIPIENT_HANDLE: mari.local.coves.dev
+# Give the AppView a moment to index the records from the firehose, then
+# change tabs so the unread count refreshes.
+- retry:
+    maxRetries: 5
+    commands:
+      - tapOn: "Me"
+      - tapOn: "Home"
+      - extendedWaitUntil:
+          visible: "Notifications, .* unread"
+          timeout: 10000

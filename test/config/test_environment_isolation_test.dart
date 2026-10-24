@@ -31,7 +31,10 @@ void main() {
     expect(dioBaseUri.host, '127.0.0.1', reason: 'baseUrl was $dioBaseUrl');
     expect(dioBaseUri.port, 1, reason: 'baseUrl was $dioBaseUrl');
 
-    final apiService = CovesApiService(tokenGetter: () async => null);
+    final apiService = CovesApiService(
+      sessionKeyOf: () => null,
+      tokenGetter: () async => null,
+    );
     addTearDown(apiService.dispose);
 
     Object? thrown;

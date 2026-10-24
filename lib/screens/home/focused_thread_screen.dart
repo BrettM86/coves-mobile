@@ -758,29 +758,36 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   /// Build an ancestor comment (shown flat as context above anchor)
   /// Styled more subtly than the anchor to show it's contextual
   ///
-  /// After a session change its vote and reply controls act only when
-  /// [commentsProvider]'s loaded tree has it: that provider was created for
-  /// the new session, so its tree came from responses whose votes it
-  /// applied.
+  /// Prefers [commentsProvider]'s loaded row, which is rendered, used as
+  /// the reply target and stamped with the provider's current session.
+  /// After a session change the vote and reply controls act only when the
+  /// loaded tree has it: that provider was created for the new session, so
+  /// its tree came from responses whose votes it applied.
   ///
-  /// [sessionStamp] is the stamp the row's snapshot was loaded under, so a
-  /// row retained from a previous session is denied admin tools.
+  /// [sessionStamp] is the stamp the retained row's snapshot was loaded
+  /// under, so a row retained from a previous session is denied admin tools.
   Widget _buildAncestorComment(
     ThreadViewComment ancestor,
     Object? sessionStamp,
     CommentsProvider commentsProvider,
   ) {
+    final loadedAncestor = _findInLoadedTree(
+      commentsProvider,
+      ancestor.comment.uri,
+    );
+    final currentAncestor = loadedAncestor ?? ancestor;
     final controlsEnabled =
-        !_ancestorsFromPreviousSession ||
-        _findInLoadedTree(commentsProvider, ancestor.comment.uri) != null;
+        !_ancestorsFromPreviousSession || loadedAncestor != null;
     return Opacity(
       opacity: 0.6,
       child: CommentCard(
-        comment: ancestor.comment,
-        onTap: controlsEnabled ? () => _openReplyScreen(ancestor) : null,
+        comment: currentAncestor.comment,
+        onTap: controlsEnabled ? () => _openReplyScreen(currentAncestor) : null,
         onDelete: _onDelete,
         parentPost: widget.parentPost,
-        sessionStamp: sessionStamp,
+        sessionStamp: loadedAncestor != null
+            ? commentsProvider.sessionStamp
+            : sessionStamp,
         reloadAfterModeration: _reloadAfterModeration,
         votingEnabled: controlsEnabled,
       ),

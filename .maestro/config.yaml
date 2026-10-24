@@ -65,6 +65,13 @@ executionOrder:
     - g4_block_unblock
     - h1_video_post
     - h2_rich_text_linkbars
+    # Section I seeds notifications for mari from the second local account
+    # (scripts/seed_notifications.js); i2 and i5 reuse what i1 seeded.
+    - i1_notifications_badge
+    - i2_notifications_list
+    - i3_notification_rows
+    - i4_notification_navigation
+    - i5_notification_settings
     - a2_signout_landing
     - d4_discovery_guest
     - d6_modlog_guest

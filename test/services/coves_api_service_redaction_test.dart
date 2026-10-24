@@ -18,6 +18,10 @@ void main() {
   // Contains '!' — a character outside the old regex charset — to pin the
   // greedy non-whitespace match (the old pattern leaked the token tail).
   const token = 'abc!def.secret~token';
+  const originSession = (
+    did: 'did:plc:pc4syntheticoriginmarker',
+    sessionId: 'pc4-origin-session-7f19-marker',
+  );
 
   group('CovesApiService - bearer token redaction', () {
     late Dio dio;
@@ -35,7 +39,11 @@ void main() {
 
       dio = Dio(BaseOptions(baseUrl: 'https://api.test.coves.social'));
       dioAdapter = DioAdapter(dio: dio);
-      apiService = CovesApiService(dio: dio, tokenGetter: () async => token);
+      apiService = CovesApiService(
+        sessionKeyOf: () => originSession,
+        dio: dio,
+        tokenGetter: () async => token,
+      );
     });
 
     tearDown(() {
@@ -44,6 +52,15 @@ void main() {
     });
 
     test('redacts the Authorization header in request logs', () async {
+      RequestOptions? completedRequest;
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onResponse: (response, handler) {
+            completedRequest = response.requestOptions;
+            handler.next(response);
+          },
+        ),
+      );
       dioAdapter.onGet(
         '/xrpc/social.coves.community.list',
         (server) => server.reply(200, {'communities': [], 'cursor': null}),
@@ -55,6 +72,13 @@ void main() {
       final output = logLines.join('\n');
       expect(output, contains('Bearer [REDACTED]'));
       expect(output, isNot(contains(token)));
+      expect(
+        completedRequest?.extra.containsKey('coves.authOriginSession'),
+        isTrue,
+      );
+      expect(completedRequest?.extra['coves.authOriginSession'], originSession);
+      expect(output, isNot(contains(originSession.did)));
+      expect(output, isNot(contains(originSession.sessionId)));
     });
 
     test('redacts bearer tokens echoed in error response data', () async {

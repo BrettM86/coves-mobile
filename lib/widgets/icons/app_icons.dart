@@ -1,6 +1,9 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'lucide_icon_painter.dart';
+import 'lucide_paths.dart';
+
 /// Navigation icons rendered from the Lucide SVG assets in `assets/icons/`.
 ///
 /// Lucide is ISC licensed — see `assets/icons/lucide/LICENSE`.
@@ -34,6 +37,10 @@ class AppIcon extends StatelessWidget {
 
   static Widget search({required Color color, double size = 24}) =>
       AppIcon(iconName: 'search', color: color, size: size);
+
+  /// Lucide `settings` — notification preferences
+  static Widget settings({required Color color, double size = 24}) =>
+      LucideGlyph(LucidePaths.settings, color: color, size: size);
 
   /// Lucide `plus` — the "Create" action
   static Widget create({required Color color, double size = 24}) =>
