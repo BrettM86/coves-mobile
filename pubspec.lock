@@ -576,7 +576,7 @@ packages:
     source: hosted
     version: "7.0.0"
   image_cropper_platform_interface:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: image_cropper_platform_interface
       sha256: "886a30ec199362cdcc2fbb053b8e53347fbfb9dbbdaa94f9ff85622609f5e7ff"
@@ -632,7 +632,7 @@ packages:
     source: hosted
     version: "0.2.2+1"
   image_picker_platform_interface:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: image_picker_platform_interface
       sha256: "567e056716333a1647c64bb6bd873cff7622233a5c3f694be28a583d4715690c"

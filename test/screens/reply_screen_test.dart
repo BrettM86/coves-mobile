@@ -88,8 +88,8 @@ void main() {
 
   /// Pumps a base route; ReplyScreen is pushed on top so pops are visible
   Future<void> pumpBase(WidgetTester tester) async {
-    // Without a mock handler, HapticFeedback.lightImpact() (awaited inside
-    // _handleSubmit) never completes in widget tests and submit would hang
+    // Without a mock handler, HapticFeedback.lightImpact() never completes
+    // in widget tests
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.platform,
       (methodCall) async => null,
@@ -287,7 +287,7 @@ void main() {
 
     /// Taps Send and pumps a bounded number of frames: the in-flight spinner
     /// animates indefinitely, so pumpAndSettle would time out. Two frames
-    /// cover the awaited (mocked) haptic call, the setState, and the rebuild.
+    /// cover the mention lookup, the onSubmit call, and the rebuild.
     Future<void> tapSendAndPumpUntilInFlight(WidgetTester tester) async {
       await tester.tap(find.text('Send'));
       await tester.pump();
@@ -835,6 +835,100 @@ void main() {
         commentsProvider.getDraft(parentUri: comment.comment.uri),
         'hi @alice.coves.social',
       );
+    });
+  });
+
+  group('ReplyScreen submit', () {
+    testWidgets('a second Send tap before the first one rebuilds the screen '
+        'does not submit twice', (tester) async {
+      final comment = createComment('at://did:plc:author/comment/1');
+      await pumpBase(tester);
+      final submit = Completer<void>();
+      var submitCalls = 0;
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) {
+          submitCalls++;
+          return submit.future;
+        },
+      );
+
+      await tester.enterText(find.byType(TextField), 'Ship it');
+      await tester.pump();
+      // Both taps land in the same frame, before any rebuild disables Send
+      final onTap = sendButton(tester).onTap!;
+      onTap();
+      onTap();
+      await tester.pump();
+      await tester.pump();
+
+      submit.complete();
+      await tester.pumpAndSettle();
+
+      expect(submitCalls, 1);
+    });
+
+    testWidgets('Cancel while the Send haptic is still pending keeps the '
+        'draft when that send then fails', (tester) async {
+      final comment = createComment('at://did:plc:author/comment/1');
+      await pumpBase(tester);
+      // Haptic feedback stays pending until the composer has been closed
+      final haptic = Completer<void>();
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (methodCall) async {
+          await haptic.future;
+          return null;
+        },
+      );
+      final submit = Completer<void>();
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) => submit.future,
+      );
+
+      await tester.enterText(find.byType(TextField), 'Reply that must survive');
+      await tester.pump();
+      await tester.tap(find.text('Send'));
+      await tester.pump();
+      await tester.tap(find.text('Cancel'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.byType(ReplyScreen), findsNothing);
+
+      haptic.complete();
+      await tester.pump();
+      submit.completeError(Exception('network unreachable'));
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        'Reply that must survive',
+      );
+    });
+
+    testWidgets('an onSubmit failure is left to the parent screen to report', (
+      tester,
+    ) async {
+      final comment = createComment('at://did:plc:author/comment/1');
+      await pumpBase(tester);
+      await pushReply(
+        tester,
+        comment: comment,
+        onSubmit: (content, facets) async {
+          throw ServerException('Comment service unavailable', statusCode: 503);
+        },
+      );
+
+      await tester.enterText(find.byType(TextField), 'Ship it');
+      await tester.pump();
+      await tester.tap(find.text('Send'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Failed to submit'), findsNothing);
     });
   });
 }

@@ -1276,6 +1276,67 @@ void main() {
     },
   );
 
+  testWidgets(
+    'given a reply to the anchor in flight, when the focused thread is '
+    'removed under the composer and the reply then fails, then the comment '
+    'error still shows',
+    (tester) async {
+      _useTallViewport(tester);
+      final harness = _FocusedThreadOverPost(
+        FakeAuthProvider(signedInDid: _firstDid),
+      );
+      try {
+        await harness.openFocusedThread(tester);
+        final focusedRoute = _visibleFocusedRoute(tester);
+        // Made when the request is sent, inside the zone the submission runs
+        // in: a future's error does not reach a listener in another error
+        // zone
+        late final Completer<CreateCommentResponse> createComment;
+        when(
+          harness.commentService.createComment(
+            rootUri: anyNamed('rootUri'),
+            rootCid: anyNamed('rootCid'),
+            parentUri: anyNamed('parentUri'),
+            parentCid: anyNamed('parentCid'),
+            content: anyNamed('content'),
+            contentFacets: anyNamed('contentFacets'),
+          ),
+        ).thenAnswer((_) {
+          createComment = Completer<CreateCommentResponse>();
+          return createComment.future;
+        });
+
+        final submissionErrors = await _replyToFocusedAnchor(
+          tester,
+          'Thanks for the context',
+        );
+        expect(submissionErrors, isEmpty);
+        expect(find.byType(ReplyScreen), findsOneWidget);
+
+        harness.navigatorKey.currentState!.removeRoute(focusedRoute);
+        await tester.pump();
+        expect(
+          find.byType(FocusedThreadScreen, skipOffstage: false),
+          findsNothing,
+        );
+
+        createComment.completeError(ApiException('Rejected', statusCode: 500));
+        for (var frame = 0; frame < 5; frame++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+
+        _expectNoErrors(tester, 'after the reply failed');
+        expect(
+          find.text('Could not post comment. Please try again.'),
+          findsOneWidget,
+          reason: 'the composer leaves reporting the failure to its parent',
+        );
+      } finally {
+        await harness.dispose(tester);
+      }
+    },
+  );
+
   // The "continue this thread" case: the anchor is in the post's first page
   // with its replies truncated by depth, so the deeper replies exist only in
   // the anchor's subtree. After a sign-in the post screen refreshes the

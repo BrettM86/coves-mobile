@@ -52,7 +52,10 @@ class ReplyScreen extends StatefulWidget {
   /// Comment being replied to (mutually exclusive with post)
   final ThreadViewComment? comment;
 
-  /// Callback when user submits reply
+  /// Callback when user submits reply. ReplyScreen does not report its
+  /// failures: implementers must show their own error (on a messenger that
+  /// can outlive their screen) and rethrow, so the composer restores the
+  /// draft
   final Future<void> Function(String content, List<RichTextFacet> facets)
   onSubmit;
 
@@ -252,7 +255,7 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _handleSubmit() async {
-    if (_authInvalidated) {
+    if (_isSubmitting || _authInvalidated) {
       return;
     }
 
@@ -271,13 +274,10 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     // on the screen below, after system back has closed this one
     final messenger = ScaffoldMessenger.of(context);
 
-    // Add haptic feedback before submission
-    await HapticFeedback.lightImpact();
-
-    // Set loading state
-    setState(() {
-      _isSubmitting = true;
-    });
+    // Claimed and shown in one synchronous step, so a second tap is ignored
+    // and no await separates the claim from the draft handling below
+    setState(() => _isSubmitting = true);
+    unawaited(HapticFeedback.lightImpact());
 
     // The text leaves the draft slot for the duration of the send, so a
     // composer reopened mid-send starts empty instead of inviting a duplicate
@@ -320,11 +320,9 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
       if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
         Navigator.of(context).pop();
       }
-    } on Exception catch (e) {
-      // Show error if submission fails
-      if (mounted) {
-        messenger.showSnackBar(_submitFailureSnackBar(e));
-      }
+    } on Exception {
+      // The parent screens report onSubmit failures and rethrow them; the
+      // draft is restored below
     } finally {
       if (!succeeded) {
         // A newer draft saved while this send was in flight wins. If a

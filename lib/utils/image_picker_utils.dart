@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../constants/image_upload_limits.dart';
 import '../models/picked_image.dart';
 
 /// Configuration for image picking constraints
@@ -12,7 +13,7 @@ class ImageConstraints {
     this.maxWidth = 1024,
     this.maxHeight = 1024,
     this.imageQuality = 85,
-    this.maxSizeBytes = 1024 * 1024, // 1 MB
+    this.maxSizeBytes = ImageUploadLimits.avatarMaxSizeBytes,
     this.allowedMimeTypes = const {'image/jpeg', 'image/png', 'image/webp'},
   }) : assert(maxWidth > 0, 'maxWidth must be positive'),
        assert(maxHeight > 0, 'maxHeight must be positive'),
@@ -43,7 +44,8 @@ class ImageConstraints {
   /// Preset for larger images (banners, post images)
   static const banner = ImageConstraints(
     maxWidth: 2048,
-    maxSizeBytes: 2 * 1024 * 1024, // 2 MB
+    maxHeight: 2048,
+    maxSizeBytes: ImageUploadLimits.bannerMaxSizeBytes,
   );
 }
 
@@ -75,9 +77,13 @@ class ImagePickerUtils {
   ///
   /// [source] - ImageSource.gallery or ImageSource.camera
   /// [constraints] - Optional constraints (defaults to avatar preset)
+  ///
+  /// [validate] - Set to false when the result is validated later (e.g. after
+  /// cropping re-encodes it), so the uncropped original is not rejected.
   static Future<PickedImage?> pickImage(
     ImageSource source, {
     ImageConstraints constraints = ImageConstraints.avatar,
+    bool validate = true,
   }) async {
     final pickedFile = await _picker.pickImage(
       source: source,
@@ -94,7 +100,9 @@ class ImagePickerUtils {
     final bytes = await file.readAsBytes();
     final mimeType = inferMimeTypeFromExtension(pickedFile.path);
 
-    validateImage(bytes: bytes, mimeType: mimeType, constraints: constraints);
+    if (validate) {
+      validateImage(bytes: bytes, mimeType: mimeType, constraints: constraints);
+    }
 
     return PickedImage(file: file, bytes: bytes, mimeType: mimeType);
   }
@@ -138,9 +146,12 @@ class ImagePickerUtils {
   }) {
     // Check file size
     if (bytes.length > constraints.maxSizeBytes) {
-      final maxSizeMB = constraints.maxSizeBytes / (1024 * 1024);
+      final maxSize = ImageUploadLimits.formatMegabytes(
+        constraints.maxSizeBytes,
+        fractionDigits: 0,
+      );
       throw ImageValidationException(
-        'Image size exceeds maximum of ${maxSizeMB.toStringAsFixed(0)} MB. '
+        'Image size exceeds maximum of $maxSize. '
         'Please choose a smaller image.',
       );
     }

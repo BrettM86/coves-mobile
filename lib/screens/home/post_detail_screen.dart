@@ -1004,7 +1004,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         );
       }
     } on Exception catch (e) {
-      if (mounted) {
+      if (messenger.mounted) {
         messenger.showSnackBar(
           SnackBar(
             content: Text(ErrorMessage.comment(e)),
@@ -1042,7 +1042,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         );
       }
     } on Exception catch (e) {
-      if (mounted) {
+      if (messenger.mounted) {
         messenger.showSnackBar(
           SnackBar(
             content: Text(ErrorMessage.comment(e)),

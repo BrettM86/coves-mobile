@@ -81,6 +81,8 @@ dev_dependencies:
   http: ^1.6.0
   http_mock_adapter: ^0.6.1
   file: ^7.0.1
+  image_cropper_platform_interface: ^8.0.0
+  image_picker_platform_interface: ^2.11.1
 
   # Launcher icons
   flutter_launcher_icons: ^0.14.1

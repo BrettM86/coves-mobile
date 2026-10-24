@@ -498,7 +498,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
         parentComment: parent,
       );
     } on Exception catch (e) {
-      if (mounted) {
+      if (messenger.mounted) {
         messenger.showSnackBar(
           SnackBar(
             content: Text(ErrorMessage.comment(e)),

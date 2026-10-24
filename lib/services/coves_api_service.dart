@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../constants/image_upload_limits.dart';
 import '../constants/moderation_constants.dart';
 import '../models/comment.dart';
 import '../models/community.dart';
@@ -1153,12 +1154,10 @@ class CovesApiService {
     required Uint8List imageBytes,
     required String mimeType,
   }) async {
-    // Validate image size (max 1 MB)
-    const maxSizeBytes = 1024 * 1024; // 1 MB
-    if (imageBytes.length > maxSizeBytes) {
+    if (imageBytes.length > ImageUploadLimits.avatarMaxSizeBytes) {
       throw ApiException(
         'Image size exceeds maximum of 1 MB '
-        '(${(imageBytes.length / 1024 / 1024).toStringAsFixed(2)} MB)',
+        '(${ImageUploadLimits.formatMegabytes(imageBytes.length)})',
       );
     }
     _validateImageMimeType(mimeType);
@@ -1210,11 +1209,10 @@ class CovesApiService {
       if (avatarMimeType == null) {
         throw ApiException('avatarMimeType required when avatarBytes provided');
       }
-      const maxAvatarBytes = 1024 * 1024; // 1 MB
-      if (avatarBytes.length > maxAvatarBytes) {
+      if (avatarBytes.length > ImageUploadLimits.avatarMaxSizeBytes) {
         throw ApiException(
           'Avatar size exceeds maximum of 1 MB '
-          '(${(avatarBytes.length / 1024 / 1024).toStringAsFixed(2)} MB)',
+          '(${ImageUploadLimits.formatMegabytes(avatarBytes.length)})',
         );
       }
       _validateImageMimeType(avatarMimeType);
@@ -1225,11 +1223,10 @@ class CovesApiService {
       if (bannerMimeType == null) {
         throw ApiException('bannerMimeType required when bannerBytes provided');
       }
-      const maxBannerBytes = 2 * 1024 * 1024; // 2 MB
-      if (bannerBytes.length > maxBannerBytes) {
+      if (bannerBytes.length > ImageUploadLimits.bannerMaxSizeBytes) {
         throw ApiException(
           'Banner size exceeds maximum of 2 MB '
-          '(${(bannerBytes.length / 1024 / 1024).toStringAsFixed(2)} MB)',
+          '(${ImageUploadLimits.formatMegabytes(bannerBytes.length)})',
         );
       }
       _validateImageMimeType(bannerMimeType);
@@ -1306,7 +1303,7 @@ class CovesApiService {
       throw ApiException('Invalid report reason: $reason');
     }
 
-    if (explanation != null && explanation.length > 1000) {
+    if (explanation != null && explanation.runes.length > 1000) {
       throw ApiException(
         'Explanation exceeds maximum length of 1000 characters',
       );

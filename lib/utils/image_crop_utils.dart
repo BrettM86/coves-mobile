@@ -7,6 +7,7 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../constants/app_colors.dart';
+import '../constants/image_upload_limits.dart';
 import '../models/picked_image.dart';
 import 'image_picker_utils.dart';
 
@@ -139,7 +140,7 @@ abstract final class ImageCropUtils {
   /// Returns [PickedImage] with cropped image data, or null if cancelled
   /// at any step (image picking or cropping).
   ///
-  /// Throws [ImageValidationException] if the picked image fails validation.
+  /// Throws [ImageValidationException] if the cropped image fails validation.
   ///
   /// Example:
   /// ```dart
@@ -158,9 +159,11 @@ abstract final class ImageCropUtils {
     ImageConstraints constraints = ImageConstraints.avatar,
     CropConfig cropConfig = CropConfig.avatar,
   }) async {
+    // The cropper re-encodes to JPEG, so only the cropped result is validated.
     final picked = await ImagePickerUtils.pickImage(
       source,
       constraints: constraints,
+      validate: false,
     );
 
     if (picked == null) {
@@ -200,9 +203,9 @@ abstract final class ImageCropUtils {
     if (croppedBytes.length > constraints.maxSizeBytes) {
       throw ImageValidationException(
         'Cropped image is too large '
-        '(${(croppedBytes.length / 1024 / 1024).toStringAsFixed(1)} MB). '
+        '(${ImageUploadLimits.formatMegabytes(croppedBytes.length)}). '
         'Maximum size is '
-        '${(constraints.maxSizeBytes / 1024 / 1024).toStringAsFixed(1)} MB.',
+        '${ImageUploadLimits.formatMegabytes(constraints.maxSizeBytes)}.',
       );
     }
 
