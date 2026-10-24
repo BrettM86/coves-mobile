@@ -1,0 +1,8 @@
+What's new in 1.6.0
+
+• Notifications: replies, mentions and likes in one place, with settings for what you get
+• A fresh new app icon
+• Sort a community's Top posts by day, week, month, year or all time
+• Bluesky posts shared with a matching title no longer show the title twice
+• Discover keeps your place when you scroll back
+• Fixes for profile bios, image uploads, sign-in prompts and loading comments

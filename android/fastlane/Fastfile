@@ -14,6 +14,9 @@
 #   cd android && fastlane production     # build + upload to Production (draft)
 #   cd android && fastlane ship           # upload dist/ AAB + changelog to
 #                                         # Production and start a 100% rollout
+#   cd android && fastlane push_images   # replace the Play icon, feature
+#                                         # graphic and phone screenshots
+#                                         # with fastlane/metadata images
 #
 # The whole release, both platforms, is driven by tool/release -- see RELEASING.md.
 
@@ -119,7 +122,8 @@ platform :android do
       rollout: "1",
       skip_upload_apk: true,
       # Listing text and images live in fastlane/metadata; push them
-      # deliberately with `fastlane supply` rather than on every release.
+      # deliberately (images: `fastlane push_images`) rather than
+      # on every release.
       skip_upload_metadata: true,
       skip_upload_images: true,
       skip_upload_screenshots: true,
@@ -131,5 +135,19 @@ platform :android do
       UI.user_error!("Play production does not list #{build_number} after upload: #{live.inspect}")
     end
     UI.success("Play production now carries version codes #{live.inspect}")
+  end
+
+  desc "Replace the Play listing icon, feature graphic, and screenshots with"
+  desc "the ones in fastlane/metadata/android, without a build, text, or changelogs."
+  lane :push_images do
+    upload_to_play_store(
+      metadata_path: File.join(__dir__, "metadata/android"),
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: false,
+      skip_upload_screenshots: false,
+    )
   end
 end

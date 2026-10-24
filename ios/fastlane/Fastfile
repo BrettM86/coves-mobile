@@ -14,6 +14,7 @@
 #   cd ios && fastlane precheck        # run ASC precheck rules against the listing
 #   cd ios && fastlane pull_metadata   # download the ASC listing into fastlane/metadata
 #   cd ios && fastlane push_metadata   # upload fastlane/metadata text, no build
+#   cd ios && fastlane push_screenshots # replace ASC screenshots outside a release (ship also uploads them)
 #
 # The whole release, both platforms, is driven by tool/release -- see RELEASING.md.
 
@@ -153,8 +154,11 @@ platform :ios do
       # Pushes the whole text listing from fastlane/metadata, not just the
       # release notes: the repo is the source of truth for listing copy.
       skip_metadata: false,
-      # iOS screenshots are managed in App Store Connect; nothing in the repo.
-      skip_screenshots: true,
+      # Screenshots are tied to the version and lock once it is submitted,
+      # so they go up here, replacing the previous version's set.
+      skip_screenshots: false,
+      screenshots_path: File.join(__dir__, "screenshots"),
+      overwrite_screenshots: true,
       # Without this deliver opens an HTML preview and waits for a "y" at the
       # terminal, which hangs (or, non-interactively, aborts) after Play has
       # already shipped.
@@ -189,7 +193,7 @@ platform :ios do
   end
 
   desc "Push the text listing in fastlane/metadata to App Store Connect"
-  desc "without a build. iOS screenshots are managed in App Store Connect."
+  desc "without a build. Screenshots go up with push_screenshots."
   lane :push_metadata do
     upload_to_app_store(
       api_key: asc_api_key,
@@ -201,6 +205,23 @@ platform :ios do
       submit_for_review: false,
       precheck_include_in_app_purchases: false,
       precheck_default_rule_level: :warn,
+    )
+  end
+
+  desc "Replace the App Store screenshots with fastlane/screenshots/en-US,"
+  desc "without a build or metadata. Deletes whatever is live first."
+  lane :push_screenshots do
+    upload_to_app_store(
+      api_key: asc_api_key,
+      screenshots_path: File.join(__dir__, "screenshots"),
+      skip_binary_upload: true,
+      skip_metadata: true,
+      skip_screenshots: false,
+      overwrite_screenshots: true,
+      skip_app_version_update: true,
+      force: true,
+      submit_for_review: false,
+      run_precheck_before_submit: false,
     )
   end
 
