@@ -8,7 +8,6 @@ import 'package:provider/provider.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'config/oauth_config.dart';
-import 'constants/app_colors.dart';
 import 'constants/app_theme.dart';
 import 'constants/app_typography.dart';
 import 'models/community.dart';
@@ -70,12 +69,7 @@ Future<void> main() async {
       LucidePaths.registerLicense();
 
       // Set system UI overlay style (Android navigation bar)
-      SystemChrome.setSystemUIOverlayStyle(
-        const SystemUiOverlayStyle(
-          systemNavigationBarColor: AppColors.background,
-          systemNavigationBarIconBrightness: Brightness.light,
-        ),
-      );
+      SystemChrome.setSystemUIOverlayStyle(AppTheme.navigationBarStyle);
 
       runApp(await bootstrapCovesApp());
     },

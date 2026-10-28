@@ -1,12 +1,17 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/app_colors.dart';
+import '../constants/app_theme.dart';
 import '../models/post.dart';
 import '../services/media_saver.dart';
+import '../utils/app_route_observer.dart';
 import 'icons/lucide_icon_painter.dart';
 import 'icons/lucide_paths.dart';
 
@@ -14,7 +19,8 @@ import 'icons/lucide_paths.dart';
 ///
 /// Multi-image galleries page horizontally and dismiss with a vertical drag.
 /// A single image follows free-direction drags and dismisses based on vertical
-/// distance.
+/// distance. A single tap toggles the controls and the status bar; zooming in
+/// hides them. With a screen reader on, the controls always stay shown.
 class ImageViewer extends StatefulWidget {
   const ImageViewer({required this.images, this.initialIndex = 0, super.key})
     : assert(images.length > 0, 'viewer needs at least one image');
@@ -57,7 +63,28 @@ class ImageViewer extends StatefulWidget {
 }
 
 class _ImageViewerState extends State<ImageViewer>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin, RouteAware {
+  // A zoomed image can pan under the navigation bar, so the bar goes clear.
+  // On API 35+ edge-to-edge the color is ignored and only turning contrast
+  // enforcement off removes the scrim.
+  static final SystemUiOverlayStyle _zoomedNavigationBarStyle = AppTheme
+      .navigationBarStyle
+      .copyWith(
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarContrastEnforced: false,
+      );
+
+  // Behind the control buttons and the page indicator pill, so they stay
+  // visible over light images.
+  static final Color _controlBackdropColor = Colors.black.withValues(
+    alpha: 0.6,
+  );
+
+  static final ButtonStyle _controlButtonStyle = IconButton.styleFrom(
+    backgroundColor: _controlBackdropColor,
+    disabledBackgroundColor: _controlBackdropColor,
+  );
+
   late final PageController? _pageController = widget.images.length > 1
       ? PageController(initialPage: widget.initialIndex)
       : null;
@@ -67,8 +94,46 @@ class _ImageViewerState extends State<ImageViewer>
     duration: const Duration(milliseconds: 250),
   )..addListener(_onZoomAnimation);
   late Matrix4Tween _zoomTween;
+
+  // Bluesky's lightbox FAST_SPRING: heavily damped, so the controls move
+  // fast and then ease out while the status bar is still sliding.
+  static final SpringDescription _controlsSpring = SpringDescription(
+    mass: defaultTargetPlatform == TargetPlatform.iOS ? 1.25 : 0.75,
+    stiffness: 900,
+    damping: 150,
+  );
+
+  // How far the controls travel toward their edge as they hide.
+  static const double _controlsHiddenOffset = 30;
+
+  // 1 shown, 0 hidden; drives both opacity and the slide.
+  late final AnimationController _controlsAnimation = AnimationController(
+    vsync: this,
+    value: 1,
+  );
   late int _index = widget.initialIndex;
   bool _zoomed = false;
+  bool _controlsVisible = true;
+  bool _accessibleNavigation = false;
+
+  // Whether the viewer has hidden the status bar, so it only talks to the
+  // platform when the hidden state changes and restores only what it hid.
+  bool _statusBarHidden = false;
+
+  // Set while the viewer is closing or covered by another route: the system
+  // bars belong to the app again, and the viewer sends nothing until a
+  // covering route pops back to it.
+  bool _systemUiReleased = false;
+
+  ModalRoute<void>? _route;
+  Size? _screenSize;
+
+  // Hiding the status bar zeroes the top padding. The image keeps the inset
+  // it had while the controls were shown, and only follows the reported
+  // padding again once that changes after the controls come back.
+  EdgeInsets _padding = EdgeInsets.zero;
+  EdgeInsets? _heldInset;
+  EdgeInsets? _paddingWhenShown;
 
   // Swipe-to-dismiss state, mirroring FullscreenVideoPlayer's gesture.
   Offset _dragOffset = Offset.zero;
@@ -89,8 +154,48 @@ class _ImageViewerState extends State<ImageViewer>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != _route) {
+      _route?.animation?.removeStatusListener(_onRouteAnimationStatus);
+      appRouteObserver.unsubscribe(this);
+      _route = route is ModalRoute<void> ? route : null;
+      _route?.animation?.addStatusListener(_onRouteAnimationStatus);
+      if (_route case final route?) {
+        appRouteObserver.subscribe(this, route);
+      }
+    }
+    _padding = MediaQuery.paddingOf(context);
+    // A new screen size (a rotation, a resized window) makes the held inset
+    // meaningless; the new real padding applies.
+    final screenSize = MediaQuery.sizeOf(context);
+    if (_screenSize != null && screenSize != _screenSize) {
+      _heldInset = null;
+      _paddingWhenShown = null;
+    }
+    _screenSize = screenSize;
+    _accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
+    if (_accessibleNavigation) {
+      _controlsVisible = true;
+    }
+    if (_heldInset != null &&
+        !_controlsHidden &&
+        _paddingWhenShown != null &&
+        _padding != _paddingWhenShown) {
+      _heldInset = null;
+      _paddingWhenShown = null;
+    }
+    _syncControlsHidden();
+  }
+
+  @override
   void dispose() {
+    _releaseSystemUi();
+    _route?.animation?.removeStatusListener(_onRouteAnimationStatus);
+    appRouteObserver.unsubscribe(this);
     _zoomAnimation.dispose();
+    _controlsAnimation.dispose();
     _transform
       ..removeListener(_onTransformChanged)
       ..dispose();
@@ -98,11 +203,126 @@ class _ImageViewerState extends State<ImageViewer>
     super.dispose();
   }
 
+  // The pop animation reverses on the first frame of the pop; restoring the
+  // bars there, rather than in dispose after the fade, keeps the page below
+  // from appearing without its status bar.
+  void _onRouteAnimationStatus(AnimationStatus status) {
+    if (status == AnimationStatus.reverse) {
+      _releaseSystemUi();
+    }
+  }
+
+  @override
+  void didPushNext() => _releaseSystemUi();
+
+  @override
+  void didPopNext() {
+    if (!_systemUiReleased) {
+      return;
+    }
+    _systemUiReleased = false;
+    if (_zoomed) {
+      SystemChrome.setSystemUIOverlayStyle(_zoomedNavigationBarStyle);
+    }
+    _syncControlsHidden();
+  }
+
+  /// Hands the system bars back to the app: the closing pop, a covering
+  /// route and dispose all release through here, once.
+  void _releaseSystemUi() {
+    if (_systemUiReleased) {
+      return;
+    }
+    _systemUiReleased = true;
+    if (_zoomed) {
+      SystemChrome.setSystemUIOverlayStyle(AppTheme.navigationBarStyle);
+    }
+    if (_statusBarHidden) {
+      _statusBarHidden = false;
+      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+    }
+  }
+
+  /// The one place the controls count as hidden; opacity, hit testing, focus
+  /// and the status bar all follow it.
+  bool get _controlsHidden => !_controlsVisible && !_accessibleNavigation;
+
+  EdgeInsets get _imageInset => _heldInset ?? _padding;
+
+  void _syncControlsHidden() {
+    final hidden = _controlsHidden;
+    _animateControls(shown: !hidden);
+    if (_systemUiReleased || hidden == _statusBarHidden) {
+      return;
+    }
+    _statusBarHidden = hidden;
+    if (hidden) {
+      _heldInset ??= _padding;
+      _paddingWhenShown = null;
+      // Manual mode with only the bottom overlay hides the status bar and
+      // keeps the navigation bar without moving the layout.
+      unawaited(
+        SystemChrome.setEnabledSystemUIMode(
+          SystemUiMode.manual,
+          overlays: [SystemUiOverlay.bottom],
+        ),
+      );
+    } else {
+      if (_heldInset != null) {
+        _paddingWhenShown = _padding;
+      }
+      // Edge-to-edge, not manual with both overlays: it is the app's mode.
+      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+    }
+  }
+
+  void _animateControls({required bool shown}) {
+    final target = shown ? 1.0 : 0.0;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controlsAnimation.value = target;
+      return;
+    }
+    if (_controlsAnimation.value == target && !_controlsAnimation.isAnimating) {
+      return;
+    }
+    _controlsAnimation.animateWith(
+      SpringSimulation(
+        _controlsSpring,
+        _controlsAnimation.value,
+        target,
+        _controlsAnimation.velocity,
+        snapToEnd: true,
+      ),
+    );
+  }
+
   void _onTransformChanged() {
     final zoomed = _transform.value.getMaxScaleOnAxis() > 1.01;
-    if (zoomed != _zoomed) {
-      setState(() => _zoomed = zoomed);
+    if (zoomed == _zoomed) {
+      return;
     }
+    if (!_systemUiReleased) {
+      SystemChrome.setSystemUIOverlayStyle(
+        zoomed ? _zoomedNavigationBarStyle : AppTheme.navigationBarStyle,
+      );
+    }
+    setState(() {
+      _zoomed = zoomed;
+      // Zooming in clears the picture; zooming out leaves the controls to
+      // the next tap.
+      if (zoomed) {
+        _controlsVisible = false;
+      }
+    });
+    _syncControlsHidden();
+  }
+
+  void _onTap() {
+    if (_accessibleNavigation) {
+      return;
+    }
+    setState(() => _controlsVisible = !_controlsVisible);
+    _syncControlsHidden();
   }
 
   void _onPointerDown(PointerDownEvent event) {
@@ -291,6 +511,7 @@ class _ImageViewerState extends State<ImageViewer>
       onPointerUp: _onPointerEnded,
       onPointerCancel: _onPointerCancel,
       child: GestureDetector(
+        onTap: _onTap,
         onDoubleTapDown: _onDoubleTapDown,
         onDoubleTap: _onDoubleTap,
         child: InteractiveViewer(
@@ -307,7 +528,15 @@ class _ImageViewerState extends State<ImageViewer>
           onInteractionStart: _onInteractionStart,
           onInteractionUpdate: _onInteractionUpdate,
           onInteractionEnd: _onInteractionEnd,
-          child: Center(child: rendered),
+          // The inset sits inside the zoom surface, unclipped, so the image
+          // fits between the system bars at rest yet pans under them zoomed.
+          child: Padding(
+            padding: _imageInset,
+            child: Center(
+              key: const Key('image-viewer-image-slot'),
+              child: rendered,
+            ),
+          ),
         ),
       ),
     );
@@ -354,72 +583,123 @@ class _ImageViewerState extends State<ImageViewer>
               child: content,
             ),
           ),
+          Positioned.fill(
+            child: ExcludeFocus(
+              excluding: _controlsHidden,
+              child: IgnorePointer(
+                ignoring: _controlsHidden,
+                child: FadeTransition(
+                  opacity: _controlsAnimation,
+                  child: _buildControls(context, multi),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildControls(BuildContext context, bool multi) {
+    // The controls sit in the image's held inset, so the status bar going
+    // away doesn't move them on top of their slide.
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(padding: _imageInset),
+      child: Stack(
+        children: [
           if (multi)
-            SafeArea(
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Container(
-                    key: const Key('image-viewer-page-indicator'),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '${_index + 1}/${widget.images.length}',
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+            _slideToEdge(
+              direction: 1,
+              child: SafeArea(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Container(
+                      key: const Key('image-viewer-page-indicator'),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _controlBackdropColor,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${_index + 1}/${widget.images.length}',
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: IconButton(
-                // Same 24px footprint as the glyph so the button doesn't
-                // shift while saving.
-                icon: _saving
-                    ? const SizedBox.square(
-                        dimension: 24,
-                        child: Padding(
-                          padding: EdgeInsets.all(3),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.textPrimary,
+          _slideToEdge(
+            direction: -1,
+            child: SafeArea(
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: IconButton(
+                  // Same 24px footprint as the glyph so the button doesn't
+                  // shift while saving.
+                  icon: _saving
+                      ? const SizedBox.square(
+                          dimension: 24,
+                          child: Padding(
+                            padding: EdgeInsets.all(3),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.textPrimary,
+                            ),
                           ),
+                        )
+                      : const LucideGlyph(
+                          LucidePaths.download,
+                          color: AppColors.textPrimary,
                         ),
-                      )
-                    : const LucideGlyph(
-                        LucidePaths.download,
-                        color: AppColors.textPrimary,
-                      ),
-                tooltip: 'Save image',
-                onPressed: _saving ? null : _onSavePressed,
+                  tooltip: 'Save image',
+                  style: _controlButtonStyle,
+                  onPressed: _saving ? null : _onSavePressed,
+                ),
               ),
             ),
           ),
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topRight,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: AppColors.textPrimary),
-                tooltip: 'Close',
-                onPressed: () => Navigator.of(context).pop(),
+          _slideToEdge(
+            direction: -1,
+            child: SafeArea(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: AppColors.textPrimary),
+                  tooltip: 'Close',
+                  style: _controlButtonStyle,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  /// Moves [child] up to [_controlsHiddenOffset] toward the bottom edge
+  /// ([direction] 1) or the top edge (-1) as the controls hide.
+  Widget _slideToEdge({required double direction, required Widget child}) {
+    return AnimatedBuilder(
+      animation: _controlsAnimation,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(
+          0,
+          direction * _controlsHiddenOffset * (1 - _controlsAnimation.value),
+        ),
+        child: child,
+      ),
+      child: child,
     );
   }
 }

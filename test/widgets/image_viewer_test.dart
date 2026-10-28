@@ -3,10 +3,14 @@ import 'dart:async';
 import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/services/media_saver.dart';
+import 'package:coves_flutter/utils/app_route_observer.dart';
 import 'package:coves_flutter/widgets/icons/lucide_icon_painter.dart';
 import 'package:coves_flutter/widgets/icons/lucide_paths.dart';
 import 'package:coves_flutter/widgets/image_viewer.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -110,9 +114,11 @@ Widget _harness({
       fullsize: 'https://cdn.test/fullsize.jpg',
     ),
   ],
+  List<NavigatorObserver> navigatorObservers = const [],
 }) {
   return MaterialApp(
     theme: AppTheme.dark,
+    navigatorObservers: navigatorObservers,
     home: Builder(
       builder: (context) => Scaffold(
         body: Center(
@@ -134,8 +140,11 @@ Future<void> _openViewer(
       fullsize: 'https://cdn.test/fullsize.jpg',
     ),
   ],
+  List<NavigatorObserver> navigatorObservers = const [],
 }) async {
-  await tester.pumpWidget(_harness(images: images));
+  await tester.pumpWidget(
+    _harness(images: images, navigatorObservers: navigatorObservers),
+  );
   await tester.tap(find.text('Open image'));
   await tester.pumpAndSettle();
 }
@@ -152,7 +161,921 @@ Future<void> _doubleTapAt(WidgetTester tester, Offset position) async {
   await tester.pumpAndSettle();
 }
 
+const _imageSlotKey = Key('image-viewer-image-slot');
+
+Finder _closeButton() => find.descendant(
+  of: find.byKey(_viewerKey),
+  matching: find.byTooltip('Close'),
+);
+
+Finder _pageIndicator() => find.descendant(
+  of: find.byKey(_viewerKey),
+  matching: find.byKey(const Key('image-viewer-page-indicator')),
+);
+
+/// The opacity [finder]'s widget is painted with: the product of every
+/// opacity between its render object and the root.
+double _paintedOpacity(WidgetTester tester, Finder finder) {
+  var opacity = 1.0;
+  RenderObject? node = tester.renderObject(finder);
+  while (node != null) {
+    if (node is RenderOpacity) {
+      opacity *= node.opacity;
+    }
+    if (node is RenderAnimatedOpacityMixin) {
+      opacity *= node.opacity.value;
+    }
+    node = node.parent;
+  }
+  return opacity;
+}
+
+/// Expects every control in [controls] to be fully visible and hit-testable
+/// when [shown], or invisible and not hit-testable otherwise.
+void _expectControls(
+  WidgetTester tester,
+  List<Finder> controls, {
+  required bool shown,
+  required String reason,
+}) {
+  for (final control in controls) {
+    expect(
+      control.hitTestable(),
+      shown ? findsOneWidget : findsNothing,
+      reason: '$reason (hit-testable: $control)',
+    );
+    if (shown || control.evaluate().isNotEmpty) {
+      expect(
+        _paintedOpacity(tester, control),
+        shown ? 1.0 : 0.0,
+        reason: '$reason (opacity: $control)',
+      );
+    }
+  }
+}
+
+/// A single tap that resolves as a tap rather than the start of a double tap.
+Future<void> _singleTapAt(WidgetTester tester, Offset position) async {
+  await tester.tapAt(position);
+  await tester.pump(kDoubleTapTimeout);
+  await tester.pumpAndSettle();
+}
+
+/// Pinches two pointers from [start] to [end] pixels either side of
+/// [center], then lifts both. The first pointer alone steps 20 pixels past
+/// the tap slop so the scale gesture wins the arena; the span at that moment
+/// is the scale baseline.
+Future<void> _pinchAt(
+  WidgetTester tester,
+  Offset center, {
+  required double start,
+  required double end,
+}) async {
+  final first = await tester.startGesture(
+    center.translate(-start, 0),
+    pointer: 1,
+  );
+  final second = await tester.startGesture(
+    center.translate(start, 0),
+    pointer: 2,
+  );
+  final slopStep = end > start ? 20.0 : -20.0;
+  await first.moveBy(Offset(-slopStep, 0));
+  await tester.pump();
+  await first.moveBy(Offset(-(end - start - slopStep), 0));
+  await second.moveBy(Offset(end - start, 0));
+  await tester.pump();
+  await first.up();
+  await second.up();
+  await tester.pumpAndSettle();
+}
+
+/// Records the viewer's system-UI mode calls as 'method arguments' strings,
+/// answering every platform call so nothing reaches a missing plugin.
+List<String> _recordSystemUiModeCalls(WidgetTester tester) {
+  final calls = <String>[];
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    SystemChannels.platform,
+    (call) async {
+      if (call.method == 'SystemChrome.setEnabledSystemUIOverlays' ||
+          call.method == 'SystemChrome.setEnabledSystemUIMode') {
+        calls.add('${call.method} ${call.arguments}');
+      }
+      return null;
+    },
+  );
+  addTearDown(
+    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      null,
+    ),
+  );
+  return calls;
+}
+
+const _statusBarHidden =
+    'SystemChrome.setEnabledSystemUIOverlays [SystemUiOverlay.bottom]';
+const _edgeToEdge =
+    'SystemChrome.setEnabledSystemUIMode SystemUiMode.edgeToEdge';
+
+Future<void> _popViewer(WidgetTester tester, Offset center) async {
+  Navigator.of(tester.element(_interactiveViewer())).pop();
+  await tester.pumpAndSettle();
+}
+
+/// Whether primary focus sits inside the IconButton holding [control].
+bool _focusIsInside(Finder control) {
+  final focused = FocusManager.instance.primaryFocus?.context;
+  final buttons = find
+      .ancestor(of: control, matching: find.byType(IconButton))
+      .evaluate();
+  if (focused == null || buttons.isEmpty) {
+    return false;
+  }
+  final button = buttons.single;
+  var inside = focused == button;
+  focused.visitAncestorElements((ancestor) {
+    inside = inside || ancestor == button;
+    return !inside;
+  });
+  return inside;
+}
+
+/// Presses Tab [presses] times and returns the names of [controls] that held
+/// primary focus after any press.
+Future<Set<String>> _tabCycle(
+  WidgetTester tester,
+  Map<String, Finder> controls, {
+  int presses = 6,
+}) async {
+  final reached = <String>{};
+  for (var press = 0; press < presses; press++) {
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    for (final MapEntry(:key, :value) in controls.entries) {
+      if (_focusIsInside(value)) {
+        reached.add(key);
+      }
+    }
+  }
+  return reached;
+}
+
 void main() {
+  testWidgets(
+    'image fits inside the safe area at rest and can zoom under the bars',
+    (tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      tester.view.padding = const FakeViewPadding(top: 40, bottom: 30);
+      tester.view.viewPadding = const FakeViewPadding(top: 40, bottom: 30);
+      addTearDown(tester.view.reset);
+
+      await _pumpViewerWithSaver(
+        tester,
+        saver: _RecordingMediaSaver(),
+        images: const [
+          EmbedImage(
+            thumb: 'https://cdn.test/thumb.jpg',
+            fullsize: 'https://cdn.test/fullsize.jpg',
+          ),
+        ],
+      );
+
+      expect(
+        tester.getRect(find.byKey(_viewerKey)),
+        const Rect.fromLTRB(0, 0, 400, 800),
+        reason: 'the backdrop must cover the full screen',
+      );
+      expect(
+        tester.getRect(_interactiveViewer()),
+        const Rect.fromLTRB(0, 0, 400, 800),
+        reason: 'the zoom surface must cover the full screen',
+      );
+      final slot = find.descendant(
+        of: find.byKey(_viewerKey),
+        matching: find.byKey(_imageSlotKey),
+      );
+      expect(
+        tester.getRect(slot),
+        const Rect.fromLTRB(0, 40, 400, 770),
+        reason: 'at rest the image fits between the status and nav bars',
+      );
+
+      await _doubleTapAt(tester, const Offset(200, 60));
+      expect(
+        tester.getRect(slot).top,
+        lessThan(40),
+        reason: 'a zoomed image must be able to move under the status bar',
+      );
+    },
+  );
+
+  group('single tap toggles the controls', () {
+    final rows = <(String, List<EmbedImage>, List<Finder> Function())>[
+      (
+        'single image',
+        _twoImageGallery.sublist(0, 1),
+        () => [_closeButton(), _saveButton()],
+      ),
+      (
+        'gallery',
+        _twoImageGallery,
+        () => [_closeButton(), _saveButton(), _pageIndicator()],
+      ),
+    ];
+    for (final (description, images, controls) in rows) {
+      testWidgets('$description: tap hides, tap shows, double tap waits', (
+        tester,
+      ) async {
+        await _pumpViewerWithSaver(
+          tester,
+          saver: _RecordingMediaSaver(),
+          images: images,
+        );
+        final center = tester.getCenter(_interactiveViewer());
+        _expectControls(
+          tester,
+          controls(),
+          shown: true,
+          reason: 'controls start shown',
+        );
+
+        await _singleTapAt(tester, center);
+        _expectControls(
+          tester,
+          controls(),
+          shown: false,
+          reason: 'a single tap hides the controls',
+        );
+
+        await _singleTapAt(tester, center);
+        _expectControls(
+          tester,
+          controls(),
+          shown: true,
+          reason: 'a second single tap brings the controls back',
+        );
+
+        await tester.tapAt(center);
+        await tester.pump(const Duration(milliseconds: 50));
+        await tester.pump();
+        _expectControls(
+          tester,
+          controls(),
+          shown: true,
+          reason: 'the first tap of a double tap must not toggle the controls',
+        );
+        await tester.tapAt(center);
+        await tester.pumpAndSettle();
+      });
+    }
+  });
+
+  testWidgets(
+    "hiding controls slide 30px to their edge on Bluesky's lightbox spring",
+    (tester) async {
+      await _pumpViewerWithSaver(
+        tester,
+        saver: _RecordingMediaSaver(),
+        images: _twoImageGallery,
+      );
+      final center = tester.getCenter(_interactiveViewer());
+      double top(Finder finder) => tester.getTopLeft(finder).dy;
+      final closeAtRest = top(_closeButton());
+      final saveAtRest = top(_saveButton());
+      final indicatorAtRest = top(_pageIndicator());
+
+      await tester.tapAt(center);
+      await tester.pump(kDoubleTapTimeout);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(top(_closeButton()), lessThan(closeAtRest));
+      expect(top(_closeButton()), greaterThan(closeAtRest - 30));
+      expect(top(_saveButton()), lessThan(saveAtRest));
+      expect(top(_pageIndicator()), greaterThan(indicatorAtRest));
+      expect(top(_pageIndicator()), lessThan(indicatorAtRest + 30));
+      expect(
+        _closeButton().hitTestable(),
+        findsNothing,
+        reason: 'fading controls stop taking taps at once',
+      );
+
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+        _paintedOpacity(tester, _closeButton()),
+        greaterThan(0.1),
+        reason: 'the spring is still easing out 300ms in',
+      );
+
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(
+        _paintedOpacity(tester, _closeButton()),
+        lessThan(0.02),
+        reason: 'the spring is all but settled 800ms in',
+      );
+
+      await tester.pumpAndSettle();
+      expect(top(_closeButton()), closeAtRest - 30);
+      expect(top(_saveButton()), saveAtRest - 30);
+      expect(top(_pageIndicator()), indicatorAtRest + 30);
+      _expectControls(
+        tester,
+        [_closeButton(), _saveButton(), _pageIndicator()],
+        shown: false,
+        reason: 'the spring settles fully hidden',
+      );
+
+      await tester.tapAt(center);
+      await tester.pump(kDoubleTapTimeout);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(top(_closeButton()), greaterThan(closeAtRest - 30));
+      expect(top(_closeButton()), lessThan(closeAtRest));
+
+      await tester.pumpAndSettle();
+      expect(top(_closeButton()), closeAtRest);
+      expect(top(_saveButton()), saveAtRest);
+      expect(top(_pageIndicator()), indicatorAtRest);
+      _expectControls(
+        tester,
+        [_closeButton(), _saveButton(), _pageIndicator()],
+        shown: true,
+        reason: 'the spring settles fully shown',
+      );
+    },
+  );
+
+  group('zooming hides the controls until a single tap', () {
+    final rows =
+        <
+          (
+            String,
+            Future<void> Function(WidgetTester, Offset),
+            Future<void> Function(WidgetTester, Offset),
+          )
+        >[
+          ('double tap', _doubleTapAt, _doubleTapAt),
+          (
+            'pinch',
+            (tester, center) => _pinchAt(tester, center, start: 40, end: 100),
+            (tester, center) => _pinchAt(tester, center, start: 100, end: 45),
+          ),
+        ];
+    for (final (description, zoomIn, zoomOut) in rows) {
+      testWidgets(description, (tester) async {
+        await _openViewer(tester);
+        final controller = tester
+            .widget<InteractiveViewer>(_interactiveViewer())
+            .transformationController!;
+        final center = tester.getCenter(_interactiveViewer());
+        final controls = [_closeButton(), _saveButton()];
+
+        await zoomIn(tester, center);
+        expect(controller.value.getMaxScaleOnAxis(), greaterThan(1.9));
+        _expectControls(
+          tester,
+          controls,
+          shown: false,
+          reason: 'zooming in hides the controls',
+        );
+
+        await zoomOut(tester, center);
+        expect(controller.value.getMaxScaleOnAxis(), closeTo(1, 0.01));
+        _expectControls(
+          tester,
+          controls,
+          shown: false,
+          reason: 'returning to scale 1 leaves the controls hidden',
+        );
+
+        await _singleTapAt(tester, center);
+        _expectControls(
+          tester,
+          controls,
+          shown: true,
+          reason: 'a single tap after zooming out shows the controls',
+        );
+      });
+    }
+  });
+
+  group('zooming makes the navigation bar transparent', () {
+    const seededStyle = SystemUiOverlayStyle(
+      statusBarColor: Color(0x33000000),
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Color(0xFF123456),
+      systemNavigationBarIconBrightness: Brightness.dark,
+      systemNavigationBarContrastEnforced: false,
+    );
+    final rows = <(String, Future<void> Function(WidgetTester, Offset))>[
+      ('double tap back to scale 1', _doubleTapAt),
+      (
+        'popping the viewer while zoomed',
+        (tester, center) async {
+          Navigator.of(tester.element(_interactiveViewer())).pop();
+          await tester.pumpAndSettle();
+        },
+      ),
+    ];
+    for (final (description, endZoom) in rows) {
+      testWidgets('$description restores the app navigation bar', (
+        tester,
+      ) async {
+        final previousStyle = SystemChrome.latestStyle;
+        addTearDown(() {
+          if (previousStyle != null) {
+            SystemChrome.setSystemUIOverlayStyle(previousStyle);
+          }
+        });
+        // Seeded after the viewer opens: MaterialApp applies its own
+        // theme-derived style when it first builds.
+        await _openViewer(tester);
+        SystemChrome.setSystemUIOverlayStyle(seededStyle);
+        await tester.pump();
+        expect(SystemChrome.latestStyle, seededStyle);
+
+        final center = tester.getCenter(_interactiveViewer());
+        await _doubleTapAt(tester, center);
+        await tester.pump();
+
+        final zoomed = SystemChrome.latestStyle!;
+        expect(zoomed.systemNavigationBarColor, const Color(0x00000000));
+        expect(zoomed.systemNavigationBarContrastEnforced, false);
+        // Null status fields tell the platform to leave the status bar as is.
+        expect(zoomed.statusBarColor, isNull);
+        expect(zoomed.statusBarIconBrightness, isNull);
+        expect(zoomed.statusBarBrightness, isNull);
+
+        await endZoom(tester, center);
+        await tester.pump();
+
+        final restored = SystemChrome.latestStyle!;
+        expect(restored.systemNavigationBarColor, const Color(0xFF0B0F14));
+        expect(restored.systemNavigationBarIconBrightness, Brightness.light);
+        expect(restored.systemNavigationBarContrastEnforced, true);
+        expect(restored.statusBarColor, isNull);
+      });
+    }
+  });
+
+  group('the status bar follows the controls', () {
+    Future<void> tapWhileZoomed(WidgetTester tester, Offset center) async {
+      await _singleTapAt(tester, center);
+      final scale = tester
+          .widget<InteractiveViewer>(_interactiveViewer())
+          .transformationController!
+          .value
+          .getMaxScaleOnAxis();
+      expect(scale, greaterThan(1.01), reason: 'the tap must not unzoom');
+      _expectControls(
+        tester,
+        [_closeButton(), _saveButton()],
+        shown: true,
+        reason: 'a single tap while zoomed shows the controls',
+      );
+    }
+
+    final rows =
+        <(String, List<(Future<void> Function(WidgetTester, Offset), String)>)>[
+          (
+            'tap hides it, tap shows it',
+            [(_singleTapAt, _statusBarHidden), (_singleTapAt, _edgeToEdge)],
+          ),
+          (
+            'zoom hides it, zooming out keeps it hidden, tap shows it',
+            [
+              (_doubleTapAt, _statusBarHidden),
+              (_doubleTapAt, _statusBarHidden),
+              (_singleTapAt, _edgeToEdge),
+            ],
+          ),
+          (
+            'tap while zoomed shows it',
+            [(_doubleTapAt, _statusBarHidden), (tapWhileZoomed, _edgeToEdge)],
+          ),
+          (
+            'popping with hidden controls at rest restores it',
+            [(_singleTapAt, _statusBarHidden), (_popViewer, _edgeToEdge)],
+          ),
+          (
+            'popping while zoomed restores it',
+            [(_doubleTapAt, _statusBarHidden), (_popViewer, _edgeToEdge)],
+          ),
+        ];
+    for (final (description, steps) in rows) {
+      testWidgets(description, (tester) async {
+        final calls = _recordSystemUiModeCalls(tester);
+        await _openViewer(tester);
+        final center = tester.getCenter(_interactiveViewer());
+
+        for (final (index, (step, expectedLast)) in steps.indexed) {
+          await step(tester, center);
+          await tester.pump();
+          expect(
+            calls.lastOrNull,
+            expectedLast,
+            reason: 'last system UI call after step ${index + 1}',
+          );
+        }
+      });
+    }
+  });
+
+  testWidgets('hiding the status bar leaves the image where it was', (
+    tester,
+  ) async {
+    void setTopInset(double top) {
+      tester.view.padding = FakeViewPadding(top: top, bottom: 30);
+      tester.view.viewPadding = FakeViewPadding(top: top, bottom: 30);
+    }
+
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    setTopInset(40);
+    addTearDown(tester.view.reset);
+    await _pumpViewerWithSaver(
+      tester,
+      saver: _RecordingMediaSaver(),
+      images: _twoImageGallery.sublist(0, 1),
+    );
+    final slot = find.descendant(
+      of: find.byKey(_viewerKey),
+      matching: find.byKey(_imageSlotKey),
+    );
+    final center = tester.getCenter(_interactiveViewer());
+
+    final steps = <(String, Future<void> Function(), Rect)>[
+      (
+        'tap hides the controls and the status bar goes away',
+        () async {
+          await _singleTapAt(tester, center);
+          setTopInset(0);
+          await tester.pump();
+        },
+        const Rect.fromLTRB(0, 40, 400, 770),
+      ),
+      (
+        'tap shows the controls before the status bar returns',
+        () => _singleTapAt(tester, center),
+        const Rect.fromLTRB(0, 40, 400, 770),
+      ),
+      (
+        'the status bar returns',
+        () async {
+          setTopInset(40);
+          await tester.pump();
+        },
+        const Rect.fromLTRB(0, 40, 400, 770),
+      ),
+      (
+        'the status bar inset changes while the controls are shown',
+        () async {
+          setTopInset(24);
+          await tester.pump();
+        },
+        const Rect.fromLTRB(0, 24, 400, 770),
+      ),
+    ];
+    for (final (description, step, expectedSlot) in steps) {
+      await step();
+      expect(tester.getRect(slot), expectedSlot, reason: description);
+    }
+  });
+
+  testWidgets('controls keep their inset while the status bar hides', (
+    tester,
+  ) async {
+    void setTopInset(double top) {
+      tester.view.padding = FakeViewPadding(top: top, bottom: 30);
+      tester.view.viewPadding = FakeViewPadding(top: top, bottom: 30);
+    }
+
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    setTopInset(40);
+    addTearDown(tester.view.reset);
+    await _pumpViewerWithSaver(
+      tester,
+      saver: _RecordingMediaSaver(),
+      images: _twoImageGallery,
+    );
+    final center = tester.getCenter(_interactiveViewer());
+    double top(Finder finder) => tester.getTopLeft(finder).dy;
+    final closeAtRest = top(_closeButton());
+    final indicatorAtRest = top(_pageIndicator());
+
+    await _singleTapAt(tester, center);
+    setTopInset(0);
+    await tester.pumpAndSettle();
+    expect(top(_closeButton()), closeAtRest - 30, reason: 'hidden');
+    expect(top(_pageIndicator()), indicatorAtRest + 30, reason: 'hidden');
+
+    await _singleTapAt(tester, center);
+    expect(top(_closeButton()), closeAtRest, reason: 'shown, bar not back');
+
+    setTopInset(40);
+    await tester.pumpAndSettle();
+    expect(top(_closeButton()), closeAtRest, reason: 'the status bar returns');
+  });
+
+  testWidgets('with animations turned off the controls hide and show at once', (
+    tester,
+  ) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await _pumpViewerWithSaver(
+      tester,
+      saver: _RecordingMediaSaver(),
+      images: _twoImageGallery,
+    );
+    final center = tester.getCenter(_interactiveViewer());
+    final controls = [_closeButton(), _saveButton(), _pageIndicator()];
+
+    await tester.tapAt(center);
+    await tester.pump(kDoubleTapTimeout);
+    await tester.pump();
+    _expectControls(tester, controls, shown: false, reason: 'tap hides');
+    expect(tester.binding.hasScheduledFrame, isFalse);
+
+    await tester.tapAt(center);
+    await tester.pump(kDoubleTapTimeout);
+    await tester.pump();
+    _expectControls(tester, controls, shown: true, reason: 'tap shows');
+    expect(tester.binding.hasScheduledFrame, isFalse);
+  });
+
+  group('a screen reader keeps the controls', () {
+    void enableAccessibleNavigation(WidgetTester tester) {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(accessibleNavigation: true);
+    }
+
+    final rows = <(String, Future<void> Function(WidgetTester, Offset), bool)>[
+      ('single tap', _singleTapAt, false),
+      ('double tap', _doubleTapAt, true),
+    ];
+    for (final (description, gesture, zooms) in rows) {
+      testWidgets('$description leaves the controls shown', (tester) async {
+        final calls = _recordSystemUiModeCalls(tester);
+        final semantics = tester.ensureSemantics();
+        enableAccessibleNavigation(tester);
+        addTearDown(
+          tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+        );
+        await _openViewer(tester);
+        final center = tester.getCenter(_interactiveViewer());
+
+        await gesture(tester, center);
+        if (zooms) {
+          final scale = tester
+              .widget<InteractiveViewer>(_interactiveViewer())
+              .transformationController!
+              .value
+              .getMaxScaleOnAxis();
+          expect(scale, greaterThan(1.01), reason: 'the double tap zooms');
+        }
+        _expectControls(
+          tester,
+          [_closeButton(), _saveButton()],
+          shown: true,
+          reason: 'screen reader users keep the controls after a $description',
+        );
+        for (final (label, control) in [
+          ('Close', _closeButton()),
+          ('Save image', _saveButton()),
+        ]) {
+          expect(
+            tester.getSemantics(control),
+            // An IconButton exposes its tooltip as the spoken label.
+            isSemantics(tooltip: label, isButton: true, hasTapAction: true),
+          );
+        }
+        expect(calls, isNot(contains(_statusBarHidden)));
+        semantics.dispose();
+      });
+    }
+
+    testWidgets('turning a screen reader on brings hidden controls back', (
+      tester,
+    ) async {
+      final calls = _recordSystemUiModeCalls(tester);
+      final semantics = tester.ensureSemantics();
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      await _openViewer(
+        tester,
+        images: const [
+          EmbedImage(
+            thumb: 'https://cdn.test/thumb.jpg',
+            fullsize: 'https://cdn.test/fullsize.jpg',
+            alt: 'A heron standing on a rock',
+          ),
+        ],
+      );
+
+      await _singleTapAt(tester, tester.getCenter(_interactiveViewer()));
+      expect(
+        find.bySemanticsLabel('A heron standing on a rock'),
+        findsOneWidget,
+        reason: 'alt text stays in semantics while the controls are hidden',
+      );
+
+      enableAccessibleNavigation(tester);
+      await tester.pumpAndSettle();
+      _expectControls(
+        tester,
+        [_closeButton(), _saveButton()],
+        shown: true,
+        reason: 'a screen reader turning on shows the controls',
+      );
+      expect(calls.lastOrNull, _edgeToEdge);
+      semantics.dispose();
+    });
+  });
+
+  testWidgets('hidden controls cannot hold or take keyboard focus', (
+    tester,
+  ) async {
+    await _pumpViewerWithSaver(
+      tester,
+      saver: _RecordingMediaSaver(),
+      images: _twoImageGallery.sublist(0, 1),
+    );
+    final controls = {'Close': _closeButton(), 'Save image': _saveButton()};
+
+    expect(await _tabCycle(tester, controls), {
+      'Close',
+      'Save image',
+    }, reason: 'Tab reaches both shown controls');
+    for (var press = 0; press < 6 && !_focusIsInside(_closeButton()); press++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+    }
+    expect(_focusIsInside(_closeButton()), isTrue, reason: 'Close is focused');
+
+    await _singleTapAt(tester, tester.getCenter(_interactiveViewer()));
+    expect(
+      controls.keys.where((name) => _focusIsInside(controls[name]!)),
+      isEmpty,
+      reason: 'hiding the controls moves focus out of them',
+    );
+    expect(
+      await _tabCycle(tester, controls),
+      isEmpty,
+      reason: 'Tab never lands on hidden controls',
+    );
+  });
+
+  group('closing the viewer restores the system bars as the pop starts', () {
+    Future<void> tapCloseWhileZoomed(WidgetTester tester, Offset center) async {
+      await _singleTapAt(tester, center);
+      await tester.tap(_closeButton());
+    }
+
+    Future<void> navigatorPop(WidgetTester tester, Offset center) async {
+      Navigator.of(tester.element(_interactiveViewer())).pop();
+    }
+
+    final rows =
+        <
+          (
+            String,
+            Future<void> Function(WidgetTester, Offset),
+            Future<void> Function(WidgetTester, Offset),
+            bool,
+          )
+        >[
+          ('hidden controls, Navigator.pop', _singleTapAt, navigatorPop, false),
+          ('zoomed, Navigator.pop', _doubleTapAt, navigatorPop, true),
+          ('zoomed, Close button', _doubleTapAt, tapCloseWhileZoomed, true),
+        ];
+    for (final (description, setUpState, close, zoomed) in rows) {
+      testWidgets(description, (tester) async {
+        final previousStyle = SystemChrome.latestStyle;
+        addTearDown(() {
+          if (previousStyle != null) {
+            SystemChrome.setSystemUIOverlayStyle(previousStyle);
+          }
+        });
+        final calls = _recordSystemUiModeCalls(tester);
+        await _openViewer(tester);
+        final center = tester.getCenter(_interactiveViewer());
+        await setUpState(tester, center);
+
+        final callsBeforeClose = calls.length;
+        await close(tester, center);
+        await tester.pump();
+        expect(
+          calls.lastOrNull,
+          _edgeToEdge,
+          reason: 'the status bar returns on the first frame of the pop',
+        );
+        if (zoomed) {
+          final style = SystemChrome.latestStyle!;
+          expect(style.systemNavigationBarColor, const Color(0xFF0B0F14));
+          expect(style.systemNavigationBarIconBrightness, Brightness.light);
+          expect(style.systemNavigationBarContrastEnforced, true);
+        }
+
+        await tester.pumpAndSettle();
+        expect(
+          calls.sublist(callsBeforeClose),
+          isNot(contains(_statusBarHidden)),
+          reason: 'the closing viewer never hides the status bar again',
+        );
+        expect(find.byKey(_viewerKey), findsNothing, reason: 'it closed');
+      });
+    }
+  });
+
+  group('a route pushed over the viewer gets the app system bars', () {
+    final rows = <(String, Future<void> Function(WidgetTester, Offset), bool)>[
+      ('hidden controls', _singleTapAt, false),
+      ('zoomed', _doubleTapAt, true),
+    ];
+    for (final (description, setUpState, zoomed) in rows) {
+      testWidgets('$description: push releases, pop back re-applies', (
+        tester,
+      ) async {
+        final previousStyle = SystemChrome.latestStyle;
+        addTearDown(() {
+          if (previousStyle != null) {
+            SystemChrome.setSystemUIOverlayStyle(previousStyle);
+          }
+        });
+        final calls = _recordSystemUiModeCalls(tester);
+        await _openViewer(tester, navigatorObservers: [appRouteObserver]);
+        await setUpState(tester, tester.getCenter(_interactiveViewer()));
+        final navigator = Navigator.of(tester.element(_interactiveViewer()));
+
+        unawaited(
+          navigator.push(
+            MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Covering route')),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(calls.lastOrNull, _edgeToEdge, reason: 'after the push');
+        if (zoomed) {
+          final style = SystemChrome.latestStyle!;
+          expect(style.systemNavigationBarColor, const Color(0xFF0B0F14));
+          expect(style.systemNavigationBarIconBrightness, Brightness.light);
+          expect(style.systemNavigationBarContrastEnforced, true);
+        }
+
+        navigator.pop();
+        await tester.pumpAndSettle();
+        expect(
+          calls.lastOrNull,
+          _statusBarHidden,
+          reason: 'back on the viewer the controls are still hidden',
+        );
+        if (zoomed) {
+          final style = SystemChrome.latestStyle!;
+          expect(style.systemNavigationBarColor, const Color(0x00000000));
+          expect(style.systemNavigationBarContrastEnforced, false);
+        }
+      });
+    }
+  });
+
+  testWidgets('a screen size change drops the held image inset', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(top: 40, bottom: 30);
+    tester.view.viewPadding = const FakeViewPadding(top: 40, bottom: 30);
+    addTearDown(tester.view.reset);
+    await _pumpViewerWithSaver(
+      tester,
+      saver: _RecordingMediaSaver(),
+      images: _twoImageGallery.sublist(0, 1),
+    );
+
+    await _singleTapAt(tester, tester.getCenter(_interactiveViewer()));
+    tester.view.physicalSize = const Size(800, 400);
+    tester.view.padding = const FakeViewPadding(left: 40, bottom: 24);
+    tester.view.viewPadding = const FakeViewPadding(left: 40, bottom: 24);
+    await tester.pump();
+
+    expect(
+      tester.getRect(
+        find.descendant(
+          of: find.byKey(_viewerKey),
+          matching: find.byKey(_imageSlotKey),
+        ),
+      ),
+      const Rect.fromLTRB(40, 0, 800, 376),
+      reason: 'rotating applies the new real insets even with hidden controls',
+    );
+  });
+
   testWidgets('double-tap smoothly animates focal zoom and reset', (
     tester,
   ) async {

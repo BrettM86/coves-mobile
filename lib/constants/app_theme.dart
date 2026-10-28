@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../widgets/icons/back_icon.dart';
 import 'app_colors.dart';
@@ -11,6 +12,16 @@ import 'app_typography.dart';
 class AppTheme {
   // Private constructor to prevent instantiation
   AppTheme._();
+
+  /// The Android navigation bar the app runs under. Contrast enforcement is
+  /// explicit so a screen that turns it off (the zoomed image viewer) has a
+  /// known value to restore. Status-bar fields stay null: leave them alone.
+  /// The image viewer restores this style when it zooms back out or closes.
+  static const SystemUiOverlayStyle navigationBarStyle = SystemUiOverlayStyle(
+    systemNavigationBarColor: AppColors.background,
+    systemNavigationBarIconBrightness: Brightness.light,
+    systemNavigationBarContrastEnforced: true,
+  );
 
   /// Color roles, mapped by hand onto the palette in `app_colors.dart`.
   ///
