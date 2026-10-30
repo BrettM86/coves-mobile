@@ -1,0 +1,204 @@
+# Section E — formatting composer end to end (PRD_COMPOSER_FORMATTING,
+# task 17 DoD 3 + 4). A reply to the NASA fixture post typed with every
+# format from the formatting toolbar, then:
+# - scripts/assert_comment_facets.js reads the comment record from mari's
+#   repo on the local PDS and checks the trimmed content and the facets,
+#   grouped as serializeFormatting writes them (UTF-8 byte offsets, one
+#   facet per identical range, block facets without the trailing newline);
+# - the post detail shows the comment with each format's text. Every check
+#   is tied to this run's comment: plain text carries the run's stamp or
+#   tag, and the line-1 spans are checked inside the paragraph holding the
+#   stamp (see the post-detail section). Text assertions cannot see styling,
+#   so the formatting itself (bold, italic, strikethrough, inline code,
+#   spoiler box, mention colour, quote bars, heading size, code block box)
+#   is verified from the two screenshots: e10_comment_inline (line 1) and
+#   e10_comment_blocks (lines 2-5).
+#
+# The comment, line by line (leading newline + spaces and trailing spaces +
+# newline are typed so the record must come back trimmed):
+#   1  <stamp> plain bold, italic, struck, secret, snippet, hi @mari...
+#      in !science and !science@coves.social
+#      bold/italic/strikethrough/spoiler/inline code typed with the format
+#      armed at the caret (toggle on, type, toggle off), then a user
+#      mention and a native community mention by name and by name@origin
+#   2  Quoted heading <tag>          quote + heading 1 (one facet)
+#   3  Between the blocks <tag>      plain (quote toggled off this line)
+#   4  Code line one <tag>           quote + code block (one facet over 4-5)
+#   5  Code line two <tag>
+# Every line starts with a capital: the reply field capitalises sentences,
+# so the keyboard would capitalise a lowercase line start.
+# Block formats apply to the caret's line, so each is toggled after the
+# line's text is typed. Enter after a heading line keeps the quote but not
+# the heading; Enter on a quoted code-block line keeps both.
+#
+# The toolbar scrolls horizontally on a phone-width screen: after the
+# inline buttons, a left swipe on it brings Quote, Heading and Code block
+# into view.
+# NOTE: never use hideKeyboard in the composer — Maestro implements it as a
+# BACK press, which closes the reply screen.
+# Assumes a signed-in session as mari (a1_login_session). Each run's stamp
+# and tag make its comment distinguishable from earlier runs' comments.
+appId: social.coves.dev
+---
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+# Reach the fixture through !science post search, not the flooded Discover
+# feed (docs/QA_LOOP.md "Reaching fixtures")
+- runFlow:
+    file: subflows/open_science_post.yaml
+    env:
+      QUERY: "NASA delays"
+      TITLE: "NASA delays .*Swift telescope.*"
+- extendedWaitUntil:
+    visible: "NASA delays[\\s\\S]*"
+    timeout: 15000
+- evalScript: ${output.e10Stamp = 'E10 ' + Date.now()}
+- evalScript: ${output.e10Tag = 't' + Date.now().toString(36)}
+# --- open the reply composer (focused, so the formatting row shows) ---
+- tapOn: "Comment"
+- extendedWaitUntil:
+    visible: "Send comment[\\s\\S]*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- extendedWaitUntil:
+    visible: "Bold"
+    timeout: 10000
+# --- line 1: leading whitespace, five inline formats, a mention ---
+- pressKey: Enter
+- inputText: "  ${output.e10Stamp} plain "
+- tapOn: "Bold"
+- inputText: "bold"
+- tapOn: "Bold"
+- inputText: ", "
+- tapOn: "Italic"
+- inputText: "italic"
+- tapOn: "Italic"
+- inputText: ", "
+- tapOn: "Strikethrough"
+- inputText: "struck"
+- tapOn: "Strikethrough"
+- inputText: ", "
+- tapOn: "Spoiler"
+- inputText: "secret"
+- tapOn: "Spoiler"
+- inputText: ", "
+- tapOn: "Code"
+- inputText: "snippet"
+- tapOn: "Code"
+- inputText: ", hi @mari.local.coves.dev in !science and !science@coves.social"
+# --- reveal the block buttons ---
+- swipe:
+    from:
+      text: "Spoiler"
+    direction: LEFT
+- extendedWaitUntil:
+    visible: "Code block"
+    timeout: 5000
+# --- line 2: quote + heading 1 ---
+- pressKey: Enter
+- inputText: "Quoted heading ${output.e10Tag}"
+- tapOn: "Quote"
+- tapOn: "Heading"
+- extendedWaitUntil:
+    visible: "Heading 1"
+    timeout: 5000
+- tapOn: "Heading 1"
+# --- line 3: plain between the blocks (Enter carried the quote over) ---
+- pressKey: Enter
+- inputText: "Between the blocks ${output.e10Tag}"
+- tapOn: "Quote"
+# --- lines 4-5: quote + code block, then trailing whitespace ---
+- pressKey: Enter
+- inputText: "Code line one ${output.e10Tag}"
+- tapOn: "Quote"
+- tapOn: "Code block"
+- pressKey: Enter
+- inputText: "Code line two ${output.e10Tag}  "
+- pressKey: Enter
+- takeScreenshot: build/maestro/e10_composer_filled
+# --- send; the reply lands in the thread ---
+- tapOn: "Send comment[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "View [0-9]+ comments?[\\s\\S]*"
+    timeout: 20000
+# --- the record on the local PDS ---
+- runScript:
+    file: scripts/assert_comment_facets.js
+    env:
+      AUTHOR_HANDLE: mari.local.coves.dev
+      MENTION_HANDLE: mari.local.coves.dev
+      COMMUNITY_HANDLE: c-science.coves.social
+      STAMP: ${output.e10Stamp}
+      TAG: ${output.e10Tag}
+- assertTrue: ${output.e10FacetsOk}
+# --- the rendered comment in the post detail ---
+- tapOn: "View [0-9]+ comments?[\\s\\S]*"
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*${output.e10Stamp} plain bold, italic, struck, [\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
+- assertVisible: "[\\s\\S]*${output.e10Stamp} plain bold, italic, struck, [\\s\\S]*"
+# Line 1 is one paragraph. RichTextRenderer gives it its own semantics node
+# and splits it at each tappable span, so its children are: the stamp text
+# up to the spoiler, the concealed spoiler, ", snippet, hi ", the user
+# mention, " in ", the community mention by name, " and " and the community
+# mention by name@origin. Each check below is scoped (childOf) to the
+# paragraph whose child is this run's stamp text, so an earlier run's
+# comment cannot satisfy it, and neither can the comment's own
+# "@mari.local.coves.dev" author header, which sits outside the paragraph.
+# The texts are exact: a mention without its facet would merge into the
+# plain text around it and fail its check.
+# A concealed spoiler is announced instead of its text.
+- assertVisible:
+    text: "Spoiler\\. Tap to reveal\\."
+    childOf:
+      containsChild:
+        text: "[\\s\\S]*${output.e10Stamp} plain bold, italic, struck, [\\s\\S]*"
+- assertVisible:
+    text: ", snippet, hi\\s?"
+    childOf:
+      containsChild:
+        text: "[\\s\\S]*${output.e10Stamp} plain bold, italic, struck, [\\s\\S]*"
+- assertVisible:
+    text: "@mari\\.local\\.coves\\.dev"
+    childOf:
+      containsChild:
+        text: "[\\s\\S]*${output.e10Stamp} plain bold, italic, struck, [\\s\\S]*"
+- assertVisible:
+    text: "!science"
+    childOf:
+      containsChild:
+        text: "[\\s\\S]*${output.e10Stamp} plain bold, italic, struck, [\\s\\S]*"
+- assertVisible:
+    text: "!science@coves\\.social"
+    childOf:
+      containsChild:
+        text: "[\\s\\S]*${output.e10Stamp} plain bold, italic, struck, [\\s\\S]*"
+- takeScreenshot: build/maestro/e10_comment_inline
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*Quoted heading ${output.e10Tag}[\\s\\S]*"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "[\\s\\S]*Between the blocks ${output.e10Tag}[\\s\\S]*"
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*Code line one ${output.e10Tag}[\\s\\S]*"
+    direction: DOWN
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*Code line two ${output.e10Tag}[\\s\\S]*"
+    direction: DOWN
+    timeout: 15000
+- takeScreenshot: build/maestro/e10_comment_blocks
+- back

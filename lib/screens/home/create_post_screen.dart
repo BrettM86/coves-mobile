@@ -11,6 +11,10 @@ import '../../services/mention_resolver.dart';
 import '../../utils/error_messages.dart';
 import '../../utils/rich_text_composer.dart';
 import '../../utils/url_policy.dart';
+import '../../widgets/composer/facet_editing_controller.dart';
+import '../../widgets/composer/facet_serialization.dart';
+import '../../widgets/composer/facet_text_field.dart';
+import '../../widgets/composer/formatting_toolbar.dart';
 import '../compose/community_picker_screen.dart';
 import 'post_detail_screen.dart';
 
@@ -65,7 +69,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   // Text controllers
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _urlController = TextEditingController();
-  final TextEditingController _bodyController = TextEditingController();
+  final FacetEditingController _bodyController = FacetEditingController();
 
   // Scroll and focus
   final ScrollController _scrollController = ScrollController();
@@ -169,6 +173,34 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       return;
     }
 
+    // The body as it was at submit, with its formatting: edits and
+    // formatting changes made while the post is in flight do not reach it
+    final SerializedFormatting serializedBody;
+    try {
+      serializedBody = serializeFormatting(
+        _bodyController.text,
+        inlineRanges: _bodyController.inlineRanges,
+        blockRanges: _bodyController.blockRanges,
+        featureRanges: _bodyController.featureRanges,
+      );
+    } on FacetLimitExceededException {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Too much formatting to send. Remove some and try again.',
+          ),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final composedBody = composeFormattedRichText(
+      serializedBody.content,
+      formattingFacets: serializedBody.facets,
+      excludedRanges: serializedBody.codeRanges,
+    );
+
     setState(() {
       _isSubmitting = true;
     });
@@ -186,7 +218,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           : null;
       final language = _language;
       final isNsfw = _isNsfw;
-      final bodyText = _bodyController.text;
 
       // Build embed if URL is provided
       ExternalEmbedInput? embed;
@@ -219,7 +250,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       }
 
       final body = await resolveMentions(
-        composeRichText(bodyText),
+        composedBody,
         ApiMentionResolver(apiService),
       );
 
@@ -437,76 +468,102 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          controller: _scrollController,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Community selector
-              _buildCommunitySelector(),
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Community selector
+                    _buildCommunitySelector(),
 
-              const SizedBox(height: 16),
+                    const SizedBox(height: 16),
 
-              // User info row
-              _buildUserInfo(userHandle),
+                    // User info row
+                    _buildUserInfo(userHandle),
 
-              const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-              // Title field
-              _buildTextField(
-                controller: _titleController,
-                focusNode: _titleFocusNode,
-                hintText: 'Title',
-                maxLines: 1,
-                maxLength: kTitleMaxLength,
+                    // Title field
+                    _buildTextField(
+                      controller: _titleController,
+                      focusNode: _titleFocusNode,
+                      hintText: 'Title',
+                      maxLines: 1,
+                      maxLength: kTitleMaxLength,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // URL field
+                    _buildTextField(
+                      controller: _urlController,
+                      focusNode: _urlFocusNode,
+                      hintText: 'URL',
+                      maxLines: 1,
+                      keyboardType: TextInputType.url,
+                      // URLs must never be auto-capitalized ("Https://..." breaks
+                      // backend unfurling and external link handling)
+                      textCapitalization: TextCapitalization.none,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Body field (multiline, formatted from the toolbar)
+                    _buildBodyField(),
+
+                    const SizedBox(height: 24),
+
+                    // Language dropdown and NSFW toggle
+                    Row(
+                      children: [
+                        // Language dropdown
+                        Expanded(child: _buildLanguageDropdown()),
+
+                        const SizedBox(width: 16),
+
+                        // NSFW toggle
+                        Expanded(child: _buildNsfwToggle()),
+                      ],
+                    ),
+
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
-
-              const SizedBox(height: 16),
-
-              // URL field
-              _buildTextField(
-                controller: _urlController,
-                focusNode: _urlFocusNode,
-                hintText: 'URL',
-                maxLines: 1,
-                keyboardType: TextInputType.url,
-                // URLs must never be auto-capitalized ("Https://..." breaks
-                // backend unfurling and external link handling)
-                textCapitalization: TextCapitalization.none,
-              ),
-
-              const SizedBox(height: 16),
-
-              // Body field (multiline)
-              _buildTextField(
-                controller: _bodyController,
-                focusNode: _bodyFocusNode,
-                hintText: 'What are your thoughts?',
-                minLines: 8,
-                maxLength: kContentMaxLength,
-              ),
-
-              const SizedBox(height: 24),
-
-              // Language dropdown and NSFW toggle
-              Row(
-                children: [
-                  // Language dropdown
-                  Expanded(child: _buildLanguageDropdown()),
-
-                  const SizedBox(width: 16),
-
-                  // NSFW toggle
-                  Expanded(child: _buildNsfwToggle()),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-            ],
-          ),
+            ),
+            // Docked at the keyboard top while the body is focused
+            ListenableBuilder(
+              listenable: _bodyFocusNode,
+              builder: (context, _) => _bodyFocusNode.hasFocus
+                  ? ColoredBox(
+                      color: AppColors.backgroundSecondary,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: FormattingToolbar(controller: _bodyController),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBodyField() {
+    return FacetTextField(
+      controller: _bodyController,
+      focusNode: _bodyFocusNode,
+      minLines: 8,
+      maxLength: kContentMaxLength,
+      autocorrect: false,
+      textCapitalization: TextCapitalization.sentences,
+      style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
+      decoration: _inputDecoration('What are your thoughts?'),
     );
   }
 
@@ -601,26 +658,30 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       textInputAction: effectiveTextInputAction,
       textCapitalization: textCapitalization,
       style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
-      decoration: InputDecoration(
-        hintText: hintText,
-        hintStyle: const TextStyle(color: AppColors.textPlaceholder),
-        filled: true,
-        fillColor: AppColors.backgroundTertiary,
-        counterStyle: const TextStyle(color: AppColors.textSecondary),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.inputBorder),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.inputBorder),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 2),
-        ),
-        contentPadding: const EdgeInsets.all(16),
+      decoration: _inputDecoration(hintText),
+    );
+  }
+
+  InputDecoration _inputDecoration(String hintText) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: const TextStyle(color: AppColors.textPlaceholder),
+      filled: true,
+      fillColor: AppColors.backgroundTertiary,
+      counterStyle: const TextStyle(color: AppColors.textSecondary),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.inputBorder),
       ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.inputBorder),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+      ),
+      contentPadding: const EdgeInsets.all(16),
     );
   }
 

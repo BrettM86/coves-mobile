@@ -5,7 +5,12 @@ import 'dart:isolate';
 import 'package:coves_flutter/models/facet.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/utils/rich_text_composer.dart';
+import 'package:coves_flutter/widgets/composer/facet_editing_controller.dart';
+import 'package:coves_flutter/widgets/composer/facet_serialization.dart';
+import 'package:flutter/painting.dart' show TextRange;
 import 'package:flutter_test/flutter_test.dart';
+
+import 'mention_resolver_fakes.dart';
 
 /// Each facet as its UTF-8 byte range and every feature it carries, so a
 /// wrong range, wrong uri, extra feature or extra facet all show up
@@ -56,58 +61,14 @@ Map<String, List<String>> describeMentionsEach(List<String> inputs) => {
     input: describeMentions(composeRichText(input).mentions),
 };
 
-/// A [MentionResolver] answering from fixed tables
-///
-/// Records each lookup as it starts (`user <handle>` or `community <name>`)
-/// and as it completes. An identifier with a gate waits for that gate before
-/// answering; one with an error throws it; one missing from its table is not
-/// found (null).
-class FakeMentionResolver implements MentionResolver {
-  FakeMentionResolver({
-    this.handles = const {},
-    this.communities = const {},
-    this.errors = const {},
-    this.gates = const {},
-  });
+/// The described type of a bold feature
+const boldType = BoldFacetFeature.typeId;
 
-  /// DID returned for each handle
-  final Map<String, String> handles;
-
-  /// DID returned for each community name or name@origin
-  final Map<String, String> communities;
-
-  /// Exception thrown for each lookup key (`user <handle>` or
-  /// `community <name>`)
-  final Map<String, Exception> errors;
-
-  /// Gate each lookup key waits on before answering
-  final Map<String, Completer<void>> gates;
-
-  final List<String> started = [];
-  final List<String> completed = [];
-
-  @override
-  Future<String?> resolveHandle(String handle) =>
-      _lookUp('user $handle', handles[handle]);
-
-  @override
-  Future<String?> resolveCommunity(String community) =>
-      _lookUp('community $community', communities[community]);
-
-  Future<String?> _lookUp(String key, String? did) async {
-    started.add(key);
-    final gate = gates[key];
-    if (gate != null) {
-      await gate.future;
-    }
-    completed.add(key);
-    final error = errors[key];
-    if (error != null) {
-      throw error;
-    }
-    return did;
-  }
-}
+/// A bold formatting facet over the UTF-8 byte range [start]..[end]
+RichTextFacet boldOver(int start, int end) => RichTextFacet(
+  index: ByteSlice(byteStart: start, byteEnd: end),
+  features: const [BoldFacetFeature()],
+);
 
 /// [text] composed and its mentions resolved through [resolver]
 Future<ComposedRichText> composeAndResolve(
@@ -1069,6 +1030,400 @@ void main() {
       expect(describeFacets(resolved.facets), [
         '[0,19) [mention did:plc:alice]',
         '[20,27) [mention did:plc:gaming]',
+      ]);
+    });
+  });
+
+  group('detectRichTextSpans', () {
+    test('rejected tokens are not detected, beside detected controls', () {
+      final outcomes = {
+        for (final text in const [
+          '!community_name and !science',
+          'example.com and https://example.com',
+          '@alice.1abc @bob.test',
+          'https://a.com/@bob.test',
+          'xhttps://a.com/@bob.test @carol.test',
+        ])
+          text: detectRichTextSpans(text),
+      };
+      expect(outcomes, {
+        '!community_name and !science': [
+          (kind: RichTextSpanKind.mention, start: 20, end: 28),
+        ],
+        'example.com and https://example.com': [
+          (kind: RichTextSpanKind.link, start: 16, end: 35),
+        ],
+        '@alice.1abc @bob.test': [
+          (kind: RichTextSpanKind.mention, start: 12, end: 21),
+        ],
+        'https://a.com/@bob.test': [
+          (kind: RichTextSpanKind.link, start: 0, end: 23),
+        ],
+        'xhttps://a.com/@bob.test @carol.test': [
+          (kind: RichTextSpanKind.mention, start: 25, end: 36),
+        ],
+      });
+    });
+
+    test('a handle no resolver knows is detected as a mention', () {
+      expect(detectRichTextSpans('@ghost.test'), [
+        (kind: RichTextSpanKind.mention, start: 0, end: 11),
+      ]);
+    });
+
+    test('drops spans that overlap an excluded range', () {
+      const text = '😀 @alice.test 😀 https://example.com @bob.test';
+      final cases = <String, List<TextRange>>{
+        'mention excluded': const [TextRange(start: 3, end: 14)],
+        'link excluded': const [TextRange(start: 18, end: 37)],
+        'part of a mention excluded': const [TextRange(start: 5, end: 8)],
+        'end of the link and start of a mention excluded': const [
+          TextRange(start: 36, end: 39),
+        ],
+        'only the gaps between spans excluded': const [
+          TextRange(start: 14, end: 18),
+          TextRange(start: 37, end: 38),
+        ],
+      };
+      final outcomes = {
+        for (final MapEntry(key: name, value: excludedRanges) in cases.entries)
+          name: detectRichTextSpans(text, excludedRanges: excludedRanges),
+      };
+      expect(outcomes, {
+        'mention excluded': [
+          (kind: RichTextSpanKind.link, start: 18, end: 37),
+          (kind: RichTextSpanKind.mention, start: 38, end: 47),
+        ],
+        'link excluded': [
+          (kind: RichTextSpanKind.mention, start: 3, end: 14),
+          (kind: RichTextSpanKind.mention, start: 38, end: 47),
+        ],
+        'part of a mention excluded': [
+          (kind: RichTextSpanKind.link, start: 18, end: 37),
+          (kind: RichTextSpanKind.mention, start: 38, end: 47),
+        ],
+        'end of the link and start of a mention excluded': [
+          (kind: RichTextSpanKind.mention, start: 3, end: 14),
+        ],
+        'only the gaps between spans excluded': [
+          (kind: RichTextSpanKind.mention, start: 3, end: 14),
+          (kind: RichTextSpanKind.link, start: 18, end: 37),
+          (kind: RichTextSpanKind.mention, start: 38, end: 47),
+        ],
+      });
+    });
+
+    test('a sigil inside an excluded URL is still not a mention', () {
+      // The URL is at [3,26) and @bob.test at [17,26); the excluded range
+      // covers only the `https` scheme (like inline code over part of the
+      // URL), so it drops the URL but does not overlap @bob.test
+      expect(
+        detectRichTextSpans(
+          '😀 https://a.com/@bob.test @carol.test',
+          excludedRanges: const [TextRange(start: 3, end: 8)],
+        ),
+        [(kind: RichTextSpanKind.mention, start: 27, end: 38)],
+      );
+    });
+  });
+
+  group('composeRichText with excluded ranges', () {
+    // Excluded ranges are UTF-16 offsets into this untrimmed text: the emoji
+    // is at 4, @alice.test at [7,18), the URL at [19,38), @bob.test at
+    // [39,48)
+    const text = '    😀 @alice.test https://example.com @bob.test';
+
+    List<String> describeMentions(List<PendingMention> mentions) => [
+      for (final PendingMention(:kind, :identifier, :index) in mentions)
+        '${kind.name} $identifier [${index.byteStart},${index.byteEnd})',
+    ];
+
+    test('an excluded mention is not pending; the link and other mention '
+        'are', () {
+      final composed = composeRichText(
+        text,
+        excludedRanges: const [TextRange(start: 7, end: 18)],
+      );
+      expect(describeFacets(composed.facets), [
+        '[17,36) [link https://example.com]',
+      ]);
+      expect(describeMentions(composed.mentions), ['user bob.test [37,46)']);
+    });
+
+    test('an excluded link is not a facet; the mentions are pending', () {
+      final composed = composeRichText(
+        text,
+        excludedRanges: const [TextRange(start: 19, end: 38)],
+      );
+      expect(describeFacets(composed.facets), isNull);
+      expect(describeMentions(composed.mentions), [
+        'user alice.test [5,16)',
+        'user bob.test [37,46)',
+      ]);
+    });
+
+    test('an excluded range starting inside the leading whitespace drops '
+        'what it overlaps and keeps the rest', () {
+      // @alice.test is at [4,15) and @bob.test at [16,25) in the untrimmed
+      // text; the excluded range [0,15) starts four characters before the
+      // trimmed content does
+      final composed = composeRichText(
+        '    @alice.test @bob.test',
+        excludedRanges: const [TextRange(start: 0, end: 15)],
+      );
+      expect(describeMentions(composed.mentions), ['user bob.test [12,21)']);
+    });
+
+    test('an excluded range that ends before the trimmed content keeps '
+        'everything', () {
+      final composed = composeRichText(
+        '   @alice.test',
+        excludedRanges: const [TextRange(start: 0, end: 2)],
+      );
+      expect(describeMentions(composed.mentions), ['user alice.test [0,11)']);
+    });
+  });
+
+  group('composeFormattedRichText grouping', () {
+    test('a link exactly over a bold range joins the bold facet', () {
+      // https://a.com is at [4,17)
+      final composed = composeFormattedRichText(
+        'see https://a.com now',
+        formattingFacets: [boldOver(4, 17)],
+      );
+      expect(describeFacets(composed.facets), [
+        '[4,17) [link https://a.com, $boldType]',
+      ]);
+    });
+
+    test('a resolved mention exactly over a bold range joins the bold '
+        'facet', () async {
+      // @alice.test is at [3,14)
+      final resolved = await resolveMentions(
+        composeFormattedRichText(
+          'hi @alice.test ok',
+          formattingFacets: [boldOver(3, 14)],
+        ),
+        FakeMentionResolver(handles: {'alice.test': 'did:plc:alice'}),
+      );
+      expect(describeFacets(resolved.facets), [
+        '[3,14) [mention did:plc:alice, $boldType]',
+      ]);
+    });
+
+    test('a link only partly over a bold range stays a separate facet', () {
+      // Bold covers "see http" at [0,8); https://a.com is at [4,17)
+      final composed = composeFormattedRichText(
+        'see https://a.com now',
+        formattingFacets: [boldOver(0, 8)],
+      );
+      expect(describeFacets(composed.facets), [
+        '[0,8) [$boldType]',
+        '[4,17) [link https://a.com]',
+      ]);
+    });
+
+    test('a link sharing only its start with a bold range stays a separate '
+        'facet', () {
+      // Bold covers "https" at [4,9); https://a.com is at [4,17)
+      final composed = composeFormattedRichText(
+        'see https://a.com now',
+        formattingFacets: [boldOver(4, 9)],
+      );
+      expect(describeFacets(composed.facets), [
+        '[4,9) [$boldType]',
+        '[4,17) [link https://a.com]',
+      ]);
+    });
+
+    test('a link sharing only its end with a bold range stays a separate '
+        'facet', () {
+      // Bold covers "s://a.com" at [8,17); https://a.com is at [4,17)
+      final composed = composeFormattedRichText(
+        'see https://a.com now',
+        formattingFacets: [boldOver(8, 17)],
+      );
+      expect(describeFacets(composed.facets), [
+        '[4,17) [link https://a.com]',
+        '[8,17) [$boldType]',
+      ]);
+    });
+  });
+
+  group('serialized formatting through composition and resolution', () {
+    test('links and mentions inside inline code and code blocks are not '
+        'detected; those outside are, in trimmed coordinates', () async {
+      // Content after trimming the two leading spaces, ASCII so UTF-16
+      // offsets equal byte offsets:
+      //   [2,17) https://in.code  [18,26) @in.test   (inline code [2,26))
+      //   [27,44) https://after.com  [45,54) @out.test
+      //   [55,72) https://block.com  [73,84) @block.test (code block [55,84))
+      //   [85,101) https://tail.com  [102,112) @tail.test
+      // In the untrimmed text every offset is two higher, so untrimmed
+      // exclusions would cover https://after.com and https://tail.com.
+      const text =
+          '  x https://in.code @in.test https://after.com @out.test\n'
+          'https://block.com @block.test\n'
+          'https://tail.com @tail.test  ';
+      final serialized = serializeFormatting(
+        text,
+        inlineRanges: const [InlineRange(InlineFormat.code, 4, 28)],
+        blockRanges: const [BlockRange(BlockFormat.codeBlock, 57, 86)],
+      );
+      final resolved = await resolveMentions(
+        composeFormattedRichText(
+          serialized.content,
+          formattingFacets: serialized.facets,
+          excludedRanges: serialized.codeRanges,
+        ),
+        FakeMentionResolver(
+          handles: {
+            'in.test': 'did:plc:in',
+            'out.test': 'did:plc:out',
+            'block.test': 'did:plc:block',
+            'tail.test': 'did:plc:tail',
+          },
+        ),
+      );
+      expect(describeFacets(resolved.facets), [
+        '[2,26) [social.coves.richtext.facet#code]',
+        '[27,44) [link https://after.com]',
+        '[45,54) [mention did:plc:out]',
+        '[55,84) [social.coves.richtext.facet#codeBlock]',
+        '[85,101) [link https://tail.com]',
+        '[102,112) [mention did:plc:tail]',
+      ]);
+    });
+  });
+
+  group('composeFormattedRichText facet cap', () {
+    test('composition alone keeps all 199 formatting facets and only the '
+        'earlier of two links', () {
+      // https://a.com at [0,13), https://b.com at [14,27), then 199 words
+      // "ab" with word i at [28 + 3i, 30 + 3i)
+      final content = [
+        'https://a.com https://b.com',
+        ...List.filled(199, 'ab'),
+      ].join(' ');
+      final composed = composeFormattedRichText(
+        content,
+        formattingFacets: [
+          for (var i = 0; i < 199; i++) boldOver(28 + 3 * i, 30 + 3 * i),
+        ],
+      );
+      expect(describeFacets(composed.facets), [
+        '[0,13) [link https://a.com]',
+        for (var i = 0; i < 199; i++)
+          '[${28 + 3 * i},${30 + 3 * i}) [$boldType]',
+      ]);
+    });
+
+    test('after resolution 198 formatting facets leave room for only the '
+        'first two link and mention facets by byte start', () async {
+      // @m.test at [0,7), https://a.com at [8,21), @n.test at [22,29), then
+      // 198 words "ab" with word i at [30 + 3i, 32 + 3i)
+      final content = [
+        '@m.test https://a.com @n.test',
+        ...List.filled(198, 'ab'),
+      ].join(' ');
+      final resolved = await resolveMentions(
+        composeFormattedRichText(
+          content,
+          formattingFacets: [
+            for (var i = 0; i < 198; i++) boldOver(30 + 3 * i, 32 + 3 * i),
+          ],
+        ),
+        FakeMentionResolver(
+          handles: {'m.test': 'did:plc:m', 'n.test': 'did:plc:n'},
+        ),
+      );
+      expect(describeFacets(resolved.facets), [
+        '[0,7) [mention did:plc:m]',
+        '[8,21) [link https://a.com]',
+        for (var i = 0; i < 198; i++)
+          '[${30 + 3 * i},${32 + 3 * i}) [$boldType]',
+      ]);
+    });
+
+    test('after resolution the one slot 199 formatting facets leave goes to '
+        'a mention before a link', () async {
+      // @m.test at [0,7), https://a.com at [8,21), then 199 words "ab" with
+      // word i at [22 + 3i, 24 + 3i). Resolution adds the mention after the
+      // link, so the slot follows byte order, not detection order.
+      final content = [
+        '@m.test https://a.com',
+        ...List.filled(199, 'ab'),
+      ].join(' ');
+      final resolved = await resolveMentions(
+        composeFormattedRichText(
+          content,
+          formattingFacets: [
+            for (var i = 0; i < 199; i++) boldOver(22 + 3 * i, 24 + 3 * i),
+          ],
+        ),
+        FakeMentionResolver(handles: {'m.test': 'did:plc:m'}),
+      );
+      expect(describeFacets(resolved.facets), [
+        '[0,7) [mention did:plc:m]',
+        for (var i = 0; i < 199; i++)
+          '[${22 + 3 * i},${24 + 3 * i}) [$boldType]',
+      ]);
+    });
+
+    test('a link and a mention grouped into formatting facets take no slot '
+        'at the cap', () async {
+      // Separate: @m.test [0,7), https://a.com [8,21), @n.test [22,29).
+      // Grouped: https://g.com [30,43) and @g.test [44,51), each exactly
+      // under a bold facet. Then 196 words "ab" with word i at
+      // [52 + 3i, 54 + 3i). 198 formatting facets in all.
+      final content = [
+        '@m.test https://a.com @n.test https://g.com @g.test',
+        ...List.filled(196, 'ab'),
+      ].join(' ');
+      final resolved = await resolveMentions(
+        composeFormattedRichText(
+          content,
+          formattingFacets: [
+            boldOver(30, 43),
+            boldOver(44, 51),
+            for (var i = 0; i < 196; i++) boldOver(52 + 3 * i, 54 + 3 * i),
+          ],
+        ),
+        FakeMentionResolver(
+          handles: {
+            'm.test': 'did:plc:m',
+            'n.test': 'did:plc:n',
+            'g.test': 'did:plc:g',
+          },
+        ),
+      );
+      expect(describeFacets(resolved.facets), [
+        '[0,7) [mention did:plc:m]',
+        '[8,21) [link https://a.com]',
+        '[30,43) [link https://g.com, $boldType]',
+        '[44,51) [mention did:plc:g, $boldType]',
+        for (var i = 0; i < 196; i++)
+          '[${52 + 3 * i},${54 + 3 * i}) [$boldType]',
+      ]);
+    });
+
+    test('a bold link after 200 plain links is still grouped, and 199 plain '
+        'links are kept', () {
+      // URL i is https://u000.com style, 16 characters, at [17i, 17i + 16);
+      // https://bold.com follows at [3400,3416) under a bold facet
+      String plainUrl(int i) => 'https://u${i.toString().padLeft(3, '0')}.com';
+      final content = [
+        for (var i = 0; i < 200; i++) plainUrl(i),
+        'https://bold.com',
+      ].join(' ');
+      final composed = composeFormattedRichText(
+        content,
+        formattingFacets: [boldOver(3400, 3416)],
+      );
+      expect(describeFacets(composed.facets), [
+        for (var i = 0; i < 199; i++)
+          '[${17 * i},${17 * i + 16}) [link ${plainUrl(i)}]',
+        '[3400,3416) [link https://bold.com, $boldType]',
       ]);
     });
   });

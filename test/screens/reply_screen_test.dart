@@ -3,161 +3,40 @@ import 'dart:convert';
 
 import 'package:coves_flutter/models/comment.dart';
 import 'package:coves_flutter/models/facet.dart';
-import 'package:coves_flutter/models/post.dart';
-import 'package:coves_flutter/providers/auth_provider.dart';
-import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/comments_provider.dart';
-import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/compose/reply_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
-import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/widgets/composer/composer_draft.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
-import 'package:provider/provider.dart';
 
-// Shared generated mockito mocks (real provider types) so provider lookups
-// inside CommentThread/CommentCard resolve correctly.
 import '../test_helpers/test_mocks.dart';
+import 'compose/reply_screen_test_harness.dart';
 
 void main() {
-  const testPostUri = 'at://did:plc:test/social.coves.post.record/123';
-  const testPostCid = 'test-post-cid';
-
+  late ReplyScreenHarness harness;
   late MockAuthProvider mockAuthProvider;
   late MockCovesApiService mockApiService;
-  late MockVoteProvider mockVoteProvider;
-  late BlockProvider blockProvider;
   late CommentsProvider commentsProvider;
-  late GlobalKey<NavigatorState> navigatorKey;
 
   setUp(() {
-    mockAuthProvider = MockAuthProvider();
-    mockApiService = MockCovesApiService();
-    mockVoteProvider = MockVoteProvider();
-    blockProvider = BlockProvider(
-      apiService: mockApiService,
-      authProvider: mockAuthProvider,
-    );
-    navigatorKey = GlobalKey<NavigatorState>();
-
-    // Signed-out rendering keeps CommentCard simple (no action menus)
-    when(mockAuthProvider.isAuthenticated).thenReturn(false);
-    when(mockAuthProvider.did).thenReturn('did:plc:testuser');
-    when(mockVoteProvider.isLiked(any)).thenReturn(false);
-    when(mockVoteProvider.getVoteState(any)).thenReturn(null);
-    when(mockVoteProvider.isPending(any)).thenReturn(false);
-    when(mockVoteProvider.getAdjustedScore(any, any))
-        .thenAnswer((invocation) => invocation.positionalArguments[1] as int);
-
-    // Real CommentsProvider over mocks: drafts are pure local state, so no
-    // API stubbing is needed (ReplyScreen never triggers loadComments)
-    commentsProvider = CommentsProvider(
-      mockAuthProvider,
-      postUri: testPostUri,
-      postCid: testPostCid,
-      apiService: mockApiService,
-      voteProvider: mockVoteProvider,
-    );
+    harness = ReplyScreenHarness();
+    mockAuthProvider = harness.mockAuthProvider;
+    mockApiService = harness.mockApiService;
+    commentsProvider = harness.commentsProvider;
   });
 
-  tearDown(() {
-    commentsProvider.dispose();
-    blockProvider.dispose();
-  });
+  tearDown(() => harness.dispose());
 
-  ThreadViewComment createComment(String uri) {
-    return ThreadViewComment(
-      comment: CommentView(
-        uri: uri,
-        cid: 'cid-$uri',
-        record: CommentRecord(content: 'Parent comment for $uri'),
-        createdAt: DateTime.parse('2025-01-01T12:00:00Z'),
-        indexedAt: DateTime.parse('2025-01-01T12:00:00Z'),
-        author: AuthorView(
-          did: 'did:plc:author',
-          handle: 'test.user',
-          displayName: 'Test User',
-        ),
-        post: CommentRef(uri: testPostUri, cid: testPostCid),
-        stats: const CommentStats(score: 10, upvotes: 12, downvotes: 2),
-      ),
-    );
-  }
-
-  /// Pumps a base route; ReplyScreen is pushed on top so pops are visible
-  Future<void> pumpBase(WidgetTester tester) async {
-    // Without a mock handler, HapticFeedback.lightImpact() never completes
-    // in widget tests
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      SystemChannels.platform,
-      (methodCall) async => null,
-    );
-    addTearDown(
-      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        SystemChannels.platform,
-        null,
-      ),
-    );
-
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<AuthProvider>.value(value: mockAuthProvider),
-          ChangeNotifierProvider<VoteProvider>.value(value: mockVoteProvider),
-          ChangeNotifierProvider<BlockProvider>.value(value: blockProvider),
-          Provider<CovesApiService>.value(value: mockApiService),
-        ],
-        child: MaterialApp(
-          navigatorKey: navigatorKey,
-          home: const Scaffold(body: Text('base route')),
-        ),
-      ),
-    );
-  }
+  Future<void> pumpBase(WidgetTester tester) => harness.pumpBase(tester);
 
   Future<void> pushReply(
     WidgetTester tester, {
     required ThreadViewComment comment,
     Future<void> Function(String content, List<RichTextFacet> facets)? onSubmit,
-  }) async {
-    unawaited(
-      navigatorKey.currentState!.push(
-        MaterialPageRoute<void>(
-          builder: (_) => ReplyScreen(
-            comment: comment,
-            commentsProvider: commentsProvider,
-            onSubmit: onSubmit ?? (content, facets) async {},
-          ),
-        ),
-      ),
-    );
-    // Settles the push animation, draft restore, and the delayed autofocus
-    await tester.pumpAndSettle();
-  }
-
-  /// The Send pill's tap target (nearest GestureDetector around 'Send')
-  GestureDetector sendButton(WidgetTester tester) {
-    return tester.widget<GestureDetector>(
-      find
-          .ancestor(
-            of: find.text('Send'),
-            matching: find.byType(GestureDetector),
-          )
-          .first,
-    );
-  }
-
-  /// System back, then pumps past the reverse page transition (longer than
-  /// any default Material transition) so the reply route is removed and its
-  /// State disposed before the send settles
-  Future<void> systemBackAndFinishTransition(WidgetTester tester) async {
-    await tester.binding.handlePopRoute();
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 2));
-    await tester.pump();
-  }
+  }) => harness.pushReply(tester, comment: comment, onSubmit: onSubmit);
 
   group('ReplyScreen draft round-trip', () {
     testWidgets('type then Cancel saves the draft for the parent URI', (
@@ -175,7 +54,7 @@ void main() {
 
       expect(find.text('base route'), findsOneWidget);
       expect(
-        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        commentsProvider.getDraft(parentUri: comment.comment.uri)?.text,
         'My draft reply',
       );
     });
@@ -221,7 +100,7 @@ void main() {
       expect(find.text('base route'), findsOneWidget);
       // Draft cleared - the pop-time save must not have run (the controller
       // still held the submitted text when the route popped)
-      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), isNull);
     });
 
     testWidgets('drafts for distinct parentUris are independent', (
@@ -248,11 +127,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        commentsProvider.getDraft(parentUri: comment1.comment.uri),
+        commentsProvider.getDraft(parentUri: comment1.comment.uri)?.text,
         'draft one',
       );
       expect(
-        commentsProvider.getDraft(parentUri: comment2.comment.uri),
+        commentsProvider.getDraft(parentUri: comment2.comment.uri)?.text,
         'draft two',
       );
     });
@@ -273,7 +152,7 @@ void main() {
 
       expect(find.text('base route'), findsOneWidget);
       expect(
-        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        commentsProvider.getDraft(parentUri: comment.comment.uri)?.text,
         'Saved by system back',
       );
     });
@@ -284,15 +163,6 @@ void main() {
       (widget) =>
           widget is Semantics && widget.properties.label == 'Send comment',
     );
-
-    /// Taps Send and pumps a bounded number of frames: the in-flight spinner
-    /// animates indefinitely, so pumpAndSettle would time out. Two frames
-    /// cover the mention lookup, the onSubmit call, and the rebuild.
-    Future<void> tapSendAndPumpUntilInFlight(WidgetTester tester) async {
-      await tester.tap(find.text('Send'));
-      await tester.pump();
-      await tester.pump();
-    }
 
     void expectSendInFlight() {
       expect(find.text('Send'), findsNothing);
@@ -342,7 +212,7 @@ void main() {
       final textField = tester.widget<TextField>(find.byType(TextField));
       expect(textField.controller!.text, 'Reply that must survive');
       expect(
-        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        commentsProvider.getDraft(parentUri: comment.comment.uri)?.text,
         'Reply that must survive',
       );
     });
@@ -379,25 +249,25 @@ void main() {
       expect(find.byType(ReplyScreen), findsNothing);
       expect(replyState.mounted, isFalse);
       // The text being sent must not sit in the draft slot during the send
-      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), isNull);
 
       submitCompleter.complete();
       await tester.pump();
 
-      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), isNull);
 
       await pushReply(tester, comment: comment);
 
       final reopenedField = tester.widget<TextField>(find.byType(TextField));
       expect(reopenedField.controller!.text, isEmpty);
-      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), isNull);
     });
 
     testWidgets('successful send without a user pop clears the restored '
         'draft: reopening shows an empty field', (tester) async {
       final comment = createComment('at://did:plc:author/comment/1');
       commentsProvider.saveDraft(
-        'Previously saved draft',
+        ComposerDraft(text: 'Previously saved draft'),
         parentUri: comment.comment.uri,
       );
       String? submittedContent;
@@ -420,13 +290,13 @@ void main() {
       // The submit path popped the screen itself
       expect(find.text('base route'), findsOneWidget);
       expect(find.byType(ReplyScreen), findsNothing);
-      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), isNull);
 
       await pushReply(tester, comment: comment);
 
       final reopenedField = tester.widget<TextField>(find.byType(TextField));
       expect(reopenedField.controller!.text, isEmpty);
-      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), isNull);
     });
 
     testWidgets('reopening the composer while the send is in flight shows an '
@@ -454,7 +324,7 @@ void main() {
       expect(submitCompleter.isCompleted, isFalse);
       final reopenedField = tester.widget<TextField>(find.byType(TextField));
       expect(reopenedField.controller!.text, isEmpty);
-      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), isNull);
 
       // Settle the first send so nothing is left pending
       submitCompleter.complete();
@@ -485,13 +355,13 @@ void main() {
 
       expect(find.text('base route'), findsOneWidget);
       expect(replyState.mounted, isFalse);
-      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), '');
+      expect(commentsProvider.getDraft(parentUri: comment.comment.uri), isNull);
 
       submitCompleter.completeError(Exception('network unreachable'));
       await tester.pump();
 
       expect(
-        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        commentsProvider.getDraft(parentUri: comment.comment.uri)?.text,
         'Cancelled mid-send',
       );
     });
@@ -520,7 +390,7 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(
-        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        commentsProvider.getDraft(parentUri: comment.comment.uri)?.text,
         'Newer draft',
       );
 
@@ -528,7 +398,7 @@ void main() {
       await tester.pump();
 
       expect(
-        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        commentsProvider.getDraft(parentUri: comment.comment.uri)?.text,
         'Newer draft',
       );
       await pushReply(tester, comment: comment);
@@ -565,7 +435,7 @@ void main() {
 
       // The failed send must not overwrite the newer draft with its text
       expect(
-        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        commentsProvider.getDraft(parentUri: comment.comment.uri)?.text,
         'Newer draft',
       );
       await pushReply(tester, comment: comment);
@@ -580,7 +450,7 @@ void main() {
       await pumpBase(tester);
       // A middle route stands in for post detail, so a second pop is visible
       unawaited(
-        navigatorKey.currentState!.push(
+        harness.navigatorKey.currentState!.push(
           MaterialPageRoute<void>(
             builder: (_) => const Scaffold(body: Text('post detail route')),
           ),
@@ -744,7 +614,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        commentsProvider.getDraft(parentUri: comment.comment.uri)?.text,
         'hi @alice.coves.social',
       );
     });
@@ -786,7 +656,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        commentsProvider.getDraft(parentUri: comment.comment.uri)?.text,
         'hi @alice.coves.social',
       );
     });
@@ -832,7 +702,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        commentsProvider.getDraft(parentUri: comment.comment.uri)?.text,
         'hi @alice.coves.social',
       );
     });
@@ -905,7 +775,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(
-        commentsProvider.getDraft(parentUri: comment.comment.uri),
+        commentsProvider.getDraft(parentUri: comment.comment.uri)?.text,
         'Reply that must survive',
       );
     });

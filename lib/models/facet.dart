@@ -459,31 +459,54 @@ class UnknownFacetFeature extends FacetFeature {
       identical(this, other) ||
       other is UnknownFacetFeature &&
           runtimeType == other.runtimeType &&
-          _mapEquals(data, other.data);
+          _deepEquals(data, other.data);
 
+  /// Hashes [data] by content, nested maps and lists included, so equal
+  /// data decoded separately hashes alike. Map entries are XOR-folded so the
+  /// result is independent of key insertion order (matching [_deepEquals]).
   @override
-  int get hashCode {
-    // MapEntry hashes by identity and `.entries` creates fresh entries per
-    // call, so Object.hashAll(data.entries) returned a different value on
-    // every invocation. Hash the content instead, XOR-folded so the result
-    // is independent of key insertion order (matching _mapEquals).
-    var hash = 0;
-    for (final entry in data.entries) {
-      hash ^= Object.hash(entry.key, entry.value);
-    }
-    return hash;
-  }
+  int get hashCode => _deepHash(data);
 
-  static bool _mapEquals(Map<String, dynamic> a, Map<String, dynamic> b) {
-    if (a.length != b.length) {
-      return false;
-    }
-    for (final key in a.keys) {
-      if (!b.containsKey(key) || a[key] != b[key]) {
+  /// Whether [a] and [b] are equal JSON values, comparing nested maps by
+  /// their entries and nested lists element by element.
+  static bool _deepEquals(Object? a, Object? b) {
+    if (a is Map && b is Map) {
+      if (a.length != b.length) {
         return false;
       }
+      for (final key in a.keys) {
+        if (!b.containsKey(key) || !_deepEquals(a[key], b[key])) {
+          return false;
+        }
+      }
+      return true;
     }
-    return true;
+    if (a is List && b is List) {
+      if (a.length != b.length) {
+        return false;
+      }
+      for (var index = 0; index < a.length; index++) {
+        if (!_deepEquals(a[index], b[index])) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return a == b;
+  }
+
+  static int _deepHash(Object? value) {
+    if (value is Map) {
+      var hash = 0;
+      for (final entry in value.entries) {
+        hash ^= Object.hash(entry.key, _deepHash(entry.value));
+      }
+      return hash;
+    }
+    if (value is List) {
+      return Object.hashAll(value.map(_deepHash));
+    }
+    return value.hashCode;
   }
 }
 
@@ -532,14 +555,31 @@ class RichTextFacet {
   /// treat a facet carrying one as a block and apply any remaining features
   /// inline within it (code blocks excepted: their text renders literally).
   FacetFeature? get blockFeature {
+    final blocks = blockFeatures;
+    return blocks.isEmpty ? null : blocks.first;
+  }
+
+  /// The block-level features this facet renders, in feature order: at most
+  /// one blockquote plus at most one heading or code block (the first of
+  /// each). A quote may share a facet with a heading or code block over the
+  /// same lines; duplicates and other combinations from untrusted records
+  /// are dropped.
+  List<FacetFeature> get blockFeatures {
+    FacetFeature? quote;
+    FacetFeature? inner;
+    final blocks = <FacetFeature>[];
     for (final feature in features) {
-      if (feature is BlockquoteFacetFeature ||
-          feature is HeadingFacetFeature ||
-          feature is CodeBlockFacetFeature) {
-        return feature;
+      if (feature is BlockquoteFacetFeature && quote == null) {
+        quote = feature;
+        blocks.add(feature);
+      } else if ((feature is HeadingFacetFeature ||
+              feature is CodeBlockFacetFeature) &&
+          inner == null) {
+        inner = feature;
+        blocks.add(feature);
       }
     }
-    return null;
+    return blocks;
   }
 
   /// Get the link URI if this facet has a link feature

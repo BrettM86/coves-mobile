@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
 
 import '../models/facet.dart';
 import 'url_policy.dart';
@@ -13,7 +14,31 @@ class ComposedRichText {
     required this.content,
     this.facets,
     required this.mentions,
-  });
+    this._formattingFacets = const [],
+    List<RichTextFacet>? separateFacets,
+  }) : _separateFacets = separateFacets ?? facets ?? const [];
+
+  /// [formattingFacets] (each kept) and [separateFacets] (truncated, in byte
+  /// order, to the slots of [maxFacetsPerRecord] the formatting facets
+  /// leave) merged and sorted by byte start
+  factory ComposedRichText._merged({
+    required String content,
+    required List<RichTextFacet> formattingFacets,
+    required List<RichTextFacet> separateFacets,
+    required List<PendingMention> mentions,
+  }) {
+    final kept = (separateFacets..sort(_byByteStart))
+        .take(math.max(0, maxFacetsPerRecord - formattingFacets.length))
+        .toList();
+    final facets = [...formattingFacets, ...kept]..sort(_byByteStart);
+    return ComposedRichText._(
+      content: content,
+      facets: facets.isEmpty ? null : facets,
+      mentions: mentions,
+      formattingFacets: formattingFacets,
+      separateFacets: kept,
+    );
+  }
 
   /// Canonical content to send
   final String content;
@@ -23,6 +48,45 @@ class ComposedRichText {
 
   /// Mentions detected in [content], not yet resolved to DIDs
   final List<PendingMention> mentions;
+
+  /// The formatting facets among [facets], with any link or mention grouped
+  /// into them; never truncated by the facet cap
+  final List<RichTextFacet> _formattingFacets;
+
+  /// The link and mention facets among [facets] that stand alone
+  final List<RichTextFacet> _separateFacets;
+}
+
+/// Orders facets by byte start, then byte end
+int _byByteStart(RichTextFacet a, RichTextFacet b) =>
+    a.index.byteStart != b.index.byteStart
+    ? a.index.byteStart.compareTo(b.index.byteStart)
+    : a.index.byteEnd.compareTo(b.index.byteEnd);
+
+/// [formattingFacets] with [facet]'s single link or mention feature grouped
+/// into the formatting facet over exactly the same byte range, or null when
+/// no formatting facet has that range
+///
+/// A link or mention comes first in the lexicon's union order, and a
+/// formatting facet holds neither, so the feature goes in front.
+List<RichTextFacet>? _groupedInto(
+  List<RichTextFacet> formattingFacets,
+  RichTextFacet facet,
+) {
+  final index = formattingFacets.indexWhere(
+    (formatting) =>
+        formatting.index.byteStart == facet.index.byteStart &&
+        formatting.index.byteEnd == facet.index.byteEnd,
+  );
+  if (index == -1) {
+    return null;
+  }
+  final formatting = formattingFacets[index];
+  return [...formattingFacets]
+    ..[index] = RichTextFacet(
+      index: formatting.index,
+      features: [...facet.features, ...formatting.features],
+    );
 }
 
 /// What a mention names
@@ -63,6 +127,11 @@ const int maxMentionLookups = 20;
 /// [composed] with its mentions resolved into #mention facets merged into its
 /// link facets
 ///
+/// A resolved mention whose byte range exactly equals a formatting facet's
+/// joins that facet. Every formatting facet is kept; separate link and
+/// mention facets fill only the slots of [maxFacetsPerRecord] the formatting
+/// facets leave, in byte order.
+///
 /// Each distinct identifier is looked up once, all lookups at the same time,
 /// and only the first [maxMentionLookups] distinct identifiers are looked up;
 /// the rest stay plain text. A mention that is not found, or whose DID is not
@@ -93,7 +162,8 @@ Future<ComposedRichText> resolveMentions(
   final dids = await Future.wait(lookups.values, eagerError: true);
   final resolved = Map.fromIterables(lookups.keys, dids);
 
-  final facets = [...?composed.facets];
+  var formattingFacets = composed._formattingFacets;
+  final separateFacets = [...composed._separateFacets];
   for (final PendingMention(:kind, :identifier, :index) in composed.mentions) {
     final did = resolved[_lookupKey(kind, identifier)];
     if (did == null) {
@@ -107,19 +177,22 @@ Future<ComposedRichText> resolveMentions(
       }
       continue;
     }
-    facets.add(
-      RichTextFacet(
-        index: index,
-        features: [MentionFacetFeature(did: did)],
-      ),
+    final mention = RichTextFacet(
+      index: index,
+      features: [MentionFacetFeature(did: did)],
     );
+    final grouped = _groupedInto(formattingFacets, mention);
+    if (grouped != null) {
+      formattingFacets = grouped;
+    } else {
+      separateFacets.add(mention);
+    }
   }
-  facets.sort((a, b) => a.index.byteStart.compareTo(b.index.byteStart));
-  final kept = facets.take(maxFacetsPerRecord).toList();
 
-  return ComposedRichText._(
+  return ComposedRichText._merged(
     content: composed.content,
-    facets: kept.isEmpty ? null : kept,
+    formattingFacets: formattingFacets,
+    separateFacets: separateFacets,
     mentions: const [],
   );
 }
@@ -132,8 +205,42 @@ Future<ComposedRichText> resolveMentions(
       MentionKind.community => (kind, identifier),
     };
 
+/// What a detected span of text is
+enum RichTextSpanKind { link, mention }
+
+/// A link or mention detected in text, as UTF-16 offsets into that text
+typedef DetectedRichTextSpan = ({RichTextSpanKind kind, int start, int end});
+
+/// The links and mentions [composeRichText] would detect in [text], in text
+/// order, as UTF-16 offsets into [text]
+///
+/// Synchronous and lookup-free: a mention is detected by its shape alone. A
+/// link or mention that overlaps any of [excludedRanges] (UTF-16 offsets into
+/// [text]) is dropped whole.
+List<DetectedRichTextSpan> detectRichTextSpans(
+  String text, {
+  List<TextRange> excludedRanges = const [],
+}) {
+  final (:links, :mentions) = _detect(
+    text,
+    excludedRanges,
+    0,
+    linkLimit: maxFacetsPerRecord,
+  );
+  return [
+    for (final link in links)
+      (kind: RichTextSpanKind.link, start: link.start, end: link.end),
+    for (final mention in mentions)
+      (kind: RichTextSpanKind.mention, start: mention.start, end: mention.end),
+  ]..sort((a, b) => a.start.compareTo(b.start));
+}
+
 /// A structurally valid atproto DID
 final _didPattern = RegExp(r'^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$');
+
+/// Whether [did] is a structurally valid atproto DID, the check a mention
+/// facet's DID must pass to be submitted.
+bool isValidDid(String did) => _didPattern.hasMatch(did);
 
 /// Trims [text], detects the bare http(s) URLs in it as link facets and finds
 /// the @handle and !community mentions in it
@@ -143,48 +250,183 @@ final _didPattern = RegExp(r'^did:[a-z]+:[a-zA-Z0-9._:%-]*[a-zA-Z0-9._-]$');
 /// [ComposedRichText.content], so trimming must happen before any range is
 /// measured. Its mentions are only candidates: the result must go through
 /// [resolveMentions] before it is sent, or its mentions stay plain text.
-ComposedRichText composeRichText(String text) {
+///
+/// No link facet or mention overlaps any of [excludedRanges], which are
+/// UTF-16 offsets into the untrimmed [text].
+ComposedRichText composeRichText(
+  String text, {
+  List<TextRange> excludedRanges = const [],
+}) {
   final content = text.trim();
+  final leadingTrim = text.length - text.trimLeft().length;
   final offsets = Utf8Offsets(content);
+  final (:links, :mentions) = _detect(
+    content,
+    excludedRanges,
+    leadingTrim,
+    linkLimit: maxFacetsPerRecord,
+  );
 
-  final urlCandidates = _urlCandidate.allMatches(content).toList();
-  final facets = <RichTextFacet>[];
-  for (final match in urlCandidates) {
-    // Links past the backend's facet cap are left as plain text
-    if (facets.length == maxFacetsPerRecord) {
-      break;
-    }
-    final link = _acceptedLink(content, match.start, match.end);
-    if (link == null) {
-      continue;
-    }
-    final (:start, :end, :uri) = link;
-    facets.add(
-      RichTextFacet(
-        index: ByteSlice(
-          byteStart: offsets.byteOffsetOf(start),
-          byteEnd: offsets.byteOffsetOf(end),
-        ),
-        features: [LinkFacetFeature(uri: uri)],
-      ),
-    );
-  }
+  ByteSlice slice(int start, int end) => ByteSlice(
+    byteStart: offsets.byteOffsetOf(start),
+    byteEnd: offsets.byteOffsetOf(end),
+  );
 
   return ComposedRichText._(
     content: content,
-    facets: facets.isEmpty ? null : facets,
-    mentions: _mentionsIn(content, offsets, urlCandidates),
+    facets: links.isEmpty
+        ? null
+        : [
+            for (final (:start, :end, :uri) in links)
+              RichTextFacet(
+                index: slice(start, end),
+                features: [LinkFacetFeature(uri: uri)],
+              ),
+          ],
+    mentions: [
+      for (final (:kind, :identifier, :start, :end) in mentions)
+        PendingMention(
+          kind: kind,
+          identifier: identifier,
+          index: slice(start, end),
+        ),
+    ],
   );
 }
 
+/// [content] with its link facets detected and merged with
+/// [formattingFacets], and its mentions found, ready for [resolveMentions]
+///
+/// [content] is already trimmed, [formattingFacets] are UTF-8 byte ranges
+/// into it and [excludedRanges] are UTF-16 offsets into it; no link or
+/// mention overlapping an excluded range is detected. A formatting facet
+/// carrying a link or mention is a kept loaded one, and no link or mention
+/// overlapping its byte range is detected. A link whose byte range
+/// exactly equals a formatting facet's joins that facet. Every formatting
+/// facet is kept; separate link and mention facets fill only the slots of
+/// [maxFacetsPerRecord] the formatting facets leave, in byte order.
+ComposedRichText composeFormattedRichText(
+  String content, {
+  List<RichTextFacet> formattingFacets = const [],
+  List<TextRange> excludedRanges = const [],
+}) {
+  final offsets = Utf8Offsets(content);
+  // Uncapped: a link past the first 200 may still group into a formatting
+  // facet, and the cap is applied once grouping is known
+  final (:links, :mentions) = _detect(content, excludedRanges, 0);
+
+  ByteSlice slice(int start, int end) => ByteSlice(
+    byteStart: offsets.byteOffsetOf(start),
+    byteEnd: offsets.byteOffsetOf(end),
+  );
+
+  // A formatting facet carrying a link or mention is a kept loaded one: its
+  // text is not detected again
+  final loaded = [
+    for (final facet in formattingFacets)
+      if (facet.features.any(
+        (feature) =>
+            feature is LinkFacetFeature || feature is MentionFacetFeature,
+      ))
+        facet.index,
+  ];
+  bool overlapsLoaded(ByteSlice index) => loaded.any(
+    (kept) => kept.byteStart < index.byteEnd && index.byteStart < kept.byteEnd,
+  );
+
+  var grouped = formattingFacets;
+  final separateFacets = <RichTextFacet>[];
+  for (final (:start, :end, :uri) in links) {
+    final index = slice(start, end);
+    if (overlapsLoaded(index)) {
+      continue;
+    }
+    final link = RichTextFacet(
+      index: index,
+      features: [LinkFacetFeature(uri: uri)],
+    );
+    final withLink = _groupedInto(grouped, link);
+    if (withLink != null) {
+      grouped = withLink;
+    } else {
+      separateFacets.add(link);
+    }
+  }
+
+  return ComposedRichText._merged(
+    content: content,
+    formattingFacets: grouped,
+    separateFacets: separateFacets,
+    mentions: [
+      for (final (:kind, :identifier, :start, :end) in mentions)
+        if (slice(start, end) case final index when !overlapsLoaded(index))
+          PendingMention(kind: kind, identifier: identifier, index: index),
+    ],
+  );
+}
+
+/// The links and mentions in [content], each in text order with UTF-16
+/// offsets, the detection rules [composeRichText] and [detectRichTextSpans]
+/// share
+///
+/// A link or mention overlapping any of [excludedRanges] is dropped whole;
+/// the ranges are offsets into a text in which [content] starts at
+/// [excludedRangesOffset]. URL candidates are found over all of [content],
+/// so a sigil inside an excluded URL is still not a mention. Links past
+/// [linkLimit], when given, are left as plain text.
+({
+  List<({int start, int end, String uri})> links,
+  List<_DetectedMention> mentions,
+})
+_detect(
+  String content,
+  List<TextRange> excludedRanges,
+  int excludedRangesOffset, {
+  int? linkLimit,
+}) {
+  // Compared without building shifted TextRanges, whose constructor asserts
+  // offsets >= -1
+  bool isExcluded(int start, int end) => excludedRanges.any(
+    (range) =>
+        range.start - excludedRangesOffset < end &&
+        start < range.end - excludedRangesOffset,
+  );
+
+  final urlCandidates = _urlCandidate.allMatches(content).toList();
+  final links = <({int start, int end, String uri})>[];
+  for (final match in urlCandidates) {
+    if (links.length == linkLimit) {
+      break;
+    }
+    final link = _acceptedLink(content, match.start, match.end);
+    if (link != null && !isExcluded(link.start, link.end)) {
+      links.add(link);
+    }
+  }
+
+  return (
+    links: links,
+    mentions: [
+      for (final mention in _mentionsIn(content, urlCandidates))
+        if (!isExcluded(mention.start, mention.end)) mention,
+    ],
+  );
+}
+
+typedef _DetectedMention = ({
+  MentionKind kind,
+  String identifier,
+  int start,
+  int end,
+});
+
 /// The mentions in [content], skipping any that overlap a URL candidate
 /// (linked or not), so a sigil in a URL is never a mention
-List<PendingMention> _mentionsIn(
+List<_DetectedMention> _mentionsIn(
   String content,
-  Utf8Offsets offsets,
   List<RegExpMatch> urlCandidates,
 ) {
-  final mentions = <PendingMention>[];
+  final mentions = <_DetectedMention>[];
   // Candidates are in text order and never overlap, so one pass finds the
   // first candidate that ends after the current index
   var candidate = 0;
@@ -229,16 +471,12 @@ List<PendingMention> _mentionsIn(
       index++;
       continue;
     }
-    mentions.add(
-      PendingMention(
-        kind: mention.kind,
-        identifier: mention.identifier,
-        index: ByteSlice(
-          byteStart: offsets.byteOffsetOf(index),
-          byteEnd: offsets.byteOffsetOf(mention.end),
-        ),
-      ),
-    );
+    mentions.add((
+      kind: mention.kind,
+      identifier: mention.identifier,
+      start: index,
+      end: mention.end,
+    ));
     index = mention.end;
   }
   return mentions;

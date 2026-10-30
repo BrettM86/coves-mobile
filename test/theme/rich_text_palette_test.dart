@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:coves_flutter/constants/app_colors.dart';
 import 'package:coves_flutter/models/facet.dart';
+import 'package:coves_flutter/theme/rich_text_palette.dart';
 import 'package:coves_flutter/widgets/rich_text_renderer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -104,13 +105,23 @@ void main() {
 
     expect(
       _spanWithText(spans, 'example.com').style?.color,
-      AppColors.textLink,
+      RichTextPalette.link,
       reason: 'links must render in the palette link color, not the theme',
     );
     expect(
       _spanWithText(spans, '@alice.test').style?.color,
-      AppColors.coral,
+      RichTextPalette.mention,
       reason: 'mentions must render in the palette accent, not the theme',
+    );
+    expect(
+      RichTextPalette.link,
+      AppColors.textLink,
+      reason: 'the shared palette keeps the link color unchanged',
+    );
+    expect(
+      RichTextPalette.mention,
+      AppColors.coral,
+      reason: 'the shared palette keeps the mention color unchanged',
     );
   });
 }

@@ -56,6 +56,10 @@ const String _bellBodyD =
 const String _fileTextBodyD =
     'M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 '
     '3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z';
+const String _boldD =
+    'M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8';
+const String _squareD =
+    'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z';
 
 abstract final class LucidePaths {
   /// Declares the ISC license for the bundled Lucide glyphs (both the `d`
@@ -228,6 +232,52 @@ abstract final class LucidePaths {
     'm16 17 5-5-5-5',
     'M21 12H9',
     'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4',
+  ];
+
+  /// `bold` — the composer's Bold button
+  ///
+  /// Taken from lucide-static 1.64.0 (absent from the repo's `icons/` at the
+  /// time), with its compact arc flags spaced out.
+  static const List<String> bold = [_boldD];
+
+  /// `italic` — the composer's Italic button
+  ///
+  /// The three `line`s are written as paths.
+  static const List<String> italic = ['M19 4H10', 'M14 20H5', 'M15 4 9 20'];
+
+  /// `strikethrough` — the composer's Strikethrough button
+  ///
+  /// The `line` is written as a path.
+  static const List<String> strikethrough = [
+    'M16 4H9a3 3 0 0 0-2.83 4',
+    'M14 12a4 4 0 0 1 0 8H6',
+    'M4 12H20',
+  ];
+
+  /// `code` — the composer's inline Code button
+  static const List<String> code = ['m16 18 6-6-6-6', 'm8 6-6 6 6 6'];
+
+  /// `text-quote` — the composer's Quote button
+  static const List<String> textQuote = [
+    'M17 5H3',
+    'M21 12H8',
+    'M21 19H8',
+    'M3 12v7',
+  ];
+
+  /// `heading` — the composer's Heading button
+  ///
+  /// Taken from lucide-static 1.64.0.
+  static const List<String> heading = ['M18 20V4', 'M6 12H18', 'M6 20V4'];
+
+  /// `square-code` — the composer's Code block button
+  ///
+  /// The `rect` (x3 y3, 18x18, rx2) is written as a rounded-rectangle path,
+  /// as in [lock].
+  static const List<String> squareCode = [
+    'm10 9-3 3 3 3',
+    'm14 15 3-3-3-3',
+    _squareD,
   ];
 }
 

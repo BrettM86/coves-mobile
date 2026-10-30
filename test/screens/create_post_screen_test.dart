@@ -3,11 +3,9 @@ import 'dart:async';
 import 'package:coves_flutter/models/community.dart';
 import 'package:coves_flutter/models/facet.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
-import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/create_post_screen.dart';
 import 'package:coves_flutter/screens/home/post_detail_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
-import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,49 +13,8 @@ import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
 import '../test_helpers/error_copy_rows.dart';
-import '../test_helpers/fake_providers.dart' show postCardProviders;
 import '../test_helpers/test_mocks.dart';
-
-// Fake AuthProvider for testing
-class FakeAuthProvider extends AuthProvider {
-  bool _isAuthenticated = true;
-  String? _did = 'did:plc:testuser';
-  String? _handle = 'testuser.coves.social';
-
-  @override
-  bool get isAuthenticated => _isAuthenticated;
-
-  @override
-  String? get did => _did;
-
-  @override
-  String? get handle => _handle;
-
-  void setAuthenticated({required bool value, String? did, String? handle}) {
-    _isAuthenticated = value;
-    _did = did;
-    _handle = handle;
-    notifyListeners();
-  }
-
-  @override
-  Future<String?> getAccessToken() async {
-    return _isAuthenticated ? 'mock_access_token' : null;
-  }
-
-  @override
-  Future<bool> refreshToken() async {
-    return _isAuthenticated;
-  }
-
-  @override
-  Future<void> signOut() async {
-    _isAuthenticated = false;
-    _did = null;
-    _handle = null;
-    notifyListeners();
-  }
-}
+import 'home/create_post_test_harness.dart';
 
 void main() {
   group('CreatePostScreen Widget Tests', () {
@@ -467,15 +424,6 @@ void main() {
       );
     }
 
-    /// Opens the community picker and selects the single stubbed community,
-    /// which is the only way to make the form (and the Post button) valid.
-    Future<void> selectCommunity(WidgetTester tester) async {
-      await tester.tap(find.text('Select a community'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Test Cove'));
-      await tester.pumpAndSettle();
-    }
-
     void verifyCreatePostNeverCalled() {
       verifyNever(
         mockApiService.createPost(
@@ -649,27 +597,12 @@ void main() {
 
       /// Pumps CreatePostScreen with the providers PostDetailScreen resolves,
       /// with the mocked API last so CreatePostScreen submits through it
-      Future<void> pumpWithPostDetailProviders(WidgetTester tester) async {
-        await tester.pumpWidget(
-          MultiProvider(
-            providers: [
-              ...postCardProviders(auth: fakeAuthProvider),
-              Provider<CovesApiService>.value(value: mockApiService),
-              Provider<CommentsProviderCache>(
-                create: (context) => CommentsProviderCache(
-                  authProvider: fakeAuthProvider,
-                  voteProvider: context.read<VoteProvider>(),
-                  commentService: MockCommentService(),
-                  apiService: mockApiService,
-                ),
-                dispose: (_, cache) => cache.dispose(),
-              ),
-            ],
-            child: const MaterialApp(home: CreatePostScreen()),
-          ),
-        );
-        await tester.pumpAndSettle();
-      }
+      Future<void> pumpWithPostDetailProviders(WidgetTester tester) =>
+          pumpCreatePostWithPostDetailProviders(
+            tester,
+            auth: fakeAuthProvider,
+            api: mockApiService,
+          );
 
       /// Toggles the NSFW switch while the Post button's spinner animates,
       /// which pumpAndSettle would wait on forever

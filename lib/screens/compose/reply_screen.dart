@@ -17,6 +17,11 @@ import '../../services/coves_api_service.dart';
 import '../../services/mention_resolver.dart';
 import '../../utils/rich_text_composer.dart';
 import '../../widgets/comment_thread.dart';
+import '../../widgets/composer/composer_draft.dart';
+import '../../widgets/composer/facet_editing_controller.dart';
+import '../../widgets/composer/facet_serialization.dart';
+import '../../widgets/composer/facet_text_field.dart';
+import '../../widgets/composer/formatting_toolbar.dart';
 import '../../widgets/post_card.dart';
 
 /// Reply Screen
@@ -67,7 +72,7 @@ class ReplyScreen extends StatefulWidget {
 }
 
 class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
-  final TextEditingController _textController = TextEditingController();
+  late final FacetEditingController _textController;
   final FocusNode _focusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
   bool _hasText = false;
@@ -84,6 +89,8 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _textController = _restoredController();
+    _hasText = _textController.text.trim().isNotEmpty;
     _textController.addListener(_onTextChanged);
     _focusNode.addListener(_onFocusChanged);
 
@@ -94,11 +101,10 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     // reply route.
     _acquireProviderPin();
 
-    // Restore draft and autofocus after frame is built
+    // Autofocus after frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _setupAuthListener();
-        _restoreDraft();
 
         // Autofocus with delay (Thunder approach - let screen render first)
         Future.delayed(const Duration(milliseconds: 300), () {
@@ -167,23 +173,25 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Restore draft text if available for this reply context
+  /// A controller holding this reply context's draft, text and formatting
+  /// as they were saved (untrimmed), or an empty one when there is none
   ///
   /// Uses `widget.commentsProvider` directly — this screen is pushed on the
   /// root navigator, so `context.read<CommentsProvider>()` would look above
   /// the route and find nothing (the provider lives in the detail screen).
-  void _restoreDraft() {
-    final ourParentUri = widget.comment?.comment.uri;
-
-    // Get draft for this specific parent URI
-    final draft = widget.commentsProvider.getDraft(parentUri: ourParentUri);
-
-    if (draft.isNotEmpty) {
-      _textController.text = draft;
-      setState(() {
-        _hasText = true;
-      });
+  FacetEditingController _restoredController() {
+    final draft = widget.commentsProvider.getDraft(
+      parentUri: widget.comment?.comment.uri,
+    );
+    if (draft == null) {
+      return FacetEditingController();
     }
+    return FacetEditingController.withRanges(
+      draft.text,
+      inlineRanges: draft.inlineRanges,
+      blockRanges: draft.blockRanges,
+      featureRanges: draft.featureRanges,
+    );
   }
 
   void _onFocusChanged() {
@@ -259,14 +267,43 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
       return;
     }
 
-    final submittedText = _textController.text;
-    final composed = composeRichText(submittedText);
+    // What is sent, and restored if the send fails: later edits and
+    // formatting changes made while the send is in flight do not reach it
+    final snapshot = _currentDraft();
+    final SerializedFormatting serialized;
+    try {
+      serialized = serializeFormatting(
+        snapshot.text,
+        inlineRanges: snapshot.inlineRanges,
+        blockRanges: snapshot.blockRanges,
+        featureRanges: snapshot.featureRanges,
+      );
+    } on FacetLimitExceededException {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Too much formatting to send. Remove some and try again.',
+          ),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final composed = composeFormattedRichText(
+      serialized.content,
+      formattingFacets: serialized.facets,
+      excludedRanges: serialized.codeRanges,
+    );
     if (composed.content.isEmpty) {
       return;
     }
     final parentUri = widget.comment?.comment.uri;
     // Shared app-wide API client (owned by main.dart), read before any await
-    final mentionResolver = ApiMentionResolver(context.read<CovesApiService>());
+    // and only when there is a handle to look up
+    final mentionResolver = composed.mentions.isEmpty
+        ? null
+        : ApiMentionResolver(context.read<CovesApiService>());
     // The account that started the send; null when there is no AuthProvider
     final authProvider = _authProvider;
     final submittingDid = authProvider?.did;
@@ -289,7 +326,9 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     try {
       final ComposedRichText resolved;
       try {
-        resolved = await resolveMentions(composed, mentionResolver);
+        resolved = mentionResolver == null
+            ? composed
+            : await resolveMentions(composed, mentionResolver);
       } on Exception catch (e) {
         // The parent screens report onSubmit failures themselves, but not
         // lookup failures, so this is shown even when the screen is gone
@@ -328,11 +367,8 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
         // A newer draft saved while this send was in flight wins. If a
         // composer reopened during the send is still open when this send
         // fails and is closed afterwards, its text overwrites this one.
-        if (widget.commentsProvider.getDraft(parentUri: parentUri).isEmpty) {
-          widget.commentsProvider.saveDraft(
-            submittedText,
-            parentUri: parentUri,
-          );
+        if (widget.commentsProvider.getDraft(parentUri: parentUri) == null) {
+          widget.commentsProvider.saveDraft(snapshot, parentUri: parentUri);
         }
         if (mounted) {
           setState(() {
@@ -396,14 +432,22 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     Navigator.of(context).pop();
   }
 
-  /// Save current text as draft (widget.commentsProvider, not context.read —
-  /// the provider is not an ancestor of this pushed route)
+  /// Save current text and formatting as draft (widget.commentsProvider, not
+  /// context.read — the provider is not an ancestor of this pushed route)
   void _saveDraft() {
     widget.commentsProvider.saveDraft(
-      _textController.text,
+      _currentDraft(),
       parentUri: widget.comment?.comment.uri,
     );
   }
+
+  /// The field's text, untrimmed, with all of its ranges
+  ComposerDraft _currentDraft() => ComposerDraft(
+    text: _textController.text,
+    inlineRanges: _textController.inlineRanges,
+    blockRanges: _textController.blockRanges,
+    featureRanges: _textController.featureRanges,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -466,14 +510,12 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
                         // main area
                         Padding(
                           padding: const EdgeInsets.all(16),
-                          child: TextField(
+                          child: FacetTextField(
                             controller: _textController,
                             focusNode: _focusNode,
-                            maxLines: null,
                             minLines: 8,
-                            keyboardType: TextInputType.multiline,
+                            autocorrect: false,
                             textCapitalization: TextCapitalization.sentences,
-                            textInputAction: TextInputAction.newline,
                             style: const TextStyle(
                               color: AppColors.textPrimary,
                               fontSize: 16,
@@ -499,6 +541,8 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
                 Container(height: 1, color: AppColors.border),
 
                 _ReplyToolbar(
+                  controller: _textController,
+                  focusNode: _focusNode,
                   hasText: _hasText,
                   isSubmitting: _isSubmitting,
                   onImageTap: _handleImageTap,
@@ -575,6 +619,8 @@ class _ContextPreview extends StatelessWidget {
 
 class _ReplyToolbar extends StatefulWidget {
   const _ReplyToolbar({
+    required this.controller,
+    required this.focusNode,
     required this.hasText,
     required this.isSubmitting,
     required this.onMentionTap,
@@ -582,6 +628,12 @@ class _ReplyToolbar extends StatefulWidget {
     required this.onSubmit,
   });
 
+  /// The body field's controller, which the formatting toolbar edits
+  final FacetEditingController controller;
+
+  /// The body field's focus node: the formatting toolbar shows only while
+  /// the field has focus
+  final FocusNode focusNode;
   final bool hasText;
   final bool isSubmitting;
   final VoidCallback onMentionTap;
@@ -647,6 +699,88 @@ class _ReplyToolbarState extends State<_ReplyToolbar>
 
   @override
   Widget build(BuildContext context) {
+    final leading = <Widget>[
+      Semantics(
+        button: true,
+        label: 'Mention user',
+        child: GestureDetector(
+          onTap: widget.onMentionTap,
+          child: const Padding(
+            padding: EdgeInsets.all(8),
+            child: Icon(
+              Icons.alternate_email_rounded,
+              size: 24,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(width: 4),
+      Semantics(
+        button: true,
+        label: 'Add image',
+        child: GestureDetector(
+          onTap: widget.onImageTap,
+          child: const Padding(
+            padding: EdgeInsets.all(8),
+            child: Icon(
+              Icons.image_outlined,
+              size: 24,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    ];
+    final send = Semantics(
+      button: true,
+      // The label alone: the pill's visible 'Send' text would merge into it
+      excludeSemantics: true,
+      label: 'Send comment',
+      // excludeSemantics drops the GestureDetector's tap, so restate it
+      enabled: widget.hasText && !widget.isSubmitting,
+      onTap: (widget.hasText && !widget.isSubmitting) ? widget.onSubmit : null,
+      child: GestureDetector(
+        onTap: (widget.hasText && !widget.isSubmitting)
+            ? widget.onSubmit
+            : null,
+        child: Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: (widget.hasText && !widget.isSubmitting)
+                ? AppColors.primary
+                : AppColors.textSecondary.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.isSubmitting)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.textPrimary,
+                    ),
+                  ),
+                )
+              else
+                const Text(
+                  'Send',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -667,85 +801,15 @@ class _ReplyToolbarState extends State<_ReplyToolbar>
               child: child,
             );
           },
-          child: Row(
-            children: [
-              Semantics(
-                button: true,
-                label: 'Mention user',
-                child: GestureDetector(
-                  onTap: widget.onMentionTap,
-                  child: const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Icon(
-                      Icons.alternate_email_rounded,
-                      size: 24,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Semantics(
-                button: true,
-                label: 'Add image',
-                child: GestureDetector(
-                  onTap: widget.onImageTap,
-                  child: const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Icon(
-                      Icons.image_outlined,
-                      size: 24,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Semantics(
-                button: true,
-                label: 'Send comment',
-                child: GestureDetector(
-                  onTap: (widget.hasText && !widget.isSubmitting)
-                      ? widget.onSubmit
-                      : null,
-                  child: Container(
-                    height: 32,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: (widget.hasText && !widget.isSubmitting)
-                          ? AppColors.primary
-                          : AppColors.textSecondary.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (widget.isSubmitting)
-                          const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                AppColors.textPrimary,
-                              ),
-                            ),
-                          )
-                        else
-                          const Text(
-                            'Send',
-                            style: TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.normal,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          child: ListenableBuilder(
+            listenable: widget.focusNode,
+            builder: (context, _) => widget.focusNode.hasFocus
+                ? FormattingToolbar(
+                    controller: widget.controller,
+                    leading: leading,
+                    trailing: [send],
+                  )
+                : Row(children: [...leading, const Spacer(), send]),
           ),
         ),
         ValueListenableBuilder<double>(

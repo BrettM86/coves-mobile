@@ -57,6 +57,9 @@ executionOrder:
     - e7_delete_post_from_profile
     - e8_reply_draft_system_back
     - e9_delete_post_profile_open
+    # e10 replies to the NASA fixture with every composer format and reads
+    # the record back from mari's repo on the local PDS (port 3001).
+    - e10_formatted_comment
     - f1_own_profile
     - f2_author_profile
     - f3_edit_profile_persist

@@ -16,6 +16,7 @@ import '../services/coves_api_service.dart';
 import '../services/viewer_state_hydrator.dart';
 import '../utils/cursor_pagination_controller.dart';
 import '../utils/error_messages.dart';
+import '../widgets/composer/composer_draft.dart';
 import 'auth_provider.dart';
 import 'vote_provider.dart';
 
@@ -377,7 +378,7 @@ class CommentsProvider with ChangeNotifier {
   // post)
   // This allows users to have separate drafts for different comments within
   // the same post
-  final Map<String?, String> _drafts = {};
+  final Map<String?, ComposerDraft> _drafts = {};
 
   // Staleness tracking for background refresh
   DateTime? _lastRefreshTime;
@@ -460,12 +461,12 @@ class CommentsProvider with ChangeNotifier {
   /// Get draft text for a specific parent URI
   ///
   /// [parentUri] - URI of parent comment (null for top-level post reply)
-  /// Returns the draft text, or empty string if no draft exists
-  String getDraft({String? parentUri}) => _drafts[parentUri] ?? '';
+  /// Returns the draft, or null if no draft exists
+  ComposerDraft? getDraft({String? parentUri}) => _drafts[parentUri];
 
   /// Legacy getters for backward compatibility
   /// @deprecated Use getDraft(parentUri: ...) instead
-  String get draftText => _drafts.values.firstOrNull ?? '';
+  String get draftText => _drafts.values.firstOrNull?.text ?? '';
   String? get draftParentUri => _drafts.keys.firstOrNull;
 
   /// Check if cached data is stale and should be refreshed in background
@@ -476,19 +477,20 @@ class CommentsProvider with ChangeNotifier {
     return DateTime.now().difference(_lastRefreshTime!) > stalenessThreshold;
   }
 
-  /// Save draft reply text
+  /// Save a draft reply's text and formatting ranges
   ///
-  /// [text] - The draft text content
+  /// [draft] - The draft text and ranges; a draft whose text is blank is
+  /// not stored and removes any stored draft
   /// [parentUri] - URI of parent comment (null for top-level post reply)
   ///
   /// Each parent URI gets its own draft, so switching between replies
   /// preserves drafts for each context.
-  void saveDraft(String text, {String? parentUri}) {
-    if (text.trim().isEmpty) {
+  void saveDraft(ComposerDraft draft, {String? parentUri}) {
+    if (draft.text.trim().isEmpty) {
       // Remove empty drafts to avoid clutter
       _drafts.remove(parentUri);
     } else {
-      _drafts[parentUri] = text;
+      _drafts[parentUri] = draft;
     }
     // No notifyListeners - this is passive state save
   }

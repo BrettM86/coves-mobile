@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../constants/app_colors.dart';
 import '../models/facet.dart';
+import '../theme/rich_text_palette.dart';
 import '../utils/url_launcher.dart';
 import '../utils/url_policy.dart';
 import '../utils/utf8_offsets.dart';
@@ -280,8 +281,8 @@ class _RichTextRendererState extends State<RichTextRenderer> {
     final blocks = <_ResolvedBlock>[];
 
     for (final rf in resolved) {
-      final feature = rf.facet.blockFeature;
-      if (feature == null) {
+      final features = rf.facet.blockFeatures;
+      if (features.isEmpty) {
         continue;
       }
 
@@ -309,17 +310,35 @@ class _RichTextRendererState extends State<RichTextRenderer> {
       }
 
       if (end > start) {
-        blocks.add(_ResolvedBlock(feature: feature, start: start, end: end));
+        // A quote sharing a facet with a heading or code block becomes its
+        // own block over the same lines, so it can contain the other
+        for (final feature in features) {
+          blocks.add(_ResolvedBlock(feature: feature, start: start, end: end));
+        }
       }
     }
 
     blocks.sort((a, b) {
       final cmp = a.start.compareTo(b.start);
-      // Longer (containing) block first so containment recursion sees it
-      return cmp != 0 ? cmp : b.end.compareTo(a.end);
+      if (cmp != 0) {
+        return cmp;
+      }
+      // Longer (containing) block first so containment recursion sees it;
+      // over the same lines the quote is outer, then heading, then code block
+      final endCmp = b.end.compareTo(a.end);
+      if (endCmp != 0) {
+        return endCmp;
+      }
+      return _blockRank(a.feature).compareTo(_blockRank(b.feature));
     });
     return blocks;
   }
+
+  static int _blockRank(FacetFeature feature) => switch (feature) {
+    BlockquoteFacetFeature() => 0,
+    HeadingFacetFeature() => 1,
+    _ => 2,
+  };
 
   /// Lays out a range as a list of block widgets (paragraphs and blocks)
   List<Widget> _blockWidgets(
@@ -773,7 +792,7 @@ class _RichTextRendererState extends State<RichTextRenderer> {
               if (widget.linkStyle != null) {
                 style = style.merge(widget.linkStyle);
               } else {
-                style = style.copyWith(color: AppColors.textLink);
+                style = style.copyWith(color: RichTextPalette.link);
                 decorations.add(TextDecoration.underline);
               }
               onTap ??= () {
@@ -782,7 +801,7 @@ class _RichTextRendererState extends State<RichTextRenderer> {
             }
           case MentionFacetFeature(did: final did):
             style = style.copyWith(
-              color: AppColors.coral,
+              color: RichTextPalette.mention,
               // Only set a weight when none is set yet, so an already-merged
               // bold (w700) isn't clobbered down to w600
               fontWeight: style.fontWeight ?? FontWeight.w600,
