@@ -298,16 +298,45 @@ class PostView {
   ///
   /// Full post views render the quoted post's text inside the embed card, so
   /// they hide a title that merely restates it. Compact views keep the title.
-  /// Comparison ignores leading/trailing whitespace and treats any whitespace
-  /// run (including newlines) as a single space.
+  /// The title counts as a duplicate when it is the quoted text, or exactly
+  /// the title the bluesky-topics aggregator builds from it: "{name}: {text}"
+  /// with name the displayName or handle, cut to 279 code points plus "…"
+  /// when longer than 280. Comparison ignores leading/trailing whitespace and
+  /// treats any whitespace run (including newlines) as a single space.
   bool get titleDuplicatesBlueskyEmbed {
     final resolved = embed?.blueskyPost?.resolved;
     if (resolved == null || resolved.unavailable) {
       return false;
     }
     final normalizedTitle = _normalizeWhitespace(title ?? '');
-    return normalizedTitle.isNotEmpty &&
-        normalizedTitle == _normalizeWhitespace(resolved.text);
+    if (normalizedTitle.isEmpty) {
+      return false;
+    }
+    final normalizedText = _normalizeWhitespace(resolved.text);
+    // A non-empty title cannot repeat empty text, and the aggregator titles
+    // a text-less post "{name} on Bluesky", not "{name}: ".
+    if (normalizedText.isEmpty) {
+      return false;
+    }
+    final displayName = resolved.author.displayName?.trim();
+    final candidates = [
+      normalizedText,
+      if (displayName != null && displayName.isNotEmpty)
+        _aggregatorTitle(displayName, resolved.text),
+      _aggregatorTitle(resolved.author.handle, resolved.text),
+    ];
+    return candidates.contains(normalizedTitle);
+  }
+
+  /// The whitespace-normalized title bluesky-topics writes for a post by
+  /// [name] with [text], cut by code points as the aggregator does.
+  static String _aggregatorTitle(String name, String text) {
+    final full = '$name: ${_normalizeWhitespace(text)}';
+    final runes = full.runes;
+    if (runes.length <= 280) {
+      return _normalizeWhitespace(full);
+    }
+    return _normalizeWhitespace('${String.fromCharCodes(runes.take(279))}…');
   }
 
   static final _whitespaceRun = RegExp(r'\s+');

@@ -816,6 +816,77 @@ void main() {
       expect(post.titleDuplicatesBlueskyEmbed, isFalse);
     });
 
+    test('matches bluesky-topics aggregator "{author}: {text}" titles', () {
+      const text =
+          '12:30pm ET tip for Finals Game 6, Atlanta showed up. '
+          'Full stadium, crazy energy.';
+      const longText =
+          'Atlanta showed up for Finals Game 6 and the building never sat '
+          'down. Every possession felt like a playoff game from the nineties, '
+          'the bench was on its feet for the whole fourth quarter, and the '
+          'crowd stayed long after the buzzer to chant for the starters. '
+          'Nobody in the arena wanted to leave tonight, not even the ushers.';
+      // Aggregator truncation: first 279 code points of the full title + "…"
+      // (ASCII literal, so code units equal code points).
+      final truncatedTitle = '${'Steph Noh: $longText'.substring(0, 279)}…';
+      expect(longText.length, greaterThan(280));
+      // Astral emoji before the cut: code points and UTF-16 units differ, so
+      // the aggregator's code-point cut is computed with runes.
+      const emojiText = '🏀🏀 Finals Game 6 🏀 $longText';
+      const emojiFull = 'Steph Noh: $emojiText';
+      final emojiTruncatedTitle =
+          '${String.fromCharCodes(emojiFull.runes.take(279))}…';
+      expect(emojiFull.runes.length, greaterThan(280));
+      expect(
+        emojiFull.substring(0, 279),
+        isNot(String.fromCharCodes(emojiFull.runes.take(279))),
+      );
+      // Cut lands on a space: the 279th code point of the full title is ' ',
+      // so the aggregator title ends with " …".
+      final spaceText = List.filled(80, 'Go!').join(' ');
+      final spaceFull = 'Steph Noh: $spaceText';
+      expect(spaceFull[278], ' ');
+      final spaceTruncatedTitle = '${spaceFull.substring(0, 279)}…';
+      expect(spaceTruncatedTitle.endsWith(' …'), isTrue);
+
+      // (title, embed text, embed displayName, expected)
+      final rows = <(String, String, String?, bool)>[
+        ('Steph Noh: $text', text, 'Steph Noh', true),
+        ('stephnoh.bsky.social: $text', text, null, true),
+        (truncatedTitle, longText, 'Steph Noh', true),
+        ('Someone Else: $text', text, 'Steph Noh', false),
+        ('Steph Noh on Bluesky', '', 'Steph Noh', false),
+        // Hand-written ellipsis titles are not aggregator output.
+        ('Steph…', text, 'Steph Noh', false),
+        ('12:30pm ET tip…', text, 'Steph Noh', false),
+        (
+          'Steph Noh: ${longText.substring(0, 100)}…',
+          longText,
+          'Steph Noh',
+          false,
+        ),
+        (emojiTruncatedTitle, emojiText, 'Steph Noh', true),
+        (spaceTruncatedTitle, spaceText, 'Steph Noh', true),
+        // Text-less posts get "{name} on Bluesky", never "{name}: ".
+        ('Steph Noh:', '', 'Steph Noh', false),
+        ('Steph Noh:', '   ', 'Steph Noh', false),
+      ];
+
+      final actual = [
+        for (final (title, embedText, displayName, _) in rows)
+          sharePost(
+            title: title,
+            embed: blueskyQuoteEmbed(
+              text: embedText,
+              handle: 'stephnoh.bsky.social',
+              displayName: displayName,
+            ),
+          ).titleDuplicatesBlueskyEmbed,
+      ];
+
+      expect(actual, [for (final row in rows) row.$4]);
+    });
+
     test('leaves the title itself unchanged', () {
       final post = sharePost(
         title: 'Hello  world',

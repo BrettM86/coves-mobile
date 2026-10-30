@@ -7,7 +7,13 @@ import 'package:coves_flutter/models/post.dart';
 /// entirely, the shape the appview sends when it could not hydrate the quote.
 /// [unavailable] marks a resolved post the appview flagged as blocked,
 /// deleted or detached while still carrying a text and author.
-PostEmbed blueskyQuoteEmbed({String? text, bool unavailable = false}) {
+/// [handle] and [displayName] set the resolved post's author.
+PostEmbed blueskyQuoteEmbed({
+  String? text,
+  bool unavailable = false,
+  String handle = 'quoted.bsky.social',
+  String? displayName,
+}) {
   return PostEmbed.fromJson({
     r'$type': EmbedTypes.postView,
     'post': {
@@ -20,7 +26,11 @@ PostEmbed blueskyQuoteEmbed({String? text, bool unavailable = false}) {
         'cid': 'bafyquotedcid',
         'text': text,
         'createdAt': '2026-09-01T12:00:00Z',
-        'author': {'did': 'did:plc:quoted', 'handle': 'quoted.bsky.social'},
+        'author': {
+          'did': 'did:plc:quoted',
+          'handle': handle,
+          'displayName': ?displayName,
+        },
         'replyCount': 0,
         'repostCount': 0,
         'likeCount': 0,
