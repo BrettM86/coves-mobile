@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../test_helpers/default_avatar_expectations.dart';
 import '../test_helpers/reply_notification_fixture.dart';
 import '../test_helpers/semantics_helpers.dart';
 import '../test_helpers/theme_pump.dart';
@@ -154,6 +155,55 @@ Finder _inCard(Finder finder) =>
 
 void main() {
   group('NotificationReplyCard', () {
+    group('default avatars', () {
+      // The reply author and the root-post author have different vector
+      // DIDs (distinct picture and tint), so forwarding one person's DID to
+      // the other's avatar fails.
+      final wire = _row(
+        rootPost: {
+          ..._cardRoot,
+          'author': {
+            'did': 'did:plc:z72i7hdynmk6r22z27h6tvur',
+            'handle': 'poster.test',
+          },
+        },
+        author: {
+          'did': 'did:plc:ewvi7nxzyoun6zhxrhs64oiz',
+          'handle': 'bob.coves.social',
+        },
+      );
+
+      testWidgets('a reply author with no avatar shows their DID default', (
+        tester,
+      ) async {
+        await _pumpCard(tester, wire);
+
+        expectDefaultAvatar(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is UserAvatar && widget.name == 'bob.coves.social',
+          ),
+          url: 'http://127.0.0.1:1/img/default-avatars/v1/ocean-wave.webp',
+          tint: 0xFFD5E6E3,
+        );
+      });
+
+      testWidgets('the root post card shows its author\'s DID default', (
+        tester,
+      ) async {
+        await _pumpCard(tester, wire);
+
+        expectDefaultAvatar(
+          find.descendant(
+            of: find.byType(CompactPostCard),
+            matching: find.byType(UserAvatar),
+          ),
+          url: 'http://127.0.0.1:1/img/default-avatars/v1/pufferfish.webp',
+          tint: 0xFFD8E8D4,
+        );
+      });
+    });
+
     // B1: live header and record time (including missing/invalid timestamps).
     for (final (reason, heading) in [
       ('postReply', 'Reply to your post'),

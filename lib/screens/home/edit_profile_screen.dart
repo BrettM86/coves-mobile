@@ -420,14 +420,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     )
                                   : UserAvatar(
                                       name: widget.profile.handle ?? '',
+                                      did: widget.profile.did,
                                       avatarUrl: widget.profile.avatar,
                                       size: avatarSize - 8,
-                                      fallbackColor: AppColors.primary,
-                                      fallbackIcon: const Icon(
-                                        Icons.person,
-                                        size: (avatarSize - 8) * 0.5,
-                                        color: Colors.white,
-                                      ),
                                     ),
                             ),
                             // Edit overlay

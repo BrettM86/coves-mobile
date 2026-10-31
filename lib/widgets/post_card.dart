@@ -601,6 +601,7 @@ class _PostCardContent extends StatelessWidget {
                 // Author avatar (circular, small)
                 UserAvatar(
                   name: author.displayName ?? author.handle,
+                  did: author.did,
                   avatarUrl: author.avatar,
                   size: 20,
                 ),

@@ -68,6 +68,7 @@ CompactPostCard notificationPostCard(
   return CompactPostCard(
     currentTime: currentTime ?? DateTime.now(),
     authorHandle: rootPost.author?.handle,
+    authorDid: rootPost.author?.did,
     authorAvatarUrl: rootPost.author?.avatar,
     createdAt: createdAt == null ? null : DateTime.tryParse(createdAt),
     title: rootPost.title,

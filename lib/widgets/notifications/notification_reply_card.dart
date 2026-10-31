@@ -393,6 +393,7 @@ class _ReplyBubble extends StatelessWidget {
               children: [
                 UserAvatar(
                   name: author.name,
+                  did: author.did,
                   avatarUrl: author.avatar,
                   size: _authorAvatarSize,
                 ),

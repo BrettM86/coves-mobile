@@ -55,6 +55,7 @@ class CompactPostCard extends StatelessWidget {
   const CompactPostCard({
     required this.currentTime,
     this.authorHandle,
+    this.authorDid,
     this.authorAvatarUrl,
     this.createdAt,
     this.title,
@@ -67,6 +68,10 @@ class CompactPostCard extends StatelessWidget {
   });
 
   final String? authorHandle;
+
+  /// The author's DID, for the default avatar. Null draws the empty-DID
+  /// circle.
+  final String? authorDid;
   final String? authorAvatarUrl;
   final DateTime? createdAt;
   final DateTime currentTime;
@@ -112,6 +117,7 @@ class CompactPostCard extends StatelessWidget {
                       if (handle != null || createdAt != null) ...[
                         _Meta(
                           handle: handle,
+                          did: authorDid ?? '',
                           avatarUrl: authorAvatarUrl,
                           time: createdAt == null
                               ? null
@@ -149,9 +155,15 @@ class CompactPostCard extends StatelessWidget {
 }
 
 class _Meta extends StatelessWidget {
-  const _Meta({required this.handle, required this.avatarUrl, this.time});
+  const _Meta({
+    required this.handle,
+    required this.did,
+    required this.avatarUrl,
+    this.time,
+  });
 
   final String? handle;
+  final String did;
   final String? avatarUrl;
   final String? time;
 
@@ -162,7 +174,12 @@ class _Meta extends StatelessWidget {
     return Row(
       children: [
         if (handle != null) ...[
-          UserAvatar(name: handle, size: _avatarSize, avatarUrl: avatarUrl),
+          UserAvatar(
+            name: handle,
+            did: did,
+            size: _avatarSize,
+            avatarUrl: avatarUrl,
+          ),
           const SizedBox(width: _metaGap),
           Flexible(
             child: Text(

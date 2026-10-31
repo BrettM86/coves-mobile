@@ -254,10 +254,9 @@ class ProfileHeader extends StatelessWidget {
   Widget _buildAvatar(double size) {
     return UserAvatar(
       name: profile?.handle ?? '',
+      did: profile?.did ?? '',
       avatarUrl: profile?.avatar,
       size: size,
-      fallbackColor: AppColors.primary,
-      fallbackIcon: Icon(Icons.person, size: size * 0.5, color: Colors.white),
     );
   }
 }

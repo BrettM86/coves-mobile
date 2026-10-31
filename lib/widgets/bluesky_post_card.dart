@@ -316,6 +316,7 @@ class BlueskyPostCard extends StatelessWidget {
     // Coves hash palette, so the embed reads as Bluesky chrome.
     return UserAvatar(
       name: author.displayName ?? author.handle,
+      did: author.did,
       avatarUrl: author.avatar,
       size: 40,
       fallbackColor: BlueskyColors.avatarFallback,
@@ -616,6 +617,7 @@ class BlueskyPostCard extends StatelessWidget {
   Widget _buildSmallAvatar(AuthorView author) {
     return UserAvatar(
       name: author.displayName ?? author.handle,
+      did: author.did,
       avatarUrl: author.avatar,
       size: 20,
       fallbackColor: BlueskyColors.avatarFallback,

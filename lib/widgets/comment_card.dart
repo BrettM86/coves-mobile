@@ -358,6 +358,7 @@ class _CommentCardState extends State<CommentCard> {
   Widget _buildAuthorAvatar(AuthorView author) {
     return UserAvatar(
       name: author.displayName ?? author.handle,
+      did: author.did,
       avatarUrl: author.avatar,
       size: 24,
     );

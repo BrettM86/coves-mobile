@@ -1,0 +1,25 @@
+# Section F — default avatar (PRD_DEFAULT_AVATARS §4.2/§4.5): a local
+# account with no avatar shows its DID's default picture on its tint.
+# livecheck.local.coves.dev (did:plc:sk27ydgarb6vtpnpkjtuzqic) has no
+# avatar and maps to `sea-turtle` on Sand 0xFFF4E7C1. The avatar has no
+# semantics, so check the picture and tint by eye (or by pixel) in
+# build/maestro/f6_default_avatar_profile.png.
+# NOT in config.yaml's flowsOrder: MainActivity has no VIEW intent filter,
+# so the profile deep link must be fired via adb BEFORE running this flow
+# (this flow intentionally has no launchApp):
+#   adb shell am start -n social.coves.dev/social.coves.MainActivity \
+#     -a android.intent.action.VIEW \
+#     -d 'social.coves:///profile/livecheck.local.coves.dev'
+appId: social.coves.dev
+tags:
+  - standalone
+---
+- extendedWaitUntil:
+    visible: "[\\s\\S]*@livecheck.local.coves.dev[\\s\\S]*"
+    timeout: 30000
+- assertVisible: "[\\s\\S]*did:plc:sk27ydgarb6vtpnpkjtuzqic[\\s\\S]*"
+- assertVisible: "[\\s\\S]*\\d+ Posts[\\s\\S]*"
+# Give the default picture time to load over the local AppView.
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: build/maestro/f6_default_avatar_profile

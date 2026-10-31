@@ -1,9 +1,12 @@
 import 'package:coves_flutter/models/user_profile.dart';
 import 'package:coves_flutter/utils/date_time_utils.dart';
 import 'package:coves_flutter/widgets/profile_header.dart';
+import 'package:coves_flutter/widgets/user_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../test_helpers/default_avatar_expectations.dart';
 
 /// Regression tests for [ProfileHeader] geometry and the [ProfileDetails]
 /// joined date.
@@ -301,6 +304,66 @@ void main() {
       // Shrinking happens within the line box reserved at 20pt, so the
       // header's deterministic geometry is unaffected by handle length.
       expect(heights.toSet(), hasLength(1));
+    });
+  });
+
+  group('ProfileHeader avatar', () {
+    Future<void> pumpHeader(WidgetTester tester, UserProfile? profile) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: CustomScrollView(
+                slivers: [
+                  SliverAppBar(
+                    pinned: true,
+                    expandedHeight: ProfileHeader.expandedHeightFor(context),
+                    flexibleSpace: ProfileHeader(profile: profile),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+    }
+
+    testWidgets('a profile with no avatar shows its DID default, not the '
+        'person icon', (tester) async {
+      await pumpHeader(
+        tester,
+        UserProfile(
+          did: 'did:plc:ewvi7nxzyoun6zhxrhs64oiz',
+          handle: 'someone.example.com',
+        ),
+      );
+
+      expectDefaultAvatar(
+        find.byType(UserAvatar),
+        url: 'http://127.0.0.1:1/img/default-avatars/v1/ocean-wave.webp',
+        tint: 0xFFD5E6E3,
+      );
+      expect(find.byIcon(Icons.person), findsNothing);
+    });
+
+    testWidgets('no loaded profile draws the plain Mist circle', (
+      tester,
+    ) async {
+      await pumpHeader(tester, null);
+
+      final avatar = find.byType(UserAvatar);
+      expect(avatar, findsOneWidget);
+      expect(
+        tintedCircleIn(avatar, 0xFFDCE0EA),
+        findsWidgets,
+        reason: 'an empty DID draws the Mist circle (D13)',
+      );
+      expect(defaultAvatarImagesIn(avatar), findsNothing);
     });
   });
 

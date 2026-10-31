@@ -278,6 +278,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
   Widget _buildAvatar(AuthorView author) {
     return UserAvatar(
       name: author.displayName ?? author.handle,
+      did: author.did,
       avatarUrl: author.avatar,
       size: 22,
     );

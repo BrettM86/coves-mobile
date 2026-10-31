@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../test_helpers/default_avatar_expectations.dart';
 import '../test_helpers/lucide_glyph_finder.dart';
 import '../test_helpers/theme_pump.dart';
 import '../test_helpers/upvote_notification_fixture.dart';
@@ -88,6 +89,37 @@ Finder _thumbnail() => find.byWidgetPredicate(
 
 void main() {
   group('NotificationUpvoteRow', () {
+    testWidgets('upvoters with no avatar each show their own DID default', (
+      tester,
+    ) async {
+      await _pumpRow(
+        tester,
+        upvoteWire(
+          upvoters: [
+            {'did': 'did:plc:ewvi7nxzyoun6zhxrhs64oiz', 'handle': 'wave.test'},
+            {
+              'did': 'did:plc:z72i7hdynmk6r22z27h6tvur',
+              'handle': 'puffer.test',
+            },
+          ],
+          count: 2,
+          subject: {...postSubject, 'preview': _title},
+          rootPost: _plainRoot,
+        ),
+      );
+
+      expectDefaultAvatar(
+        find.byType(UserAvatar).at(0),
+        url: 'http://127.0.0.1:1/img/default-avatars/v1/ocean-wave.webp',
+        tint: 0xFFD5E6E3,
+      );
+      expectDefaultAvatar(
+        find.byType(UserAvatar).at(1),
+        url: 'http://127.0.0.1:1/img/default-avatars/v1/pufferfish.webp',
+        tint: 0xFFD8E8D4,
+      );
+    });
+
     testWidgets('B4 header shows ordered avatars, a filled heart, the title, '
         'the names line and the time', (tester) async {
       await _pumpRow(

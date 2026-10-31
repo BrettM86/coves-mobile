@@ -1,28 +1,23 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:coves_flutter/constants/app_colors.dart';
 import 'package:coves_flutter/models/comment.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
-import 'package:coves_flutter/utils/display_utils.dart';
 import 'package:coves_flutter/widgets/comment_card.dart';
+import 'package:coves_flutter/widgets/user_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/default_avatar_expectations.dart';
 import '../test_helpers/test_mocks.dart';
 
-/// RED: CommentCard's hand-rolled author avatar.
-///
-/// The avatar image is built at 14x14 while its own fallback is 24x24, so the
-/// header row reflows the moment an avatar fails to load. The fallback also
-/// takes its initial from `handle` even when a displayName exists, and paints
-/// AppColors.primary instead of the shared hash color.
+/// CommentCard's author avatar: the image is requested at the same 24x24 box
+/// the fallback occupies, so the header row does not reflow when an avatar
+/// fails to load, and an author with no avatar shows their DID default.
 void main() {
-  // Hashes onto a non-coral palette slot, so "shared hash color" and the
-  // legacy AppColors.primary are distinguishable.
   const authorHandle = 'commenter.test';
 
   late MockAuthProvider mockAuthProvider;
@@ -49,6 +44,7 @@ void main() {
 
   CommentView createComment({
     required String handle,
+    String did = 'did:plc:author',
     String? displayName,
     String? avatar,
   }) {
@@ -59,7 +55,7 @@ void main() {
       createdAt: DateTime(2025),
       indexedAt: DateTime(2025),
       author: AuthorView(
-        did: 'did:plc:author',
+        did: did,
         handle: handle,
         displayName: displayName,
         avatar: avatar,
@@ -82,25 +78,14 @@ void main() {
     );
   }
 
-  Size boxSizeAround(WidgetTester tester, Finder inner) => tester.getSize(
-    find.ancestor(of: inner, matching: find.byType(DecoratedBox)).first,
-  );
-
-  Color paintedColorBehind(WidgetTester tester, Finder inner) {
-    final decorated = tester.widget<DecoratedBox>(
-      find.ancestor(of: inner, matching: find.byType(DecoratedBox)).first,
-    );
-    return (decorated.decoration as BoxDecoration).color!;
-  }
-
   group('CommentCard author avatar', () {
-    testWidgets('fallback occupies a 24x24 box', (tester) async {
+    testWidgets('the avatar occupies a 24x24 box', (tester) async {
       // Characterization: this is the size the image path must match.
       await tester.pumpWidget(
         createTestWidget(createComment(handle: authorHandle)),
       );
 
-      expect(boxSizeAround(tester, find.text('C')), const Size(24, 24));
+      expect(tester.getSize(find.byType(UserAvatar)), const Size(24, 24));
     });
 
     testWidgets('image is requested at the same 24x24 box as the fallback', (
@@ -127,35 +112,22 @@ void main() {
       expect(image.height, 24, reason: 'avatar image must not shrink to 14');
     });
 
-    testWidgets('fallback initial prefers displayName over handle', (
+    testWidgets('an author with no avatar shows their DID default', (
       tester,
     ) async {
       await tester.pumpWidget(
         createTestWidget(
-          createComment(handle: authorHandle, displayName: 'Ada Lovelace'),
+          createComment(
+            handle: authorHandle,
+            did: 'did:plc:z72i7hdynmk6r22z27h6tvur',
+          ),
         ),
       );
 
-      expect(find.text('A'), findsOneWidget);
-      expect(find.text('C'), findsNothing);
-    });
-
-    testWidgets('fallback uses the shared hash color, not AppColors.primary', (
-      tester,
-    ) async {
-      expect(
-        DisplayUtils.getFallbackColor(authorHandle).toARGB32(),
-        isNot(AppColors.primary.toARGB32()),
-        reason: 'fixture handle must hash away from the legacy color',
-      );
-
-      await tester.pumpWidget(
-        createTestWidget(createComment(handle: authorHandle)),
-      );
-
-      expect(
-        paintedColorBehind(tester, find.text('C')).toARGB32(),
-        DisplayUtils.getFallbackColor(authorHandle).toARGB32(),
+      expectDefaultAvatar(
+        find.byType(UserAvatar),
+        url: 'http://127.0.0.1:1/img/default-avatars/v1/pufferfish.webp',
+        tint: 0xFFD8E8D4,
       );
     });
   });

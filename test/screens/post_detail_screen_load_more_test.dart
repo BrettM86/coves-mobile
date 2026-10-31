@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/models/comment.dart';
 import 'package:coves_flutter/models/post.dart';
@@ -9,6 +11,7 @@ import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/widgets/loading_error_states.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
@@ -153,6 +156,25 @@ void main() {
   testWidgets('a failed page stops the scroll trigger until the footer Retry', (
     tester,
   ) async {
+    // The authors have no avatar, so each draws its DID default picture
+    // through the real DefaultCacheManager. On the host that cache can't
+    // open its storage: it needs path_provider and then a sqflite plugin,
+    // neither of which exists here. Under fake async its storage lookups
+    // never get an answer, so the pictures stay loading; the real-async
+    // windows in scrollToEnd would deliver MissingPluginException instead.
+    // Leave path_provider unanswered so they stay loading here too.
+    const pathProvider = MethodChannel('plugins.flutter.io/path_provider');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      pathProvider,
+      (call) => Completer<Object?>().future,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        pathProvider,
+        null,
+      ),
+    );
+
     try {
       await tester.pumpWidget(app());
       await tester.pumpAndSettle();

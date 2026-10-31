@@ -8,6 +8,7 @@ import 'package:coves_flutter/widgets/external_link_bar.dart';
 import 'package:coves_flutter/widgets/media/media_aspect.dart';
 import 'package:coves_flutter/widgets/media/streamable_video_embed.dart';
 import 'package:coves_flutter/widgets/source_link_bar.dart';
+import 'package:coves_flutter/widgets/user_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -34,6 +35,17 @@ const _alt = 'A photograph the author marked as sensitive';
 
 const _videoUrl = 'https://cdn.test/video.mp4';
 const _videoThumb = 'https://cdn.test/video-thumb.jpg';
+
+/// Network images that are not part of a [UserAvatar].
+///
+/// An author with no avatar draws a DID-derived default picture, which is not
+/// concealed content; every other network image (link thumbnail, carousel
+/// slide) is.
+Finder _contentImages() => find.byElementPredicate(
+  (element) =>
+      element.widget is CachedNetworkImage &&
+      element.findAncestorWidgetOfExactType<UserAvatar>() == null,
+);
 
 const _linkUri = 'https://example.com/article';
 const _sourceUri = 'https://example.com/source-one';
@@ -316,7 +328,7 @@ void main() {
 
       expect(find.byKey(_bannerKey), findsOneWidget);
       expect(
-        find.byType(CachedNetworkImage),
+        _contentImages(),
         findsNothing,
         reason: 'the link thumbnail is part of the concealed content',
       );
@@ -344,7 +356,7 @@ void main() {
 
       expect(find.byKey(_bannerKey), findsOneWidget);
       expect(find.byType(PageView), findsNothing);
-      expect(find.byType(CachedNetworkImage), findsNothing);
+      expect(_contentImages(), findsNothing);
     });
 
     testWidgets('a Streamable player is hidden', (tester) async {

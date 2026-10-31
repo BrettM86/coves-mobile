@@ -269,6 +269,7 @@ class _AvatarStack extends StatelessWidget {
                 padding: const EdgeInsets.all(_avatarRing),
                 child: UserAvatar(
                   name: actor.name,
+                  did: actor.did,
                   avatarUrl: actor.avatar,
                   size: _avatarSize - _avatarRing * 2,
                 ),

@@ -4,11 +4,13 @@ import 'package:coves_flutter/models/bluesky_post.dart';
 import 'package:coves_flutter/utils/date_time_utils.dart';
 import 'package:coves_flutter/widgets/bluesky_post_card.dart';
 import 'package:coves_flutter/widgets/image_viewer.dart';
+import 'package:coves_flutter/widgets/user_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
+import '../test_helpers/default_avatar_expectations.dart';
 import '../test_helpers/mock_url_launcher_platform.dart';
 
 const imagesEmbedKey = Key('bluesky-images-embed');
@@ -197,6 +199,41 @@ Widget blueskyCardHarness(BlueskyPostEmbed embed) {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('BlueskyPostCard author avatars', () {
+    testWidgets('authors with no avatar keep the Bluesky fallback and never '
+        'request a Coves default', (tester) async {
+      useMediaSizedSurface(tester);
+      final embed = BlueskyPostEmbed.fromJson(
+        blueskyImagesJson(
+          hasMedia: false,
+          quotedPost: blueskyQuotedPostJson(hasMedia: false),
+        ),
+      );
+
+      await tester.pumpWidget(blueskyCardHarness(embed));
+      await tester.pump();
+
+      // Initials of authorHandle (main) and quoteAuthorHandle (quoted).
+      for (final initial in ['I', 'Q']) {
+        final avatar = find.ancestor(
+          of: find.text(initial),
+          matching: find.byType(UserAvatar),
+        );
+        expect(avatar, findsOneWidget, reason: '$initial is an avatar initial');
+        expect(
+          tintedCircleIn(avatar, 0xFF2E3D4F),
+          findsOneWidget,
+          reason: 'Bluesky authors keep BlueskyColors.avatarFallback (D12)',
+        );
+      }
+      expect(
+        defaultAvatarImagesIn(find.byType(BlueskyPostCard)),
+        findsNothing,
+        reason: 'embedded Bluesky authors never draw the Coves default (D12)',
+      );
+    });
+  });
 
   group('BlueskyPostCard with an unavailable quoted post', () {
     testWidgets(
