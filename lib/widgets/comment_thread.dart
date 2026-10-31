@@ -38,6 +38,7 @@ class CommentThread extends StatelessWidget {
     this.onContinueThread,
     this.ancestors = const [],
     this.onDelete,
+    this.onEdit,
     this.focusedCommentUri,
     this.focusedCommentKey,
     this.parentPost,
@@ -94,6 +95,9 @@ class CommentThread extends StatelessWidget {
 
   /// Callback when a comment is deleted
   final Future<void> Function(String commentUri)? onDelete;
+
+  /// Callback when the signed-in author picks "Edit comment"
+  final void Function(CommentView comment)? onEdit;
 
   /// URI of the comment to render highlighted (deep-link target), if any.
   final String? focusedCommentUri;
@@ -155,6 +159,7 @@ class CommentThread extends StatelessWidget {
                 onContinueThread: onContinueThread,
                 ancestors: childAncestors,
                 onDelete: onDelete,
+                onEdit: onEdit,
                 focusedCommentUri: focusedCommentUri,
                 focusedCommentKey: focusedCommentKey,
                 parentPost: parentPost,
@@ -183,6 +188,7 @@ class CommentThread extends StatelessWidget {
             isCollapsed: isCollapsed,
             collapsedCount: collapsedCount,
             onDelete: onDelete,
+            onEdit: onEdit,
             isHighlighted: isFocused,
             parentPost: parentPost,
             sessionStamp: sessionStamp,

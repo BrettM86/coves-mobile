@@ -8,6 +8,7 @@ import '../models/feed_state.dart';
 import '../models/post.dart';
 import '../models/user_profile.dart';
 import '../services/api_exceptions.dart';
+import '../services/comment_change_broadcast.dart';
 import '../services/comment_service.dart';
 import '../services/coves_api_service.dart';
 import '../services/post_change_broadcast.dart';
@@ -36,6 +37,7 @@ class UserProfileProvider with ChangeNotifier {
     required Object? Function() sessionKeyOf,
     VoteProvider? voteProvider,
     ViewerStateHydrator? hydrator,
+    this._commentChangeBroadcast,
   }) : _authProvider = authProvider,
        _lastSignedInDid = _signedInDid(authProvider),
        _hydrator =
@@ -71,6 +73,7 @@ class UserProfileProvider with ChangeNotifier {
     _authProvider.addListener(_onAuthChanged);
     _profileCache.addPutListener(_onProfileCached);
     _postChangeBroadcast.addPostChangeListener(_onPostChanged);
+    _commentChangeBroadcast?.addCommentChangeListener(_onCommentChanged);
   }
 
   late final CursorPaginationController<FeedViewPost> _postsController;
@@ -109,6 +112,10 @@ class UserProfileProvider with ChangeNotifier {
   final ViewerStateHydrator _hydrator;
 
   final CommentService _commentService;
+
+  /// App-owned; carries edits to and from other screens' providers and
+  /// must not be disposed here.
+  final CommentChangeBroadcast? _commentChangeBroadcast;
 
   /// App-level cache shared with every other profile screen's provider.
   final ProfileCache _profileCache;
@@ -466,6 +473,53 @@ class UserProfileProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Edit one of the profile's comments
+  ///
+  /// Sends [comment]'s stored record so its embed, langs and labels survive
+  /// the full-record replace, then patches the loaded item as it is when
+  /// the save lands (so the edit survives pagination and keeps stats loaded
+  /// meanwhile), returns it with the new content, facets and cid, and
+  /// broadcasts it to other screens.
+  ///
+  /// Throws:
+  /// - ApiException without a request if [comment] has no stored record
+  /// - AuthenticationException if not authenticated
+  /// - ApiException for API errors (the list is left unchanged)
+  Future<CommentView> updateComment({
+    required CommentView comment,
+    required String content,
+    List<RichTextFacet>? facets,
+  }) async {
+    final record = comment.record;
+    if (record == null) {
+      // Saving without it would drop the embed, langs and labels.
+      throw ApiException('Cannot edit a comment without its record');
+    }
+
+    final UpdateCommentResponse response;
+    try {
+      response = await _commentService.updateComment(
+        uri: comment.uri,
+        content: content,
+        facets: facets,
+        record: record,
+      );
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Failed to update comment: $e');
+      }
+      rethrow;
+    }
+
+    final edited = record.withContent(content, facets);
+    final updated =
+        _applyCommentEdit(comment.uri, record: edited, cid: response.cid) ??
+        comment.withEditedRecord(record: edited, cid: response.cid);
+    _commentChangeBroadcast?.replaceComment(updated);
+
+    return updated;
+  }
+
   /// Delete a comment from the user's profile comments
   ///
   /// Deletes a comment and removes it from the local comments list.
@@ -498,6 +552,46 @@ class UserProfileProvider with ChangeNotifier {
       }
       rethrow;
     }
+  }
+
+  /// Patches the loaded comment [uri] with [record] and [cid], keeping its
+  /// own stats and viewer state; a tombstoned item is left alone. Returns
+  /// the patched view, or null when nothing was patched.
+  CommentView? _applyCommentEdit(
+    String uri, {
+    required CommentRecord record,
+    required String cid,
+  }) {
+    if (_disposed) {
+      return null;
+    }
+    final current = _commentsController.items
+        .where((c) => c.uri == uri)
+        .firstOrNull;
+    if (current == null || current.isTombstoned) {
+      return null;
+    }
+    // The controller notifies, which re-projects _commentsState. The
+    // transform also re-applies to a first page that lands later.
+    _commentsController.replaceItemById(
+      uri,
+      (item) => item.isTombstoned
+          ? item
+          : item.withEditedRecord(record: record, cid: cid),
+    );
+    return current.withEditedRecord(record: record, cid: cid);
+  }
+
+  void _onCommentChanged(CommentView comment) {
+    final record = comment.record;
+    final current = _commentsController.items
+        .where((c) => c.uri == comment.uri)
+        .firstOrNull;
+    // Same cid: this provider's own edit, already applied.
+    if (record == null || current == null || current.cid == comment.cid) {
+      return;
+    }
+    _applyCommentEdit(comment.uri, record: record, cid: comment.cid);
   }
 
   void _onPostChanged(PostChange change) {
@@ -659,6 +753,7 @@ class UserProfileProvider with ChangeNotifier {
   void dispose() {
     _disposed = true;
     _postChangeBroadcast.removePostChangeListener(_onPostChanged);
+    _commentChangeBroadcast?.removeCommentChangeListener(_onCommentChanged);
     _profileLoadGeneration++;
     _authProvider.removeListener(_onAuthChanged);
     _profileCache.removePutListener(_onProfileCached);

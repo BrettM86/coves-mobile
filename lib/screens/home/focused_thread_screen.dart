@@ -537,6 +537,79 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
     await _refreshSubtree();
   }
 
+  /// Open the edit screen for the viewer's own [comment]
+  void _openEditComment(CommentView comment) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (navigatorContext) => ReplyScreen(
+          editing: comment,
+          onSubmit: (content, facets) => _submitEdit(content, facets, comment),
+          commentsProvider: widget.commentsProvider,
+        ),
+      ),
+    );
+  }
+
+  /// Save an edit through this screen's provider, which patches its loaded
+  /// tree, and apply the result to this screen's own snapshots too: the
+  /// comment may be on [_thread] or an ancestor row without being in that
+  /// tree. Rethrows a failure so the composer stays open.
+  Future<void> _submitEdit(
+    String content,
+    List<RichTextFacet> facets,
+    CommentView comment,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final CommentView updated;
+    try {
+      updated = await widget.commentsProvider.updateComment(
+        comment: comment,
+        content: content,
+        facets: facets,
+      );
+    } on Exception catch (e) {
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(ErrorMessage.updateComment(e)),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+      rethrow;
+    }
+    final record = updated.record;
+    if (!mounted || record == null) {
+      return;
+    }
+    // Patch each snapshot row as it is now, not as it was when the menu
+    // opened: it may have taken newer stats since, or become a removed
+    // placeholder, which stays one.
+    CommentView edit(CommentView current) => current.isTombstoned
+        ? current
+        : current.withEditedRecord(record: record, cid: updated.cid);
+    setState(() {
+      final node = _thread.findByUri(updated.uri);
+      if (node != null) {
+        _thread = _thread.replaceDescendant(
+          node.copyWith(comment: edit(node.comment)),
+        );
+      }
+      _ancestors = [
+        for (final ancestor in _ancestors)
+          if (ancestor.row.comment.uri == updated.uri)
+            (
+              row: ancestor.row.copyWith(comment: edit(ancestor.row.comment)),
+              removalsSeen: ancestor.removalsSeen,
+              sessionStamp: ancestor.sessionStamp,
+            )
+          else
+            ancestor,
+      ];
+    });
+  }
+
   /// Load hidden replies for a nested comment inside the focused view
   Future<void> _onLoadMoreReplies(ThreadViewComment node) async {
     final provider = context.read<CommentsProvider>();
@@ -715,6 +788,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
                                 commentsProvider.loadingMoreReplies,
                             ancestors: [thread],
                             onDelete: _onDelete,
+                            onEdit: _openEditComment,
                             parentPost: widget.parentPost,
                             sessionStamp: commentsProvider.sessionStamp,
                             reloadAfterModeration: _reloadAfterModeration,
@@ -801,6 +875,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
         comment: currentAncestor.comment,
         onTap: controlsEnabled ? () => _openReplyScreen(currentAncestor) : null,
         onDelete: _onDelete,
+        onEdit: controlsEnabled ? _openEditComment : null,
         parentPost: widget.parentPost,
         sessionStamp: loadedAncestor != null
             ? commentsProvider.sessionStamp
@@ -834,6 +909,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
             ? thread.comment.stats.replyCount
             : 0,
         onDelete: _onDelete,
+        onEdit: _openEditComment,
         parentPost: widget.parentPost,
         sessionStamp: sessionStamp,
         reloadAfterModeration: _reloadAfterModeration,

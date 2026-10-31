@@ -60,6 +60,9 @@ executionOrder:
     # e10 replies to the NASA fixture with every composer format and reads
     # the record back from mari's repo on the local PDS (port 3001).
     - e10_formatted_comment
+    # e11 posts a comment on the NASA fixture, edits it, and checks the text
+    # and facets on the PDS, the AppView and after a refresh.
+    - e11_edit_comment
     - f1_own_profile
     - f2_author_profile
     - f3_edit_profile_persist

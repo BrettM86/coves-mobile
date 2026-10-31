@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../providers/auth_provider.dart';
 import '../providers/comments_provider.dart';
 import '../providers/vote_provider.dart';
+import 'comment_change_broadcast.dart';
 import 'comment_service.dart';
 import 'coves_api_service.dart';
 import 'viewer_state_hydrator.dart';
@@ -37,6 +38,7 @@ class CommentsProviderCache {
     this._hydrator,
     this.maxSize = 15,
     this._sessionKeyOf,
+    this._commentChangeBroadcast,
   }) {
     _signedInDid = _authProvider.did;
     _authProvider.addListener(_syncSignedInDid);
@@ -57,6 +59,10 @@ class CommentsProviderCache {
   /// [CommentsProvider] this cache builds so each can stamp its thread with
   /// the session it was loaded under.
   final Object? Function()? _sessionKeyOf;
+
+  /// App-owned; forwarded to every [CommentsProvider] this cache builds so
+  /// an edit saved on one screen reaches the others.
+  final CommentChangeBroadcast? _commentChangeBroadcast;
 
   /// Maximum number of providers to cache
   final int maxSize;
@@ -154,6 +160,7 @@ class CommentsProviderCache {
       postCid: postCid,
       hydrator: _hydrator,
       sessionKeyOf: _sessionKeyOf,
+      commentChangeBroadcast: _commentChangeBroadcast,
     );
 
     _cache[postUri] = provider;

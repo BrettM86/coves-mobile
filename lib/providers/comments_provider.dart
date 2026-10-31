@@ -11,6 +11,7 @@ import '../models/moderation_action.dart';
 import '../models/moderation_subject_state.dart';
 import '../models/post.dart';
 import '../services/api_exceptions.dart';
+import '../services/comment_change_broadcast.dart';
 import '../services/comment_service.dart';
 import '../services/coves_api_service.dart';
 import '../services/viewer_state_hydrator.dart';
@@ -75,6 +76,7 @@ class CommentsProvider with ChangeNotifier {
     List<Duration>? indexingRetryDelays,
     ViewerStateHydrator? hydrator,
     this._sessionKeyOf,
+    this._commentChangeBroadcast,
   }) : _voteProvider = voteProvider,
        _hydrator =
            hydrator ??
@@ -97,6 +99,7 @@ class CommentsProvider with ChangeNotifier {
       idOf: (thread) => thread.comment.uri,
       onUnexpectedError: _reportUnexpected,
     )..addListener(_onControllerChanged);
+    _commentChangeBroadcast?.addCommentChangeListener(_onCommentChanged);
   }
 
   late final CursorPaginationController<ThreadViewComment> _controller;
@@ -315,6 +318,10 @@ class CommentsProvider with ChangeNotifier {
   final ViewerStateHydrator _hydrator;
 
   final CommentService? _commentService;
+
+  /// App-owned; carries edits to and from other screens' providers and
+  /// must not be disposed here.
+  final CommentChangeBroadcast? _commentChangeBroadcast;
   final List<Duration> _indexingRetryDelays;
 
   // Post context - immutable per provider instance
@@ -1326,6 +1333,106 @@ class CommentsProvider with ChangeNotifier {
     }
   }
 
+  /// Edit one of the viewer's comments
+  ///
+  /// Sends [comment]'s stored record so its embed, langs and labels survive
+  /// the full-record replace. When the comment is in the loaded tree its
+  /// node, as it is when the save lands, is patched in place with the new
+  /// content, facets and cid and returned; otherwise [comment] is returned
+  /// with them. The edit is broadcast to other screens. There is no
+  /// refetch: the AppView picks the edit up asynchronously, so an immediate
+  /// read could still return the old text.
+  ///
+  /// Throws:
+  /// - ValidationException if content is empty or too long
+  /// - ApiException if CommentService is not available
+  /// - ApiException without a request if [comment] has no stored record
+  /// - ApiException for API errors (the tree is left unchanged)
+  Future<CommentView> updateComment({
+    required CommentView comment,
+    required String content,
+    List<RichTextFacet>? facets,
+  }) async {
+    final trimmedContent = content.trim();
+    if (trimmedContent.isEmpty) {
+      throw ValidationException('Comment cannot be empty');
+    }
+
+    final charCount = trimmedContent.characters.length;
+    if (charCount > maxCommentLength) {
+      throw ValidationException(
+        'Comment too long ($charCount characters). '
+        'Maximum is $maxCommentLength characters.',
+      );
+    }
+
+    if (_commentService == null) {
+      throw ApiException('CommentService not available');
+    }
+
+    final record = comment.record;
+    if (record == null) {
+      // Saving without it would drop the embed, langs and labels.
+      throw ApiException('Cannot edit a comment without its record');
+    }
+
+    final UpdateCommentResponse response;
+    try {
+      response = await _commentService.updateComment(
+        uri: comment.uri,
+        content: trimmedContent,
+        facets: facets,
+        record: record,
+      );
+    } on Exception catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Failed to update comment: $e');
+      }
+      rethrow;
+    }
+
+    final edited = record.withContent(trimmedContent, facets);
+    final updated =
+        _applyCommentEdit(comment.uri, record: edited, cid: response.cid) ??
+        comment.withEditedRecord(record: edited, cid: response.cid);
+    _commentChangeBroadcast?.replaceComment(updated);
+
+    return updated;
+  }
+
+  /// Patches the loaded node for [uri] with [record] and [cid], keeping its
+  /// own stats, viewer state and replies; a tombstoned node (deleted, or
+  /// removed by a moderator) is left alone. Returns the patched view, or
+  /// null when nothing was patched.
+  CommentView? _applyCommentEdit(
+    String uri, {
+    required CommentRecord record,
+    required String cid,
+  }) {
+    if (_isDisposed) {
+      return null;
+    }
+    final node = _tree.findByUri(uri);
+    if (node == null || node.comment.isTombstoned) {
+      return null;
+    }
+    final updated = node.comment.withEditedRecord(record: record, cid: cid);
+    _controller.replaceItems(
+      _tree.replaceNode(node.copyWith(comment: updated)).tree.nodes,
+    );
+    return updated;
+  }
+
+  void _onCommentChanged(CommentView comment) {
+    final record = comment.record;
+    // Same cid: this provider's own edit, already applied.
+    if (record == null ||
+        _tree.findByUri(comment.uri)?.comment.cid == comment.cid) {
+      return;
+    }
+    _applyCommentEdit(comment.uri, record: record, cid: comment.cid);
+  }
+
   /// Delete a comment
   ///
   /// Deletes a comment and refreshes the comment list.
@@ -1370,6 +1477,7 @@ class CommentsProvider with ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _commentChangeBroadcast?.removeCommentChangeListener(_onCommentChanged);
     // Stop time updates and cancel timer (also sets value to null)
     stopTimeUpdates();
     _controller.dispose();

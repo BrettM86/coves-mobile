@@ -1,0 +1,214 @@
+# Section E — editing your own comment, checked after a refresh.
+# Posts a comment stamped with this run's time on the NASA fixture, with one
+# bold word, then edits it:
+# - its "Comment options" menu offers "Edit comment" above "Delete comment";
+# - the composer opens titled "Edit comment", prefilled with the comment's
+#   text, with "Save comment" (visible "Save") instead of "Send comment";
+# - Cancel discards: the card keeps its original text;
+# - Save closes the composer and the card shows the new text at once;
+# - scripts/assert_edited_comment.js reads the record from the PDS and from
+#   the AppView, and checks the new text, the kept bold and the added italic
+#   (it waits for the AppView to index the edit through Jetstream);
+# - pull-to-refresh, then a cold relaunch, show the new text from the server;
+# - opening Edit on that server-loaded comment and saving it unchanged keeps
+#   both facets, which proves the prefill loaded them from the server's
+#   record. Text assertions cannot see styling; the facet check can.
+# The flow edits only the comment it posted, and leaves it behind as e10
+# leaves its own. Needs the local AppView and Jetstream running.
+# NOTE: never use hideKeyboard in the composer — Maestro implements it as a
+# BACK press, which closes the reply screen.
+# Assumes a signed-in session as mari (a1_login_session).
+appId: social.coves.dev
+---
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+# Reach the fixture through !science post search, not the flooded Discover
+# feed (docs/QA_LOOP.md "Reaching fixtures")
+- runFlow:
+    file: subflows/open_science_post.yaml
+    env:
+      QUERY: "NASA delays"
+      TITLE: "NASA delays .*Swift telescope.*"
+- extendedWaitUntil:
+    visible: "NASA delays[\\s\\S]*"
+    timeout: 15000
+- evalScript: ${output.e11Stamp = 'E11 ' + Date.now()}
+- evalScript: ${output.e11Original = output.e11Stamp + ' keep bold tail'}
+- evalScript: ${output.e11Edited = output.e11Stamp + ' keep bold added'}
+# --- post this run's comment, with "bold" in bold ---
+- tapOn: "Comment"
+- extendedWaitUntil:
+    visible: "Send comment[\\s\\S]*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- extendedWaitUntil:
+    visible: "Bold"
+    timeout: 10000
+- inputText: "${output.e11Stamp} keep "
+- tapOn: "Bold"
+- inputText: "bold"
+- tapOn: "Bold"
+- inputText: " tail"
+- tapOn: "Send comment[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "View [0-9]+ comments?[\\s\\S]*"
+    timeout: 20000
+- runScript:
+    file: scripts/assert_edited_comment.js
+    env:
+      AUTHOR_HANDLE: mari.local.coves.dev
+      STAMP: ${output.e11Stamp}
+      CONTENT: ${output.e11Original}
+      BOLD_TEXT: bold
+- assertTrue: ${output.e11RecordOk}
+- tapOn: "View [0-9]+ comments?[\\s\\S]*"
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*${output.e11Original}[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
+# --- the menu offers Edit above Delete ---
+# The options button is inside the comment card's semantics node.
+- tapOn:
+    text: "Comment options"
+    childOf:
+      text: "[\\s\\S]*${output.e11Original}[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Edit comment"
+    timeout: 5000
+- assertVisible:
+    text: "Edit comment"
+    above: "Delete comment"
+# --- Cancel discards ---
+- tapOn: "Edit comment"
+- extendedWaitUntil:
+    visible: "Save comment"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "Edit comment"
+- assertNotVisible: "Send comment"
+- assertVisible: "[\\s\\S]*${output.e11Original}[\\s\\S]*"
+- eraseText:
+    charactersToErase: 100
+- inputText: "E11 discarded edit"
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*${output.e11Original}[\\s\\S]*"
+    timeout: 15000
+- assertNotVisible: "[\\s\\S]*E11 discarded edit[\\s\\S]*"
+# --- replace "tail" with an italic "added", keeping the bold ---
+- tapOn:
+    text: "Comment options"
+    childOf:
+      text: "[\\s\\S]*${output.e11Original}[\\s\\S]*"
+- tapOn: "Edit comment"
+- extendedWaitUntil:
+    visible: "Save comment"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+# Cancel saved no draft for an edit: the composer is prefilled again
+- assertVisible: "[\\s\\S]*${output.e11Original}[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Italic"
+    timeout: 10000
+- eraseText:
+    charactersToErase: 4
+- tapOn: "Italic"
+- inputText: "added"
+- tapOn: "Italic"
+- takeScreenshot: build/maestro/e11_edit_composer
+- tapOn: "Save comment"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*${output.e11Edited}[\\s\\S]*"
+    timeout: 20000
+- assertNotVisible: "Save comment"
+- assertNotVisible: "[\\s\\S]*${output.e11Original}[\\s\\S]*"
+- takeScreenshot: build/maestro/e11_card_updated
+# --- the PDS and the AppView hold the new text and both facets ---
+- evalScript: ${output.e11RecordOk = false}
+- runScript:
+    file: scripts/assert_edited_comment.js
+    env:
+      AUTHOR_HANDLE: mari.local.coves.dev
+      STAMP: ${output.e11Stamp}
+      CONTENT: ${output.e11Edited}
+      BOLD_TEXT: bold
+      ITALIC_TEXT: added
+- assertTrue: ${output.e11RecordOk}
+# --- pull-to-refresh shows the edit ---
+- scrollUntilVisible:
+    element:
+      text: "NASA delays[\\s\\S]*"
+    direction: UP
+    timeout: 30000
+- swipe:
+    start: 50%, 35%
+    end: 50%, 85%
+    duration: 600
+- waitForAnimationToEnd:
+    timeout: 5000
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*${output.e11Edited}[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
+- assertNotVisible: "[\\s\\S]*${output.e11Original}[\\s\\S]*"
+# --- a cold relaunch loads the comment from the server, with no local patch ---
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- runFlow:
+    file: subflows/open_science_post.yaml
+    env:
+      QUERY: "NASA delays"
+      TITLE: "NASA delays .*Swift telescope.*"
+- extendedWaitUntil:
+    visible: "NASA delays[\\s\\S]*"
+    timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*${output.e11Edited}[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+    centerElement: true
+- takeScreenshot: build/maestro/e11_card_after_relaunch
+# --- saving the server-loaded comment unchanged keeps both facets ---
+- tapOn:
+    text: "Comment options"
+    childOf:
+      text: "[\\s\\S]*${output.e11Edited}[\\s\\S]*"
+- tapOn: "Edit comment"
+- extendedWaitUntil:
+    visible: "Save comment"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "[\\s\\S]*${output.e11Edited}[\\s\\S]*"
+- takeScreenshot: build/maestro/e11_prefill_after_relaunch
+- tapOn: "Save comment"
+- extendedWaitUntil:
+    notVisible: "Save comment"
+    timeout: 20000
+- evalScript: ${output.e11RecordOk = false}
+- runScript:
+    file: scripts/assert_edited_comment.js
+    env:
+      AUTHOR_HANDLE: mari.local.coves.dev
+      STAMP: ${output.e11Stamp}
+      CONTENT: ${output.e11Edited}
+      BOLD_TEXT: bold
+      ITALIC_TEXT: added
+- assertTrue: ${output.e11RecordOk}

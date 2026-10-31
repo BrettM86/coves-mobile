@@ -47,11 +47,23 @@ CommentView fixtureComment({
   required String text,
   String? parentUri,
   Set<ModerationCapability> capabilities = const {},
+  List<RichTextFacet>? facets,
+  Map<String, dynamic>? recordEmbed,
+  List<String>? langs,
+  Map<String, dynamic>? labels,
+  Map<String, dynamic>? viewEmbed,
+  CommentStats stats = const CommentStats(score: 3, replyCount: 2),
 }) {
   return CommentView(
     uri: uri,
     cid: 'cid-${uri.split('/').last}',
-    record: CommentRecord(content: text),
+    record: CommentRecord(
+      content: text,
+      facets: facets,
+      embed: recordEmbed,
+      langs: langs,
+      labels: labels,
+    ),
     createdAt: DateTime.utc(2025),
     indexedAt: DateTime.utc(2025),
     author: AuthorView(
@@ -62,8 +74,9 @@ CommentView fixtureComment({
     parent: parentUri == null
         ? null
         : CommentRef(uri: parentUri, cid: 'cid-${parentUri.split('/').last}'),
-    stats: const CommentStats(score: 3, replyCount: 2),
+    stats: stats,
     viewer: CommentViewerState(moderation: capabilities),
+    embed: viewEmbed,
   );
 }
 

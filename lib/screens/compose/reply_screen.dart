@@ -39,16 +39,24 @@ import '../../widgets/post_card.dart';
 /// - Thunder-style keyboard handling with manual margin
 /// - Post/comment context visible while composing
 /// - Text selection and copy/paste enabled
+///
+/// With [ReplyScreen.editing] it edits that comment instead: the field opens
+/// on the stored text and formatting, the button says "Save", and no reply
+/// draft is read, saved or cleared.
 class ReplyScreen extends StatefulWidget {
   const ReplyScreen({
     this.post,
     this.comment,
+    this.editing,
     required this.onSubmit,
-    required this.commentsProvider,
+    this.commentsProvider,
     super.key,
   }) : assert(
-         (post != null) != (comment != null),
-         'Must provide exactly one: post or comment',
+         editing != null
+             ? post == null && comment == null
+             : (post != null) != (comment != null) && commentsProvider != null,
+         'Must provide exactly one: post, comment or editing; '
+         'replying also requires commentsProvider',
        );
 
   /// Post being replied to (mutually exclusive with comment)
@@ -57,6 +65,10 @@ class ReplyScreen extends StatefulWidget {
   /// Comment being replied to (mutually exclusive with post)
   final ThreadViewComment? comment;
 
+  /// The signed-in author's comment being edited (mutually exclusive with
+  /// post and comment)
+  final CommentView? editing;
+
   /// Callback when user submits reply. ReplyScreen does not report its
   /// failures: implementers must show their own error (on a messenger that
   /// can outlive their screen) and rethrow, so the composer restores the
@@ -64,8 +76,9 @@ class ReplyScreen extends StatefulWidget {
   final Future<void> Function(String content, List<RichTextFacet> facets)
   onSubmit;
 
-  /// CommentsProvider for draft save/restore and time updates
-  final CommentsProvider commentsProvider;
+  /// CommentsProvider for draft save/restore and time updates; optional
+  /// when [editing]
+  final CommentsProvider? commentsProvider;
 
   @override
   State<ReplyScreen> createState() => _ReplyScreenState();
@@ -126,11 +139,15 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   }
 
   void _acquireProviderPin() {
+    final commentsProvider = widget.commentsProvider;
+    if (commentsProvider == null) {
+      return;
+    }
     try {
       _commentsCache = context.read<CommentsProviderCache>()
         ..acquireProvider(
-          postUri: widget.commentsProvider.postUri,
-          postCid: widget.commentsProvider.postCid,
+          postUri: commentsProvider.postUri,
+          postCid: commentsProvider.postCid,
         );
     } on ProviderNotFoundException {
       // Expected in tests - the cache may not be available
@@ -173,16 +190,26 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// A controller holding this reply context's draft, text and formatting
-  /// as they were saved (untrimmed), or an empty one when there is none
-  ///
-  /// Uses `widget.commentsProvider` directly — this screen is pushed on the
-  /// root navigator, so `context.read<CommentsProvider>()` would look above
-  /// the route and find nothing (the provider lives in the detail screen).
+  /// Where reply drafts are kept: `widget.commentsProvider` directly — this
+  /// screen is pushed on the root navigator, so
+  /// `context.read<CommentsProvider>()` would look above the route and find
+  /// nothing (the provider lives in the detail screen). Null when editing:
+  /// an edit never touches the reply drafts.
+  CommentsProvider? get _draftStore =>
+      widget.editing == null ? widget.commentsProvider : null;
+
+  /// A controller holding the edited comment's stored text and formatting,
+  /// or this reply context's draft as it was saved (untrimmed), or an empty
+  /// one when there is none
   FacetEditingController _restoredController() {
-    final draft = widget.commentsProvider.getDraft(
-      parentUri: widget.comment?.comment.uri,
-    );
+    final editing = widget.editing;
+    if (editing != null) {
+      return FacetEditingController.fromRecord(
+        editing.content,
+        editing.contentFacets ?? const [],
+      );
+    }
+    final draft = _draftStore?.getDraft(parentUri: widget.comment?.comment.uri);
     if (draft == null) {
       return FacetEditingController();
     }
@@ -245,7 +272,10 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     _bannerDismissTimer?.cancel();
     _authProvider?.removeListener(_onAuthChanged);
     // Release the cache pin so the provider becomes evictable again.
-    _commentsCache?.releaseProvider(widget.commentsProvider.postUri);
+    final pinned = widget.commentsProvider;
+    if (pinned != null) {
+      _commentsCache?.releaseProvider(pinned.postUri);
+    }
     WidgetsBinding.instance.removeObserver(this);
     _textController.dispose();
     _focusNode.dispose();
@@ -318,9 +348,8 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
 
     // The text leaves the draft slot for the duration of the send, so a
     // composer reopened mid-send starts empty instead of inviting a duplicate
-    // post; a failed send puts it back (widget.commentsProvider, not
-    // context.read — the provider is not an ancestor of this pushed route)
-    widget.commentsProvider.clearDraft(parentUri: parentUri);
+    // post; a failed send puts it back
+    _draftStore?.clearDraft(parentUri: parentUri);
 
     var succeeded = false;
     try {
@@ -367,8 +396,10 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
         // A newer draft saved while this send was in flight wins. If a
         // composer reopened during the send is still open when this send
         // fails and is closed afterwards, its text overwrites this one.
-        if (widget.commentsProvider.getDraft(parentUri: parentUri) == null) {
-          widget.commentsProvider.saveDraft(snapshot, parentUri: parentUri);
+        final draftStore = _draftStore;
+        if (draftStore != null &&
+            draftStore.getDraft(parentUri: parentUri) == null) {
+          draftStore.saveDraft(snapshot, parentUri: parentUri);
         }
         if (mounted) {
           setState(() {
@@ -432,10 +463,9 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
     Navigator.of(context).pop();
   }
 
-  /// Save current text and formatting as draft (widget.commentsProvider, not
-  /// context.read — the provider is not an ancestor of this pushed route)
+  /// Save current text and formatting as draft (none when editing)
   void _saveDraft() {
-    widget.commentsProvider.saveDraft(
+    _draftStore?.saveDraft(
       _currentDraft(),
       parentUri: widget.comment?.comment.uri,
     );
@@ -453,108 +483,119 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     // Provide CommentsProvider to descendant widgets (Consumer in
     // _ContextPreview)
-    return ChangeNotifierProvider.value(
-      value: widget.commentsProvider,
-      // System back / predictive back saves the draft just like the app-bar
-      // Cancel button. Not while a send is in flight: _handleSubmit owns the
-      // draft slot then and restores the text itself on failure. Never save
-      // in dispose() instead: after a successful submit the controller still
-      // holds the sent text.
-      child: PopScope(
-        onPopInvokedWithResult: (didPop, result) {
-          if (didPop && !_isSubmitting) {
-            _saveDraft();
-          }
-        },
-        child: GestureDetector(
-          onTap: () {
-            // Dismiss keyboard when tapping outside
-            FocusManager.instance.primaryFocus?.unfocus();
+    final commentsProvider = widget.commentsProvider;
+    final screen =
+        // System back / predictive back saves the draft just like the app-bar
+        // Cancel button. Not while a send is in flight: _handleSubmit owns the
+        // draft slot then and restores the text itself on failure. Never save
+        // in dispose() instead: after a successful submit the controller still
+        // holds the sent text.
+        PopScope(
+          onPopInvokedWithResult: (didPop, result) {
+            if (didPop && !_isSubmitting) {
+              _saveDraft();
+            }
           },
-          child: Scaffold(
-            backgroundColor: AppColors.background,
-            resizeToAvoidBottomInset: false, // Thunder approach
-            appBar: AppBar(
+          child: GestureDetector(
+            onTap: () {
+              // Dismiss keyboard when tapping outside
+              FocusManager.instance.primaryFocus?.unfocus();
+            },
+            child: Scaffold(
               backgroundColor: AppColors.background,
-              surfaceTintColor: Colors.transparent,
-              foregroundColor: AppColors.textPrimary,
-              elevation: 0,
-              automaticallyImplyLeading: false,
-              leading: TextButton(
-                onPressed: _handleCancel,
-                child: const Text(
-                  'Cancel',
-                  style: TextStyle(color: AppColors.textPrimary, fontSize: 16),
-                ),
-              ),
-              leadingWidth: 80,
-            ),
-            body: Column(
-              children: [
-                // Scrollable content area (Thunder style)
-                Expanded(
-                  child: SingleChildScrollView(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Column(
-                      children: [
-                        // Post or comment preview
-                        _buildContext(),
-
-                        const SizedBox(height: 8),
-
-                        // Divider between post and text input
-                        Container(height: 1, color: AppColors.border),
-
-                        // Text input - no background box, types directly into
-                        // main area
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: FacetTextField(
-                            controller: _textController,
-                            focusNode: _focusNode,
-                            minLines: 8,
-                            autocorrect: false,
-                            textCapitalization: TextCapitalization.sentences,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 16,
-                              height: 1.4,
-                            ),
-                            decoration: const InputDecoration(
-                              hintText: 'Say something...',
-                              hintStyle: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 16,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                        ),
-                      ],
+              resizeToAvoidBottomInset: false, // Thunder approach
+              appBar: AppBar(
+                backgroundColor: AppColors.background,
+                surfaceTintColor: Colors.transparent,
+                foregroundColor: AppColors.textPrimary,
+                elevation: 0,
+                automaticallyImplyLeading: false,
+                leading: TextButton(
+                  onPressed: _handleCancel,
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 16,
                     ),
                   ),
                 ),
+                leadingWidth: 80,
+                title: widget.editing == null
+                    ? null
+                    : const Text('Edit comment'),
+              ),
+              body: Column(
+                children: [
+                  // Scrollable content area (Thunder style)
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        children: [
+                          // Post or comment preview (none when editing)
+                          if (widget.editing == null) ...[
+                            _buildContext(),
 
-                // Divider - simple straight line like posts and comments
-                Container(height: 1, color: AppColors.border),
+                            const SizedBox(height: 8),
 
-                _ReplyToolbar(
-                  controller: _textController,
-                  focusNode: _focusNode,
-                  hasText: _hasText,
-                  isSubmitting: _isSubmitting,
-                  onImageTap: _handleImageTap,
-                  onMentionTap: _handleMentionTap,
-                  onSubmit: _handleSubmit,
-                ),
-              ],
+                            // Divider between post and text input
+                            Container(height: 1, color: AppColors.border),
+                          ],
+
+                          // Text input - no background box, types directly into
+                          // main area
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: FacetTextField(
+                              controller: _textController,
+                              focusNode: _focusNode,
+                              minLines: 8,
+                              autocorrect: false,
+                              textCapitalization: TextCapitalization.sentences,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 16,
+                                height: 1.4,
+                              ),
+                              decoration: const InputDecoration(
+                                hintText: 'Say something...',
+                                hintStyle: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 16,
+                                ),
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Divider - simple straight line like posts and comments
+                  Container(height: 1, color: AppColors.border),
+
+                  _ReplyToolbar(
+                    controller: _textController,
+                    focusNode: _focusNode,
+                    hasText: _hasText,
+                    isSubmitting: _isSubmitting,
+                    isEditing: widget.editing != null,
+                    onImageTap: _handleImageTap,
+                    onMentionTap: _handleMentionTap,
+                    onSubmit: _handleSubmit,
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ),
-    );
+        );
+    return commentsProvider == null
+        ? screen
+        : ChangeNotifierProvider.value(value: commentsProvider, child: screen);
   }
 
   /// Build context area (post or comment chain)
@@ -623,6 +664,7 @@ class _ReplyToolbar extends StatefulWidget {
     required this.focusNode,
     required this.hasText,
     required this.isSubmitting,
+    required this.isEditing,
     required this.onMentionTap,
     required this.onImageTap,
     required this.onSubmit,
@@ -636,6 +678,9 @@ class _ReplyToolbar extends StatefulWidget {
   final FocusNode focusNode;
   final bool hasText;
   final bool isSubmitting;
+
+  /// Labels the button "Save" for an edit instead of "Send"
+  final bool isEditing;
   final VoidCallback onMentionTap;
   final VoidCallback onImageTap;
   final VoidCallback onSubmit;
@@ -734,9 +779,9 @@ class _ReplyToolbarState extends State<_ReplyToolbar>
     ];
     final send = Semantics(
       button: true,
-      // The label alone: the pill's visible 'Send' text would merge into it
+      // The label alone: the pill's visible text would merge into it
       excludeSemantics: true,
-      label: 'Send comment',
+      label: widget.isEditing ? 'Save comment' : 'Send comment',
       // excludeSemantics drops the GestureDetector's tap, so restate it
       enabled: widget.hasText && !widget.isSubmitting,
       onTap: (widget.hasText && !widget.isSubmitting) ? widget.onSubmit : null,
@@ -768,9 +813,9 @@ class _ReplyToolbarState extends State<_ReplyToolbar>
                   ),
                 )
               else
-                const Text(
-                  'Send',
-                  style: TextStyle(
+                Text(
+                  widget.isEditing ? 'Save' : 'Send',
+                  style: const TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.normal,

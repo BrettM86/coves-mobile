@@ -1,9 +1,12 @@
 import 'package:coves_flutter/models/comment.dart';
+import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/comments_provider.dart';
+import 'package:coves_flutter/services/comment_change_broadcast.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 
+import '../test_helpers/comment_removal_fixtures.dart';
 import '../test_helpers/fake_providers.dart';
 import '../test_helpers/test_mocks.dart';
 
@@ -425,5 +428,67 @@ void main() {
         postUri,
       ], reason: 'the kept provider must not have been disposed');
     });
+  });
+
+  test('a provider built by a cache given a CommentChangeBroadcast applies '
+      'an edit another screen dispatches on it', () async {
+    const commentUri = 'at://did:plc:alice/social.coves.community.comment/c';
+    when(
+      api.getComments(
+        postUri: anyNamed('postUri'),
+        sort: anyNamed('sort'),
+        timeframe: anyNamed('timeframe'),
+        depth: anyNamed('depth'),
+        limit: anyNamed('limit'),
+        cursor: anyNamed('cursor'),
+        parentRkey: anyNamed('parentRkey'),
+      ),
+    ).thenAnswer(
+      (_) async => CommentsResponse(
+        post: null,
+        comments: [
+          ThreadViewComment(
+            comment: fixtureComment(
+              uri: commentUri,
+              authorDid: 'did:plc:alice',
+              text: 'Before the edit',
+            ),
+          ),
+        ],
+      ),
+    );
+    final broadcast = CommentChangeBroadcast();
+    final broadcastCache = CommentsProviderCache(
+      authProvider: auth,
+      voteProvider: votes,
+      commentService: MockCommentService(),
+      apiService: api,
+      commentChangeBroadcast: broadcast,
+    );
+    addTearDown(broadcastCache.dispose);
+    final provider = broadcastCache.acquireProvider(
+      postUri: postUri,
+      postCid: postCid,
+    );
+    await provider.loadComments(refresh: true);
+    expect(provider.comments.single.comment.content, 'Before the edit');
+
+    broadcast.replaceComment(
+      CommentView(
+        uri: commentUri,
+        cid: 'cid-after-edit',
+        record: const CommentRecord(content: 'Edited on another screen'),
+        createdAt: DateTime.utc(2025),
+        indexedAt: DateTime.utc(2025),
+        author: AuthorView(did: 'did:plc:alice', handle: 'alice.coves.test'),
+        post: CommentRef(uri: postUri, cid: postCid),
+        stats: const CommentStats(),
+      ),
+    );
+
+    expect(
+      provider.comments.single.comment.content,
+      'Edited on another screen',
+    );
   });
 }

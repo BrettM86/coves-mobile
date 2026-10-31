@@ -9,7 +9,9 @@ import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/models/comment.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/models/user_profile.dart';
+import 'package:coves_flutter/screens/compose/reply_screen.dart';
 import 'package:coves_flutter/screens/home/profile_screen.dart';
+import 'package:coves_flutter/services/comment_service.dart';
 import 'package:coves_flutter/widgets/comment_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -25,6 +27,7 @@ const String myDid = 'did:plc:me';
 const String myHandle = 'me.coves.test';
 const String keptCommentText = 'Comment that stays';
 const String deletedCommentText = 'Comment to delete';
+const String editedCommentText = 'Comment that stays, edited';
 
 CommentView _myComment(String rkey, String content) {
   return CommentView(
@@ -166,5 +169,81 @@ void main() {
     expect(find.text(keptCommentText), findsOneWidget);
     expect(find.byType(ProfileScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('editing a comment from the Comments tab shows the new text '
+      'in that profile list', (tester) async {
+    tester.view.physicalSize = const Size(540, 960);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (methodCall) async => null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    // getActorComments keeps serving the old text: the edit has not reached
+    // the AppView yet.
+    final updates = <(String, String)>[];
+    when(
+      commentService.updateComment(
+        uri: anyNamed('uri'),
+        content: anyNamed('content'),
+        facets: anyNamed('facets'),
+        record: anyNamed('record'),
+      ),
+    ).thenAnswer((invocation) async {
+      final uri = invocation.namedArguments[#uri] as String;
+      updates.add((uri, invocation.namedArguments[#content] as String));
+      return UpdateCommentResponse(uri: uri, cid: 'cid-new');
+    });
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: profileScreenProviders(
+          auth: authProvider,
+          apiService: apiService,
+          commentService: commentService,
+        ),
+        child: MaterialApp(theme: AppTheme.dark, home: const ProfileScreen()),
+      ),
+    );
+    await pumpFrames(tester);
+    await tester.tap(find.text('Comments'));
+    await pumpFrames(tester);
+    expect(find.text(keptCommentText), findsOneWidget);
+
+    final keptCard = find.ancestor(
+      of: find.text(keptCommentText),
+      matching: find.byType(CommentCard),
+    );
+    await tester.tap(
+      find.descendant(of: keptCard, matching: find.byIcon(Icons.more_horiz)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Edit comment'), findsOneWidget);
+    await tester.tap(find.text('Edit comment'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(ReplyScreen),
+        matching: find.byType(EditableText),
+      ),
+      editedCommentText,
+    );
+    await tester.pump();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(updates, [(keptComment.uri, editedCommentText)]);
+    expect(find.byType(ReplyScreen), findsNothing);
+    expect(find.text(editedCommentText), findsOneWidget);
+    expect(find.text(keptCommentText), findsNothing);
+    expect(find.text(deletedCommentText), findsOneWidget);
   });
 }

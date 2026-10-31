@@ -174,17 +174,47 @@ class ThreadViewComment {
 /// This matches the backend's `social.coves.community.comment` record type.
 /// When a comment is deleted, this record will be null in CommentView.
 class CommentRecord {
-  const CommentRecord({required this.content, this.facets});
+  const CommentRecord({
+    required this.content,
+    this.facets,
+    this.embed,
+    this.langs,
+    this.labels,
+  });
 
   factory CommentRecord.fromJson(Map<String, dynamic> json) {
     return CommentRecord(
       content: json['content'] as String,
       facets: parseFacetsFromRecord(json),
+      embed: json['embed'] is Map<String, dynamic>
+          ? json['embed'] as Map<String, dynamic>
+          : null,
+      langs: json['langs'] is List
+          ? (json['langs'] as List).whereType<String>().toList()
+          : null,
+      labels: json['labels'] is Map<String, dynamic>
+          ? json['labels'] as Map<String, dynamic>
+          : null,
     );
   }
 
   final String content;
   final List<RichTextFacet>? facets;
+  final Map<String, dynamic>? embed;
+  final List<String>? langs;
+  final Map<String, dynamic>? labels;
+
+  /// This record with new [content] and [facets] (null or empty means
+  /// none), keeping [embed], [langs] and [labels].
+  CommentRecord withContent(String content, List<RichTextFacet>? facets) {
+    return CommentRecord(
+      content: content,
+      facets: facets == null || facets.isEmpty ? null : facets,
+      embed: embed,
+      langs: langs,
+      labels: labels,
+    );
+  }
 }
 
 class CommentView {
@@ -325,6 +355,31 @@ class CommentView {
   /// (which it only does for deleted content). Prefer this over checking
   /// [isDeleted] alone when deciding whether author info can be rendered.
   bool get isTombstoned => isDeleted || author == null;
+
+  /// This view after an edit: a new [record] and [cid], everything else
+  /// unchanged.
+  CommentView withEditedRecord({
+    required CommentRecord record,
+    required String cid,
+  }) {
+    return CommentView(
+      uri: uri,
+      cid: cid,
+      record: record,
+      isDeleted: isDeleted,
+      deletionReason: deletionReason,
+      createdAt: createdAt,
+      indexedAt: indexedAt,
+      author: author,
+      post: post,
+      parent: parent,
+      stats: stats,
+      viewer: viewer,
+      embed: embed,
+      moderation: moderation,
+      deletedAt: deletedAt,
+    );
+  }
 }
 
 class CommentRef {

@@ -235,6 +235,12 @@ abstract final class ErrorMessage {
     fallback: 'Could not delete comment. Please try again.',
   );
 
+  /// Error message for saving a comment edit
+  static String updateComment(Object error) => getErrorMessage(
+    error,
+    fallback: 'Could not save your edit. Please try again.',
+  );
+
   /// Error message for reply loading
   static String loadReplies(Object error) => getErrorMessage(
     error,

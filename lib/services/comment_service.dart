@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../models/comment.dart';
 import '../models/coves_session.dart';
 import '../models/post.dart';
 import 'api_exceptions.dart';
@@ -147,6 +148,85 @@ class CommentService {
     }
   }
 
+  /// Update a comment's content
+  ///
+  /// The update procedure replaces the whole record, so the stored
+  /// [record]'s embed, langs and labels are resent verbatim.
+  ///
+  /// Throws:
+  /// - AuthenticationException if not authenticated
+  /// - ApiException with statusCode 403 if not the comment author
+  /// - NotFoundException if the comment no longer exists (404)
+  /// - ApiException with statusCode 409 and errorCode
+  ///   'ConcurrentModification' if the comment changed meanwhile
+  /// - ApiException for other errors
+  Future<UpdateCommentResponse> updateComment({
+    required String uri,
+    required String content,
+    List<RichTextFacet>? facets,
+    required CommentRecord record,
+  }) async {
+    try {
+      final session = await _sessionGetter?.call();
+
+      if (session == null) {
+        throw AuthenticationException(
+          'User not authenticated - no session available',
+        );
+      }
+
+      if (kDebugMode) {
+        debugPrint('✏️ Updating comment: $uri');
+        debugPrint('   Content length: ${content.length}');
+      }
+
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/xrpc/social.coves.community.comment.update',
+        data: {
+          'uri': uri,
+          'content': content,
+          if (facets != null && facets.isNotEmpty)
+            'facets': facets.map((f) => f.toJson()).toList(),
+          if (record.embed != null) 'embed': record.embed,
+          if (record.langs != null) 'langs': record.langs,
+          if (record.labels != null) 'labels': record.labels,
+        },
+      );
+
+      final data = response.data;
+      if (data == null) {
+        throw ApiException('Invalid response from server - no data');
+      }
+
+      final updatedUri = data['uri'];
+      final cid = data['cid'];
+
+      // Type-check rather than cast, as in createComment.
+      if (updatedUri is! String ||
+          updatedUri.isEmpty ||
+          cid is! String ||
+          cid.isEmpty) {
+        throw ApiException('Invalid response from server - missing uri or cid');
+      }
+
+      if (kDebugMode) {
+        debugPrint('✅ Comment updated: $updatedUri');
+      }
+
+      return UpdateCommentResponse(uri: updatedUri, cid: cid);
+    } on DioException catch (e) {
+      // No client copy for 403: the backend also returns it when the PDS
+      // session fails, so the server's message and error code are kept.
+      throw mapDioException(e, operation: 'update comment');
+    } on AuthenticationException {
+      rethrow;
+    } on ApiException {
+      rethrow;
+    } on Exception catch (e) {
+      throw ApiException('Failed to update comment: $e', originalError: e);
+    }
+  }
+
   /// Delete a comment
   ///
   /// Deletes a comment. Only the comment author can delete.
@@ -226,5 +306,16 @@ class CreateCommentResponse {
   final String uri;
 
   /// CID of the created comment record
+  final String cid;
+}
+
+/// Response from comment update
+class UpdateCommentResponse {
+  const UpdateCommentResponse({required this.uri, required this.cid});
+
+  /// AT-URI of the updated comment record
+  final String uri;
+
+  /// CID of the new comment record version
   final String cid;
 }

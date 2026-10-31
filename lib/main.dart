@@ -33,6 +33,7 @@ import 'screens/home/profile_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/moderation/modlog_screen.dart';
 import 'screens/settings/settings_screen.dart';
+import 'services/comment_change_broadcast.dart';
 import 'services/comment_service.dart';
 import 'services/comments_provider_cache.dart';
 import 'services/coves_api_service.dart';
@@ -176,6 +177,7 @@ Future<Widget> bootstrapCovesApp() async {
     subscriptionProvider: subscriptionProvider,
   );
   final postChangeBroadcast = PostChangeBroadcast();
+  final commentChangeBroadcast = CommentChangeBroadcast();
   final feedProvider = MultiFeedProvider(
     authProvider,
     apiService: apiService,
@@ -200,6 +202,7 @@ Future<Widget> bootstrapCovesApp() async {
       // Expose the shared API client so screens/widgets can context.read it
       Provider<CovesApiService>.value(value: apiService),
       Provider<PostChangeBroadcast>.value(value: postChangeBroadcast),
+      Provider<CommentChangeBroadcast>.value(value: commentChangeBroadcast),
       // Expose the shared comment service for per-screen profile providers
       Provider<CommentService>.value(value: commentService),
       ChangeNotifierProvider.value(value: subscriptionProvider),
@@ -235,6 +238,7 @@ Future<Widget> bootstrapCovesApp() async {
           apiService: apiService,
           hydrator: hydrator,
           sessionKeyOf: () => viewerAuthorityProvider.sessionKey,
+          commentChangeBroadcast: commentChangeBroadcast,
         ),
         dispose: (_, cache) => cache.dispose(),
       ),

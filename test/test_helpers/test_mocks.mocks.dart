@@ -134,6 +134,12 @@ class _FakeCreateCommentResponse_15 extends _i1.SmartFake
     : super(parent, parentInvocation);
 }
 
+class _FakeUpdateCommentResponse_16 extends _i1.SmartFake
+    implements _i11.UpdateCommentResponse {
+  _FakeUpdateCommentResponse_16(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
 /// A class which mocks [AuthProvider].
 ///
 /// See the documentation for Mockito's code generation for more information.
@@ -1128,6 +1134,32 @@ class MockCommentService extends _i1.Mock implements _i11.CommentService {
       ),
     ),
   ) as _i13.Future<_i11.CreateCommentResponse>);
+
+  @override
+  _i13.Future<_i11.UpdateCommentResponse> updateComment({
+    required String? uri,
+    required String? content,
+    List<_i2.RichTextFacet>? facets,
+    required _i3.CommentRecord? record,
+  }) => (super.noSuchMethod(
+    Invocation.method(#updateComment, [], {
+      #uri: uri,
+      #content: content,
+      #facets: facets,
+      #record: record,
+    }),
+    returnValue: _i13.Future<_i11.UpdateCommentResponse>.value(
+      _FakeUpdateCommentResponse_16(
+        this,
+        Invocation.method(#updateComment, [], {
+          #uri: uri,
+          #content: content,
+          #facets: facets,
+          #record: record,
+        }),
+      ),
+    ),
+  ) as _i13.Future<_i11.UpdateCommentResponse>);
 
   @override
   _i13.Future<void> deleteComment({required String? uri}) =>

@@ -13,11 +13,13 @@ import '../../providers/auth_provider.dart';
 import '../../providers/block_provider.dart';
 import '../../providers/user_profile_provider.dart';
 import '../../providers/viewer_authority_provider.dart';
+import '../../services/comment_change_broadcast.dart';
 import '../../services/comment_service.dart';
 import '../../services/coves_api_service.dart';
 import '../../services/post_change_broadcast.dart';
 import '../../services/profile_cache.dart';
 import '../../services/viewer_state_hydrator.dart';
+import '../../utils/error_messages.dart';
 import '../../utils/pagination_scroll_listener.dart';
 import '../../utils/responsive_utils.dart';
 import '../../utils/web_link_builder.dart';
@@ -31,6 +33,7 @@ import '../../widgets/post_card.dart';
 import '../../widgets/primary_button.dart';
 import '../../widgets/profile_header.dart';
 import '../../widgets/share_button.dart';
+import '../compose/reply_screen.dart';
 import 'edit_profile_screen.dart';
 
 /// Profile screen displaying user profile with header and posts
@@ -65,6 +68,7 @@ class ProfileScreen extends StatelessWidget {
           // votes and community subscriptions through hydrateFeed.
           hydrator: context.read<ViewerStateHydrator>(),
           sessionKeyOf: () => authority.sessionKey,
+          commentChangeBroadcast: context.read<CommentChangeBroadcast?>(),
         );
       },
       child: _ProfileView(actor: actor),
@@ -936,6 +940,45 @@ class _ProfileCommentCard extends StatelessWidget {
       onDelete: (commentUri) async {
         await profileProvider.deleteComment(commentUri: commentUri);
       },
+      onEdit: (comment) => _openEditComment(context, profileProvider, comment),
+    );
+  }
+
+  /// Open the edit screen for the viewer's own [comment]; the profile
+  /// provider patches its list on save. A failed save shows an error and
+  /// rethrows so the composer stays open.
+  void _openEditComment(
+    BuildContext context,
+    UserProfileProvider profileProvider,
+    CommentView comment,
+  ) {
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ReplyScreen(
+          editing: comment,
+          onSubmit: (content, facets) async {
+            try {
+              await profileProvider.updateComment(
+                comment: comment,
+                content: content,
+                facets: facets,
+              );
+            } on Exception catch (e) {
+              if (messenger.mounted) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(ErrorMessage.updateComment(e)),
+                    behavior: SnackBarBehavior.floating,
+                    backgroundColor: AppColors.primary,
+                  ),
+                );
+              }
+              rethrow;
+            }
+          },
+        ),
+      ),
     );
   }
 }

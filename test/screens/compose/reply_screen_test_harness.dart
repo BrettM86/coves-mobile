@@ -120,6 +120,29 @@ class ReplyScreenHarness {
     await tester.pumpAndSettle();
   }
 
+  /// Pushes ReplyScreen editing [comment]; the harness's CommentsProvider
+  /// is passed only when [withCommentsProvider]
+  Future<void> pushEdit(
+    WidgetTester tester, {
+    required CommentView comment,
+    required Future<void> Function(String content, List<RichTextFacet> facets)
+    onSubmit,
+    bool withCommentsProvider = false,
+  }) async {
+    unawaited(
+      navigatorKey.currentState!.push(
+        MaterialPageRoute<void>(
+          builder: (_) => ReplyScreen(
+            editing: comment,
+            commentsProvider: withCommentsProvider ? commentsProvider : null,
+            onSubmit: onSubmit,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
   /// Pushes a reply to [parentUri], recording every submission as its
   /// content and [describeFacet] of each facet
   Future<List<(String, List<String>)>> openRecordingReply(

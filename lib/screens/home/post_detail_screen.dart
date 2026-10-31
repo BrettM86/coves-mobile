@@ -1110,6 +1110,48 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
+  /// Open the edit screen for the viewer's own [comment]
+  void _openEditComment(CommentView comment) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ReplyScreen(
+          editing: comment,
+          onSubmit: (content, facets) =>
+              _handleCommentEdit(content, facets, comment),
+          commentsProvider: _commentsProvider,
+        ),
+      ),
+    );
+  }
+
+  /// Save an edit; the provider patches the comment in the loaded tree
+  Future<void> _handleCommentEdit(
+    String content,
+    List<RichTextFacet> facets,
+    CommentView comment,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      await _commentsProvider.updateComment(
+        comment: comment,
+        content: content,
+        facets: facets,
+      );
+    } on Exception catch (e) {
+      if (messenger.mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(ErrorMessage.updateComment(e)),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+      rethrow; // Let ReplyScreen know submission failed
+    }
+  }
+
   /// Navigate to focused thread screen for deep threads
   void _onContinueThread(
     ThreadViewComment thread,
@@ -1406,6 +1448,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               onDelete: (uri) => commentsProvider.deleteComment(
                                 commentUri: uri,
                               ),
+                              onEdit: _openEditComment,
                               focusedCommentUri: widget.focusCommentUri,
                               focusedCommentKey: _focusedCommentKey,
                               parentPost: _post.post,
@@ -1483,6 +1526,7 @@ class _CommentItem extends StatelessWidget {
     this.onLoadMoreReplies,
     this.loadingMoreReplies = const {},
     this.onDelete,
+    this.onEdit,
     this.focusedCommentUri,
     this.focusedCommentKey,
     this.parentPost,
@@ -1514,6 +1558,7 @@ class _CommentItem extends StatelessWidget {
   final void Function(ThreadViewComment)? onLoadMoreReplies;
   final Set<String> loadingMoreReplies;
   final Future<void> Function(String commentUri)? onDelete;
+  final void Function(CommentView comment)? onEdit;
   final String? focusedCommentUri;
   final Key? focusedCommentKey;
 
@@ -1533,6 +1578,7 @@ class _CommentItem extends StatelessWidget {
           onLoadMoreReplies: onLoadMoreReplies,
           loadingMoreReplies: loadingMoreReplies,
           onDelete: onDelete,
+          onEdit: onEdit,
           focusedCommentUri: focusedCommentUri,
           focusedCommentKey: focusedCommentKey,
           parentPost: parentPost,

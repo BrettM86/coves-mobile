@@ -32,6 +32,8 @@ import 'animated_vote_count.dart';
 import 'block_action_helpers.dart';
 import 'icons/animated_heart_icon.dart';
 import 'icons/downvote_icon.dart';
+import 'icons/lucide_icon_painter.dart';
+import 'icons/lucide_paths.dart';
 import 'icons/share_icon.dart';
 import 'moderation/moderation_action_sheet.dart';
 import 'moderation/moderation_failure_decision.dart';
@@ -75,6 +77,7 @@ class CommentCard extends StatefulWidget {
     this.isCollapsed = false,
     this.collapsedCount = 0,
     this.onDelete,
+    this.onEdit,
     this.isHighlighted = false,
     this.parentPost,
     this.reloadAfterModeration,
@@ -120,6 +123,9 @@ class CommentCard extends StatefulWidget {
 
   /// Callback when the comment is deleted
   final Future<void> Function(String commentUri)? onDelete;
+
+  /// Callback when the signed-in author picks "Edit comment"
+  final void Function(CommentView comment)? onEdit;
 
   /// Tints the card so a comment the user navigated to directly (e.g. from
   /// their profile) stands out from its siblings.
@@ -526,7 +532,8 @@ class _CommentCardState extends State<CommentCard> {
   }
 
   /// The moderation entries of the comment menu: block and report for another
-  /// user's comment, delete for the viewer's own, and remove on either when
+  /// user's comment, edit (when [CommentCard.onEdit] is set) and delete for
+  /// the viewer's own, and remove on either when
   /// [showRemove] says the admin tool is allowed.
   ///
   /// Empty when there is nothing to act on — a signed-out viewer, or a
@@ -559,8 +566,15 @@ class _CommentCardState extends State<CommentCard> {
     final authorDid = author.did;
     final authorHandle = author.handle;
     if (authProvider.did == authorDid) {
+      final onEdit = widget.onEdit;
       return [
         if (showRemove) removeItem,
+        if (onEdit != null)
+          MenuItemButton(
+            onPressed: () => onEdit(comment),
+            leadingIcon: const LucideGlyph(LucidePaths.pencil, size: 20),
+            child: const Text('Edit comment'),
+          ),
         MenuItemButton(
           onPressed: () => _handleMenuAction(context, 'delete'),
           leadingIcon: const Icon(
