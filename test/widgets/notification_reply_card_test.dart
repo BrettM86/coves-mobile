@@ -118,6 +118,10 @@ const _cardRoot = <String, dynamic>{
   'stats': {'score': 12, 'upvotes': 12, 'downvotes': 0, 'commentCount': 3},
 };
 
+/// Two grapheme clusters: a letter and a ZWJ family emoji of eight UTF-16
+/// code units, so a cut by code unit splits a cluster.
+const _graphemeUnit = 'a👨‍👩‍👧';
+
 const _yourCommentUri =
     'at://did:plc:alice/social.coves.community.comment/3kmine';
 const _yourComment = 'Mine is a Keychron Q1.';
@@ -849,11 +853,7 @@ void main() {
     // the bubble when the post card names the author.
     for (final (description, title, excerpt) in [
       ('equal to the title', _title, _title),
-      (
-        'a 140-grapheme prefix of the title',
-        _longTitle,
-        _longTitle.substring(0, 140),
-      ),
+      ('a prefix of the title', _longTitle, _longTitle.substring(0, 140)),
     ]) {
       testWidgets('B5 post mention with an excerpt $description drops the '
           'bubble when the post card shows the author', (tester) async {
@@ -900,5 +900,66 @@ void main() {
       expect(find.text('Bob'), findsOneWidget);
       expect(find.text(_title), findsNWidgets(2));
     });
+
+    // The backend sends up to 1,000 graphemes of reply text. The bubble
+    // shows at most five lines of it and keeps the whole string.
+    testWidgets('B3 a long excerpt renders at most five lines with an '
+        'ellipsis and keeps its full text', (tester) async {
+      final longExcerpt = _graphemeUnit * 500;
+      await _pumpCard(
+        tester,
+        _row(record: {..._liveRecord, 'excerpt': longExcerpt}),
+      );
+
+      final text = tester.widget<Text>(find.text(longExcerpt));
+      expect(text.data, longExcerpt);
+      expect(text.maxLines, 5);
+      expect(text.overflow, TextOverflow.ellipsis);
+    });
+
+    // The row label speaks at most 140 graphemes of each text part, cut on
+    // a grapheme boundary, and still ends with the time.
+    for (final (description, wire, label) in [
+      (
+        'a 1,000-grapheme excerpt',
+        _row(record: {..._liveRecord, 'excerpt': _graphemeUnit * 500}),
+        'Reply to your post, !gaming@coves.social, Best budget keyboards?, '
+            'Bob, ${_graphemeUnit * 70}, 6d',
+      ),
+      (
+        'a 1,000-grapheme quote of your comment',
+        _commentReply(
+          subject: {
+            'uri': _yourCommentUri,
+            'cid': 'bafymine',
+            'preview': _graphemeUnit * 500,
+          },
+        ),
+        'Reply to your comment, !gaming@coves.social, '
+            '${_graphemeUnit * 70}, Bob, I use a Keychron K2., 6d',
+      ),
+      (
+        'an exactly 140-grapheme excerpt',
+        _row(record: {..._liveRecord, 'excerpt': _graphemeUnit * 70}),
+        'Reply to your post, !gaming@coves.social, Best budget keyboards?, '
+            'Bob, ${_graphemeUnit * 70}, 6d',
+      ),
+    ]) {
+      testWidgets('B8 the row label caps $description at 140 graphemes', (
+        tester,
+      ) async {
+        final semantics = tester.ensureSemantics();
+        try {
+          await _pumpCard(tester, wire);
+
+          expect(
+            tester.getSemantics(find.byType(NotificationReplyCard)).label,
+            label,
+          );
+        } finally {
+          semantics.dispose();
+        }
+      });
+    }
   });
 }

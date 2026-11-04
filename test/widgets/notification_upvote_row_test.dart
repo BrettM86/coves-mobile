@@ -26,6 +26,10 @@ const _longPreview =
     'plenty of useful layout options for daily work. It goes on to describe '
     'the typing feel and how it compares with other keyboards on a desk.';
 
+/// Two grapheme clusters: a letter and a ZWJ family emoji of eight UTF-16
+/// code units, so a cut by code unit splits a cluster.
+const _graphemeUnit = 'a👨‍👩‍👧';
+
 /// A live root post without an author or stats, so the post card adds no
 /// avatar or heart of its own to the row.
 const _plainRoot = <String, dynamic>{
@@ -423,6 +427,37 @@ void main() {
             await tester.pump();
             expect(taps, 1);
           }
+        } finally {
+          semantics.dispose();
+        }
+      });
+    }
+
+    // The backend sends up to 1,000 graphemes of comment preview. The row
+    // label speaks at most 140 of them, cut on a grapheme boundary.
+    for (final (description, wire, label) in [
+      (
+        'a 1,000-grapheme comment preview',
+        upvoteWire(
+          upvoters: [aliceUpvoter],
+          count: 1,
+          subject: {...commentSubject, 'preview': _graphemeUnit * 500},
+          rootPost: _cardRoot,
+        ),
+        'Alice liked your comment, ${_graphemeUnit * 70}, 6d',
+      ),
+    ]) {
+      testWidgets('B9 the row label caps $description at 140 graphemes', (
+        tester,
+      ) async {
+        final semantics = tester.ensureSemantics();
+        try {
+          await _pumpRow(tester, wire);
+
+          expect(
+            tester.getSemantics(find.byType(NotificationUpvoteRow)).label,
+            label,
+          );
         } finally {
           semantics.dispose();
         }

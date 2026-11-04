@@ -7,6 +7,13 @@ import '../compact_post_card.dart';
 const _unreadDotSize = 8.0;
 const _unreadDotGap = 6.0;
 
+/// The most graphemes of user text a notification row's label speaks.
+const notificationLabelTextGraphemeLimit = 140;
+
+/// The first [notificationLabelTextGraphemeLimit] graphemes of [text].
+String? notificationLabelText(String? text) =>
+    text?.characters.take(notificationLabelTextGraphemeLimit).toString();
+
 /// The full-width surface every notification row sits on, divided from the
 /// next row by a hairline, as feed posts are.
 const ShapeBorder notificationRowShape = Border(

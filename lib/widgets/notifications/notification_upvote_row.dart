@@ -113,7 +113,7 @@ class NotificationUpvoteRow extends StatelessWidget {
     final label = [
       if (!notification.isRead) 'Unread',
       sentence,
-      preview,
+      notificationLabelText(preview),
       time,
       if (thumbnail != null) thumbnailAlt,
     ].whereType<String>().join(', ');

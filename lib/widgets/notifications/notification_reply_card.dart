@@ -179,10 +179,13 @@ class NotificationReplyCard extends StatelessWidget {
       if (!notification.isRead) 'Unread',
       reason,
       communityHandle,
-      if (quotesYourComment) quote else if (postCardVisible) rootPost.title,
+      if (quotesYourComment)
+        notificationLabelText(quote)
+      else if (postCardVisible)
+        rootPost.title,
       if (!rootIsLive) rootPlaceholder,
       if (showsBubble) authorName,
-      if (showsBubble) excerpt,
+      if (showsBubble) notificationLabelText(excerpt),
       time,
     ].whereType<String>().join(', ');
 
@@ -424,6 +427,8 @@ class _ReplyBubble extends StatelessWidget {
             if (author != null) const SizedBox(height: _excerptGap),
             Text(
               excerpt,
+              maxLines: 5,
+              overflow: TextOverflow.ellipsis,
               style: excerptIsPlaceholder ? _placeholderStyle : _excerptStyle,
             ),
           ],
