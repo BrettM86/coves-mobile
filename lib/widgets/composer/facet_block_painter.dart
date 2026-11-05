@@ -20,9 +20,9 @@ enum FacetBlockLayer {
 }
 
 /// Paints one [FacetBlockLayer] of a FacetTextField's block decorations.
-/// Text is never indented; the field keeps a fixed start gutter of
-/// [gutterWidth] whether or not a quote is present, and the bars fit in it
-/// at every quote level.
+/// Text is never indented line by line; while a quote is present the field
+/// keeps a start gutter of [gutterWidth], and the bars fit in it at every
+/// quote level.
 ///
 /// Geometry comes from the field's laid-out [RenderEditable], found under
 /// the render box of the widget [fieldKey] is attached to, which must be the
@@ -58,15 +58,17 @@ class FacetBlockPainter extends CustomPainter {
   final InputBorder fillBorder;
   final TextDirection textDirection;
 
-  /// The minimum start padding of the field's text, in logical pixels: the
-  /// space the quote bars and the code background's lead-in paint in.
+  /// The minimum start padding of the field's text while it holds a quote,
+  /// in logical pixels: the space the quote bars and the code background's
+  /// lead-in paint in.
   static const gutterWidth = 28.0;
 
   static const _barWidth = 3.0;
   static const _barGap = 4.0;
 
-  /// How far the code background reaches left of the text.
-  static const _codePadding = 4.0;
+  /// How far the code background reaches left of the text, and so the
+  /// minimum start padding while the field holds a code block but no quote.
+  static const codePadding = 4.0;
 
   /// Space kept clear between the outermost bar and the field's start edge,
   /// so bars never cross a border drawn there.
@@ -74,7 +76,7 @@ class FacetBlockPainter extends CustomPainter {
 
   /// The width left for the bars: the gutter less the edge margin, the code
   /// background's lead-in and the gap before the innermost bar.
-  static const _barSpan = gutterWidth - _edgeMargin - _codePadding - _barGap;
+  static const _barSpan = gutterWidth - _edgeMargin - codePadding - _barGap;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -164,7 +166,7 @@ class FacetBlockPainter extends CustomPainter {
       }
       if (layer == FacetBlockLayer.background) {
         canvas.drawRect(
-          startSide(-_codePadding, extent.top, width, extent.bottom),
+          startSide(-codePadding, extent.top, width, extent.bottom),
           paint,
         );
         continue;
@@ -178,7 +180,7 @@ class FacetBlockPainter extends CustomPainter {
       final barGap = _barGap * scale;
       for (var level = 1; level <= block.level; level++) {
         final right =
-            -(_codePadding + _barGap) - (level - 1) * (barWidth + barGap);
+            -(codePadding + _barGap) - (level - 1) * (barWidth + barGap);
         canvas.drawRect(
           startSide(right - barWidth, extent.top, right, extent.bottom),
           paint,

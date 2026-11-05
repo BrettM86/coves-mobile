@@ -335,8 +335,6 @@ void main() {
         ),
       ),
     ];
-    await pumpField(tester, FacetEditingController(text: fixtureText));
-    final unquotedLeft = lineRect(renderEditable(tester), 6, 12).left;
     for (final row in rows) {
       await pumpField(tester, row.controller());
       final editable = renderEditable(tester);
@@ -372,11 +370,6 @@ void main() {
         lineRect(editable, 6, 12).left,
         closeTo(plainLeft, 0.5),
         reason: '${row.name}: quoted text is not indented',
-      );
-      expect(
-        lineRect(editable, 6, 12).left,
-        closeTo(unquotedLeft, 0.01),
-        reason: '${row.name}: the text sits where it does with no quote',
       );
       for (final (start, end) in const [(0, 5), (14, 19)]) {
         expect(

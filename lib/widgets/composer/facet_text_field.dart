@@ -69,6 +69,26 @@ class _FacetTextFieldState extends State<FacetTextField>
   FocusNode get _focusNode =>
       widget.focusNode ?? (_ownFocusNode ??= FocusNode());
 
+  /// The selection controls, kept across rebuilds: EditableText disposes and
+  /// recreates its selection overlay whenever it gets a different controls
+  /// object, which ends a handle drag in progress. Rebuilt only when the
+  /// platform changes.
+  _UnformattedPasteSelectionControls? _selectionControls;
+
+  _UnformattedPasteSelectionControls _selectionControlsFor(
+    TargetPlatform platform,
+  ) {
+    final stock = _stockSelectionControls(platform);
+    final cached = _selectionControls;
+    if (cached != null && identical(cached.stock, stock)) {
+      return cached;
+    }
+    return _selectionControls = _UnformattedPasteSelectionControls(
+      stock: stock,
+      paste: (editable) => _pasteUnformatted(editable, hideToolbar: true),
+    );
+  }
+
   /// The view the field is in, cached for [didChangeMetrics].
   ui.FlutterView? _view;
 
@@ -77,10 +97,52 @@ class _FacetTextFieldState extends State<FacetTextField>
   /// hardware keyboard, which never raises it.
   double? _bottomInset;
 
+  /// The least start padding the block decorations need right now; the
+  /// field rebuilds only when it changes, not on every edit.
+  late double _startGutter;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _startGutter = _gutterFor(widget.controller);
+    widget.controller.addListener(_updateStartGutter);
+  }
+
+  @override
+  void didUpdateWidget(FacetTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_updateStartGutter);
+      widget.controller.addListener(_updateStartGutter);
+      _startGutter = _gutterFor(widget.controller);
+    }
+  }
+
+  /// The start padding [controller]'s blocks need: the full quote gutter
+  /// while any quote is present, the code background's lead-in while only
+  /// code blocks are, and none otherwise, so plain text starts at the
+  /// decoration's own padding.
+  static double _gutterFor(FacetEditingController controller) {
+    var gutter = 0.0;
+    for (final block in controller.blockRanges) {
+      switch (block.format) {
+        case BlockFormat.blockquote:
+          return FacetBlockPainter.gutterWidth;
+        case BlockFormat.codeBlock:
+          gutter = FacetBlockPainter.codePadding;
+        case BlockFormat.heading:
+          break;
+      }
+    }
+    return gutter;
+  }
+
+  void _updateStartGutter() {
+    final gutter = _gutterFor(widget.controller);
+    if (gutter != _startGutter) {
+      setState(() => _startGutter = gutter);
+    }
   }
 
   @override
@@ -117,6 +179,7 @@ class _FacetTextFieldState extends State<FacetTextField>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.controller.removeListener(_updateStartGutter);
     _ownFocusNode?.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -231,7 +294,12 @@ class _FacetTextFieldState extends State<FacetTextField>
           // the decorator's own fill would cover them.
           decoration: decoration.copyWith(
             filled: false,
-            contentPadding: _contentPadding(decoration, theme, textDirection),
+            contentPadding: _contentPadding(
+              decoration,
+              theme,
+              textDirection,
+              _startGutter,
+            ),
           ),
           style: widget.style,
           minLines: widget.minLines,
@@ -242,10 +310,7 @@ class _FacetTextFieldState extends State<FacetTextField>
           textCapitalization: widget.textCapitalization,
           autofocus: widget.autofocus,
           contextMenuBuilder: _buildContextMenu,
-          selectionControls: _UnformattedPasteSelectionControls(
-            stock: _stockSelectionControls(theme.platform),
-            paste: (editable) => _pasteUnformatted(editable, hideToolbar: true),
-          ),
+          selectionControls: _selectionControlsFor(theme.platform),
         ),
       ),
     );
@@ -339,13 +404,13 @@ Color? _fillColor(InputDecoration decoration, ThemeData theme) {
 }
 
 /// [decoration]'s content padding, or the InputDecorator's Material 3
-/// default for it when it has none, with the start raised to the block
-/// painter's fixed gutter so quote bars always fit and text never shifts
-/// when a quote appears.
+/// default for it when it has none, with the start raised to [startGutter]
+/// so the quote bars and code background fit beside the text.
 EdgeInsetsDirectional _contentPadding(
   InputDecoration decoration,
   ThemeData theme,
   TextDirection textDirection,
+  double startGutter,
 ) {
   final EdgeInsetsDirectional padding;
   final explicit = decoration.contentPadding?.resolve(textDirection);
@@ -379,7 +444,7 @@ EdgeInsetsDirectional _contentPadding(
     }
   }
   return EdgeInsetsDirectional.fromSTEB(
-    math.max(padding.start, FacetBlockPainter.gutterWidth),
+    math.max(padding.start, startGutter),
     padding.top,
     padding.end,
     padding.bottom,
