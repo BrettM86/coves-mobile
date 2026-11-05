@@ -13,9 +13,12 @@ import 'facet_editing_controller.dart';
 /// A text field that edits a [FacetEditingController].
 ///
 /// The [decoration] must not have a prefix, prefixText or prefixIcon: the
-/// block painter draws quote bars in a gutter at the start of the content
-/// padding, where the decorator would put them, so they would overlap.
-/// Debug builds assert this.
+/// block painter draws quote bars in the start content padding, where the
+/// decorator would put them, so they would overlap. Debug builds assert this.
+///
+/// Quote bars paint before the text without moving it, in the start content
+/// padding plus [outerStartMargin]. Only when that room is less than a bar
+/// needs does the field raise its start padding while a quote is present.
 class FacetTextField extends StatefulWidget {
   const FacetTextField({
     super.key,
@@ -30,6 +33,7 @@ class FacetTextField extends StatefulWidget {
     this.spellCheckConfiguration,
     this.textCapitalization = TextCapitalization.none,
     this.autofocus = false,
+    this.outerStartMargin = 0,
   });
 
   final FacetEditingController controller;
@@ -46,6 +50,10 @@ class FacetTextField extends StatefulWidget {
   final SpellCheckConfiguration? spellCheckConfiguration;
   final TextCapitalization textCapitalization;
   final bool autofocus;
+
+  /// Empty space outside the field on its start side, such as a screen's
+  /// padding, that the quote bars and code background may paint into.
+  final double outerStartMargin;
 
   @override
   State<FacetTextField> createState() => _FacetTextFieldState();
@@ -97,51 +105,55 @@ class _FacetTextFieldState extends State<FacetTextField>
   /// hardware keyboard, which never raises it.
   double? _bottomInset;
 
-  /// The least start padding the block decorations need right now; the
-  /// field rebuilds only when it changes, not on every edit.
-  late double _startGutter;
+  /// The least start room (padding plus [FacetTextField.outerStartMargin])
+  /// the block decorations need right now; the field rebuilds only when it
+  /// changes, not on every edit.
+  late double _requiredStartRoom;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _startGutter = _gutterFor(widget.controller);
-    widget.controller.addListener(_updateStartGutter);
+    _requiredStartRoom = _startRoomFor(widget.controller);
+    widget.controller.addListener(_updateRequiredStartRoom);
   }
 
   @override
   void didUpdateWidget(FacetTextField oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_updateStartGutter);
-      widget.controller.addListener(_updateStartGutter);
-      _startGutter = _gutterFor(widget.controller);
+      oldWidget.controller.removeListener(_updateRequiredStartRoom);
+      widget.controller.addListener(_updateRequiredStartRoom);
+      _requiredStartRoom = _startRoomFor(widget.controller);
     }
   }
 
-  /// The start padding [controller]'s blocks need: the full quote gutter
-  /// while any quote is present, the code background's lead-in while only
-  /// code blocks are, and none otherwise, so plain text starts at the
-  /// decoration's own padding.
-  static double _gutterFor(FacetEditingController controller) {
-    var gutter = 0.0;
+  /// The start room [controller]'s blocks need: room for the deepest quote's
+  /// bars while any quote is present, the code background's lead-in while
+  /// only code blocks are, and none otherwise.
+  static double _startRoomFor(FacetEditingController controller) {
+    var deepestQuote = 0;
+    var hasCode = false;
     for (final block in controller.blockRanges) {
       switch (block.format) {
         case BlockFormat.blockquote:
-          return FacetBlockPainter.gutterWidth;
+          deepestQuote = math.max(deepestQuote, block.level);
         case BlockFormat.codeBlock:
-          gutter = FacetBlockPainter.codePadding;
+          hasCode = true;
         case BlockFormat.heading:
           break;
       }
     }
-    return gutter;
+    if (deepestQuote > 0) {
+      return FacetBlockPainter.quoteRoomFor(deepestQuote);
+    }
+    return hasCode ? FacetBlockPainter.codePadding : 0;
   }
 
-  void _updateStartGutter() {
-    final gutter = _gutterFor(widget.controller);
-    if (gutter != _startGutter) {
-      setState(() => _startGutter = gutter);
+  void _updateRequiredStartRoom() {
+    final room = _startRoomFor(widget.controller);
+    if (room != _requiredStartRoom) {
+      setState(() => _requiredStartRoom = room);
     }
   }
 
@@ -179,7 +191,7 @@ class _FacetTextFieldState extends State<FacetTextField>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    widget.controller.removeListener(_updateStartGutter);
+    widget.controller.removeListener(_updateRequiredStartRoom);
     _ownFocusNode?.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -258,9 +270,16 @@ class _FacetTextFieldState extends State<FacetTextField>
           decoration.prefixText == null &&
           decoration.prefixIcon == null,
       'FacetTextField does not support a decoration prefix, prefixText or '
-      'prefixIcon: they would overlap the quote bars in the start gutter.',
+      'prefixIcon: they would overlap the quote bars in the start padding.',
     );
     final repaint = Listenable.merge([widget.controller, _scrollController]);
+    final contentPadding = _contentPadding(
+      decoration,
+      theme,
+      textDirection,
+      math.max(0, _requiredStartRoom - widget.outerStartMargin),
+    );
+    final startRoom = contentPadding.start + widget.outerStartMargin;
     return Actions(
       actions: {PasteTextIntent: _UnformattedPasteAction(this)},
       child: CustomPaint(
@@ -275,12 +294,14 @@ class _FacetTextFieldState extends State<FacetTextField>
               decoration.border ??
               const UnderlineInputBorder(),
           textDirection: textDirection,
+          startRoom: startRoom,
           repaint: repaint,
         ),
         foregroundPainter: FacetBlockPainter(
           controller: widget.controller,
           fieldKey: _paintKey,
           layer: FacetBlockLayer.quoteBars,
+          startRoom: startRoom,
           repaint: repaint,
         ),
         child: TextField(
@@ -294,12 +315,7 @@ class _FacetTextFieldState extends State<FacetTextField>
           // the decorator's own fill would cover them.
           decoration: decoration.copyWith(
             filled: false,
-            contentPadding: _contentPadding(
-              decoration,
-              theme,
-              textDirection,
-              _startGutter,
-            ),
+            contentPadding: contentPadding,
           ),
           style: widget.style,
           minLines: widget.minLines,
@@ -404,13 +420,13 @@ Color? _fillColor(InputDecoration decoration, ThemeData theme) {
 }
 
 /// [decoration]'s content padding, or the InputDecorator's Material 3
-/// default for it when it has none, with the start raised to [startGutter]
+/// default for it when it has none, with the start raised to [minimumStart]
 /// so the quote bars and code background fit beside the text.
 EdgeInsetsDirectional _contentPadding(
   InputDecoration decoration,
   ThemeData theme,
   TextDirection textDirection,
-  double startGutter,
+  double minimumStart,
 ) {
   final EdgeInsetsDirectional padding;
   final explicit = decoration.contentPadding?.resolve(textDirection);
@@ -444,7 +460,7 @@ EdgeInsetsDirectional _contentPadding(
     }
   }
   return EdgeInsetsDirectional.fromSTEB(
-    math.max(padding.start, startGutter),
+    math.max(padding.start, minimumStart),
     padding.top,
     padding.end,
     padding.bottom,

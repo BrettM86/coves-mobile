@@ -13,16 +13,17 @@ enum FacetBlockLayer {
   /// background behind its lines.
   background,
 
-  /// In front of the field: the quote gutter bars, one per level, on the
+  /// In front of the field: the quote bars, one per level, on the
   /// start side of each quoted line (the left in LTR, the right in RTL).
-  /// They sit in the gutter, clear of the text.
+  /// They sit in the start room, clear of the text.
   quoteBars,
 }
 
 /// Paints one [FacetBlockLayer] of a FacetTextField's block decorations.
-/// Text is never indented line by line; while a quote is present the field
-/// keeps a start gutter of [gutterWidth], and the bars fit in it at every
-/// quote level.
+/// Text is never indented: the bars and the code background's lead-in paint
+/// in the [startRoom] left of the text (on its start side), which may reach
+/// past the field into a margin around it. The bars fit in that room at
+/// every quote level.
 ///
 /// Geometry comes from the field's laid-out [RenderEditable], found under
 /// the render box of the widget [fieldKey] is attached to, which must be the
@@ -43,6 +44,7 @@ class FacetBlockPainter extends CustomPainter {
     this.fillColor,
     this.fillBorder = InputBorder.none,
     this.textDirection = TextDirection.ltr,
+    required this.startRoom,
     super.repaint,
   });
 
@@ -58,25 +60,44 @@ class FacetBlockPainter extends CustomPainter {
   final InputBorder fillBorder;
   final TextDirection textDirection;
 
-  /// The minimum start padding of the field's text while it holds a quote,
-  /// in logical pixels: the space the quote bars and the code background's
-  /// lead-in paint in.
-  static const gutterWidth = 28.0;
+  /// How far the blocks may paint before the start of the text: the field's
+  /// start padding plus any margin outside the field. At least
+  /// [quoteRoomFor] the deepest quote level present.
+  final double startRoom;
 
   static const _barWidth = 3.0;
   static const _barGap = 4.0;
 
+  /// The thinnest bar and gap deep quote levels shrink to, so each level
+  /// stays readable.
+  static const _minimumBarWidth = 2.0;
+  static const _minimumBarGap = 1.5;
+
   /// How far the code background reaches left of the text, and so the
-  /// minimum start padding while the field holds a code block but no quote.
+  /// least [startRoom] while the field holds a code block but no quote.
   static const codePadding = 4.0;
 
-  /// Space kept clear between the outermost bar and the field's start edge,
-  /// so bars never cross a border drawn there.
+  /// Space kept clear between the outermost bar and the outer edge of the
+  /// start room, so bars never touch a border or screen edge there.
   static const _edgeMargin = 2.0;
 
-  /// The width left for the bars: the gutter less the edge margin, the code
-  /// background's lead-in and the gap before the innermost bar.
-  static const _barSpan = gutterWidth - _edgeMargin - codePadding - _barGap;
+  /// The least [startRoom] while the field holds a quote: one full-width
+  /// bar beside the code background's lead-in, clear of the start edge.
+  static const minimumQuoteRoom =
+      _edgeMargin + codePadding + _barGap + _barWidth;
+
+  /// The least [startRoom] for a quote [level] deep: full-size bars for a
+  /// single level, and the thinnest readable bars and gaps for deeper ones.
+  static double quoteRoomFor(int level) {
+    if (level <= 1) {
+      return minimumQuoteRoom;
+    }
+    return _edgeMargin +
+        codePadding +
+        _barGap +
+        level * _minimumBarWidth +
+        (level - 1) * _minimumBarGap;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -84,9 +105,6 @@ class FacetBlockPainter extends CustomPainter {
     if (origin is! RenderBox || !origin.attached) {
       return;
     }
-    canvas
-      ..save()
-      ..clipRect(Offset.zero & size);
     if (layer == FacetBlockLayer.background && fillColor != null) {
       _paintFill(canvas, origin);
     }
@@ -94,7 +112,6 @@ class FacetBlockPainter extends CustomPainter {
     if (editable != null && editable.hasSize) {
       _paintBlocks(canvas, origin, editable);
     }
-    canvas.restore();
   }
 
   /// Fills the decoration's container (the field less any helper or counter
@@ -138,12 +155,14 @@ class FacetBlockPainter extends CustomPainter {
     canvas
       ..save()
       ..transform(editable.getTransformTo(origin).storage)
-      // Lines scrolled out of the field must not draw over its decoration.
+      // Lines scrolled out of the field must not draw over its decoration,
+      // and nothing reaches further before the text than the start room.
       ..clipRect(
         Rect.fromLTRB(
-          -gutterWidth,
+          editable.textDirection == TextDirection.rtl ? 0 : -startRoom,
           0,
-          editable.size.width + gutterWidth,
+          editable.size.width +
+              (editable.textDirection == TextDirection.rtl ? startRoom : 0),
           editable.size.height,
         ),
       );
@@ -153,7 +172,7 @@ class FacetBlockPainter extends CustomPainter {
         FacetBlockLayer.quoteBars => AppColors.teal.withValues(alpha: 0.6),
       };
     // Offsets below are laid out for LTR, start on the left; RTL mirrors
-    // them so the blocks sit on the start side the gutter is reserved on.
+    // them so the blocks sit on the start side, in the start room.
     final rtl = editable.textDirection == TextDirection.rtl;
     final width = editable.size.width;
     Rect startSide(double left, double top, double right, double bottom) => rtl
@@ -173,11 +192,22 @@ class FacetBlockPainter extends CustomPainter {
       }
       // Level 1 is innermost, closest to the text, and outside any code
       // background on the same lines (the quote is the outer block). Deep
-      // levels shrink the bars and gaps evenly to stay in the gutter.
+      // levels shrink the bars and gaps evenly to stay in the start room,
+      // down to the thinnest readable size the field makes room for.
+      final barSpan = startRoom - _edgeMargin - codePadding - _barGap;
       final naturalSpan = block.level * _barWidth + (block.level - 1) * _barGap;
-      final scale = math.min(naturalSpan, _barSpan) / naturalSpan;
-      final barWidth = _barWidth * scale;
-      final barGap = _barGap * scale;
+      final scale = math.min(naturalSpan, barSpan) / naturalSpan;
+      final barWidth = math.max(_minimumBarWidth, _barWidth * scale);
+      // Gaps take what the bars leave, so floored bars still fit
+      final barGap = block.level == 1
+          ? _barGap
+          : math.max(
+              _minimumBarGap,
+              math.min(
+                _barGap,
+                (barSpan - block.level * barWidth) / (block.level - 1),
+              ),
+            );
       for (var level = 1; level <= block.level; level++) {
         final right =
             -(codePadding + _barGap) - (level - 1) * (barWidth + barGap);

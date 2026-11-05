@@ -393,7 +393,14 @@ void main() {
       addTearDown(controller.dispose);
       final boundary = await pumpInBoundary(
         tester,
-        FacetTextField(controller: controller, style: baseStyle),
+        FacetTextField(
+          controller: controller,
+          style: baseStyle,
+          // Room for three full-size bars
+          decoration: const InputDecoration(
+            contentPadding: EdgeInsetsDirectional.only(start: 28),
+          ),
+        ),
         left: fieldLeft,
       );
       final field = tester.getRect(find.byType(FacetTextField));
@@ -902,8 +909,8 @@ void main() {
     );
     expect(
       field.right - editableRect.right,
-      greaterThanOrEqualTo(FacetBlockPainter.gutterWidth),
-      reason: 'the gutter is reserved on the start (right) side',
+      greaterThanOrEqualTo(FacetBlockPainter.minimumQuoteRoom),
+      reason: 'room for a bar is reserved on the start (right) side',
     );
     final pixels = await renderedPixels(tester, boundary);
     final blended = Color.alphaBlend(barColor, AppColors.background);
@@ -934,6 +941,53 @@ void main() {
           reason: '$reason: nothing paints on the end (left) side at $x',
         );
       }
+    }
+  });
+
+  testWidgets('D2 with an outer start margin the bars paint in the margin and '
+      'the text does not move', (tester) async {
+    final controller = FacetEditingController(text: fixtureText);
+    addTearDown(controller.dispose);
+    toggleOver(controller, 6, 14, BlockFormat.blockquote);
+    final boundary = await pumpInBoundary(
+      tester,
+      FacetTextField(
+        controller: controller,
+        style: baseStyle,
+        outerStartMargin: 16,
+        decoration: const InputDecoration(
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.zero,
+        ),
+      ),
+      left: 40,
+    );
+    final field = tester.getRect(find.byType(FacetTextField));
+    final editable = renderEditable(tester);
+    final editableRect = MatrixUtils.transformRect(
+      editable.getTransformTo(null),
+      Offset.zero & editable.size,
+    );
+    expect(editableRect.left, field.left, reason: 'the text does not move');
+    final pixels = await renderedPixels(tester, boundary);
+    final blended = Color.alphaBlend(barColor, AppColors.background);
+    for (final (start, end) in const [(6, 12), (13, 13)]) {
+      final line = lineRect(editable, start, end);
+      final reason = 'line [$start,$end]';
+      final bars = rectsBeside(paintedRects(tester), barColor, line);
+      expect(bars, hasLength(1), reason: reason);
+      expect(bars.single.left, greaterThanOrEqualTo(field.left - 16));
+      expect(bars.single.right, lessThanOrEqualTo(line.left), reason: reason);
+      var barPixels = 0;
+      for (var x = field.left - 16 + 0.5; x < field.left; x += 1) {
+        if (nearColor(
+          pixelAt(pixels, boundary, Offset(x, line.center.dy)),
+          blended,
+        )) {
+          barPixels += 1;
+        }
+      }
+      expect(barPixels, 3, reason: '$reason: the bar renders in the margin');
     }
   });
 }

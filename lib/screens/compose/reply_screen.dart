@@ -35,6 +35,10 @@ import '../../widgets/image_source_picker.dart';
 import '../../widgets/post_card.dart';
 import '../../widgets/sign_in_again_dialog.dart';
 
+/// The padding around the reply text field; its start side also holds the
+/// field's quote bars.
+const _composerPadding = 16.0;
+
 /// Reply Screen
 ///
 /// Full-screen reply interface inspired by Thunder's natural scrolling
@@ -789,10 +793,12 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
                           // Text input - no background box, types directly into
                           // main area
                           Padding(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(_composerPadding),
                             child: FacetTextField(
                               controller: _textController,
                               focusNode: _focusNode,
+                              // The quote bars sit in the screen padding
+                              outerStartMargin: _composerPadding,
                               minLines: 8,
                               autocorrect: false,
                               textCapitalization: TextCapitalization.sentences,
