@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:coves_flutter/models/comment.dart';
 import 'package:coves_flutter/models/facet.dart';
+import 'package:coves_flutter/models/post_embed_input.dart';
 import 'package:coves_flutter/providers/comments_provider.dart';
 import 'package:coves_flutter/screens/compose/reply_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
@@ -35,7 +36,12 @@ void main() {
   Future<void> pushReply(
     WidgetTester tester, {
     required ThreadViewComment comment,
-    Future<void> Function(String content, List<RichTextFacet> facets)? onSubmit,
+    Future<void> Function(
+      String content,
+      List<RichTextFacet> facets,
+      ImagesEmbedInput? embed,
+    )?
+    onSubmit,
   }) => harness.pushReply(tester, comment: comment, onSubmit: onSubmit);
 
   group('ReplyScreen draft round-trip', () {
@@ -85,7 +91,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) async {
+        onSubmit: (content, facets, embed) async {
           submitted = content;
         },
       );
@@ -184,7 +190,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) {
+        onSubmit: (content, facets, embed) {
           submittedContent = content;
           return submitCompleter.future;
         },
@@ -226,7 +232,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) {
+        onSubmit: (content, facets, embed) {
           submittedContent = content;
           return submitCompleter.future;
         },
@@ -275,7 +281,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) async {
+        onSubmit: (content, facets, embed) async {
           submittedContent = content;
         },
       );
@@ -307,7 +313,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) => submitCompleter.future,
+        onSubmit: (content, facets, embed) => submitCompleter.future,
       );
 
       await tester.enterText(find.byType(TextField), 'Reply still sending');
@@ -339,7 +345,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) => submitCompleter.future,
+        onSubmit: (content, facets, embed) => submitCompleter.future,
       );
 
       await tester.enterText(find.byType(TextField), 'Cancelled mid-send');
@@ -374,7 +380,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) => submitCompleter.future,
+        onSubmit: (content, facets, embed) => submitCompleter.future,
       );
 
       await tester.enterText(find.byType(TextField), 'First reply in flight');
@@ -414,7 +420,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) => submitCompleter.future,
+        onSubmit: (content, facets, embed) => submitCompleter.future,
       );
 
       await tester.enterText(find.byType(TextField), 'First reply in flight');
@@ -460,7 +466,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) => submitCompleter.future,
+        onSubmit: (content, facets, embed) => submitCompleter.future,
       );
 
       await tester.enterText(find.byType(TextField), 'Reply sent during back');
@@ -495,7 +501,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) async {
+        onSubmit: (content, facets, embed) async {
           submissions.add((content, facets));
         },
       );
@@ -553,7 +559,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) async {
+        onSubmit: (content, facets, embed) async {
           submissions.add((content, facets));
         },
       );
@@ -595,7 +601,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) async {
+        onSubmit: (content, facets, embed) async {
           submitCalls++;
         },
       );
@@ -633,7 +639,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) async {
+        onSubmit: (content, facets, embed) async {
           submitCalls++;
         },
       );
@@ -673,7 +679,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) async {
+        onSubmit: (content, facets, embed) async {
           submitCalls++;
         },
       );
@@ -718,7 +724,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) {
+        onSubmit: (content, facets, embed) {
           submitCalls++;
           return submit.future;
         },
@@ -756,7 +762,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) => submit.future,
+        onSubmit: (content, facets, embed) => submit.future,
       );
 
       await tester.enterText(find.byType(TextField), 'Reply that must survive');
@@ -788,7 +794,7 @@ void main() {
       await pushReply(
         tester,
         comment: comment,
-        onSubmit: (content, facets) async {
+        onSubmit: (content, facets, embed) async {
           throw ServerException('Comment service unavailable', statusCode: 503);
         },
       );

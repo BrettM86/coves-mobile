@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/services/media_saver.dart';
@@ -7,12 +9,18 @@ import 'package:coves_flutter/utils/app_route_observer.dart';
 import 'package:coves_flutter/widgets/icons/lucide_icon_painter.dart';
 import 'package:coves_flutter/widgets/icons/lucide_paths.dart';
 import 'package:coves_flutter/widgets/image_viewer.dart';
+import 'package:coves_flutter/widgets/media/gif_codec.dart';
+import 'package:coves_flutter/widgets/media/image_error.dart';
+import 'package:coves_flutter/widgets/media/media_page_dots.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+
+import '../test_helpers/fake_gif_codec.dart';
+import '../test_helpers/fake_image_cache_manager.dart';
 
 const _viewerKey = Key('image-viewer');
 
@@ -67,22 +75,27 @@ class _PendingMediaSaver implements MediaSaver {
   }
 }
 
-/// Pumps the viewer directly as the app's home under a [MediaSaver].
+/// Pumps the viewer directly as the app's home under a [MediaSaver]. With
+/// [gifLoader], GIFs load through it and images through a cache manager
+/// that never resolves.
 Future<void> _pumpViewerWithSaver(
   WidgetTester tester, {
   required MediaSaver saver,
   required List<EmbedImage> images,
   int initialIndex = 0,
+  FakeGifCodecLoader? gifLoader,
 }) async {
-  await tester.pumpWidget(
-    Provider<MediaSaver>.value(
-      value: saver,
-      child: MaterialApp(
-        theme: AppTheme.dark,
-        home: ImageViewer(images: images, initialIndex: initialIndex),
-      ),
-    ),
+  Widget app = MaterialApp(
+    theme: AppTheme.dark,
+    home: ImageViewer(images: images, initialIndex: initialIndex),
   );
+  if (gifLoader != null) {
+    app = GifCodecScope(
+      loader: gifLoader.load,
+      child: ImageCacheScope(cacheManager: FakeImageCacheManager(), child: app),
+    );
+  }
+  await tester.pumpWidget(Provider<MediaSaver>.value(value: saver, child: app));
   await tester.pumpAndSettle();
 }
 
@@ -171,6 +184,17 @@ Finder _closeButton() => find.descendant(
 Finder _pageIndicator() => find.descendant(
   of: find.byKey(_viewerKey),
   matching: find.byKey(const Key('image-viewer-page-indicator')),
+);
+
+/// The viewer's page dots, showing page [index] (zero-based) of [count].
+Finder _pageDots({required int index, required int count}) => find.descendant(
+  of: _pageIndicator(),
+  matching: find.byWidgetPredicate(
+    (widget) =>
+        widget is MediaPageDots &&
+        widget.index == index &&
+        widget.count == count,
+  ),
 );
 
 /// The opacity [finder]'s widget is painted with: the product of every
@@ -370,6 +394,46 @@ void main() {
       );
     },
   );
+
+  testWidgets('B3 a gallery shows page dots, not a counter, that follow a '
+      'swipe', (tester) async {
+    await _pumpViewerWithSaver(
+      tester,
+      saver: _RecordingMediaSaver(),
+      images: const [
+        EmbedImage(
+          thumb: 'https://cdn.test/thumb-1.jpg',
+          fullsize: 'https://cdn.test/fullsize-1.jpg',
+        ),
+        EmbedImage(
+          thumb: 'https://cdn.test/thumb-2.jpg',
+          fullsize: 'https://cdn.test/fullsize-2.jpg',
+        ),
+        EmbedImage(
+          thumb: 'https://cdn.test/thumb-3.jpg',
+          fullsize: 'https://cdn.test/fullsize-3.jpg',
+        ),
+      ],
+    );
+
+    expect(_pageDots(index: 0, count: 3), findsOneWidget);
+    expect(
+      find.descendant(of: _pageIndicator(), matching: find.text('1/3')),
+      findsNothing,
+    );
+
+    await tester.fling(
+      find.descendant(
+        of: find.byKey(_viewerKey),
+        matching: find.byType(PageView),
+      ),
+      const Offset(-500, 0),
+      1200,
+    );
+    await tester.pumpAndSettle();
+
+    expect(_pageDots(index: 1, count: 3), findsOneWidget);
+  });
 
   group('single tap toggles the controls', () {
     final rows = <(String, List<EmbedImage>, List<Finder> Function())>[
@@ -1328,7 +1392,7 @@ void main() {
         reason: 'the gallery pinch must leave the fullscreen route open',
       );
       expect(
-        find.descendant(of: viewerFinder, matching: find.text('1/2')),
+        _pageDots(index: 0, count: 2),
         findsOneWidget,
         reason: 'the pinch must not page away from the first gallery image',
       );
@@ -1336,7 +1400,7 @@ void main() {
   );
 
   testWidgets(
-    'unzoomed gallery diagonal drag dismisses without outer X translation',
+    'unzoomed gallery diagonal drag follows the finger and dismisses',
     (tester) async {
       await _openViewer(
         tester,
@@ -1381,8 +1445,8 @@ void main() {
           .transform!;
       expect(
         dismissalTransform.storage[12],
-        0.0,
-        reason: 'gallery horizontal motion must remain reserved for paging',
+        70.0,
+        reason: 'a steep gallery drag follows the finger sideways too',
       );
       expect(
         dismissalTransform.storage[13],
@@ -1458,7 +1522,7 @@ void main() {
         reason: 'panning a zoomed image must leave the fullscreen route open',
       );
       expect(
-        find.descendant(of: viewerFinder, matching: find.text('1/2')),
+        _pageDots(index: 0, count: 2),
         findsOneWidget,
         reason: 'panning the zoomed image must not change gallery pages',
       );
@@ -1484,7 +1548,7 @@ void main() {
         reason: 'a normal gallery page swipe must keep the route open',
       );
       expect(
-        find.descendant(of: viewerFinder, matching: find.text('2/2')),
+        _pageDots(index: 1, count: 2),
         findsOneWidget,
         reason: 'paging must resume after the zoom and pan state is reset',
       );
@@ -1799,7 +1863,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(
-          find.descendant(of: viewerFinder, matching: find.text('2/2')),
+          _pageDots(index: 1, count: 2),
           findsOneWidget,
           reason: 'the swipe must bring the second image into view',
         );
@@ -1961,7 +2025,7 @@ void main() {
           await tester.pump(const Duration(milliseconds: 50));
         }
         expect(
-          find.descendant(of: viewerFinder, matching: find.text('2/3')),
+          _pageDots(index: 1, count: 3),
           findsOneWidget,
           reason: 'paging must still work while a save is pending',
         );
@@ -2380,4 +2444,512 @@ void main() {
       );
     }
   });
+
+  group('B6 a GIF in the viewer', () {
+    const gifThumb = 'https://cdn.test/cat-thumb.jpg';
+    const gifFull = 'https://cdn.test/cat-full.gif';
+    const gif = EmbedImage(thumb: gifThumb, fullsize: gifFull, isGif: true);
+    late FakeGifFrames frames;
+
+    setUpAll(() async {
+      frames = await FakeGifFrames.create();
+    });
+
+    tearDownAll(() => frames.dispose());
+
+    Finder playGif() => find.descendant(
+      of: find.byKey(_viewerKey),
+      matching: find.bySemanticsLabel('Play GIF'),
+    );
+    Finder viewerImage(String url) => find.descendant(
+      of: find.byKey(_viewerKey),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is CachedNetworkImage && widget.imageUrl == url,
+      ),
+    );
+
+    testWidgets('shows the still thumb with Play GIF and never requests '
+        'fullsize', (tester) async {
+      final loader = FakeGifCodecLoader(codec: FakeGifCodec(frames));
+      await _pumpViewerWithSaver(
+        tester,
+        saver: _RecordingMediaSaver(),
+        images: const [gif],
+        gifLoader: loader,
+      );
+
+      expect(viewerImage(gifFull), findsNothing);
+      expect(viewerImage(gifThumb), findsOneWidget);
+      expect(playGif(), findsOneWidget);
+      expect(loader.requests, isEmpty);
+    });
+
+    testWidgets('a tap on the image away from Play GIF toggles the controls '
+        'and does not play', (tester) async {
+      final loader = FakeGifCodecLoader(codec: FakeGifCodec(frames));
+      await _pumpViewerWithSaver(
+        tester,
+        saver: _RecordingMediaSaver(),
+        images: const [gif],
+        gifLoader: loader,
+      );
+      expect(playGif(), findsOneWidget);
+
+      // Left edge, mid height: clear of the centred play control and of
+      // the top corner buttons.
+      await _singleTapAt(
+        tester,
+        tester.getRect(_interactiveViewer()).centerLeft + const Offset(20, 0),
+      );
+
+      _expectControls(
+        tester,
+        [_closeButton(), _saveButton()],
+        shown: false,
+        reason: 'a tap on a GIF still toggles the controls',
+      );
+      expect(loader.requests, isEmpty);
+      expect(find.byKey(gifFrameKey), findsNothing);
+    });
+
+    testWidgets('Play GIF plays the fullsize GIF in place', (tester) async {
+      final loader = FakeGifCodecLoader(codec: FakeGifCodec(frames));
+      await _pumpViewerWithSaver(
+        tester,
+        saver: _RecordingMediaSaver(),
+        images: const [gif],
+        gifLoader: loader,
+      );
+      expect(playGif(), findsOneWidget);
+
+      await tester.tap(playGif());
+      await tester.pump();
+      await tester.pump();
+
+      expect(loader.requests, [gifFull]);
+      expect(
+        find.descendant(
+          of: find.byKey(_imageSlotKey),
+          matching: find.byKey(gifFrameKey),
+        ),
+        findsOneWidget,
+      );
+      expect(shownGifFrameWidth(tester), 10);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(shownGifFrameWidth(tester), 11);
+    });
+
+    testWidgets('paging away from a playing GIF and back shows Play GIF', (
+      tester,
+    ) async {
+      final loader = FakeGifCodecLoader(codec: FakeGifCodec(frames));
+      await _pumpViewerWithSaver(
+        tester,
+        saver: _RecordingMediaSaver(),
+        images: [gif, _twoImageGallery.first],
+        gifLoader: loader,
+      );
+      expect(playGif(), findsOneWidget);
+      await tester.tap(playGif());
+      await tester.pump();
+      await tester.pump();
+      expect(shownGifFrameWidth(tester), 10);
+
+      final pages = find.descendant(
+        of: find.byKey(_viewerKey),
+        matching: find.byType(PageView),
+      );
+      await tester.fling(pages, const Offset(-500, 0), 1200);
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(_pageDots(index: 1, count: 2), findsOneWidget);
+      await tester.fling(pages, const Offset(500, 0), 1200);
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(_pageDots(index: 0, count: 2), findsOneWidget);
+
+      expect(playGif(), findsOneWidget);
+      expect(find.byKey(gifFrameKey), findsNothing);
+    });
+  });
+
+  group('B7 the ALT badge', () {
+    const altBadgeKey = Key('image-viewer-alt-badge');
+    const altTextKey = Key('image-viewer-alt-text');
+    const catAlt = 'A tabby cat asleep on a sunny windowsill';
+    const dogAlt = 'A golden retriever catching a frisbee';
+
+    Finder altBadge() => find.byKey(altBadgeKey);
+    Finder altText(String alt) => find.descendant(
+      of: find.byKey(altTextKey),
+      matching: find.text(alt),
+      matchRoot: true,
+    );
+
+    Future<void> swipeToNextPage(WidgetTester tester) async {
+      await tester.fling(
+        find.descendant(
+          of: find.byKey(_viewerKey),
+          matching: find.byType(PageView),
+        ),
+        const Offset(-500, 0),
+        1200,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('reads ALT, announces Show alt text, and follows the page: '
+        'absent for null and empty alt', (tester) async {
+      await _pumpViewerWithSaver(
+        tester,
+        saver: _RecordingMediaSaver(),
+        images: const [
+          EmbedImage(
+            thumb: 'https://cdn.test/thumb-1.jpg',
+            fullsize: 'https://cdn.test/fullsize-1.jpg',
+            alt: catAlt,
+          ),
+          EmbedImage(
+            thumb: 'https://cdn.test/thumb-2.jpg',
+            fullsize: 'https://cdn.test/fullsize-2.jpg',
+          ),
+          EmbedImage(
+            thumb: 'https://cdn.test/thumb-3.jpg',
+            fullsize: 'https://cdn.test/fullsize-3.jpg',
+            alt: '',
+          ),
+        ],
+      );
+
+      expect(altBadge(), findsOneWidget);
+      expect(
+        find.descendant(of: altBadge(), matching: find.text('ALT')),
+        findsOneWidget,
+      );
+      expect(find.bySemanticsLabel('Show alt text'), findsOneWidget);
+
+      await swipeToNextPage(tester);
+      expect(_pageDots(index: 1, count: 3), findsOneWidget);
+      expect(altBadge(), findsNothing, reason: 'null alt has no badge');
+
+      await swipeToNextPage(tester);
+      expect(_pageDots(index: 2, count: 3), findsOneWidget);
+      expect(altBadge(), findsNothing, reason: 'empty alt has no badge');
+    });
+
+    testWidgets('tapping the badge shows the full alt text', (tester) async {
+      await _pumpViewerWithSaver(
+        tester,
+        saver: _RecordingMediaSaver(),
+        images: const [
+          EmbedImage(
+            thumb: 'https://cdn.test/thumb.jpg',
+            fullsize: 'https://cdn.test/fullsize.jpg',
+            alt: catAlt,
+          ),
+        ],
+      );
+      expect(altBadge(), findsOneWidget);
+      expect(find.byKey(altTextKey), findsNothing);
+
+      await tester.tap(altBadge());
+      await tester.pumpAndSettle();
+
+      expect(altText(catAlt), findsOneWidget);
+    });
+
+    testWidgets('a 3000-character alt scrolls to its end inside the panel', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final longAlt = '${'word ' * 599}FINAL';
+      expect(longAlt.length, 3000);
+      await _pumpViewerWithSaver(
+        tester,
+        saver: _RecordingMediaSaver(),
+        images: [
+          EmbedImage(
+            thumb: 'https://cdn.test/thumb.jpg',
+            fullsize: 'https://cdn.test/fullsize.jpg',
+            alt: longAlt,
+          ),
+        ],
+      );
+      expect(altBadge(), findsOneWidget);
+      await tester.tap(altBadge());
+      await tester.pumpAndSettle();
+
+      final text = altText(longAlt);
+      expect(text, findsOneWidget);
+      // Just above the bottom edge of the text: its last line.
+      const lastLine = Alignment(0, 0.99);
+      expect(
+        text.hitTestable(at: lastLine),
+        findsNothing,
+        reason: 'the panel is shorter than the text',
+      );
+
+      final panel = find
+          .ancestor(of: text, matching: find.byType(Scrollable))
+          .first;
+      await tester.drag(panel, const Offset(0, -5000));
+      await tester.pumpAndSettle();
+
+      expect(text.hitTestable(at: lastLine), findsOneWidget);
+    });
+
+    testWidgets('hidden controls take the badge with them', (tester) async {
+      await _pumpViewerWithSaver(
+        tester,
+        saver: _RecordingMediaSaver(),
+        images: const [
+          EmbedImage(
+            thumb: 'https://cdn.test/thumb.jpg',
+            fullsize: 'https://cdn.test/fullsize.jpg',
+            alt: catAlt,
+          ),
+        ],
+      );
+      expect(altBadge().hitTestable(), findsOneWidget);
+
+      await _singleTapAt(tester, tester.getCenter(_interactiveViewer()));
+
+      _expectControls(
+        tester,
+        [_closeButton()],
+        shown: false,
+        reason: 'a single tap hides the controls',
+      );
+      expect(altBadge().hitTestable(), findsNothing);
+    });
+
+    testWidgets('changing page closes the panel and shows no stale alt', (
+      tester,
+    ) async {
+      await _pumpViewerWithSaver(
+        tester,
+        saver: _RecordingMediaSaver(),
+        images: const [
+          EmbedImage(
+            thumb: 'https://cdn.test/thumb-1.jpg',
+            fullsize: 'https://cdn.test/fullsize-1.jpg',
+            alt: catAlt,
+          ),
+          EmbedImage(
+            thumb: 'https://cdn.test/thumb-2.jpg',
+            fullsize: 'https://cdn.test/fullsize-2.jpg',
+            alt: dogAlt,
+          ),
+        ],
+      );
+      expect(altBadge(), findsOneWidget);
+      await tester.tap(altBadge());
+      await tester.pumpAndSettle();
+      expect(altText(catAlt), findsOneWidget);
+
+      await swipeToNextPage(tester);
+
+      expect(_pageDots(index: 1, count: 2), findsOneWidget);
+      expect(find.text(catAlt), findsNothing);
+      expect(find.byKey(altTextKey), findsNothing);
+      expect(altBadge(), findsOneWidget);
+    });
+  });
+
+  group(
+    'a gallery swipe pages when mostly sideways and dismisses otherwise',
+    () {
+      const gallery = [
+        EmbedImage(
+          thumb: 'https://cdn.test/t1.jpg',
+          fullsize: 'https://cdn.test/f1.jpg',
+        ),
+        EmbedImage(
+          thumb: 'https://cdn.test/t2.jpg',
+          fullsize: 'https://cdn.test/f2.jpg',
+        ),
+        EmbedImage(
+          thumb: 'https://cdn.test/t3.jpg',
+          fullsize: 'https://cdn.test/f3.jpg',
+        ),
+      ];
+
+      Future<void> openGallery(WidgetTester tester) =>
+          _openViewer(tester, images: gallery);
+
+      for (final (description, throwOffset) in [
+        ('up and to the right', const Offset(250, -320)),
+        ('up and to the left', const Offset(-250, -320)),
+        ('down and to the right', const Offset(250, 320)),
+      ]) {
+        testWidgets('a diagonal throw $description closes the viewer', (
+          tester,
+        ) async {
+          await openGallery(tester);
+
+          await tester.fling(_interactiveViewer().first, throwOffset, 1200);
+          await tester.pumpAndSettle();
+
+          expect(find.byKey(_viewerKey), findsNothing);
+        });
+      }
+
+      testWidgets(
+        'a slightly slanted sideways swipe pages and keeps the viewer',
+        (tester) async {
+          await openGallery(tester);
+
+          await tester.fling(
+            _interactiveViewer().first,
+            const Offset(-400, 110),
+            1200,
+          );
+          await tester.pumpAndSettle();
+
+          expect(find.byKey(_viewerKey), findsOneWidget);
+          expect(_pageDots(index: 1, count: 3), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'with a screen reader on the gallery keeps its scroll actions',
+        (tester) async {
+          final semantics = tester.ensureSemantics();
+          tester.platformDispatcher.accessibilityFeaturesTestValue =
+              const FakeAccessibilityFeatures(accessibleNavigation: true);
+          addTearDown(
+            tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+          );
+          await openGallery(tester);
+
+          expect(
+            find.semantics.byAction(SemanticsAction.scrollLeft),
+            findsOne,
+            reason: 'TalkBack and VoiceOver page the gallery with it',
+          );
+          semantics.dispose();
+        },
+      );
+
+      testWidgets('a page swipe that bends downward still pages, and the next '
+          'sideways swipe pages too', (tester) async {
+        await openGallery(tester);
+        final start = tester.getCenter(_interactiveViewer().first);
+
+        final gesture = await tester.startGesture(start);
+        // Small first steps, as a finger moves: paging claims the swipe
+        // before the dismiss drag's larger slop.
+        await gesture.moveBy(const Offset(-10, 0));
+        await gesture.moveBy(const Offset(-10, 0));
+        await tester.pump();
+        for (var i = 0; i < 6; i++) {
+          await gesture.moveBy(const Offset(-70, 0));
+          await tester.pump();
+        }
+        for (var i = 0; i < 6; i++) {
+          await gesture.moveBy(const Offset(0, 60));
+          await tester.pump();
+        }
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(_viewerKey), findsOneWidget);
+        expect(_pageDots(index: 1, count: 3), findsOneWidget);
+
+        await tester.fling(
+          _interactiveViewer().first,
+          const Offset(-400, 0),
+          1200,
+        );
+        await tester.pumpAndSettle();
+        expect(_pageDots(index: 2, count: 3), findsOneWidget);
+      });
+
+      testWidgets('with a phone\'s touch slop a slow sideways swipe pages', (
+        tester,
+      ) async {
+        // Real phones report a touch slop; the dismiss drag's slop is twice
+        // it, so paging must use the same device slop to claim first.
+        tester.view.gestureSettings = const ui.GestureSettings(
+          physicalTouchSlop: 8, // 2.67px at the test's 3x density
+        );
+        addTearDown(tester.view.resetGestureSettings);
+        await openGallery(tester);
+
+        final gesture = await tester.startGesture(
+          tester.getCenter(_interactiveViewer().first),
+        );
+        for (var i = 0; i < 220; i++) {
+          await gesture.moveBy(const Offset(-2, 0));
+          await tester.pump(const Duration(milliseconds: 8));
+        }
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(_viewerKey), findsOneWidget);
+        expect(_pageDots(index: 1, count: 3), findsOneWidget);
+      });
+
+      testWidgets('paging takes its fling tracking and devices from the scroll '
+          'behaviour, like a PageView', (tester) async {
+        await openGallery(tester);
+
+        final detector = tester.widget<RawGestureDetector>(
+          find
+              .ancestor(
+                of: find.byType(PageView),
+                matching: find.byType(RawGestureDetector),
+              )
+              .first,
+        );
+        final factory = detector.gestures.values.single;
+        final recognizer = factory.constructor() as DragGestureRecognizer;
+        addTearDown(recognizer.dispose);
+        factory.initializer(recognizer);
+
+        final tracker = recognizer.velocityTrackerBuilder(
+          const PointerDownEvent(),
+        );
+        expect(tracker, isA<IOSScrollViewFlingVelocityTracker>());
+        expect(
+          recognizer.multitouchDragStrategy,
+          MultitouchDragStrategy.averageBoundaryPointers,
+        );
+        expect(
+          recognizer.supportedDevices,
+          isNot(contains(PointerDeviceKind.mouse)),
+        );
+      }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+
+      testWidgets('a short diagonal drag follows the finger and snaps back', (
+        tester,
+      ) async {
+        await openGallery(tester);
+        final slot = find.byKey(const Key('image-viewer-image-slot')).first;
+        final start = tester.getCenter(slot);
+
+        final gesture = await tester.startGesture(start);
+        for (var i = 0; i < 6; i++) {
+          await gesture.moveBy(const Offset(10, -12));
+          await tester.pump();
+        }
+        final moved = tester.getCenter(slot);
+        expect(
+          moved.dx,
+          greaterThan(start.dx + 20),
+          reason: 'follows sideways',
+        );
+        expect(moved.dy, lessThan(start.dy - 20), reason: 'follows upward');
+
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(_viewerKey), findsOneWidget);
+        expect(_pageDots(index: 0, count: 3), findsOneWidget);
+        expect(tester.getCenter(slot), start);
+      });
+    },
+  );
 }

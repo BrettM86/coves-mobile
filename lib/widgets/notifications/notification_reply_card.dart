@@ -100,12 +100,8 @@ class NotificationReplyCard extends StatelessWidget {
         rootIsLive &&
         notification.reason == NotificationReason.commentReply &&
         subject != null &&
-        moderationSubjectUriKind(subject.uri) ==
-            ModerationSubjectKind.comment &&
-        (subject.status != null || subject.preview != null);
-    final quoteText = quotesYourComment
-        ? subject.placeholderCopy ?? subject.preview
-        : null;
+        moderationSubjectUriKind(subject.uri) == ModerationSubjectKind.comment;
+    final quoteText = quotesYourComment ? subject.previewCopy : null;
     final quoteIsSensitive =
         quotesYourComment && subject.status == null && subject.isSensitive;
     final showsPostCard = !quotesYourComment;
@@ -114,7 +110,7 @@ class NotificationReplyCard extends StatelessWidget {
         ? rootPost.thumbnail
         : null;
 
-    final recordExcerpt = record?.placeholderCopy ?? record?.excerpt;
+    final recordExcerpt = record?.excerptCopy;
     final isPostMention =
         notification.reason == NotificationReason.mention &&
         record != null &&

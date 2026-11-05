@@ -12,7 +12,9 @@ import '../models/moderation_subject_state.dart';
 import '../models/notification.dart';
 import '../models/notification_preferences.dart';
 import '../models/post.dart';
+import '../models/post_embed_input.dart';
 import '../models/post_get_result.dart';
+import '../models/upload_image_response.dart';
 import '../models/user_profile.dart';
 import 'api_exceptions.dart';
 import 'auth_interceptor.dart';
@@ -21,7 +23,8 @@ import 'log_redaction.dart';
 import 'retry_interceptor.dart';
 
 /// Preserve Dio's debug logging for public routes while withholding private
-/// moderation and notification headers, query values and bodies.
+/// moderation and notification headers, query values and bodies, and the
+/// bytes of raw upload bodies.
 class _ModerationSafeLogInterceptor extends Interceptor {
   _ModerationSafeLogInterceptor()
     : _publicLogger = LogInterceptor(
@@ -39,6 +42,14 @@ class _ModerationSafeLogInterceptor extends Interceptor {
     if (isPrivateModerationPath(options.path) ||
         isPrivateNotificationPath(options.path)) {
       debugPrint('${options.method} ${options.path.split('?').first}');
+      handler.next(options);
+    } else if (options.data is List<int>) {
+      // A raw byte body (image upload): name its type and length only.
+      final body = options.data as List<int>;
+      debugPrint(
+        '${options.method} ${options.path.split('?').first} '
+        '${options.contentType} ${body.length} bytes',
+      );
       handler.next(options);
     } else {
       _publicLogger.onRequest(options, handler);
@@ -834,7 +845,7 @@ class CovesApiService {
     String? title,
     String? content,
     List<RichTextFacet>? facets,
-    ExternalEmbedInput? embed,
+    PostEmbedInput? embed,
     List<String>? langs,
     SelfLabels? labels,
   }) {
@@ -856,6 +867,38 @@ class CovesApiService {
       parse: (data) => CreatePostResponse.fromJson(_asJsonMap(data)),
     );
   }
+
+  /// Upload one post image as the raw request body.
+  ///
+  /// POST /xrpc/social.coves.media.uploadImage with [contentType] and a
+  /// 120 s send and receive timeout on this request only.
+  Future<UploadImageResponse> uploadImage(
+    Uint8List bytes,
+    String contentType, {
+    CancelToken? cancelToken,
+    ProgressCallback? onSendProgress,
+  }) {
+    return _request(
+      operation: 'upload image',
+      send: () => _dio.post(
+        '/xrpc/social.coves.media.uploadImage',
+        data: bytes,
+        options: Options(
+          contentType: contentType,
+          sendTimeout: _uploadImageTimeout,
+          receiveTimeout: _uploadImageTimeout,
+        ),
+        cancelToken: cancelToken,
+        onSendProgress: onSendProgress,
+      ),
+      parse: (data) => UploadImageResponse.fromJson(_asJsonMap(data)),
+    );
+  }
+
+  /// Send and receive timeout of one image upload: a 10 MB body over a slow
+  /// uplink outlasts the shared 30 s receive timeout. Matches the AppView's
+  /// upload read timeout.
+  static const _uploadImageTimeout = Duration(seconds: 120);
 
   /// Delete a post
   ///

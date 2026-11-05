@@ -1,0 +1,127 @@
+# Section E — check 12: HEIC conversion and large-JPEG re-encode on post.
+# Attach a HEIC and a > 50 MP JPEG from the gallery, post to Night Sky; the
+# optimistic detail shows the 2-image gallery ("1/2").
+# The device checker then reads the record from the LOCAL PDS and confirms
+# both blobs are image/jpeg and the large JPEG's long edge is 4096 (getBlob
+# header), and that the app cache holds no post-image-* files:
+#   adb shell run-as social.coves.dev ls cache
+# Assumes a signed-in session on the local stack with the uploadImage
+# endpoint. Each run uploads 2 blobs and seeds one post.
+# PREREQUISITE: push the two images last, so they are the two newest in
+# the picker (generated on a Mac, not stored in the repo):
+#   magick -size 9000x6000 plasma:fractal +noise Gaussian -quality 95 e12_large.jpg
+#   magick -size 3000x2000 plasma:fractal e12_src.jpg
+#   sips -s format heic e12_src.jpg --out e12_heic.heic
+#   adb push e12_heic.heic /sdcard/Pictures/
+#   adb push e12_large.jpg /sdcard/Pictures/
+#   for f in e12_heic.heic e12_large.jpg; do
+#     adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
+#       -d file:///sdcard/Pictures/$f
+#   done
+# NOTE: never use hideKeyboard on the compose screen — Maestro implements it
+# as a BACK press, which the shell's dirty-draft guard redirects to Home.
+# Tagged standalone: its gallery prerequisite (these two images newest)
+# conflicts with e10's (three small images newest).
+appId: social.coves.dev
+tags:
+  - standalone
+---
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Create"
+      - extendedWaitUntil:
+          visible: "Create Post"
+          timeout: 15000
+# --- pick community ---
+- tapOn: "Select a community"
+- extendedWaitUntil:
+    visible: "Post to"
+    timeout: 15000
+- tapOn: "Search for a community"
+- inputText: "nightsk"
+- extendedWaitUntil:
+    visible: "Night Sky[\\s\\S]*"
+    timeout: 15000
+- tapOn: "Night Sky[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Create Post"
+    timeout: 15000
+- assertVisible: "Night Sky"
+# --- title ---
+- evalScript: ${output.e12Title = 'QA E12 heic large jpeg ' + Date.now()}
+- tapOn: "Title"
+- inputText: ${output.e12Title}
+# --- attach the two newest gallery images (large JPEG, HEIC) ---
+# the keyboard covers the image strip; scroll the form to reveal it
+- scrollUntilVisible:
+    element:
+      text: "Add image.*"
+    direction: DOWN
+    timeout: 15000
+- tapOn:
+    text: "Add image.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Select Image Source"
+    timeout: 15000
+- tapOn: "Choose from Gallery[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Photo taken on .*"
+    timeout: 20000
+- takeScreenshot: build/maestro/e12_photo_picker
+- tapOn:
+    text: "Photo taken on .*"
+    index: 0
+- tapOn:
+    text: "Photo taken on .*"
+    index: 1
+# the picker's confirm button reads "Add" or "Done" by picker version
+- tapOn: "(Add|Done).*"
+- extendedWaitUntil:
+    visible: "Create Post"
+    timeout: 30000
+# --- preparing: tile shown, Post disabled until both images are ready ---
+- extendedWaitUntil:
+    visible: "Preparing 2 images…"
+    timeout: 10000
+- takeScreenshot: build/maestro/e12_preparing
+- assertVisible:
+    text: "Post"
+    enabled: false
+- tapOn: "Post"
+- assertVisible: "Create Post"
+- extendedWaitUntil:
+    notVisible: "Preparing.*"
+    timeout: 90000
+- extendedWaitUntil:
+    visible: "Image 1 of 2"
+    timeout: 15000
+- assertVisible: "Image 2 of 2"
+- assertVisible:
+    text: "Post"
+    enabled: true
+- takeScreenshot: build/maestro/e12_strip
+# --- submit: the prepared images upload on Post ---
+- tapOn: "Post"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*${output.e12Title}[\\s\\S]*"
+    timeout: 90000
+- extendedWaitUntil:
+    visible: "1/2"
+    timeout: 15000
+- takeScreenshot: build/maestro/e12_optimistic_detail
+- back
+- extendedWaitUntil:
+    visible: "Create Post"
+    timeout: 15000

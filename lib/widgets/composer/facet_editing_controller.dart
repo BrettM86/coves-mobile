@@ -207,8 +207,11 @@ class FacetEditingController extends TextEditingController {
               when data[r'$type'] == LinkFacetFeature.typeId ||
                   data[r'$type'] == MentionFacetFeature.typeId:
             break;
+          // An image placement is kept as is, like a feature this composer
+          // doesn't edit, so editing a comment keeps its placed images.
           case MentionFacetFeature() ||
               LinkFacetFeature() ||
+              ImageFacetFeature() ||
               UnknownFacetFeature():
             final range = FeatureRange(feature, start, end);
             if (!_featureRanges.contains(range)) {
@@ -1013,9 +1016,13 @@ class FacetEditingController extends TextEditingController {
     final clusterBoundaries = _GraphemeBoundaries(newText);
     final remapped = <FeatureRange>[];
     for (final range in _featureRanges) {
-      if (_isLinkOrMention(range.feature)) {
+      if (_isLinkOrMention(range.feature) ||
+          range.feature is ImageFacetFeature) {
         // A mention or link covers exactly its own text: an edit that
-        // changes that text drops it, so the text is detected again.
+        // changes that text drops it, so the text is detected again. An
+        // image placement's covered text stands in for the image; text
+        // typed into it would vanish under the image, so the placement goes
+        // and the image falls back to the gallery.
         final changesOwnText = deletedLength > 0
             ? start < range.end && range.start < replaced.oldEnd
             : range.start < start && start < range.end;

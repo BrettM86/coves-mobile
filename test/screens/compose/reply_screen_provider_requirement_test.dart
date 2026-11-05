@@ -1,4 +1,5 @@
 import 'package:coves_flutter/models/post.dart';
+import 'package:coves_flutter/models/post_embed_input.dart';
 import 'package:coves_flutter/screens/compose/reply_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -18,7 +19,11 @@ FeedViewPost _post() => FeedViewPost(
   ),
 );
 
-Future<void> _noopSubmit(String content, List<RichTextFacet> facets) async {}
+Future<void> _noopSubmit(
+  String content,
+  List<RichTextFacet> facets,
+  ImagesEmbedInput? embed,
+) async {}
 
 void main() {
   group('ReplyScreen reply mode requires a CommentsProvider', () {

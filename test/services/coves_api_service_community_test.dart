@@ -1,4 +1,5 @@
 import 'package:coves_flutter/models/community.dart';
+import 'package:coves_flutter/models/post_embed_input.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:dio/dio.dart';

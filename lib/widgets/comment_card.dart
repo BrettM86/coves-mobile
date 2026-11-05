@@ -24,6 +24,7 @@ import '../services/moderation_errors.dart';
 import '../utils/copy_link.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/error_messages.dart';
+import '../utils/image_layout.dart';
 import '../utils/post_web_link.dart';
 import '../utils/removal_copy.dart';
 import '../utils/share_link.dart';
@@ -35,6 +36,10 @@ import 'icons/downvote_icon.dart';
 import 'icons/lucide_icon_painter.dart';
 import 'icons/lucide_paths.dart';
 import 'icons/share_icon.dart';
+import 'image_viewer.dart';
+import 'media/media_aspect.dart';
+import 'media/media_surface.dart';
+import 'media/native_image_embed.dart';
 import 'moderation/moderation_action_sheet.dart';
 import 'moderation/moderation_failure_decision.dart';
 import 'report_dialog.dart';
@@ -162,6 +167,12 @@ class _CommentCardState extends State<CommentCard> {
     // A placeholder has nothing to reply to, so its taps are ignored; this
     // guard covers every screen that passes onTap.
     final onTap = comment.isTombstoned ? null : this.onTap;
+    // Comments only ever carry a plain images embed
+    final images = imageLayout(
+      comment.parsedEmbed is ImagesPostEmbed ? comment.parsedEmbed : null,
+      comment.content,
+      comment.contentFacets,
+    );
 
     // All comments get at least 1 threading line (depth + 1)
     final threadingLineCount = depth + 1;
@@ -341,7 +352,25 @@ class _CommentCardState extends State<CommentCard> {
 
                           // Comment content
                           if (comment.content.isNotEmpty) ...[
-                            _buildCommentContent(comment),
+                            _buildCommentContent(comment, images),
+                            const SizedBox(height: 8),
+                          ],
+
+                          // Unplaced images, always after the body; the
+                          // lightbox pages unspoilered placed images first
+                          if (images.gallery.isNotEmpty) ...[
+                            NativeImageGallery(
+                              images: images.gallery,
+                              keyPrefix: 'comment',
+                              bounds: kFeedRatioBounds,
+                              fill: kFeedMediaFill,
+                              source: MediaImageSource.thumb,
+                              onOpen: (index) => ImageViewer.open(
+                                context,
+                                images.lightboxImages(images.openPlaced),
+                                initialIndex: images.openPlaced.length + index,
+                              ),
+                            ),
                             const SizedBox(height: 8),
                           ],
 
@@ -390,10 +419,11 @@ class _CommentCardState extends State<CommentCard> {
   }
 
   /// Builds the comment content with support for facets
-  Widget _buildCommentContent(CommentView comment) {
+  Widget _buildCommentContent(CommentView comment, ImageLayout images) {
     return RichTextRenderer(
       text: comment.content,
       facets: comment.contentFacets,
+      images: images,
       style: const TextStyle(
         color: AppColors.textPrimary,
         fontSize: 14,

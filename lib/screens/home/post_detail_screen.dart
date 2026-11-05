@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../models/comment.dart';
 import '../../models/post.dart';
+import '../../models/post_embed_input.dart';
 import '../../models/post_get_result.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
@@ -19,6 +21,7 @@ import '../../services/post_change_broadcast.dart';
 import '../../services/viewer_state_hydrator.dart';
 import '../../utils/community_handle_utils.dart';
 import '../../utils/error_messages.dart';
+import '../../utils/image_preparation.dart';
 import '../../utils/pagination_scroll_listener.dart';
 import '../../utils/post_web_link.dart';
 import '../../utils/responsive_utils.dart';
@@ -89,6 +92,8 @@ class PostDetailScreen extends StatefulWidget {
     required this.post,
     required this.sessionStamp,
     this.isOptimistic = false,
+    this.ownedImageFiles = const [],
+    this.initialImageIndex = 0,
     this.focusCommentUri,
     this.onPostRemoved,
     super.key,
@@ -112,9 +117,15 @@ class PostDetailScreen extends StatefulWidget {
   /// [FocusedThreadScreen] on top of this one instead.
   final String? focusCommentUri;
 
+  /// The gallery page to open on, carried from the feed card.
+  final int initialImageIndex;
+
   /// Whether this is an optimistic post (just created, not yet indexed)
   /// When true, skips initial comment load since we know there are no comments
   final bool isOptimistic;
+
+  /// Local image files of an optimistic post that this screen owns.
+  final List<File> ownedImageFiles;
 
   /// The comment count to display in the comments header.
   ///
@@ -140,6 +151,11 @@ class PostDetailScreen extends StatefulWidget {
 }
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
+  /// The gallery page the reader is on. The post header scrolls away and is
+  /// rebuilt when it comes back, so the page lives here, not in the gallery.
+  /// Not state: nothing redraws when it changes.
+  late int _imageIndex = widget.initialImageIndex;
+
   // ScrollController created lazily; explicit comment focus overrides
   // restoration.
   late ScrollController _scrollController;
@@ -477,6 +493,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     // for the same post would revert a published replacement.
     if (widget.post.post.uri != _post.post.uri) {
       _post = widget.post;
+      _imageIndex = widget.initialImageIndex;
     }
   }
 
@@ -484,6 +501,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     switch (change) {
       case PostReplaced(:final post) when post.uri == _post.post.uri:
         setState(() => _post = _post.copyWith(post: post));
+        // A server view no longer draws from the composer's files; a copy
+        // of the optimistic post (a moderation update) still does.
+        if (!_drawsFromOwnedImageFiles(post)) {
+          _deleteOwnedImageFiles();
+        }
       case PostRemoved(:final uri) when uri == _post.post.uri:
         if (!_leavingAfterDelete) {
           widget.onPostRemoved?.call();
@@ -493,9 +515,36 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
+  /// Whether [post]'s images include one of
+  /// [PostDetailScreen.ownedImageFiles].
+  bool _drawsFromOwnedImageFiles(PostView post) {
+    final images = switch (post.embed) {
+      ImagesPostEmbed(:final images) ||
+      ImagesWithAttachmentPostEmbed(:final images) => images,
+      _ => const <EmbedImage>[],
+    };
+    final ownedPaths = {for (final file in widget.ownedImageFiles) file.path};
+    return images.any(
+      (image) =>
+          image.localFile != null && ownedPaths.contains(image.localFile!.path),
+    );
+  }
+
+  /// Whether [PostDetailScreen.ownedImageFiles] have been deleted.
+  bool _ownedImageFilesDeleted = false;
+
+  void _deleteOwnedImageFiles() {
+    if (_ownedImageFilesDeleted) {
+      return;
+    }
+    _ownedImageFilesDeleted = true;
+    widget.ownedImageFiles.forEach(deletePreparedImageFile);
+  }
+
   @override
   void dispose() {
     _postChangeBroadcast.removePostChangeListener(_onPostChanged);
+    _deleteOwnedImageFiles();
     // Remove auth listener via the stored reference — context.read here is
     // unsafe once the ancestor is deactivated (tree finalization) and throws
     // a FlutterError that `on Exception` cannot catch.
@@ -985,6 +1034,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Future<void> _handleCommentSubmit(
     String content,
     List<RichTextFacet> facets,
+    ImagesEmbedInput? embed,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
 
@@ -992,6 +1042,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       await _commentsProvider.createComment(
         content: content,
         contentFacets: facets,
+        embed: embed,
       );
 
       if (mounted) {
@@ -1021,6 +1072,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Future<void> _handleCommentReply(
     String content,
     List<RichTextFacet> facets,
+    ImagesEmbedInput? embed,
     ThreadViewComment parentComment,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -1030,6 +1082,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         content: content,
         contentFacets: facets,
         parentComment: parentComment,
+        embed: embed,
       );
 
       if (mounted) {
@@ -1102,8 +1155,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       MaterialPageRoute<void>(
         builder: (context) => ReplyScreen(
           comment: comment,
-          onSubmit: (content, facets) =>
-              _handleCommentReply(content, facets, comment),
+          onSubmit: (content, facets, embed) =>
+              _handleCommentReply(content, facets, embed, comment),
           commentsProvider: _commentsProvider,
         ),
       ),
@@ -1116,7 +1169,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       MaterialPageRoute<void>(
         builder: (context) => ReplyScreen(
           editing: comment,
-          onSubmit: (content, facets) =>
+          onSubmit: (content, facets, _) =>
               _handleCommentEdit(content, facets, comment),
           commentsProvider: _commentsProvider,
         ),
@@ -1354,6 +1407,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   // when time changes
                                   _PostHeader(
                                     post: _post,
+                                    initialImageIndex: _imageIndex,
+                                    onImagePageChanged: (index) =>
+                                        _imageIndex = index,
                                     currentTimeNotifier:
                                         commentsProvider.currentTimeNotifier,
                                   ),
@@ -1494,9 +1550,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 /// Extracted to prevent unnecessary rebuilds when comment list changes.
 /// Uses ValueListenableBuilder to listen only to time updates.
 class _PostHeader extends StatelessWidget {
-  const _PostHeader({required this.post, required this.currentTimeNotifier});
+  const _PostHeader({
+    required this.post,
+    required this.initialImageIndex,
+    required this.onImagePageChanged,
+    required this.currentTimeNotifier,
+  });
 
   final FeedViewPost post;
+  final int initialImageIndex;
+  final ValueChanged<int> onImagePageChanged;
   final ValueNotifier<DateTime?> currentTimeNotifier;
 
   @override
@@ -1504,7 +1567,12 @@ class _PostHeader extends StatelessWidget {
     return ValueListenableBuilder<DateTime?>(
       valueListenable: currentTimeNotifier,
       builder: (context, currentTime, child) {
-        return DetailedPostView(post: post, currentTime: currentTime);
+        return DetailedPostView(
+          post: post,
+          currentTime: currentTime,
+          initialImageIndex: initialImageIndex,
+          onImagePageChanged: onImagePageChanged,
+        );
       },
     );
   }

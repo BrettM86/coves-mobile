@@ -12,9 +12,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/create_post_harness.dart';
 import '../test_helpers/error_copy_rows.dart';
 import '../test_helpers/test_mocks.dart';
-import 'home/create_post_test_harness.dart';
 
 void main() {
   group('CreatePostScreen Widget Tests', () {
@@ -379,24 +379,7 @@ void main() {
       fakeAuthProvider = FakeAuthProvider();
       mockApiService = MockCovesApiService();
 
-      when(
-        mockApiService.listCommunities(
-          limit: anyNamed('limit'),
-          cursor: anyNamed('cursor'),
-          sort: anyNamed('sort'),
-          subscribed: anyNamed('subscribed'),
-        ),
-      ).thenAnswer(
-        (_) async => CommunitiesResponse(
-          communities: [
-            CommunityView(
-              did: 'did:plc:community',
-              name: 'testcove',
-              displayName: 'Test Cove',
-            ),
-          ],
-        ),
-      );
+      stubTestCove(mockApiService);
 
       // Any createPost that does happen is short-circuited so the screen
       // never navigates to PostDetailScreen; the assertion of interest is
@@ -595,15 +578,6 @@ void main() {
         return '$range ${facet.features.map(describeFeature).toList()}';
       }
 
-      /// Pumps CreatePostScreen with the providers PostDetailScreen resolves,
-      /// with the mocked API last so CreatePostScreen submits through it
-      Future<void> pumpWithPostDetailProviders(WidgetTester tester) =>
-          pumpCreatePostWithPostDetailProviders(
-            tester,
-            auth: fakeAuthProvider,
-            api: mockApiService,
-          );
-
       /// Toggles the NSFW switch while the Post button's spinner animates,
       /// which pumpAndSettle would wait on forever
       Future<void> toggleNsfwWhileSubmitting(WidgetTester tester) async {
@@ -681,7 +655,11 @@ void main() {
           ),
         );
 
-        await pumpWithPostDetailProviders(tester);
+        await pumpWithPostDetailProviders(
+          tester,
+          auth: fakeAuthProvider,
+          api: mockApiService,
+        );
         await selectCommunity(tester);
         await tester.enterText(
           find.widgetWithText(TextField, 'What are your thoughts?'),
@@ -852,7 +830,11 @@ void main() {
           ),
         );
 
-        await pumpWithPostDetailProviders(tester);
+        await pumpWithPostDetailProviders(
+          tester,
+          auth: fakeAuthProvider,
+          api: mockApiService,
+        );
         await selectCommunity(tester);
         await tester.enterText(
           find.widgetWithText(TextField, 'Title'),

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -81,7 +82,14 @@ class GalMediaSaver implements MediaSaver {
     }
   }
 
+  /// The bytes behind [url]: a `file:` URI (an optimistic post's image,
+  /// before its blob is served) is read from disk, anything else through the
+  /// image cache.
   Future<Uint8List> _readImageBytes(String url) async {
+    final uri = Uri.parse(url);
+    if (uri.isScheme('file')) {
+      return File.fromUri(uri).readAsBytes();
+    }
     final file = await _cacheManager.getSingleFile(url);
     return file.readAsBytes();
   }

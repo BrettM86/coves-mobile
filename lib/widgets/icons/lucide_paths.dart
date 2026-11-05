@@ -227,6 +227,16 @@ abstract final class LucidePaths {
     'M13 7a4 4 0 1 0-8 0a4 4 0 1 0 8 0',
   ];
 
+  /// `image-plus` — attach images in the composer; the circle is drawn as
+  /// two half arcs, as in [info]
+  static const List<String> imagePlus = [
+    'M16 5h6',
+    'M19 2v6',
+    'M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5',
+    'm21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21',
+    'M11 9a2 2 0 1 0-4 0a2 2 0 1 0 4 0',
+  ];
+
   /// `log-out` — sign out
   static const List<String> logOut = [
     'm16 17 5-5-5-5',

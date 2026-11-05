@@ -72,7 +72,7 @@ class NotificationUpvoteRow extends StatelessWidget {
         subject != null &&
         moderationSubjectUriKind(subject.uri) == ModerationSubjectKind.comment;
     final title = isCommentUpvote ? 'Liked your comment' : 'Liked your post';
-    final subjectPreview = subject?.placeholderCopy ?? subject?.preview;
+    final subjectPreview = subject?.previewCopy;
 
     // A post upvote shows the root post as a card; a comment upvote quotes
     // the comment, with its thumbnail beside the quote.

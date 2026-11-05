@@ -9,6 +9,7 @@ import '../services/streamable_service.dart';
 import '../utils/community_handle_utils.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/image_decode_size.dart';
+import '../utils/image_layout.dart';
 import '../utils/post_detail_route.dart';
 import 'bluesky_post_card.dart';
 import 'community_avatar.dart';
@@ -99,6 +100,10 @@ class _PostCardState extends State<PostCard> {
   /// must start concealed even when its predecessor was revealed.
   String? _revealedUri;
 
+  /// The gallery page the reader swiped to, carried into the post detail.
+  /// Not state: nothing here redraws when it changes.
+  int _galleryIndex = 0;
+
   @override
   void didUpdateWidget(PostCard oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -106,6 +111,7 @@ class _PostCardState extends State<PostCard> {
     // and coming back to A conceals A again.
     if (oldWidget.post.post.uri != widget.post.post.uri) {
       _revealedUri = null;
+      _galleryIndex = 0;
     }
   }
 
@@ -138,6 +144,8 @@ class _PostCardState extends State<PostCard> {
           widget.post.post.isSensitive && _revealedUri != widget.post.post.uri,
       onToggleReveal: _toggleReveal,
       sessionStamp: widget.sessionStamp,
+      currentGalleryIndex: () => _galleryIndex,
+      onGalleryPageChanged: (index) => _galleryIndex = index,
     );
   }
 }
@@ -164,6 +172,8 @@ class _PostCardContent extends StatelessWidget {
     required this.concealed,
     required this.onToggleReveal,
     required this.sessionStamp,
+    required this.currentGalleryIndex,
+    required this.onGalleryPageChanged,
   });
 
   final FeedViewPost post;
@@ -191,22 +201,52 @@ class _PostCardContent extends StatelessWidget {
 
   final Object? sessionStamp;
 
+  /// The gallery page the reader is on. A function because a swipe doesn't
+  /// rebuild the card, so a value captured at build time would be stale.
+  final int Function() currentGalleryIndex;
+
+  /// Records the gallery page after a swipe.
+  final ValueChanged<int> onGalleryPageChanged;
+
   void _navigateToDetail(BuildContext context) {
-    pushPostDetail(context, post: post, sessionStamp: sessionStamp);
+    pushPostDetail(
+      context,
+      post: post,
+      sessionStamp: sessionStamp,
+      initialImageIndex: currentGalleryIndex(),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final sensitive = post.post.isSensitive;
+    final images = imageLayout(
+      post.post.embed,
+      post.post.text,
+      post.post.facets,
+    );
     // While concealed the only media shown is the blurred stand-in for a
     // native image embed; every other embed is dropped entirely.
     final media = concealed
         ? _buildSensitivePlaceholder()
-        : _buildMediaEmbed(context);
-    final showsExternalEmbed = !concealed && post.post.embed?.external != null;
+        : _buildMediaEmbed(context, images);
+    final showsExternalLinkBar =
+        !concealed && post.post.embed?.external != null;
+    // The link preview block is the media of a plain link post. Alongside
+    // native images the images are the media, and the link bar alone
+    // carries the link.
+    final showsExternalEmbed =
+        showsExternalLinkBar &&
+        post.post.embed is! ImagesWithAttachmentPostEmbed;
     final showsBlueskyEmbed =
         !concealed && post.post.embed?.blueskyPost != null;
-    final showsText = !concealed && post.post.text.isNotEmpty;
+    // A body of only placed images reads as a text card with no preview
+    final showsText =
+        !concealed &&
+        post.post.text.isNotEmpty &&
+        (showFullText ||
+            images.placed.isEmpty ||
+            previewHasText(post.post.text, images));
     // The Bluesky card shows the quoted text, so a title that only repeats
     // it is hidden while the card is visible.
     final showsTitle =
@@ -376,16 +416,16 @@ class _PostCardContent extends StatelessWidget {
                   if (!disableNavigation)
                     InkWell(
                       onTap: () => _navigateToDetail(context),
-                      child: _buildTextContent(),
+                      child: _buildTextContent(images),
                     )
                   else
-                    _buildTextContent(),
+                    _buildTextContent(images),
                 ],
               ],
             ),
 
             // External link (if present)
-            if (showsExternalEmbed) ...[
+            if (showsExternalLinkBar) ...[
               const SizedBox(height: 8),
               ExternalLinkBar(embed: post.post.embed!.external!),
             ],
@@ -422,6 +462,7 @@ class _PostCardContent extends StatelessWidget {
                 post: post,
                 showCommentButton: showCommentButton,
                 sessionStamp: sessionStamp,
+                currentGalleryIndex: currentGalleryIndex,
               ),
           ],
         ),
@@ -430,7 +471,7 @@ class _PostCardContent extends StatelessWidget {
   }
 
   /// Builds the text content with appropriate styling
-  Widget _buildTextContent() {
+  Widget _buildTextContent(ImageLayout images) {
     if (showFullText) {
       // Detail view: no container, better readability
       return Padding(
@@ -438,6 +479,7 @@ class _PostCardContent extends StatelessWidget {
         child: RichTextRenderer(
           text: post.post.text,
           facets: post.post.facets,
+          images: images,
           style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: textFontSize,
@@ -461,6 +503,7 @@ class _PostCardContent extends StatelessWidget {
         child: RichTextRenderer(
           text: post.post.text,
           facets: post.post.facets,
+          images: images,
           style: TextStyle(
             color: AppColors.textPrimary.withValues(alpha: 0.85),
             fontSize: textFontSize,
@@ -478,13 +521,17 @@ class _PostCardContent extends StatelessWidget {
   /// Only native images get one: a video, link or quote block shows nothing
   /// of the post on its own, so concealing it leaves nothing to stand in for.
   Widget? _buildSensitivePlaceholder() {
-    final embed = post.post.embed;
-    if (embed is! ImagesPostEmbed) {
+    final images = switch (post.post.embed) {
+      ImagesPostEmbed(:final images) => images,
+      ImagesWithAttachmentPostEmbed(:final images) => images,
+      _ => null,
+    };
+    if (images == null) {
       return null;
     }
 
     return SensitiveImagePlaceholder(
-      image: embed.images.first,
+      image: images.first,
       bounds: kFeedRatioBounds,
       onReveal: onToggleReveal,
     );
@@ -493,28 +540,51 @@ class _PostCardContent extends StatelessWidget {
   /// Builds the native media block for image and video embeds.
   ///
   /// Returns null when there is nothing renderable — no embed, an unknown
-  /// `$type`, or an unhydrated record shape whose blobs never resolved — so
-  /// the card falls back to text rather than showing an empty frame.
-  Widget? _buildMediaEmbed(BuildContext context) {
+  /// `$type`, an unhydrated record shape whose blobs never resolved, or
+  /// images that are all placed in the body — so the card falls back to text
+  /// rather than showing an empty frame.
+  Widget? _buildMediaEmbed(BuildContext context, ImageLayout images) {
     return switch (post.post.embed) {
-      final ImagesPostEmbed images => _buildImagesEmbed(context, images),
+      ImagesPostEmbed() || ImagesWithAttachmentPostEmbed()
+          when images.gallery.isNotEmpty =>
+        _buildImagesEmbed(context, images.gallery),
       final VideoPostEmbed video => _buildVideoEmbed(context, video),
       _ => null,
     };
   }
 
-  /// Builds the images block: the first image at full card width, with a
-  /// "1/N" badge when the gallery holds more. Tapping opens the fullscreen
-  /// viewer directly — the rest of the card still navigates to the post.
-  Widget _buildImagesEmbed(BuildContext context, ImagesPostEmbed embed) {
-    return NativeImageThumb(
-      images: embed.images,
+  /// Builds the images block at full card width: one image on its own, or a
+  /// swipeable gallery with page dots. Tapping opens the fullscreen viewer
+  /// at the image on screen — the rest of the card still navigates to the
+  /// post.
+  ///
+  /// With navigation off there is nothing to activate, and the block drops
+  /// its button semantics along with the handler; a gallery still swipes.
+  Widget _buildImagesEmbed(BuildContext context, List<EmbedImage> images) {
+    if (images.length == 1) {
+      return NativeImageThumb(
+        images: images,
+        keyPrefix: 'post',
+        onTap: disableNavigation
+            ? null
+            : () => ImageViewer.open(context, images),
+      );
+    }
+
+    return NativeImageGallery(
+      // Keyed by post so a recycled card's gallery starts over exactly when
+      // the card's recorded page resets.
+      key: ValueKey(post.post.uri),
+      images: images,
       keyPrefix: 'post',
-      // With navigation off there is nothing to activate, and the block
-      // drops its button semantics along with the handler.
-      onTap: disableNavigation
+      bounds: kFeedRatioBounds,
+      fill: kFeedMediaFill,
+      source: MediaImageSource.thumb,
+      initialIndex: currentGalleryIndex(),
+      onPageChanged: onGalleryPageChanged,
+      onOpen: disableNavigation
           ? null
-          : () => ImageViewer.open(context, embed.images),
+          : (index) => ImageViewer.open(context, images, initialIndex: index),
     );
   }
 

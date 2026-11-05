@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../constants/image_upload_limits.dart';
 import '../models/picked_image.dart';
+import 'image_format.dart';
 
 /// Configuration for image picking constraints
 class ImageConstraints {
@@ -105,6 +106,61 @@ class ImagePickerUtils {
     }
 
     return PickedImage(file: file, bytes: bytes, mimeType: mimeType);
+  }
+
+  /// Pick post images from [source] without resizing or recompressing.
+  ///
+  /// The library allows up to [remaining] images (one at a time when only
+  /// one slot is left); the camera takes one. Returns no images when
+  /// cancelled or when no slot is left.
+  ///
+  /// A picked file that cannot be read (its temporary copy gone, a cloud
+  /// asset unavailable, storage permission denied) is left out and counted
+  /// in `unreadableCount`; the readable ones are returned in order.
+  ///
+  /// The images are not validated here: [PickedImage.mimeType] is sniffed
+  /// from the bytes (`application/octet-stream` when unrecognised), and the
+  /// caller checks each image with `checkPostImage`.
+  static Future<({List<PickedImage> images, int unreadableCount})>
+  pickPostImages(ImageSource source, {required int remaining}) async {
+    if (remaining < 1) {
+      return (images: const <PickedImage>[], unreadableCount: 0);
+    }
+
+    // No imageQuality, maxWidth or maxHeight: the picker returns originals
+    // and does not re-encode GIFs.
+    final List<XFile> pickedFiles;
+    if (source == ImageSource.gallery && remaining >= 2) {
+      // pickMultiImage rejects a limit below 2.
+      pickedFiles = await _picker.pickMultiImage(limit: remaining);
+    } else {
+      final pickedFile = await _picker.pickImage(source: source);
+      pickedFiles = [?pickedFile];
+    }
+
+    // Read together rather than one after another; the order is kept.
+    final read = await Future.wait([
+      for (final pickedFile in pickedFiles.take(remaining))
+        _readPostImage(pickedFile),
+    ]);
+    final images = [for (final image in read) ?image];
+    return (images: images, unreadableCount: read.length - images.length);
+  }
+
+  /// The picked image, or null when its file cannot be read.
+  static Future<PickedImage?> _readPostImage(XFile pickedFile) async {
+    final file = File(pickedFile.path);
+    final Uint8List bytes;
+    try {
+      bytes = await file.readAsBytes();
+    } on FileSystemException {
+      return null;
+    }
+    return PickedImage(
+      file: file,
+      bytes: bytes,
+      mimeType: sniffImageFormat(bytes)?.mimeType ?? 'application/octet-stream',
+    );
   }
 
   /// Infer MIME type from file path extension.

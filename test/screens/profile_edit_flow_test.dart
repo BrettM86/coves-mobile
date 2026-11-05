@@ -15,6 +15,7 @@ import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/models/user_profile.dart';
 import 'package:coves_flutter/screens/home/edit_profile_screen.dart';
 import 'package:coves_flutter/screens/home/profile_screen.dart';
+import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:coves_flutter/widgets/icons/back_icon.dart';
@@ -376,5 +377,38 @@ void main() {
         }
       });
     }
+
+    testWidgets('a rejected image save shows the image copy, not the raw '
+        'server text', (tester) async {
+      when(
+        apiService.updateProfile(
+          displayName: anyNamed('displayName'),
+          bio: anyNamed('bio'),
+          avatarBytes: anyNamed('avatarBytes'),
+          avatarMimeType: anyNamed('avatarMimeType'),
+          bannerBytes: anyNamed('bannerBytes'),
+          bannerMimeType: anyNamed('bannerMimeType'),
+        ),
+      ).thenThrow(
+        ApiException(
+          'Image dimensions too large',
+          statusCode: 400,
+          errorCode: 'ImageDimensionsTooLarge',
+        ),
+      );
+      await pumpApp(tester);
+
+      await editAndSave(tester, _ownScreen);
+
+      verifyUpdateSentOnce();
+      expect(
+        _within(
+          find.byType(SnackBar),
+          find.text('This image is too large. Choose a smaller image.'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Image dimensions too large'), findsNothing);
+    });
   });
 }

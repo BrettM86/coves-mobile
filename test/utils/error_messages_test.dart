@@ -418,6 +418,80 @@ void main() {
     }
   });
 
+  group('ErrorMessage.updateProfile and uploadAvatar for profile image '
+      'rejections', () {
+    const helpers = <(String, String Function(Object), String)>[
+      (
+        'updateProfile',
+        ErrorMessage.updateProfile,
+        'Could not update profile. Please try again.',
+      ),
+      (
+        'uploadAvatar',
+        ErrorMessage.uploadAvatar,
+        'Could not upload avatar. Please try again.',
+      ),
+    ];
+
+    const rejectionCases = <({String code, String raw, String expected})>[
+      (
+        code: 'InvalidMimeType',
+        raw: 'Invalid avatar mime type',
+        expected:
+            "This image format isn't supported. Choose a JPEG, PNG or GIF.",
+      ),
+      (
+        code: 'ImageDimensionsTooLarge',
+        raw: 'Avatar dimensions exceed the limit',
+        expected: 'This image is too large. Choose a smaller image.',
+      ),
+      (
+        code: 'InvalidImage',
+        raw: 'Avatar could not be decoded',
+        expected: "This image couldn't be read. Choose a different image.",
+      ),
+    ];
+
+    for (final (name, helper, _) in helpers) {
+      for (final testCase in rejectionCases) {
+        test('ErrorMessage.$name of a 400 ${testCase.code} returns '
+            '"${testCase.expected}"', () {
+          final error = ApiException(
+            testCase.raw,
+            statusCode: 400,
+            errorCode: testCase.code,
+          );
+
+          expect(helper(error), testCase.expected);
+        });
+      }
+    }
+
+    for (final (name, helper, fallback) in helpers) {
+      test('ErrorMessage.$name of a 400 with an unrelated code shows the '
+          'short server message', () {
+        final error = ApiException(
+          'Display name is too long',
+          statusCode: 400,
+          errorCode: 'InvalidRequest',
+        );
+
+        expect(helper(error), 'Display name is too long');
+      });
+
+      test('ErrorMessage.$name of a 400 with an unrelated code and an HTML '
+          'body returns its fallback', () {
+        final error = ApiException(
+          '<html><body>Bad Request</body></html>',
+          statusCode: 400,
+          errorCode: 'InvalidRequest',
+        );
+
+        expect(helper(error), fallback);
+      });
+    }
+  });
+
   group('ErrorMessage.notificationPreferences', () {
     test('NetworkException returns the connection copy', () {
       expect(
@@ -465,6 +539,194 @@ void main() {
       expect(
         ErrorMessage.notificationPreferences(StateError('x'), isLoad: true),
         "Couldn't load notification settings. Try again.",
+      );
+    });
+  });
+
+  group('ErrorMessage.uploadImage and createPost name each error code', () {
+    // A human server message that getErrorMessage would otherwise show for
+    // a plain 4xx, so a code that falls through is visible.
+    const sentinel = 'Server message sentinel for this upload error';
+
+    // Each code with the status the AppView answers it with, so the
+    // exception is the subclass ApiException.fromDioError produces.
+    const uploadCodes = <({String code, int status})>[
+      (code: 'AuthenticationRequired', status: 401),
+      (code: 'AuthRequired', status: 401),
+      (code: 'InvalidRequest', status: 400),
+      (code: 'RequestTimeout', status: 408),
+      (code: 'MissingBlobScope', status: 403),
+      (code: 'ImageTooLarge', status: 413),
+      (code: 'UnsupportedImageFormat', status: 400),
+      (code: 'ImageDimensionsTooLarge', status: 400),
+      (code: 'InvalidImage', status: 400),
+      (code: 'UploadRateLimited', status: 429),
+      (code: 'PDSUploadFailed', status: 502),
+      (code: 'PayloadTooLarge', status: 413),
+      (code: 'PermissionDenied', status: 403),
+      (code: 'RateLimitExceeded', status: 429),
+      (code: 'SessionBusy', status: 503),
+      (code: 'ServiceUnavailable', status: 503),
+      (code: 'NoAuthorCredentials', status: 503),
+      (code: 'Timeout', status: 504),
+      (code: 'RequestCanceled', status: 400),
+    ];
+
+    // Codes that may share one message.
+    const uploadAliasGroups = <Set<String>>[
+      {'AuthenticationRequired', 'AuthRequired'},
+      {'MissingBlobScope', 'PermissionDenied'},
+      {'RequestTimeout', 'Timeout'},
+      {'ImageTooLarge', 'PayloadTooLarge'},
+    ];
+
+    const recordCodes = <({String code, int status})>[
+      (code: 'InvalidEmbed', status: 400),
+      (code: 'TooManyImages', status: 400),
+      (code: 'InvalidImageFacet', status: 400),
+      (code: 'ContentEmpty', status: 400),
+    ];
+
+    ApiException withCode(String code, int status) => mapResponse(
+      status,
+      <String, dynamic>{'error': code, 'message': sentinel},
+    );
+
+    ApiException withoutCode(int status) =>
+        mapResponse(status, <String, dynamic>{'message': sentinel});
+
+    bool aliased(String a, String b) => uploadAliasGroups.any(
+      (group) => group.contains(a) && group.contains(b),
+    );
+
+    void expectSpecificMessages({
+      required String Function(Object) helper,
+      required List<({String code, int status})> codes,
+      required bool Function(String, String) mayShare,
+    }) {
+      final fallback = helper(StateError('not an API error'));
+      final messages = <String, String>{};
+      for (final (:code, :status) in codes) {
+        final message = helper(withCode(code, status));
+        messages[code] = message;
+        expect(message, isNotEmpty, reason: code);
+        expect(message, isNot(fallback), reason: '$code got the fallback');
+        expect(
+          message,
+          isNot(sentinel),
+          reason: '$code showed the server message',
+        );
+        expect(
+          message,
+          isNot(helper(withoutCode(status))),
+          reason: '$code got the message for status $status without a code',
+        );
+      }
+      for (final a in codes) {
+        for (final b in codes) {
+          if (a.code.compareTo(b.code) >= 0 || mayShare(a.code, b.code)) {
+            continue;
+          }
+          expect(
+            messages[a.code],
+            isNot(messages[b.code]),
+            reason: '${a.code} and ${b.code} share a message',
+          );
+        }
+      }
+    }
+
+    test('each upload error code gets its own message', () {
+      expectSpecificMessages(
+        helper: ErrorMessage.uploadImage,
+        codes: uploadCodes,
+        mayShare: aliased,
+      );
+    });
+
+    test('ImageDimensionsTooLarge says the image is too large', () {
+      expect(
+        ErrorMessage.uploadImage(withCode('ImageDimensionsTooLarge', 400)),
+        'This image is too large. Choose a smaller image.',
+      );
+    });
+
+    test('RequestTimeout says the upload took too long', () {
+      expect(
+        ErrorMessage.uploadImage(withCode('RequestTimeout', 408)),
+        'The upload took too long. Check your connection and try again.',
+      );
+    });
+
+    for (final code in ['MissingBlobScope', 'PermissionDenied']) {
+      test('$code asks the user to sign in again to upload images', () {
+        expect(
+          ErrorMessage.uploadImage(withCode(code, 403)),
+          contains('Sign in again to upload images'),
+        );
+      });
+    }
+
+    test('UploadRateLimited says to try again in ten minutes', () {
+      expect(
+        ErrorMessage.uploadImage(withCode('UploadRateLimited', 429)),
+        contains('ten minutes'),
+      );
+    });
+
+    test('RateLimitExceeded says to try again later, not in ten minutes', () {
+      final message = ErrorMessage.uploadImage(
+        withCode('RateLimitExceeded', 429),
+      );
+
+      expect(message.toLowerCase(), contains('try again later'));
+      expect(message, isNot(contains('ten minutes')));
+    });
+
+    test('each record error code gets its own create-post message', () {
+      expectSpecificMessages(
+        helper: ErrorMessage.createPost,
+        codes: recordCodes,
+        mayShare: (_, _) => false,
+      );
+    });
+  });
+
+  group('ErrorMessage.uploadImage for client-side transport failures', () {
+    // Built the way CovesApiService.uploadImage throws: a response-less
+    // DioException mapped by mapDioException.
+    ApiException transportFailure(DioExceptionType type) => mapDioException(
+      DioException(
+        requestOptions: RequestOptions(
+          path: '/xrpc/social.coves.media.uploadImage',
+        ),
+        type: type,
+      ),
+      operation: 'upload image',
+    );
+
+    for (final type in [
+      DioExceptionType.sendTimeout,
+      DioExceptionType.receiveTimeout,
+    ]) {
+      test('${type.name} says the upload took too long', () {
+        final error = transportFailure(type);
+
+        expect(error, isA<NetworkException>());
+        expect(
+          ErrorMessage.uploadImage(error),
+          'The upload took too long. Check your connection and try again.',
+        );
+      });
+    }
+
+    test('connectionError keeps the no-connection message', () {
+      final error = transportFailure(DioExceptionType.connectionError);
+
+      expect(error, isA<NetworkException>());
+      expect(
+        ErrorMessage.uploadImage(error),
+        'No connection. Please check your internet.',
       );
     });
   });

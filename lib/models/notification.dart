@@ -1,3 +1,4 @@
+import '../utils/moderation_copy.dart';
 import '../utils/notification_timestamp.dart';
 import '../utils/removal_copy.dart';
 import 'post.dart';
@@ -189,6 +190,21 @@ class NotificationReference {
       RemovalCopy.removedByServerAdmin,
     NotificationReferenceStatus.unknown => RemovalCopy.removedByModerator,
   };
+
+  /// [placeholderCopy], else [preview], else "Image" for a live comment
+  /// without text: a reply can be images only.
+  String? get previewCopy => placeholderCopy ?? _textOrImage(preview);
+
+  /// [placeholderCopy], else [excerpt], else "Image" for a live comment
+  /// without text: a reply can be images only.
+  String? get excerptCopy => placeholderCopy ?? _textOrImage(excerpt);
+
+  String? _textOrImage(String? text) =>
+      (text == null || text.isEmpty) &&
+          status == null &&
+          moderationSubjectUriKind(uri) == ModerationSubjectKind.comment
+      ? 'Image'
+      : text;
 }
 
 class NotificationView {

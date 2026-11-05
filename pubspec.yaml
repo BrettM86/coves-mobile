@@ -58,6 +58,8 @@ dependencies:
   share_plus: ^13.3.0
   gal: ^2.3.3
   flutter_cache_manager: ^3.4.5
+  flutter_image_compress: ^2.5.1
+  path_provider: ^2.1.6
   crypto: ^3.0.7
 
 dev_dependencies:

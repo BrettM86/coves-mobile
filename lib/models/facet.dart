@@ -145,6 +145,14 @@ sealed class FacetFeature {
           language: language is String && language.isNotEmpty ? language : null,
         );
 
+      case ImageFacetFeature.typeId:
+        // Index must be an int that can address one of at most 8 images
+        final index = json['index'];
+        if (index is! int || index < 0 || index > 7) {
+          return UnknownFacetFeature(data: json);
+        }
+        return ImageFacetFeature(index: index);
+
       default:
         // Unknown feature type - preserve for forward compatibility
         return UnknownFacetFeature(data: json);
@@ -430,6 +438,33 @@ class CodeBlockFacetFeature extends FacetFeature {
 
   @override
   int get hashCode => Object.hash(typeId, language);
+}
+
+/// Image placed in the body at the facet's range
+class ImageFacetFeature extends FacetFeature {
+  const ImageFacetFeature({required this.index});
+
+  static const typeId = 'social.coves.richtext.facet#image';
+
+  /// Index into the embed's main images list
+  final int index;
+
+  @override
+  String get type => typeId;
+
+  @override
+  Map<String, dynamic> toJson() => {r'$type': typeId, 'index': index};
+
+  @override
+  String toString() => 'ImageFacetFeature($index)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ImageFacetFeature && index == other.index;
+
+  @override
+  int get hashCode => Object.hash(typeId, index);
 }
 
 /// Unknown facet feature for forward compatibility

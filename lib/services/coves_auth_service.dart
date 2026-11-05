@@ -36,13 +36,25 @@ class SessionExpiredException implements Exception {
 
 /// Thrown when a token refresh completed but its result was discarded
 /// because the session changed while the request was in flight (sign-out or
-/// re-login raced the refresh). The refreshed token was NOT saved; there is
-/// nothing to recover — callers should simply drop the operation.
+/// re-login raced the refresh). Storage was rewritten to match the session
+/// that overtook it, so there is nothing to recover — callers should simply
+/// drop the operation.
 class SessionRefreshDiscardedException implements Exception {
   const SessionRefreshDiscardedException();
 
   @override
   String toString() => 'Session changed during refresh; result discarded';
+}
+
+/// Thrown by [CovesAuthService.replaceSession] when the account it was
+/// replacing was signed out, expired, or swapped for another account before
+/// the new session was committed. The new session was not kept, in memory or
+/// in storage.
+class SessionReplacementDiscardedException implements Exception {
+  const SessionReplacementDiscardedException();
+
+  @override
+  String toString() => 'Session changed during replacement; result discarded';
 }
 
 /// Outcome of probing the backend with the stored session token.
@@ -122,6 +134,10 @@ class CovesAuthService {
   // Share logout attempts and keep new refreshes behind their outcome.
   Completer<void>? _signOutCompleter;
 
+  // The in-flight [replaceSession], which sign-out waits for before deleting
+  // credentials so the replacement cannot land after the delete.
+  Future<void>? _pendingReplacement;
+
   /// Get the current session (if any)
   CovesSession? get session => _session;
 
@@ -154,65 +170,13 @@ class CovesAuthService {
   /// The backend handles the complete OAuth flow with the user's PDS.
   /// On success, redirects back to the app with sealed token parameters.
   ///
-  /// Returns the new session on success.
+  /// Returns the new session on success, after [authenticate] then storing
+  /// it as the current session.
   /// Throws on error or user cancellation.
   Future<CovesSession> signIn(String handle) async {
     try {
-      final normalizedHandle = validateAndNormalizeHandle(handle);
-
-      if (kDebugMode) {
-        print('Starting sign-in for: $normalizedHandle');
-      }
-
-      // Build the OAuth login URL
-      final loginUrl = _buildLoginUrl(normalizedHandle);
-
-      if (kDebugMode) {
-        print('Opening browser: $loginUrl');
-        print('Callback scheme: ${OAuthConfig.callbackScheme}');
-      }
-
-      // Open browser for OAuth flow
-      // Backend redirects to custom scheme: social.coves:/callback
-      final String resultUrl;
-      try {
-        resultUrl = await FlutterWebAuth2.authenticate(
-          url: loginUrl,
-          callbackUrlScheme: OAuthConfig.callbackScheme,
-          options: const FlutterWebAuth2Options(
-            preferEphemeral: true, // Don't persist browser session
-            timeout: 300, // 5 minutes
-          ),
-        );
-      } on PlatformException catch (e) {
-        // flutter_web_auth_2 signals user cancellation (browser dismissed,
-        // system auth sheet cancelled) as PlatformException(code: 'CANCELED')
-        // on every platform. Detect it via that typed signal, scoped to the
-        // authenticate call ONLY, so exceptions from parseCallbackUrl —
-        // which can embed server-controlled text like "cancelled" — are
-        // never reclassified as a quiet user cancel.
-        if (e.code == 'CANCELED') {
-          throw const SignInCancelledException();
-        }
-        rethrow;
-      }
-
-      if (kDebugMode) {
-        final redactedUrl = redactSensitiveParams(resultUrl);
-        print('Received callback URL: $redactedUrl');
-      }
-
-      // Parse the callback URL to extract session data
-      final session = parseCallbackUrl(resultUrl);
-
-      if (kDebugMode) {
-        print('Session created: $session');
-      }
-
-      // Store the session securely
+      final session = await authenticate(handle);
       await _saveSession(session);
-
-      // Cache in memory
       _session = session;
 
       if (kDebugMode) {
@@ -233,6 +197,109 @@ class CovesAuthService {
 
       throw Exception('Sign in failed: $e');
     }
+  }
+
+  /// Runs the OAuth flow for [handle] and returns the session it produced,
+  /// without storing it or making it current.
+  ///
+  /// Throws [SignInCancelledException] when the user backs out, and any
+  /// other exception from the flow or the callback unwrapped.
+  Future<CovesSession> authenticate(String handle) async {
+    final normalizedHandle = validateAndNormalizeHandle(handle);
+
+    if (kDebugMode) {
+      print('Starting sign-in for: $normalizedHandle');
+    }
+
+    // Build the OAuth login URL
+    final loginUrl = _buildLoginUrl(normalizedHandle);
+
+    if (kDebugMode) {
+      print('Opening browser: $loginUrl');
+      print('Callback scheme: ${OAuthConfig.callbackScheme}');
+    }
+
+    // Open browser for OAuth flow
+    // Backend redirects to custom scheme: social.coves:/callback
+    final String resultUrl;
+    try {
+      resultUrl = await FlutterWebAuth2.authenticate(
+        url: loginUrl,
+        callbackUrlScheme: OAuthConfig.callbackScheme,
+        options: const FlutterWebAuth2Options(
+          preferEphemeral: true, // Don't persist browser session
+          timeout: 300, // 5 minutes
+        ),
+      );
+    } on PlatformException catch (e) {
+      // flutter_web_auth_2 signals user cancellation (browser dismissed,
+      // system auth sheet cancelled) as PlatformException(code: 'CANCELED')
+      // on every platform. Detect it via that typed signal, scoped to the
+      // authenticate call ONLY, so exceptions from parseCallbackUrl —
+      // which can embed server-controlled text like "cancelled" — are
+      // never reclassified as a quiet user cancel.
+      if (e.code == 'CANCELED') {
+        throw const SignInCancelledException();
+      }
+      rethrow;
+    }
+
+    if (kDebugMode) {
+      final redactedUrl = redactSensitiveParams(resultUrl);
+      print('Received callback URL: $redactedUrl');
+    }
+
+    // Parse the callback URL to extract session data
+    final session = parseCallbackUrl(resultUrl);
+
+    if (kDebugMode) {
+      print('Session created: $session');
+    }
+
+    return session;
+  }
+
+  /// Saves [session] to secure storage and makes it the current session, only
+  /// while the current session is still for the same account ([session]'s
+  /// DID).
+  ///
+  /// A token refresh of that account committed during the write is replaced
+  /// too, with storage rewritten so [session] is what stays stored. If the
+  /// account is signed out, expires, or changes first, storage is rewritten
+  /// to match the current session (emptied when there is none) and this
+  /// throws [SessionReplacementDiscardedException]. [signOut] waits for a
+  /// pending replacement before deleting credentials.
+  ///
+  /// A failed write throws and leaves the current session unchanged.
+  Future<void> replaceSession(CovesSession session) {
+    final replacement = _replaceSession(session);
+    _pendingReplacement = replacement;
+    return replacement.whenComplete(() {
+      if (identical(_pendingReplacement, replacement)) {
+        _pendingReplacement = null;
+      }
+    });
+  }
+
+  Future<void> _replaceSession(CovesSession session) async {
+    if (_signOutCompleter != null || _session?.did != session.did) {
+      throw const SessionReplacementDiscardedException();
+    }
+
+    // Anything that changes the session commits after its own storage write
+    // or delete, so a change seen after this write means that write may have
+    // landed last; write again until no change raced it.
+    CovesSession? before;
+    do {
+      before = _session;
+      await _saveSession(session);
+    } while (!identical(before, _session) && _session?.did == session.did);
+
+    if (_session?.did != session.did) {
+      await _restoreStoredSessionAfterDiscard();
+      throw const SessionReplacementDiscardedException();
+    }
+    _session = session;
   }
 
   /// Parse an OAuth callback URL into a session.
@@ -434,10 +501,15 @@ class CovesAuthService {
       // Create updated session with new token
       final updatedSession = sessionAtStart.copyWithToken(newToken);
 
-      // Save and cache. No await sits between the identity check above and
-      // this write, and signOut() awaits any in-flight refresh before its
-      // storage delete, so the delete always lands after this save.
+      // signOut() awaits any in-flight refresh before its storage delete, so
+      // the delete always lands after this save. A re-login through
+      // [replaceSession] does not wait, so it can replace the session while
+      // this write is pending; then this write must not stay in storage.
       await _saveSession(updatedSession);
+      if (!identical(_session, sessionAtStart)) {
+        await _restoreStoredSessionAfterDiscard();
+        throw const SessionRefreshDiscardedException();
+      }
       _session = updatedSession;
 
       if (kDebugMode) {
@@ -552,6 +624,17 @@ class CovesAuthService {
     final completer = Completer<void>();
     _signOutCompleter = completer;
     try {
+      // A replacement already in flight must commit or discard itself before
+      // credentials are deleted, or its write could land after the delete.
+      final pendingReplacement = _pendingReplacement;
+      if (pendingReplacement != null) {
+        try {
+          await pendingReplacement;
+        } on Object {
+          // Its outcome is irrelevant; the session it left is signed out.
+        }
+      }
+
       // A refresh already in flight must finish before credentials are deleted.
       if (_refreshCompleter != null) {
         try {
@@ -748,6 +831,37 @@ class CovesAuthService {
   /// Save session to secure storage
   Future<void> _saveSession(CovesSession session) async {
     await _storage.write(key: _storageKey, value: session.toJsonString());
+  }
+
+  /// [_restoreStoredSession] for a discarded write, whose caller always
+  /// throws its discard exception: a storage failure here is logged (without
+  /// the token) rather than replacing that exception.
+  Future<void> _restoreStoredSessionAfterDiscard() async {
+    try {
+      await _restoreStoredSession();
+    } on Object catch (e) {
+      if (kDebugMode) {
+        print(
+          'Failed to rewrite storage after a discarded write '
+          '(${e.runtimeType})',
+        );
+      }
+    }
+  }
+
+  /// Rewrites storage to match the current session after a discarded write
+  /// stored its own. Repeats if the session changes during the write, so the
+  /// session that overtook the discarded one is the one left in storage.
+  Future<void> _restoreStoredSession() async {
+    CovesSession? written;
+    do {
+      written = _session;
+      if (written == null) {
+        await _clearSession();
+      } else {
+        await _saveSession(written);
+      }
+    } while (!identical(written, _session));
   }
 
   /// Clear session from secure storage

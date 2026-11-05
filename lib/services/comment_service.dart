@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../models/comment.dart';
 import '../models/coves_session.dart';
 import '../models/post.dart';
+import '../models/post_embed_input.dart';
 import 'api_exceptions.dart';
 import 'auth_interceptor.dart';
 import 'coves_http.dart';
@@ -84,6 +85,7 @@ class CommentService {
     required String parentCid,
     required String content,
     List<RichTextFacet>? contentFacets,
+    ImagesEmbedInput? embed,
   }) async {
     try {
       final session = await _sessionGetter?.call();
@@ -114,6 +116,7 @@ class CommentService {
           'content': content,
           if (contentFacets != null && contentFacets.isNotEmpty)
             'facets': contentFacets.map((f) => f.toJson()).toList(),
+          if (embed != null) 'embed': embed.toJson(),
         },
       );
 

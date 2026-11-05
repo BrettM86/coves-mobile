@@ -232,6 +232,7 @@ class CommentView {
     required this.stats,
     this.viewer,
     this.embed,
+    this.parsedEmbed,
     this.moderation,
     this.deletedAt,
   }) : assert(
@@ -244,6 +245,10 @@ class CommentView {
        );
 
   factory CommentView.fromJson(Map<String, dynamic> json) {
+    // A non-map embed is dropped rather than sinking the whole comment.
+    final rawEmbed = json['embed'];
+    final embed = rawEmbed is Map<String, dynamic> ? rawEmbed : null;
+
     // Parse record if present (will be null for deleted comments)
     CommentRecord? record;
     if (json['record'] != null && json['record'] is Map<String, dynamic>) {
@@ -289,7 +294,13 @@ class CommentView {
       viewer: json['viewer'] != null
           ? CommentViewerState.fromJson(json['viewer'] as Map<String, dynamic>)
           : null,
-      embed: json['embed'] as Map<String, dynamic>?,
+      embed: embed,
+      parsedEmbed: embed != null
+          ? PostEmbed.fromJson(
+              embed,
+              recordEmbed: recordEmbedOf(json['record']),
+            )
+          : null,
       moderation: ModerationView.tryParse(json['moderation']),
       deletedAt: json['deletedAt'] is String
           ? DateTime.tryParse(json['deletedAt'] as String)
@@ -321,6 +332,10 @@ class CommentView {
   /// May contain media, link previews, or other embedded content.
   /// Stored as raw JSON since comment embed structure may vary.
   final Map<String, dynamic>? embed;
+
+  /// [embed] parsed with [PostEmbed.fromJson], or null when the comment has
+  /// no embed. Malformed embeds parse to [UnknownPostEmbed].
+  final PostEmbed? parsedEmbed;
 
   /// Effective server moderation state; null when the server sent none.
   final ModerationView? moderation;

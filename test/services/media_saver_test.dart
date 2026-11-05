@@ -219,6 +219,36 @@ void main() {
       expect(arguments['album'], isNull);
     });
 
+    test('a local file URI saves the file bytes without the cache', () async {
+      // An optimistic post's image is a local file until the post indexes.
+      gal
+        ..hasAccessResult = true
+        ..requestAccessResult = true;
+      final localBytes = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 1, 2]);
+      final localFile = io.File('${temporaryDirectory.path}/local.png')
+        ..writeAsBytesSync(localBytes);
+
+      await saver.saveImage(localFile.uri.toString());
+
+      expect(cacheManager.requestedUrls, isEmpty);
+      final arguments = gal.putCalls.single.arguments as Map<Object?, Object?>;
+      expect(arguments['bytes'], orderedEquals(localBytes));
+    });
+
+    test('a missing local file throws downloadFailed', () async {
+      gal
+        ..hasAccessResult = true
+        ..requestAccessResult = true;
+
+      await expectLater(
+        saver.saveImage(
+          io.File('${temporaryDirectory.path}/gone.png').uri.toString(),
+        ),
+        _throwsSaveFailure(MediaSaveFailure.downloadFailed),
+      );
+      expect(gal.putCalls, isEmpty);
+    });
+
     test('asks for camera-roll access, never album access', () async {
       gal
         ..hasAccessResult = false

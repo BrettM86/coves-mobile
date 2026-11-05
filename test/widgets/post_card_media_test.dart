@@ -1,16 +1,22 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/widgets/fullscreen_video_player.dart';
+import 'package:coves_flutter/widgets/media/gif_codec.dart';
+import 'package:coves_flutter/widgets/media/image_error.dart';
+import 'package:coves_flutter/widgets/media/media_page_dots.dart';
 import 'package:coves_flutter/widgets/post_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/fake_gif_codec.dart';
+import '../test_helpers/fake_image_cache_manager.dart';
 import '../test_helpers/fake_providers.dart';
 
 const _imagesKey = Key('post-images-embed');
 const _countBadgeKey = Key('post-images-count-badge');
+const _pageIndicatorKey = Key('post-images-page-indicator');
 const _videoKey = Key('post-video-embed');
 const _playOverlayKey = Key('post-video-play-overlay');
 const _durationBadgeKey = Key('post-video-duration-badge');
@@ -61,7 +67,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
   }
 
-  Widget harness(FeedViewPost post, {bool disableNavigation = false}) {
+  Widget harness(
+    FeedViewPost post, {
+    bool disableNavigation = false,
+    FakeGifCodecLoader? gifLoader,
+  }) {
     final router = GoRouter(
       observers: [observer],
       routes: [
@@ -84,9 +94,20 @@ void main() {
     );
     addTearDown(router.dispose);
 
+    Widget app = MaterialApp.router(routerConfig: router);
+    if (gifLoader != null) {
+      app = GifCodecScope(
+        loader: gifLoader.load,
+        child: ImageCacheScope(
+          cacheManager: FakeImageCacheManager(),
+          child: app,
+        ),
+      );
+    }
+
     return MultiProvider(
       providers: postCardProviders(auth: auth),
-      child: MaterialApp.router(routerConfig: router),
+      child: app,
     );
   }
 
@@ -155,6 +176,13 @@ void main() {
       reason: 'media block $blockKey should size itself with an AspectRatio',
     );
     return tester.widget<AspectRatio>(finder.first).aspectRatio;
+  }
+
+  /// The feed gallery's page dots.
+  MediaPageDots feedDots(WidgetTester tester) {
+    final finder = inBlock(_pageIndicatorKey, find.byType(MediaPageDots));
+    expect(finder, findsOneWidget, reason: 'the gallery shows page dots');
+    return tester.widget<MediaPageDots>(finder);
   }
 
   group('PostCard images embed', () {
@@ -317,7 +345,9 @@ void main() {
       expect(find.bySemanticsLabel('A red barn at dusk'), findsNothing);
     });
 
-    testWidgets('B2 shows a 1/N badge for a multi-image embed', (tester) async {
+    testWidgets('B2 a multi-image embed shows page dots, not a count badge', (
+      tester,
+    ) async {
       useMediaSizedSurface(tester);
       final post = makePost(
         embed: imagesEmbed([
@@ -330,8 +360,10 @@ void main() {
       await tester.pumpWidget(harness(post));
       await tester.pump();
 
-      expect(find.byKey(_countBadgeKey), findsOneWidget);
-      expect(inBlock(_countBadgeKey, find.text('1/3')), findsOneWidget);
+      expect(feedDots(tester).count, 3);
+      expect(feedDots(tester).index, 0);
+      expect(find.byKey(_countBadgeKey), findsNothing);
+      expect(find.text('1/3'), findsNothing);
     });
 
     testWidgets('B2 omits the badge for a single image', (tester) async {
@@ -347,6 +379,7 @@ void main() {
 
       expect(find.byKey(_imagesKey), findsOneWidget);
       expect(find.byKey(_countBadgeKey), findsNothing);
+      expect(find.byType(MediaPageDots), findsNothing);
     });
 
     testWidgets('B3 tapping the images block opens the fullscreen viewer', (
@@ -387,53 +420,6 @@ void main() {
       );
     });
 
-    testWidgets('B3 the viewer can swipe through a multi-image gallery', (
-      tester,
-    ) async {
-      useMediaSizedSurface(tester);
-      final post = makePost(
-        embed: imagesEmbed([
-          {'thumb': _thumb1, 'fullsize': _full1},
-          {'thumb': _thumb2, 'fullsize': _full2},
-        ]),
-      );
-
-      await tester.pumpWidget(harness(post));
-      await tester.pump();
-
-      await tester.tap(find.byKey(_imagesKey));
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(_viewerKey), findsOneWidget);
-      expect(
-        find.descendant(
-          of: find.byKey(_viewerKey),
-          matching: find.byType(PageView),
-        ),
-        findsOneWidget,
-        reason: 'the whole gallery is reachable straight from the feed',
-      );
-
-      await tester.drag(
-        find.descendant(
-          of: find.byKey(_viewerKey),
-          matching: find.byType(PageView),
-        ),
-        const Offset(-400, 0),
-      );
-      await tester.pumpAndSettle();
-
-      final viewerImages = tester
-          .widgetList<CachedNetworkImage>(
-            find.descendant(
-              of: find.byKey(_viewerKey),
-              matching: find.byType(CachedNetworkImage),
-            ),
-          )
-          .map((w) => w.imageUrl);
-      expect(viewerImages, contains(_full2));
-    });
-
     testWidgets('B3 disableNavigation suppresses the images tap', (
       tester,
     ) async {
@@ -454,6 +440,35 @@ void main() {
       expect(find.byKey(_viewerKey), findsNothing);
       expect(find.byKey(_imagesKey), findsOneWidget);
     });
+    testWidgets(
+      'B2 disableNavigation: a gallery still swipes but a tap opens nothing',
+      (tester) async {
+        useMediaSizedSurface(tester);
+        final handle = tester.ensureSemantics();
+        final post = makePost(
+          embed: imagesEmbed([
+            {'thumb': _thumb1, 'fullsize': _full1},
+            {'thumb': _thumb2, 'fullsize': _full2},
+            {'thumb': _thumb3, 'fullsize': _full1},
+          ]),
+        );
+
+        await tester.pumpWidget(harness(post, disableNavigation: true));
+        await tester.pump();
+
+        await tester.drag(find.byKey(_imagesKey), const Offset(-300, 0));
+        await tester.pumpAndSettle();
+        expect(feedDots(tester).index, 1);
+
+        await tester.tap(find.byKey(_imagesKey));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(_viewerKey), findsNothing);
+        expect(find.text(_detailMarker), findsNothing);
+        expect(find.bySemanticsLabel('View full image'), findsNothing);
+        handle.dispose();
+      },
+    );
   });
 
   group('H3 tappable image semantics', () {
@@ -907,6 +922,60 @@ void main() {
       expect(find.text('Plain text post'), findsOneWidget);
       expect(find.byKey(_imagesKey), findsNothing);
       expect(find.byKey(_videoKey), findsNothing);
+    });
+  });
+
+  group('B5 a GIF on the feed card', () {
+    late FakeGifFrames frames;
+
+    setUpAll(() async {
+      frames = await FakeGifFrames.create();
+    });
+
+    tearDownAll(() => frames.dispose());
+
+    testWidgets('shows Play GIF over the thumb; play loads fullsize in place '
+        'and opens no viewer or ALT badge', (tester) async {
+      useMediaSizedSurface(tester);
+      const gifFull = 'https://cdn.test/cat-full.gif';
+      final loader = FakeGifCodecLoader(codec: FakeGifCodec(frames));
+      final post = makePost(
+        embed: ImagesPostEmbed(
+          type: 'social.coves.embed.images#view',
+          images: const [
+            EmbedImage(
+              thumb: _thumb1,
+              fullsize: gifFull,
+              alt: 'A cat chasing a laser dot',
+              isGif: true,
+            ),
+          ],
+          data: const {},
+        ),
+      );
+
+      await tester.pumpWidget(harness(post, gifLoader: loader));
+      await tester.pump();
+
+      final playGif = find.bySemanticsLabel('Play GIF');
+      expect(playGif, findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is CachedNetworkImage && widget.imageUrl == gifFull,
+        ),
+        findsNothing,
+      );
+      expect(find.byKey(const Key('image-viewer-alt-badge')), findsNothing);
+
+      await tester.tap(playGif);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(loader.requests, [gifFull]);
+      expect(find.byKey(gifFrameKey), findsOneWidget);
+      expect(find.byKey(_viewerKey), findsNothing);
+      expect(find.text(_detailMarker), findsNothing);
     });
   });
 }

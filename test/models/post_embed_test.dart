@@ -1173,14 +1173,378 @@ void main() {
       ]);
     });
   });
+
+  group('imagesWithAttachment#view', () {
+    const twoImages = [
+      {
+        'thumb': 'https://cdn.test/a-thumb.jpg',
+        'fullsize': 'https://cdn.test/a-full.jpg',
+      },
+      {
+        'thumb': 'https://cdn.test/b-thumb.jpg',
+        'fullsize': 'https://cdn.test/b-full.jpg',
+      },
+    ];
+
+    PostEmbed parseWithAttachment(Object? attachment) => PostEmbed.fromJson({
+      r'$type': 'social.coves.embed.imagesWithAttachment#view',
+      'images': {
+        r'$type': 'social.coves.embed.images#view',
+        'images': twoImages,
+      },
+      'attachment': attachment,
+    });
+
+    // The AppView nests the gallery inside an images#view object and the
+    // quote strongRef under `post`. The flat-list form is never sent.
+    final appViewShapeRows = <(String, Map<String, dynamic>, String)>[
+      (
+        'nested images with a flattened external attachment',
+        {
+          r'$type': 'social.coves.embed.imagesWithAttachment#view',
+          'images': {
+            r'$type': 'social.coves.embed.images#view',
+            'images': [
+              {
+                'thumb': 'https://cdn.test/map-thumb.jpg',
+                'fullsize': 'https://cdn.test/map-full.jpg',
+                'alt': 'Trail map',
+                'aspectRatio': {'width': 1600, 'height': 1000},
+              },
+            ],
+          },
+          'attachment': {
+            r'$type': 'social.coves.embed.external#viewExternal',
+            'uri': 'https://example.com/maps',
+            'title': 'Example maps',
+            'description': 'Link attachment',
+          },
+        },
+        'gallery[https://cdn.test/map-thumb.jpg|https://cdn.test/map-full.jpg'
+            '|Trail map|1600x1000] '
+            'external(https://example.com/maps|Example maps|Link attachment)',
+      ),
+      (
+        'nested images with a nested post#view quote attachment',
+        {
+          r'$type': 'social.coves.embed.imagesWithAttachment#view',
+          'images': {
+            r'$type': 'social.coves.embed.images#view',
+            'images': [
+              {
+                'thumb': 'https://cdn.test/map-thumb.jpg',
+                'fullsize': 'https://cdn.test/map-full.jpg',
+                'alt': 'Trail map',
+                'aspectRatio': {'width': 1600, 'height': 1000},
+              },
+            ],
+          },
+          'attachment': {
+            r'$type': 'social.coves.embed.post#view',
+            'post': {
+              'uri': 'at://did:plc:abc/social.coves.community.post/3k1',
+              'cid': 'bafyreicoves',
+            },
+          },
+        },
+        'gallery[https://cdn.test/map-thumb.jpg|https://cdn.test/map-full.jpg'
+            '|Trail map|1600x1000] '
+            'quote(at://did:plc:abc/social.coves.community.post/3k1'
+            '|bafyreicoves)',
+      ),
+      (
+        'flat images list, which the AppView never sends',
+        {
+          r'$type': 'social.coves.embed.imagesWithAttachment#view',
+          'images': [
+            {
+              'thumb': 'https://cdn.test/map-thumb.jpg',
+              'fullsize': 'https://cdn.test/map-full.jpg',
+            },
+          ],
+          'attachment': {
+            r'$type': 'social.coves.embed.external#viewExternal',
+            'uri': 'https://example.com/maps',
+          },
+        },
+        'unknown(social.coves.embed.imagesWithAttachment#view)',
+      ),
+    ];
+
+    for (final (name, json, expected) in appViewShapeRows) {
+      test('parses the AppView imagesWithAttachment#view shape: $name', () {
+        final embed = PostEmbed.fromJson(json);
+
+        String describeImage(EmbedImage image) =>
+            '[${image.thumb}|${image.fullsize}|${image.alt}'
+            '|${image.aspectRatio?.width}x${image.aspectRatio?.height}]';
+        String describeAttachment(EmbedAttachment? attachment) =>
+            switch (attachment) {
+              ExternalAttachment(:final external) =>
+                'external(${external.uri}|${external.title}'
+                    '|${external.description})',
+              QuoteAttachment(:final uri, :final cid) => 'quote($uri|$cid)',
+              null => 'no attachment',
+            };
+        final described = switch (embed) {
+          ImagesWithAttachmentPostEmbed(:final images, :final attachment) =>
+            'gallery${images.map(describeImage).join()} '
+                '${describeAttachment(attachment)}',
+          UnknownPostEmbed(:final type) => 'unknown($type)',
+          _ => 'other(${embed.runtimeType})',
+        };
+
+        expect(described, expected);
+      });
+    }
+
+    test('parses images and a flattened external attachment', () {
+      final embed = parseWithAttachment({
+        r'$type': 'social.coves.embed.external#viewExternal',
+        'uri': 'https://example.com/story',
+        'title': 'Example story',
+      });
+
+      expect(embed, isA<ImagesWithAttachmentPostEmbed>());
+      final gallery = embed as ImagesWithAttachmentPostEmbed;
+      expect(gallery.type, 'social.coves.embed.imagesWithAttachment#view');
+      expect(gallery.images.map((i) => i.thumb).toList(), [
+        'https://cdn.test/a-thumb.jpg',
+        'https://cdn.test/b-thumb.jpg',
+      ]);
+      expect(gallery.images.map((i) => i.fullsize).toList(), [
+        'https://cdn.test/a-full.jpg',
+        'https://cdn.test/b-full.jpg',
+      ]);
+      expect(gallery.attachment, isA<ExternalAttachment>());
+      final link = (gallery.attachment! as ExternalAttachment).external;
+      expect(link.uri, 'https://example.com/story');
+      expect(link.title, 'Example story');
+      expect(gallery.external, same(link));
+    });
+
+    final quoteRows = <(String, Map<String, dynamic>, String, String)>[
+      (
+        'Coves post',
+        {
+          r'$type': 'social.coves.embed.post#view',
+          'post': {
+            'uri': 'at://did:plc:abc/social.coves.community.post/3k1',
+            'cid': 'bafyreicoves',
+          },
+        },
+        'at://did:plc:abc/social.coves.community.post/3k1',
+        'bafyreicoves',
+      ),
+      (
+        'Bluesky post',
+        {
+          r'$type': 'social.coves.embed.post#view',
+          'post': {
+            'uri': 'at://did:plc:xyz/app.bsky.feed.post/3k2',
+            'cid': 'bafyreibsky',
+          },
+        },
+        'at://did:plc:xyz/app.bsky.feed.post/3k2',
+        'bafyreibsky',
+      ),
+    ];
+
+    for (final (name, attachment, uri, cid) in quoteRows) {
+      test('parses a quote attachment for a $name', () {
+        final embed = parseWithAttachment(attachment);
+
+        expect(embed, isA<ImagesWithAttachmentPostEmbed>());
+        final gallery = embed as ImagesWithAttachmentPostEmbed;
+        expect(gallery.images, hasLength(2));
+        expect(gallery.attachment, isA<QuoteAttachment>());
+        final quote = gallery.attachment! as QuoteAttachment;
+        expect(quote.uri, uri);
+        expect(quote.cid, cid);
+        expect(gallery.external, isNull);
+      });
+    }
+
+    final droppedAttachmentRows = <(String, Object?)>[
+      (
+        'post#view with no post object',
+        {r'$type': 'social.coves.embed.post#view'},
+      ),
+      (
+        'post#view with a non-map post',
+        {
+          r'$type': 'social.coves.embed.post#view',
+          'post': 'at://did:plc:abc/social.coves.community.post/3k1',
+        },
+      ),
+      (
+        'post#view missing uri',
+        {
+          r'$type': 'social.coves.embed.post#view',
+          'post': {'cid': 'bafyreicoves'},
+        },
+      ),
+      (
+        'post#view non-string uri',
+        {
+          r'$type': 'social.coves.embed.post#view',
+          'post': {'uri': 42, 'cid': 'bafyreicoves'},
+        },
+      ),
+      (
+        'post#view missing cid',
+        {
+          r'$type': 'social.coves.embed.post#view',
+          'post': {'uri': 'at://did:plc:abc/social.coves.community.post/3k1'},
+        },
+      ),
+      (
+        'post#view non-string cid',
+        {
+          r'$type': 'social.coves.embed.post#view',
+          'post': {
+            'uri': 'at://did:plc:abc/social.coves.community.post/3k1',
+            'cid': 7,
+          },
+        },
+      ),
+      (
+        'unknown type carrying an https uri',
+        {
+          r'$type': 'social.coves.embed.somethingNew',
+          'uri': 'https://example.com/story',
+        },
+      ),
+      ('string attachment', 'https://example.com/story'),
+      ('list attachment', ['https://example.com/story']),
+      (
+        'external#viewExternal missing uri',
+        {
+          r'$type': 'social.coves.embed.external#viewExternal',
+          'title': 'Example story',
+        },
+      ),
+      (
+        'external#viewExternal non-string uri',
+        {
+          r'$type': 'social.coves.embed.external#viewExternal',
+          'uri': 42,
+          'title': 'Example story',
+        },
+      ),
+      (
+        'external#viewExternal non-string title',
+        {
+          r'$type': 'social.coves.embed.external#viewExternal',
+          'uri': 'https://example.com/story',
+          'title': 42,
+        },
+      ),
+      (
+        'external#viewExternal source with a disallowed uri',
+        {
+          r'$type': 'social.coves.embed.external#viewExternal',
+          'uri': 'https://example.com/story',
+          'sources': [
+            {'uri': 'javascript:alert(1)'},
+          ],
+        },
+      ),
+    ];
+
+    for (final (name, attachment) in droppedAttachmentRows) {
+      test('drops the attachment but keeps the images: $name', () {
+        final embed = parseWithAttachment(attachment);
+
+        expect(embed, isA<ImagesWithAttachmentPostEmbed>());
+        final gallery = embed as ImagesWithAttachmentPostEmbed;
+        expect(gallery.images, hasLength(2));
+        expect(gallery.attachment, isNull);
+        expect(gallery.external, isNull);
+      });
+    }
+
+    final hostileImageRows = <(String, Map<String, dynamic>)>[
+      ('images#view missing', {}),
+      ('images#view not a map', {'images': 'https://cdn.test/a-thumb.jpg'}),
+      (
+        'inner images list missing',
+        {
+          'images': {r'$type': 'social.coves.embed.images#view'},
+        },
+      ),
+      (
+        'inner images list empty',
+        {
+          'images': {
+            r'$type': 'social.coves.embed.images#view',
+            'images': <Object?>[],
+          },
+        },
+      ),
+      (
+        'inner images not a list',
+        {
+          'images': {
+            r'$type': 'social.coves.embed.images#view',
+            'images': 'https://cdn.test/a-thumb.jpg',
+          },
+        },
+      ),
+      (
+        'second image missing thumb',
+        {
+          'images': {
+            r'$type': 'social.coves.embed.images#view',
+            'images': [
+              {
+                'thumb': 'https://cdn.test/a-thumb.jpg',
+                'fullsize': 'https://cdn.test/a-full.jpg',
+              },
+              {'fullsize': 'https://cdn.test/b-full.jpg'},
+            ],
+          },
+        },
+      ),
+      (
+        'image missing fullsize',
+        {
+          'images': {
+            r'$type': 'social.coves.embed.images#view',
+            'images': [
+              {'thumb': 'https://cdn.test/a-thumb.jpg'},
+            ],
+          },
+        },
+      ),
+    ];
+
+    for (final (name, images) in hostileImageRows) {
+      test('degrades to unknown when $name', () {
+        final embed = PostEmbed.fromJson({
+          r'$type': 'social.coves.embed.imagesWithAttachment#view',
+          ...images,
+          'attachment': {
+            r'$type': 'social.coves.embed.external#viewExternal',
+            'uri': 'https://example.com/story',
+          },
+        });
+
+        expect(embed, isA<UnknownPostEmbed>());
+        expect(embed.type, 'social.coves.embed.imagesWithAttachment#view');
+      });
+    }
+  });
 }
 
 /// Exhaustive switch over the sealed [PostEmbed] hierarchy.
 ///
 /// This deliberately omits a default clause: it only compiles while
-/// [PostEmbed] is sealed and these five variants are its only subtypes.
+/// [PostEmbed] is sealed and these six variants are its only subtypes.
 String _describeEmbed(PostEmbed embed) => switch (embed) {
   ImagesPostEmbed(:final images) => 'images:${images.length}',
+  ImagesWithAttachmentPostEmbed(:final images) =>
+    'imagesWithAttachment:${images.length}',
   VideoPostEmbed(:final video) => 'video:$video',
   ExternalPostEmbed() => 'external',
   QuotePostEmbed() => 'quote',

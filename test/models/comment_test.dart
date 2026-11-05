@@ -504,6 +504,74 @@ void main() {
     });
   });
 
+  group('CommentView embed parsing', () {
+    Map<String, dynamic> commentJson({Object? embed, bool withEmbed = true}) =>
+        {
+          'uri': 'at://did:plc:test/comment/1',
+          'cid': 'cid1',
+          'record': {'content': 'Look at these'},
+          'createdAt': '2025-01-01T12:00:00Z',
+          'indexedAt': '2025-01-01T12:00:00Z',
+          'author': {'did': 'did:plc:author', 'handle': 'test.user'},
+          'post': {'uri': 'at://did:plc:test/post/123', 'cid': 'post-cid'},
+          'stats': {'upvotes': 0, 'downvotes': 0, 'score': 0},
+          if (withEmbed) 'embed': embed,
+        };
+
+    test('parses an images#view embed and keeps the raw map', () {
+      final embed = {
+        r'$type': 'social.coves.embed.images#view',
+        'images': [
+          {
+            'thumb': 'https://cdn.test/c-thumb.jpg',
+            'fullsize': 'https://cdn.test/c-full.jpg',
+          },
+        ],
+      };
+
+      final comment = CommentView.fromJson(commentJson(embed: embed));
+
+      expect(comment.parsedEmbed, isA<ImagesPostEmbed>());
+      final gallery = comment.parsedEmbed! as ImagesPostEmbed;
+      expect(gallery.images.single.thumb, 'https://cdn.test/c-thumb.jpg');
+      expect(gallery.images.single.fullsize, 'https://cdn.test/c-full.jpg');
+      expect(comment.embed, {
+        r'$type': 'social.coves.embed.images#view',
+        'images': [
+          {
+            'thumb': 'https://cdn.test/c-thumb.jpg',
+            'fullsize': 'https://cdn.test/c-full.jpg',
+          },
+        ],
+      });
+    });
+
+    test('leaves parsedEmbed null when the comment has no embed', () {
+      final comment = CommentView.fromJson(commentJson(withEmbed: false));
+
+      expect(comment.parsedEmbed, isNull);
+    });
+
+    test('parses a malformed embed map to UnknownPostEmbed', () {
+      final comment = CommentView.fromJson(
+        commentJson(
+          embed: {r'$type': 'social.coves.embed.images#view', 'images': 'x'},
+        ),
+      );
+
+      expect(comment.parsedEmbed, isA<UnknownPostEmbed>());
+      expect(comment.parsedEmbed!.type, 'social.coves.embed.images#view');
+    });
+
+    test('ignores a non-map embed without throwing', () {
+      final comment = CommentView.fromJson(
+        commentJson(embed: 'social.coves.embed.images#view'),
+      );
+
+      expect(comment.parsedEmbed, isNull);
+    });
+  });
+
   group('CommentRef', () {
     test('should parse valid JSON', () {
       final json = {'uri': 'at://did:plc:test/comment/1', 'cid': 'cid1'};

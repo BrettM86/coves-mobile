@@ -1,16 +1,26 @@
 import 'dart:collection';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:go_router/go_router.dart';
 
 import '../constants/app_colors.dart';
 import '../models/facet.dart';
 import '../theme/rich_text_palette.dart';
+import '../utils/block_lines.dart';
+import '../utils/image_layout.dart';
 import '../utils/url_launcher.dart';
 import '../utils/url_policy.dart';
 import '../utils/utf8_offsets.dart';
+import 'image_viewer.dart';
+import 'media/gif_player.dart';
+import 'media/image_error.dart';
+import 'media/media_aspect.dart';
+import 'media/media_surface.dart';
+import 'media/play_chip.dart';
 
 /// A reusable widget for rendering text with rich text facets.
 ///
@@ -30,10 +40,12 @@ import '../utils/utf8_offsets.dart';
 /// - Blockquotes: left bar per nesting level
 /// - Headings: scaled/bold single line
 /// - Code blocks: monospace card, whitespace preserved, horizontal scroll
+/// - Placed images (accepted placements in [images]): image blocks; inside
+///   an unrevealed spoiler they stay hidden
 ///
 /// When [maxLines] is set (feed previews), everything renders in a single
 /// Text.rich so ellipsis works; block features are approximated as character
-/// styles instead of layout.
+/// styles instead of layout, and placed images' covered text is left out.
 class RichTextRenderer extends StatefulWidget {
   const RichTextRenderer({
     required this.text,
@@ -42,6 +54,8 @@ class RichTextRenderer extends StatefulWidget {
     this.maxLines,
     this.overflow,
     this.linkStyle,
+    this.images,
+    this.galleryFirstInLightbox = false,
     super.key,
   });
 
@@ -71,6 +85,16 @@ class RichTextRenderer extends StatefulWidget {
   /// [isAllowedWebUrl] get neither and render as plain text.
   final TextStyle? linkStyle;
 
+  /// Image layout of the same text and facets
+  ///
+  /// Its accepted placements render as image blocks (left out of the compact
+  /// preview); rejected ones render their covered text as plain text.
+  final ImageLayout? images;
+
+  /// Whether the surface draws [images]' gallery above the body, so a placed
+  /// image's lightbox pages the gallery before the placements
+  final bool galleryFirstInLightbox;
+
   @override
   State<RichTextRenderer> createState() => _RichTextRendererState();
 }
@@ -94,11 +118,15 @@ class _ResolvedBlock {
     required this.feature,
     required this.start,
     required this.end,
+    this.placement,
   });
 
   final FacetFeature feature;
   final int start;
   final int end;
+
+  /// The accepted placement an image block draws
+  final PlacedImage? placement;
 }
 
 class _RichTextRendererState extends State<RichTextRenderer> {
@@ -112,6 +140,10 @@ class _RichTextRendererState extends State<RichTextRenderer> {
   /// rebuilds must not redo the byte-to-char resolution work)
   List<_ResolvedFacet>? _resolvedFacetsCache;
   List<_ResolvedBlock>? _resolvedBlocksCache;
+
+  /// Placements drawn in the body this build, in body order: the lightbox
+  /// pages through these and the gallery, never a still-hidden one
+  List<PlacedImage> _shownPlacements = const [];
 
   @override
   void didUpdateWidget(RichTextRenderer oldWidget) {
@@ -161,13 +193,19 @@ class _RichTextRendererState extends State<RichTextRenderer> {
     if (widget.maxLines != null) {
       return Text.rich(
         TextSpan(
-          children: _inlineSpans(
-            context,
-            0,
-            widget.text.length,
-            resolved,
-            approximateBlocks: true,
-          ),
+          children: [
+            for (final (start, end) in previewTextRanges(
+              widget.text,
+              widget.images,
+            ))
+              ..._inlineSpans(
+                context,
+                start,
+                end,
+                resolved,
+                approximateBlocks: true,
+              ),
+          ],
           style: widget.style,
         ),
         maxLines: widget.maxLines,
@@ -175,7 +213,12 @@ class _RichTextRendererState extends State<RichTextRenderer> {
       );
     }
 
-    final blocks = _resolvedBlocksCache ??= _resolveBlocks(resolved);
+    final facetBlocks = _resolvedBlocksCache ??= _resolveBlocks(resolved);
+    final imageBlocks = _visibleImageBlocks(resolved);
+    _shownPlacements = [for (final block in imageBlocks) block.placement!];
+    final blocks = imageBlocks.isEmpty
+        ? facetBlocks
+        : _sortBlocks([...facetBlocks, ...imageBlocks]);
 
     // No block structure: keep the single-Text.rich shape
     if (blocks.isEmpty) {
@@ -273,9 +316,7 @@ class _RichTextRendererState extends State<RichTextRenderer> {
   }
 
   /// Extracts block-level facets with ranges extended to line boundaries
-  ///
-  /// Per the lexicon, block ranges must span whole lines excluding the
-  /// trailing newline; readers extend malformed mid-line ranges outward.
+  /// ([lineExtendedRange])
   List<_ResolvedBlock> _resolveBlocks(List<_ResolvedFacet> resolved) {
     final text = widget.text;
     final blocks = <_ResolvedBlock>[];
@@ -285,58 +326,81 @@ class _RichTextRendererState extends State<RichTextRenderer> {
       if (features.isEmpty) {
         continue;
       }
-
-      // A sloppy writer may start the range on a newline; advance past
-      // leading newlines before snapping to line start so we don't swallow
-      // the previous line (symmetric with the trailing back-off below).
-      var rangeStart = rf.charStart;
-      while (rangeStart < rf.charEnd && text[rangeStart] == '\n') {
-        rangeStart++;
-      }
-
-      final start = rangeStart == 0
-          ? 0
-          : text.lastIndexOf('\n', rangeStart - 1) + 1;
-
-      // A sloppy writer may include the trailing newline; back off before
-      // extending forward so we don't swallow the next line.
-      var end = rf.charEnd;
-      while (end > start && text[end - 1] == '\n') {
-        end--;
-      }
-      if (end < text.length && text[end] != '\n') {
-        final nl = text.indexOf('\n', end);
-        end = nl == -1 ? text.length : nl;
-      }
-
-      if (end > start) {
+      final lines = lineExtendedRange(text, rf.charStart, rf.charEnd);
+      if (lines != null) {
         // A quote sharing a facet with a heading or code block becomes its
         // own block over the same lines, so it can contain the other
         for (final feature in features) {
-          blocks.add(_ResolvedBlock(feature: feature, start: start, end: end));
+          blocks.add(
+            _ResolvedBlock(feature: feature, start: lines.$1, end: lines.$2),
+          );
         }
       }
     }
 
-    blocks.sort((a, b) {
+    return _sortBlocks(blocks);
+  }
+
+  static List<_ResolvedBlock> _sortBlocks(List<_ResolvedBlock> blocks) {
+    return blocks..sort((a, b) {
       final cmp = a.start.compareTo(b.start);
       if (cmp != 0) {
         return cmp;
       }
       // Longer (containing) block first so containment recursion sees it;
-      // over the same lines the quote is outer, then heading, then code block
+      // over the same lines the quote is outer, then heading, then code
+      // block, and an image draws inside a quote
       final endCmp = b.end.compareTo(a.end);
       if (endCmp != 0) {
         return endCmp;
       }
       return _blockRank(a.feature).compareTo(_blockRank(b.feature));
     });
+  }
+
+  /// Image blocks for the accepted placements in [RichTextRenderer.images]
+  /// that no unrevealed spoiler conceals, in body order
+  ///
+  /// A hidden placement's covered text renders inside the redacted spoiler
+  /// run instead, so the reader reveals the image by tapping the spoiler.
+  List<_ResolvedBlock> _visibleImageBlocks(List<_ResolvedFacet> resolved) {
+    final placed = widget.images?.placed;
+    if (placed == null || placed.isEmpty) {
+      return const [];
+    }
+    final offsets = Utf8Offsets(widget.text);
+    final blocks = <_ResolvedBlock>[];
+    for (final placement in placed) {
+      final start = offsets.charIndexOf(placement.range.byteStart);
+      final end = offsets.charIndexOf(placement.range.byteEnd);
+      if (start == null || end == null || end <= start) {
+        continue;
+      }
+      final concealed = resolved.any(
+        (rf) =>
+            rf.charStart < end &&
+            rf.charEnd > start &&
+            rf.facet.features.any((f) => f is SpoilerFacetFeature) &&
+            !_revealedSpoilers.contains('${rf.charStart}:${rf.charEnd}'),
+      );
+      if (!concealed) {
+        blocks.add(
+          _ResolvedBlock(
+            feature: ImageFacetFeature(index: placement.index),
+            start: start,
+            end: end,
+            placement: placement,
+          ),
+        );
+      }
+    }
     return blocks;
   }
 
   static int _blockRank(FacetFeature feature) => switch (feature) {
     BlockquoteFacetFeature() => 0,
     HeadingFacetFeature() => 1,
+    ImageFacetFeature() => 3,
     _ => 2,
   };
 
@@ -358,6 +422,11 @@ class _RichTextRendererState extends State<RichTextRenderer> {
       final block = blocks[i];
       if (block.start < pos || block.end > rangeEnd) {
         // Overlaps already-rendered content (or leaks out of this range)
+        assert(
+          block.placement == null,
+          'imageLayout accepted a placement the renderer cannot draw at '
+          'char index ${block.start}',
+        );
         if (kDebugMode) {
           debugPrint(
             'RichTextRenderer: Skipping overlapping block facet at '
@@ -387,6 +456,11 @@ class _RichTextRendererState extends State<RichTextRenderer> {
         final inner = <_ResolvedBlock>[];
         var j = i + 1;
         while (j < blocks.length && blocks[j].start < block.end) {
+          assert(
+            blocks[j].end <= block.end || blocks[j].placement == null,
+            'imageLayout accepted a placement straddling a quote at char '
+            'index ${blocks[j].start}',
+          );
           if (blocks[j].end <= block.end) {
             inner.add(blocks[j]);
           } else if (kDebugMode) {
@@ -406,6 +480,9 @@ class _RichTextRendererState extends State<RichTextRenderer> {
         widgets.add(
           _headingWidget(context, block, feature, inlineFacets, baseStyle),
         );
+        i++;
+      } else if (block.placement case final placement?) {
+        widgets.add(_imageBlockWidget(context, placement));
         i++;
       } else {
         widgets.add(
@@ -517,6 +594,83 @@ class _RichTextRendererState extends State<RichTextRenderer> {
     }
 
     return child;
+  }
+
+  /// A placed image at body width, opening the lightbox in screen order:
+  /// the placements drawn in the body and the gallery, in the order the
+  /// surface draws them
+  Widget _imageBlockWidget(BuildContext context, PlacedImage placement) {
+    final layout = widget.images!;
+    final shown = _shownPlacements;
+    final galleryFirst = widget.galleryFirstInLightbox;
+    final image = placement.image;
+    final alt = image.alt;
+    final cacheManager = ImageCacheScope.of(context);
+
+    return KeyedSubtree(
+      key: Key('rich-text-image-${placement.index}'),
+      child: Semantics(
+        container: true,
+        // A GIF's play control is its own button node inside the block.
+        explicitChildNodes: image.isGif,
+        button: true,
+        image: true,
+        label: alt != null && alt.isNotEmpty ? alt : 'Image',
+        child: GestureDetector(
+          onTap: () => ImageViewer.open(
+            context,
+            layout.lightboxImages(shown, galleryFirst: galleryFirst),
+            initialIndex:
+                (galleryFirst ? layout.gallery.length : 0) +
+                shown.indexOf(placement),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: AspectRatio(
+              aspectRatio: clampMediaRatio(
+                image.aspectRatio,
+                min: kDetailRatioBounds.min,
+                max: kDetailRatioBounds.max,
+                fallback: 4 / 3,
+              ),
+              child: image.isGif
+                  ? GifPlayer(
+                      image: image,
+                      playChipStyle: PlayChipStyle.detail,
+                      labelsImage: false,
+                      still: _placedImage(cacheManager, image.thumb),
+                    )
+                  : _placedImage(cacheManager, image.fullsize),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _placedImage(BaseCacheManager cacheManager, String url) {
+    return CachedNetworkImage(
+      cacheManager: cacheManager,
+      imageUrl: url,
+      width: double.infinity,
+      fit: BoxFit.cover,
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      placeholder: (context, url) => MediaFill(
+        iconColor: kDetailMediaFill.iconColor,
+        iconSize: kDetailMediaFill.iconSize,
+      ),
+      errorWidget: (context, url, error) => ImageLoadError(
+        url: url,
+        error: error,
+        cacheManager: cacheManager,
+        fallback: MediaFill(
+          icon: Icons.broken_image,
+          iconColor: kDetailMediaFill.iconColor,
+          iconSize: kDetailMediaFill.iconSize,
+        ),
+      ),
+    );
   }
 
   static const _headingScales = [1.55, 1.4, 1.25, 1.15, 1.05, 1.0];
@@ -840,6 +994,8 @@ class _RichTextRendererState extends State<RichTextRenderer> {
               style = _monospace(style)
                   .copyWith(backgroundColor: AppColors.backgroundTertiary);
             }
+          case ImageFacetFeature():
+            break; // Accepted placements render as blocks, rejected as text
           case UnknownFacetFeature():
             break; // Open union: unknown features render as plain text
         }

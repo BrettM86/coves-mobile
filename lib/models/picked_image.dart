@@ -10,6 +10,7 @@ class PickedImage {
     required this.file,
     required this.bytes,
     required this.mimeType,
+    this.ownsFile = false,
   });
 
   /// The picked image file
@@ -20,6 +21,9 @@ class PickedImage {
 
   /// Detected MIME type (jpeg, png, webp, gif, or heic)
   final String mimeType;
+
+  /// Whether the app created [file] and must delete it when done.
+  final bool ownsFile;
 
   /// File path for display or debugging
   String get path => file.path;

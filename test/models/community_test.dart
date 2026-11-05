@@ -1,4 +1,5 @@
 import 'package:coves_flutter/models/community.dart';
+import 'package:coves_flutter/models/post_embed_input.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

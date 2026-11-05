@@ -7,6 +7,7 @@ import '../models/post.dart';
 import '../services/streamable_service.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/image_decode_size.dart';
+import '../utils/image_layout.dart';
 import '../utils/url_display.dart';
 import '../utils/url_launcher.dart';
 import '../utils/url_policy.dart';
@@ -39,12 +40,21 @@ class DetailedPostView extends StatefulWidget {
     required this.post,
     this.currentTime,
     this.showSources = true,
+    this.initialImageIndex = 0,
+    this.onImagePageChanged,
     super.key,
   });
 
   final FeedViewPost post;
   final DateTime? currentTime;
   final bool showSources;
+
+  /// The gallery page to open on.
+  final int initialImageIndex;
+
+  /// Called with the gallery page after each swipe, so an owner that
+  /// outlives this view can reopen it on the same page.
+  final ValueChanged<int>? onImagePageChanged;
 
   @override
   State<DetailedPostView> createState() => _DetailedPostViewState();
@@ -111,23 +121,29 @@ class _DetailedPostViewState extends State<DetailedPostView> {
     });
   }
 
+  /// The native gallery images, from an images embed or an images embed
+  /// with an attachment; null for every other embed.
+  List<EmbedImage>? get _nativeImages => switch (widget.post.post.embed) {
+    ImagesPostEmbed(:final images) => images,
+    ImagesWithAttachmentPostEmbed(:final images) => images,
+    _ => null,
+  };
+
   /// Whether the post carries a native (images/video) embed to render.
-  bool get _hasNativeMedia {
-    final embed = widget.post.post.embed;
-    return embed is ImagesPostEmbed || embed is VideoPostEmbed;
-  }
+  bool get _hasNativeMedia =>
+      _nativeImages != null || widget.post.post.embed is VideoPostEmbed;
 
   /// Determines the content type for layout decisions
   _ContentType get _contentType {
     // Native embeds are self-describing, so they short-circuit the
     // heuristics below, which exist only to classify external link cards.
-    final nativeEmbed = widget.post.post.embed;
-    if (nativeEmbed is ImagesPostEmbed) {
-      return nativeEmbed.images.length > 1
+    final nativeImages = _nativeImages;
+    if (nativeImages != null) {
+      return nativeImages.length > 1
           ? _ContentType.nativeGallery
           : _ContentType.nativeSingleImage;
     }
-    if (nativeEmbed is VideoPostEmbed) {
+    if (widget.post.post.embed is VideoPostEmbed) {
       return _ContentType.nativeVideo;
     }
 
@@ -158,6 +174,14 @@ class _DetailedPostViewState extends State<DetailedPostView> {
     // it is hidden while the card is visible.
     final hidesTitle =
         !_concealed && widget.post.post.titleDuplicatesBlueskyEmbed;
+    final layout = imageLayout(
+      widget.post.post.embed,
+      widget.post.post.text,
+      widget.post.post.facets,
+    );
+    // Every image placed in the body leaves no gallery to lead the post
+    final allImagesPlaced =
+        !_concealed && _nativeImages != null && layout.gallery.isEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -186,18 +210,19 @@ class _DetailedPostViewState extends State<DetailedPostView> {
         // Media section - full width, content-first. While concealed only a
         // native image embed has a stand-in to show, so anything else would
         // contribute this spacer and an empty section.
-        if ((!_concealed || widget.post.post.embed is ImagesPostEmbed) &&
+        if ((!_concealed || _nativeImages != null) &&
+            !allImagesPlaced &&
             (widget.post.post.embed?.external != null ||
                 widget.post.post.embed?.blueskyPost != null ||
                 _hasNativeMedia)) ...[
           const SizedBox(height: 12),
-          _buildMediaSection(),
+          _buildMediaSection(layout),
         ],
 
         // Post text - clean and readable
         if (!_concealed && widget.post.post.text.isNotEmpty) ...[
           const SizedBox(height: 12),
-          _buildBodyText(),
+          _buildBodyText(layout),
         ],
 
         // External link bar
@@ -235,13 +260,18 @@ class _DetailedPostViewState extends State<DetailedPostView> {
             _buildAvatar(author),
             const SizedBox(width: 8),
 
-            // Handle with @ prefix - always shown in muted grey
-            Text(
-              '@${author.handle}',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
+            // Handle with @ prefix - always shown in muted grey; a long
+            // handle is cut short rather than pushing the time off the row
+            Flexible(
+              child: Text(
+                '@${author.handle}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
 
@@ -301,16 +331,15 @@ class _DetailedPostViewState extends State<DetailedPostView> {
   }
 
   /// Main media section based on content type
-  Widget _buildMediaSection() {
+  Widget _buildMediaSection(ImageLayout layout) {
     if (_concealed) {
       return _buildSensitivePlaceholder();
     }
 
     switch (_contentType) {
       case _ContentType.nativeSingleImage:
-        return _buildNativeSingleImage();
       case _ContentType.nativeGallery:
-        return _buildNativeGallery();
+        return _buildNativeImages(layout);
       case _ContentType.nativeVideo:
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -340,51 +369,85 @@ class _DetailedPostViewState extends State<DetailedPostView> {
   /// nothing of the post on its own, so concealing it leaves nothing to stand
   /// in for.
   Widget _buildSensitivePlaceholder() {
-    final embed = widget.post.post.embed;
-    if (embed is! ImagesPostEmbed) {
+    final images = _nativeImages;
+    if (images == null) {
       return const SizedBox.shrink();
     }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: SensitiveImagePlaceholder(
-        image: embed.images.first,
+        image: images.first,
         bounds: kDetailRatioBounds,
         onReveal: _toggleReveal,
       ),
     );
   }
 
+  /// The unplaced native images: one as a single image, more as a gallery.
+  /// Empty when every image is placed in the body.
+  Widget _buildNativeImages(ImageLayout layout) {
+    final gallery = layout.gallery;
+    if (gallery.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // The lightbox pages in screen order: the gallery above the body, then
+    // the placed images. Spoilered placements are left out; only the body
+    // knows if they show.
+    void open(int galleryIndex) => ImageViewer.open(
+      context,
+      layout.lightboxImages(layout.openPlaced, galleryFirst: true),
+      initialIndex: galleryIndex,
+    );
+
+    return gallery.length > 1
+        ? _buildNativeGallery(gallery, open)
+        : _buildNativeSingleImage(gallery, open);
+  }
+
   /// Native single image: full card width at its own aspect ratio, tapping
   /// opens the zoomable viewer.
-  Widget _buildNativeSingleImage() {
-    final embed = widget.post.post.embed! as ImagesPostEmbed;
-
+  Widget _buildNativeSingleImage(
+    List<EmbedImage> images,
+    void Function(int index) onOpen,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: NativeImageThumb(
-        images: embed.images,
+        images: images,
         keyPrefix: 'detail',
         bounds: kDetailRatioBounds,
         source: MediaImageSource.fullsize,
         fill: kDetailMediaFill,
-        onTap: () => ImageViewer.open(context, embed.images),
+        playChipStyle: PlayChipStyle.detail,
+        onTap: () => onOpen(0),
       ),
     );
   }
 
-  /// Native gallery: a swipeable carousel of fullsize images with an i/N
-  /// indicator. No link bar — a native gallery has no uri to open.
-  Widget _buildNativeGallery() {
-    final embed = widget.post.post.embed! as ImagesPostEmbed;
-
+  /// Native gallery: a swipeable carousel of fullsize images with page
+  /// dots. A link attachment gets its link bar from the build method,
+  /// below the images.
+  Widget _buildNativeGallery(
+    List<EmbedImage> images,
+    void Function(int index) onOpen,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: NativeImageGallery(
-        images: embed.images,
+        // Keyed by post so another post shown here starts on its own page.
+        key: ValueKey(widget.post.post.uri),
+        images: images,
         keyPrefix: 'detail',
-        onOpen: (index) =>
-            ImageViewer.open(context, embed.images, initialIndex: index),
+        onOpen: onOpen,
+        playChipStyle: PlayChipStyle.detail,
+        // A replacement post (an edit, say) can carry fewer images than
+        // the page the reader was on.
+        initialIndex: widget.initialImageIndex < images.length
+            ? widget.initialImageIndex
+            : 0,
+        onPageChanged: widget.onImagePageChanged,
       ),
     );
   }
@@ -648,12 +711,14 @@ class _DetailedPostViewState extends State<DetailedPostView> {
   }
 
   /// Clean body text
-  Widget _buildBodyText() {
+  Widget _buildBodyText(ImageLayout layout) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: RichTextRenderer(
         text: widget.post.post.text,
         facets: widget.post.post.facets,
+        images: layout,
+        galleryFirstInLightbox: true,
         style: TextStyle(
           fontSize: 12.5,
           fontWeight: FontWeight.w400,

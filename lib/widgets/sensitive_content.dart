@@ -2,11 +2,13 @@ import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import '../constants/app_colors.dart';
 import '../models/post.dart';
 import 'icons/lucide_icon_painter.dart';
 import 'icons/lucide_paths.dart';
+import 'media/image_error.dart';
 import 'media/media_aspect.dart';
 import 'media/media_surface.dart';
 
@@ -92,7 +94,10 @@ class SensitiveContentBanner extends StatelessWidget {
 }
 
 /// The blurred stand-in shown in place of a concealed image embed.
-class SensitiveImagePlaceholder extends StatelessWidget {
+///
+/// When the thumb 404s there is nothing left to conceal or reveal, so it
+/// shows the unblurred "Image removed" placeholder instead.
+class SensitiveImagePlaceholder extends StatefulWidget {
   const SensitiveImagePlaceholder({
     required this.image,
     required this.bounds,
@@ -100,7 +105,8 @@ class SensitiveImagePlaceholder extends StatelessWidget {
     super.key,
   });
 
-  /// The image being concealed; only its thumb is ever fetched.
+  /// The image being concealed; only its thumb is ever fetched, or its
+  /// local file read for an optimistic post.
   final EmbedImage image;
 
   /// The display bounds of the surface this placeholder stands in for, so
@@ -111,13 +117,58 @@ class SensitiveImagePlaceholder extends StatelessWidget {
   final VoidCallback onReveal;
 
   @override
+  State<SensitiveImagePlaceholder> createState() =>
+      _SensitiveImagePlaceholderState();
+}
+
+class _SensitiveImagePlaceholderState extends State<SensitiveImagePlaceholder> {
+  /// The thumb URL found removed; any other thumb is concealed again.
+  String? _removedUrl;
+
+  /// The thumb URL already evicted, so rebuilds before the switch do not
+  /// evict it again.
+  String? _evictedUrl;
+
+  Widget _backdropError(
+    BaseCacheManager cacheManager,
+    String url,
+    Object error,
+  ) {
+    if (isImageRemoved(error) && _evictedUrl != url) {
+      _evictedUrl = url;
+      evictRemovedImage(cacheManager, url);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && widget.image.thumb == url) {
+          setState(() => _removedUrl = url);
+        }
+      });
+    }
+    return const MediaFill();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final image = widget.image;
+    final onReveal = widget.onReveal;
     // The same clamp the revealed embed applies, so reveal keeps the layout.
     final ratio = clampMediaRatio(
       image.aspectRatio,
-      min: bounds.min,
-      max: bounds.max,
+      min: widget.bounds.min,
+      max: widget.bounds.max,
     );
+
+    if (_removedUrl == image.thumb) {
+      return ClipRRect(
+        key: _placeholderKey,
+        borderRadius: BorderRadius.circular(8),
+        child: AspectRatio(
+          aspectRatio: ratio,
+          child: const ImageRemovedPlaceholder(),
+        ),
+      );
+    }
+    final cacheManager = ImageCacheScope.of(context);
+    final localFile = image.localFile;
 
     // The alt text describes what is being concealed, so it is deliberately
     // not attached anywhere here; ExcludeSemantics stops CachedNetworkImage
@@ -154,18 +205,28 @@ class SensitiveImagePlaceholder extends StatelessWidget {
                       // concealed image in the cache and on the wire.
                       child: Transform.scale(
                         scale: 1.2,
-                        child: CachedNetworkImage(
-                          imageUrl: image.thumb,
-                          // It is blurred beyond recognition anyway; a tiny
-                          // decode keeps the hidden image cheap.
-                          memCacheWidth: 64,
-                          fit: BoxFit.cover,
-                          fadeInDuration: Duration.zero,
-                          fadeOutDuration: Duration.zero,
-                          placeholder: (context, url) => const MediaFill(),
-                          errorWidget: (context, url, error) =>
-                              const MediaFill(),
-                        ),
+                        child: localFile != null
+                            ? Image.file(
+                                localFile,
+                                cacheWidth: 64,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    const MediaFill(),
+                              )
+                            : CachedNetworkImage(
+                                cacheManager: cacheManager,
+                                imageUrl: image.thumb,
+                                // It is blurred beyond recognition anyway; a
+                                // tiny decode keeps the hidden image cheap.
+                                memCacheWidth: 64,
+                                fit: BoxFit.cover,
+                                fadeInDuration: Duration.zero,
+                                fadeOutDuration: Duration.zero,
+                                placeholder: (context, url) =>
+                                    const MediaFill(),
+                                errorWidget: (context, url, error) =>
+                                    _backdropError(cacheManager, url, error),
+                              ),
                       ),
                     ),
                   ),

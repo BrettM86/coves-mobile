@@ -1,0 +1,89 @@
+# Section E — check 11: reply with text and one image. Open the reply
+# composer on the NASA fixture post, type a timestamped reply, attach one
+# image from the gallery through the reply toolbar's "Add image" control,
+# Send; the image uploads on Send and the reply then appears in the thread
+# with its image grid ("View image 1 of 1", the comment-images-grid tiles)
+# once the server copy loads (firehose indexing lag absorbed by the
+# scrollUntilVisible timeout, as in e4).
+# The comment record on the local PDS must carry a social.coves.embed.images
+# embed with one blob ref; integration_test/reply_image_test.dart reads that
+# from the PDS for the image-only case, this flow does not.
+# Assumes a signed-in session on the local stack with the uploadImage
+# endpoint (coves B1) and image comments (coves B2). Reply text is
+# timestamped so reruns never collide; each run uploads one blob and seeds
+# one comment (same precedent as e4/e10).
+# PREREQUISITE: at least one image in the emulator gallery, e.g.
+#   adb push e11_image_1.jpg /sdcard/Pictures/
+#   adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
+#     -d file:///sdcard/Pictures/e11_image_1.jpg
+# NOTE: never use hideKeyboard on the reply screen — Maestro implements it
+# as a BACK press, which closes the composer and saves a draft.
+appId: social.coves.dev
+---
+# Cold start can stall on a blank window or read stale semantics — retry the
+# launch once (documented quirk, same pattern as c1/b6/b7).
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+# Reach the fixture through !science post search, not the flooded Discover
+# feed (docs/QA_LOOP.md "Reaching fixtures")
+- runFlow:
+    file: subflows/open_science_post.yaml
+    env:
+      QUERY: "NASA delays"
+      TITLE: "NASA delays .*Swift telescope.*"
+- extendedWaitUntil:
+    visible: "NASA delays[\\s\\S]*"
+    timeout: 15000
+# --- open composer, type ---
+- evalScript: ${output.e11Reply = 'QA e11 reply image ' + Date.now()}
+- tapOn: "Comment"
+- extendedWaitUntil:
+    visible: "Send comment[\\s\\S]*"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- inputText: ${output.e11Reply}
+# --- attach one image from the gallery ---
+- tapOn: "Add image"
+- extendedWaitUntil:
+    visible: "Select Image Source"
+    timeout: 15000
+- tapOn: "Choose from Gallery[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Photo taken on .*"
+    timeout: 20000
+- tapOn:
+    text: "Photo taken on .*"
+    index: 0
+# the picker's confirm button reads "Add" or "Done" by picker version
+- tapOn: "(Add|Done).*"
+- extendedWaitUntil:
+    visible: "Image 1 of 1.*"
+    timeout: 20000
+- takeScreenshot: build/maestro/e11_reply_strip
+# --- submit: the image uploads, the reply lands in the thread ---
+- tapOn: "Send comment[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "View [0-9]+ comments?[\\s\\S]*"
+    timeout: 30000
+- tapOn: "View [0-9]+ comments?[\\s\\S]*"
+- scrollUntilVisible:
+    element:
+      text: "[\\s\\S]*${output.e11Reply}[\\s\\S]*"
+    direction: DOWN
+    timeout: 30000
+# the server copy of the reply renders its image grid
+- scrollUntilVisible:
+    element:
+      text: "View image 1 of 1"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "[\\s\\S]*${output.e11Reply}[\\s\\S]*"
+- takeScreenshot: build/maestro/e11_reply_image_posted
+- back

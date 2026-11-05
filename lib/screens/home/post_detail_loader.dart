@@ -91,6 +91,9 @@ class _PostDetailLoaderState extends State<PostDetailLoader> {
   /// the result are offered only while this session stays signed in.
   Object? _loadedUnderSessionKey;
 
+  /// The gallery page [_handedOverPost] was showing where it was opened.
+  int _handedOverImageIndex = 0;
+
   /// Monotonic id so a stale in-flight fetch can't overwrite a newer one
   int _requestId = 0;
 
@@ -125,6 +128,7 @@ class _PostDetailLoaderState extends State<PostDetailLoader> {
     _error = null;
     _handedOverPost = loadedPost.post;
     _loadedUnderSessionKey = loadedPost.sessionStamp;
+    _handedOverImageIndex = loadedPost.initialImageIndex;
   }
 
   /// The shown post was removed: fetch it again so the server's answer,
@@ -408,6 +412,7 @@ class _PostDetailLoaderState extends State<PostDetailLoader> {
       return PostDetailScreen(
         post: handedOverPost,
         sessionStamp: _loadedUnderSessionKey,
+        initialImageIndex: _handedOverImageIndex,
         focusCommentUri: widget.focusCommentUri,
         onPostRemoved: _reloadAfterRemoval,
       );

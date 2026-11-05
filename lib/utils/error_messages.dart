@@ -5,7 +5,11 @@
 /// error handling across the app.
 library;
 
+import 'package:dio/dio.dart';
+
+import '../constants/image_upload_limits.dart';
 import '../services/api_exceptions.dart';
+import 'image_format.dart';
 
 /// Longest trimmed 4xx server message [getErrorMessage] shows to the user.
 const _maximumServerMessageLength = 200;
@@ -112,11 +116,27 @@ abstract final class ErrorMessage {
     fallback: 'Could not post comment. Please try again.',
   );
 
-  /// Error message for post creation
-  static String createPost(Object error) => getErrorMessage(
-    error,
-    fallback: 'Could not create post. Please try again.',
-  );
+  /// Error message for post creation, with a specific message for each
+  /// record error code the AppView returns for a post's content or embed.
+  static String createPost(Object error) =>
+      _messageForErrorCode(error, _createPostMessages) ??
+      getErrorMessage(
+        error,
+        fallback: 'Could not create post. Please try again.',
+      );
+
+  static const _createPostMessages = <String, String>{
+    'InvalidEmbed':
+        "The post's images or link could not be attached. "
+        'Remove them and try again.',
+    'TooManyImages':
+        'A post can have at most ${ImageUploadLimits.postImageMaxCount} '
+        'images.',
+    'InvalidImageFacet':
+        'An image placed in the text could not be used. '
+        'Remove it from the text and try again.',
+    'ContentEmpty': 'Add a title, text, link or image before posting.',
+  };
 
   /// Error message for post deletion
   static String deletePost(Object error) => getErrorMessage(
@@ -206,10 +226,21 @@ abstract final class ErrorMessage {
   );
 
   /// Error message for profile updates
-  static String updateProfile(Object error) => getErrorMessage(
-    error,
-    fallback: 'Could not update profile. Please try again.',
-  );
+  static String updateProfile(Object error) =>
+      _messageForErrorCode(error, _profileImageMessages) ??
+      getErrorMessage(
+        error,
+        fallback: 'Could not update profile. Please try again.',
+      );
+
+  /// Messages for the image error codes a profile update or avatar upload
+  /// returns.
+  static const _profileImageMessages = <String, String>{
+    'InvalidMimeType':
+        "This image format isn't supported. Choose a JPEG, PNG or GIF.",
+    'ImageDimensionsTooLarge': postImageTooManyPixelsMessage,
+    'InvalidImage': "This image couldn't be read. Choose a different image.",
+  };
 
   /// Error message for community list loading
   static String loadCommunities(Object error) => getErrorMessage(
@@ -224,10 +255,78 @@ abstract final class ErrorMessage {
   );
 
   /// Error message for avatar uploads
-  static String uploadAvatar(Object error) => getErrorMessage(
-    error,
-    fallback: 'Could not upload avatar. Please try again.',
-  );
+  static String uploadAvatar(Object error) =>
+      _messageForErrorCode(error, _profileImageMessages) ??
+      getErrorMessage(
+        error,
+        fallback: 'Could not upload avatar. Please try again.',
+      );
+
+  /// Error message for post image uploads, with a specific message for each
+  /// `social.coves.media.uploadImage` error code. A client-side send or
+  /// receive timeout says the upload took too long, not that there is no
+  /// connection: a slow upload on a working connection hits it.
+  static String uploadImage(Object error) {
+    if (error is NetworkException) {
+      final original = error.originalError;
+      if (original is DioException &&
+          (original.type == DioExceptionType.sendTimeout ||
+              original.type == DioExceptionType.receiveTimeout)) {
+        return _uploadTimeoutMessage;
+      }
+    }
+    return _messageForErrorCode(error, _uploadImageMessages) ??
+        getErrorMessage(
+          error,
+          fallback: 'Could not upload image. Please try again.',
+        );
+  }
+
+  static const _uploadTimeoutMessage =
+      'The upload took too long. Check your connection and try again.';
+  static const _uploadSignInAgainMessage = 'Sign in again to upload images.';
+
+  static const _uploadImageMessages = <String, String>{
+    'AuthenticationRequired': 'Sign in to upload images.',
+    'AuthRequired': 'Sign in to upload images.',
+    'InvalidRequest': 'The image upload was not valid. Please try again.',
+    'RequestTimeout': _uploadTimeoutMessage,
+    'Timeout': _uploadTimeoutMessage,
+    'MissingBlobScope': _uploadSignInAgainMessage,
+    'PermissionDenied': _uploadSignInAgainMessage,
+    'ImageTooLarge': postImageTooLargeMessage,
+    'PayloadTooLarge': postImageTooLargeMessage,
+    'UnsupportedImageFormat': unsupportedPostImageFormatMessage,
+    'ImageDimensionsTooLarge': postImageTooManyPixelsMessage,
+    'InvalidImage': unreadablePostImageMessage,
+    'UploadRateLimited':
+        "You've uploaded a lot of images. Try again in ten minutes.",
+    'PDSUploadFailed':
+        'Your account server could not store the image. Please try again.',
+    'RateLimitExceeded':
+        'Your account server is limiting uploads. Try again later.',
+    'SessionBusy':
+        'Your account is busy with another request. '
+        'Please try again in a moment.',
+    'ServiceUnavailable':
+        'Image uploads are unavailable right now. Please try again soon.',
+    'NoAuthorCredentials':
+        'Coves could not use your session to upload. '
+        'Sign out and sign in again, then retry.',
+    'RequestCanceled': 'The upload was canceled. Please try again.',
+  };
+
+  /// The entry of [messages] for [error]'s API error code, or null when
+  /// [error] carries no code in [messages].
+  static String? _messageForErrorCode(
+    Object error,
+    Map<String, String> messages,
+  ) {
+    if (error is! ApiException) {
+      return null;
+    }
+    return messages[error.errorCode];
+  }
 
   /// Error message for comment deletion
   static String deleteComment(Object error) => getErrorMessage(

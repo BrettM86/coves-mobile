@@ -6,10 +6,12 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../models/comment.dart';
 import '../models/comment_thread_tree.dart';
+import '../models/image_attachment.dart';
 import '../models/moderation.dart';
 import '../models/moderation_action.dart';
 import '../models/moderation_subject_state.dart';
 import '../models/post.dart';
+import '../models/post_embed_input.dart';
 import '../services/api_exceptions.dart';
 import '../services/comment_change_broadcast.dart';
 import '../services/comment_service.dart';
@@ -17,6 +19,7 @@ import '../services/coves_api_service.dart';
 import '../services/viewer_state_hydrator.dart';
 import '../utils/cursor_pagination_controller.dart';
 import '../utils/error_messages.dart';
+import '../utils/image_preparation.dart';
 import '../widgets/composer/composer_draft.dart';
 import 'auth_provider.dart';
 import 'vote_provider.dart';
@@ -381,11 +384,16 @@ class CommentsProvider with ChangeNotifier {
   /// Saved scroll offset. Passive state; updates do not notify listeners.
   double scrollPosition = 0;
 
-  // Draft reply text - stored per-parent-URI (null key = top-level reply to
-  // post)
+  // Draft replies - text and attached images, stored per-parent-URI (null
+  // key = top-level reply to post)
   // This allows users to have separate drafts for different comments within
-  // the same post
-  final Map<String?, ComposerDraft> _drafts = {};
+  // the same post. A draft is its text and formatting plus its images; it
+  // owns its attachments' files until they are taken.
+  final Map<
+    String?,
+    ({ComposerDraft composer, List<ImageAttachment> attachments})
+  >
+  _drafts = {};
 
   // Staleness tracking for background refresh
   DateTime? _lastRefreshTime;
@@ -468,12 +476,12 @@ class CommentsProvider with ChangeNotifier {
   /// Get draft text for a specific parent URI
   ///
   /// [parentUri] - URI of parent comment (null for top-level post reply)
-  /// Returns the draft, or null if no draft exists
-  ComposerDraft? getDraft({String? parentUri}) => _drafts[parentUri];
+  /// Returns the draft's text and formatting, or null if no draft exists
+  ComposerDraft? getDraft({String? parentUri}) => _drafts[parentUri]?.composer;
 
   /// Legacy getters for backward compatibility
   /// @deprecated Use getDraft(parentUri: ...) instead
-  String get draftText => _drafts.values.firstOrNull?.text ?? '';
+  String get draftText => _drafts.values.firstOrNull?.composer.text ?? '';
   String? get draftParentUri => _drafts.keys.firstOrNull;
 
   /// Check if cached data is stale and should be refreshed in background
@@ -484,29 +492,83 @@ class CommentsProvider with ChangeNotifier {
     return DateTime.now().difference(_lastRefreshTime!) > stalenessThreshold;
   }
 
-  /// Save a draft reply's text and formatting ranges
+  /// Save a draft reply's text, formatting ranges and attached images,
+  /// replacing the draft
   ///
   /// [draft] - The draft text and ranges; a draft whose text is blank is
   /// not stored and removes any stored draft
   /// [parentUri] - URI of parent comment (null for top-level post reply)
+  /// [attachments] - The draft's images; the draft owns their files
   ///
   /// Each parent URI gets its own draft, so switching between replies
-  /// preserves drafts for each context.
-  void saveDraft(ComposerDraft draft, {String? parentUri}) {
-    if (draft.text.trim().isEmpty) {
+  /// preserves drafts for each context. Owned files of the old draft's
+  /// attachments that are not in [attachments] are deleted. A disposed
+  /// provider keeps no draft and deletes the owned files of [attachments].
+  void saveDraft(
+    ComposerDraft draft, {
+    String? parentUri,
+    List<ImageAttachment> attachments = const [],
+  }) {
+    if (_isDisposed) {
+      _deleteOwnedFiles(attachments);
+      return;
+    }
+    final previous = _drafts[parentUri];
+    if (draft.text.trim().isEmpty && attachments.isEmpty) {
       // Remove empty drafts to avoid clutter
       _drafts.remove(parentUri);
     } else {
-      _drafts[parentUri] = draft;
+      _drafts[parentUri] = (composer: draft, attachments: List.of(attachments));
+    }
+    if (previous != null) {
+      _deleteOwnedFiles(
+        previous.attachments.where(
+          (old) => !attachments.any((kept) => identical(kept, old)),
+        ),
+      );
     }
     // No notifyListeners - this is passive state save
   }
 
-  /// Clear draft text for a specific parent (call after successful submission)
+  /// Clear the draft for a specific parent (call after successful
+  /// submission), deleting the owned files of its attachments
   ///
   /// [parentUri] - URI of parent comment (null for top-level post reply)
   void clearDraft({String? parentUri}) {
-    _drafts.remove(parentUri);
+    final removed = _drafts.remove(parentUri);
+    if (removed != null) {
+      _deleteOwnedFiles(removed.attachments);
+    }
+  }
+
+  /// Removes and returns the draft's attachments without deleting their
+  /// files; the caller owns them from then on. The draft's text stays.
+  List<ImageAttachment> takeDraftAttachments({String? parentUri}) {
+    final draft = _drafts[parentUri];
+    if (draft == null) {
+      return const [];
+    }
+    if (draft.composer.text.trim().isEmpty) {
+      _drafts.remove(parentUri);
+    } else {
+      _drafts[parentUri] = (composer: draft.composer, attachments: const []);
+    }
+    return draft.attachments;
+  }
+
+  /// Whether the draft for [parentUri] has non-blank text or any attachment.
+  bool hasDraft({String? parentUri}) {
+    final draft = _drafts[parentUri];
+    return draft != null &&
+        (draft.composer.text.trim().isNotEmpty || draft.attachments.isNotEmpty);
+  }
+
+  void _deleteOwnedFiles(Iterable<ImageAttachment> attachments) {
+    for (final attachment in attachments) {
+      if (attachment.ownsFile) {
+        deletePreparedImageFile(attachment.file);
+      }
+    }
   }
 
   /// Toggle collapsed state for a comment thread
@@ -1193,12 +1255,15 @@ class CommentsProvider with ChangeNotifier {
     required String content,
     List<RichTextFacet>? contentFacets,
     ThreadViewComment? parentComment,
+    ImagesEmbedInput? embed,
   }) async {
-    // Validate content
+    // Validate content; an image-only reply has no text and no facets
     final trimmedContent = content.trim();
-    if (trimmedContent.isEmpty) {
+    final hasImages = embed != null && embed.images.isNotEmpty;
+    if (trimmedContent.isEmpty && !hasImages) {
       throw ValidationException('Comment cannot be empty');
     }
+    final facets = trimmedContent.isEmpty ? null : contentFacets;
 
     // Use characters.length for proper Unicode/emoji counting
     final charCount = trimmedContent.characters.length;
@@ -1245,7 +1310,8 @@ class CommentsProvider with ChangeNotifier {
         parentUri: parentUri,
         parentCid: parentCid,
         content: trimmedContent,
-        contentFacets: contentFacets,
+        contentFacets: facets,
+        embed: embed,
       );
 
       if (kDebugMode) {
@@ -1478,6 +1544,11 @@ class CommentsProvider with ChangeNotifier {
   void dispose() {
     _isDisposed = true;
     _commentChangeBroadcast?.removeCommentChangeListener(_onCommentChanged);
+    // The drafts share the provider's lifetime
+    for (final draft in _drafts.values) {
+      _deleteOwnedFiles(draft.attachments);
+    }
+    _drafts.clear();
     // Stop time updates and cancel timer (also sets value to null)
     stopTimeUpdates();
     _controller.dispose();

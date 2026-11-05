@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
 import '../../models/comment.dart';
 import '../../models/post.dart';
+import '../../models/post_embed_input.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/comments_provider.dart';
 import '../../services/comments_provider_cache.dart';
@@ -490,7 +491,8 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
       MaterialPageRoute<void>(
         builder: (navigatorContext) => ReplyScreen(
           comment: comment,
-          onSubmit: (content, facets) => _submitReply(content, facets, comment),
+          onSubmit: (content, facets, embed) =>
+              _submitReply(content, facets, embed, comment),
           commentsProvider: context.read<CommentsProvider>(),
         ),
       ),
@@ -503,6 +505,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
   Future<void> _submitReply(
     String content,
     List<RichTextFacet> facets,
+    ImagesEmbedInput? embed,
     ThreadViewComment parent,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -511,6 +514,7 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
         content: content,
         contentFacets: facets,
         parentComment: parent,
+        embed: embed,
       );
     } on Exception catch (e) {
       if (messenger.mounted) {
@@ -543,7 +547,8 @@ class _FocusedThreadBodyState extends State<_FocusedThreadBody> {
       MaterialPageRoute<void>(
         builder: (navigatorContext) => ReplyScreen(
           editing: comment,
-          onSubmit: (content, facets) => _submitEdit(content, facets, comment),
+          onSubmit: (content, facets, _) =>
+              _submitEdit(content, facets, comment),
           commentsProvider: widget.commentsProvider,
         ),
       ),

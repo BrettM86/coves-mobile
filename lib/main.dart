@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
@@ -45,11 +46,14 @@ import 'services/streamable_service.dart';
 import 'services/viewer_state_hydrator.dart';
 import 'services/vote_service.dart';
 import 'utils/app_route_observer.dart';
+import 'utils/image_preparation.dart';
 import 'utils/post_detail_route.dart';
 import 'widgets/icons/lucide_paths.dart';
 import 'widgets/loading_error_states.dart';
 
 Future<void> main() async {
+  // Prepared image files modified before this are from an earlier process.
+  final processStart = DateTime.now();
   await SentryFlutter.init(
     (options) {
       options
@@ -64,6 +68,19 @@ Future<void> main() async {
     },
     appRunner: () async {
       WidgetsFlutterBinding.ensureInitialized();
+
+      // Deletes converted images a killed earlier process left behind.
+      unawaited(() async {
+        try {
+          await sweepStalePreparedImageFiles(
+            directory: await getTemporaryDirectory(),
+            processStart: processStart,
+          );
+        } on Exception {
+          // No temp directory (MissingPlatformDirectoryException,
+          // PlatformException): nothing to sweep.
+        }
+      }());
 
       // The design-system fonts are bundled, so their OFL text ships too.
       AppTypography.registerLicenses();

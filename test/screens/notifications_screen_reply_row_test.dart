@@ -9,9 +9,10 @@ const _rootUri = 'at://did:plc:me/social.coves.community.postv2/3kpost';
 const _parentUri = 'at://did:plc:me/social.coves.community.comment/3kparent';
 const _replyUri = 'at://did:plc:writer/social.coves.community.comment/3kreply';
 const _title = 'A post about keyboards';
+const _yourComment = 'Which switches do you like?';
 
-/// A comment reply to the viewer's comment (no preview, so the row shows
-/// the root post card) on a live root post with a known author.
+/// A comment reply to the viewer's live comment, which the row quotes in
+/// place of the post card, on a live root post with a known author.
 Map<String, dynamic> _commentReplyRow() => {
   ...replyNotificationWire(
     reason: 'commentReply',
@@ -35,11 +36,11 @@ Map<String, dynamic> _commentReplyRow() => {
       'displayName': 'Writer',
     },
   ),
-  'subject': {'uri': _parentUri, 'cid': 'bafyparent'},
+  'subject': {'uri': _parentUri, 'cid': 'bafyparent', 'preview': _yourComment},
 };
 
 void main() {
-  testWidgets('B7 a comment reply row shows the post card, offers no Reply '
+  testWidgets('B7 a comment reply row quotes your comment, offers no Reply '
       'button, and opens the thread', (tester) async {
     final harness = NotificationsScreenHarness();
     try {
@@ -55,11 +56,7 @@ void main() {
       final card = find.byType(NotificationReplyCard);
       expect(card, findsOneWidget);
       expect(
-        find.descendant(of: card, matching: find.text(_title)),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: card, matching: find.text('@poster.test')),
+        find.descendant(of: card, matching: find.text(_yourComment)),
         findsOneWidget,
       );
       expect(
@@ -67,7 +64,7 @@ void main() {
         findsNothing,
       );
 
-      await tester.tap(find.text(_title));
+      await tester.tap(find.text(_yourComment));
       await tester.pumpAndSettle();
       expect(
         harness.router.state.uri.toString(),

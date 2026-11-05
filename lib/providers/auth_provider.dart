@@ -5,6 +5,25 @@ import 'package:flutter/foundation.dart';
 import '../models/coves_session.dart';
 import '../services/coves_auth_service.dart';
 
+/// Outcome of [AuthProvider.reauthenticate].
+///
+/// Only [success] replaces the session; every other outcome leaves the
+/// current session as it was.
+enum ReauthenticationResult {
+  /// Signed in again as the current account; the new session is stored.
+  success,
+
+  /// The user backed out of the sign-in flow.
+  cancelled,
+
+  /// The sign-in flow or storing its session failed.
+  failed,
+
+  /// The sign-in completed for an account other than the current one; its
+  /// session was discarded.
+  differentAccount,
+}
+
 /// Authentication Provider
 ///
 /// Manages authentication state using the Coves backend OAuth flow.
@@ -256,6 +275,57 @@ class AuthProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Signs in again as the current account, for a session that lacks a
+  /// permission it needs (such as uploading images).
+  ///
+  /// Runs the sign-in flow for the current handle, or the DID when there is
+  /// none. The new session replaces the current one, in storage too, only
+  /// when it is for the same DID. Any other outcome keeps the current
+  /// session and sets no [error], and [isAuthenticated] never changes.
+  Future<ReauthenticationResult> reauthenticate() async {
+    final current = _session;
+    if (current == null) {
+      return ReauthenticationResult.failed;
+    }
+
+    final CovesSession session;
+    try {
+      session = await _authService.authenticate(current.handle ?? current.did);
+    } on SignInCancelledException {
+      return ReauthenticationResult.cancelled;
+    } on Object catch (e) {
+      if (kDebugMode) {
+        print('Reauthentication failed (${e.runtimeType})');
+      }
+      return ReauthenticationResult.failed;
+    }
+
+    // Signed out, expired, or replaced by another account during the flow. A
+    // token refresh of the same account keeps the DID, so it does not count.
+    if (_session?.did != current.did) {
+      return ReauthenticationResult.failed;
+    }
+    if (session.did != current.did) {
+      return ReauthenticationResult.differentAccount;
+    }
+
+    // The service commits only while its session is still this account, so
+    // once this returns the new session is the current one there and in
+    // storage, even if a refresh landed during the write.
+    try {
+      await _authService.replaceSession(session);
+    } on Object catch (e) {
+      if (kDebugMode) {
+        print('Storing the reauthenticated session failed (${e.runtimeType})');
+      }
+      return ReauthenticationResult.failed;
+    }
+
+    _session = session;
+    notifyListeners();
+    return ReauthenticationResult.success;
   }
 
   /// Sign out and clear session

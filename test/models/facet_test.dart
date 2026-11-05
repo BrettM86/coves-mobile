@@ -341,6 +341,58 @@ void main() {
       expect((withoutLang as CodeBlockFacetFeature).language, isNull);
     });
 
+    test('re-parsed identical #image facets compare equal', () {
+      Map<String, dynamic> json() => {
+        'index': {'byteStart': 0, 'byteEnd': 7},
+        'features': [
+          {r'$type': 'social.coves.richtext.facet#image', 'index': 2},
+        ],
+      };
+
+      final a = RichTextFacet.fromJson(json());
+      final b = RichTextFacet.fromJson(json());
+      expect(a, b);
+      expect(a.hashCode, b.hashCode);
+      expect(
+        const ImageFacetFeature(index: 1),
+        isNot(const ImageFacetFeature(index: 2)),
+      );
+    });
+
+    test('parses #image with index 0-7; any other index degrades', () {
+      for (final index in [0, 7]) {
+        final feature = FacetFeature.fromJson({
+          r'$type': 'social.coves.richtext.facet#image',
+          'index': index,
+        });
+        expect(
+          feature,
+          isA<ImageFacetFeature>().having((f) => f.index, 'index', index),
+          reason: 'index $index',
+        );
+      }
+
+      final rejected = <String, Map<String, dynamic>>{
+        'index 8': {r'$type': 'social.coves.richtext.facet#image', 'index': 8},
+        'index -1': {
+          r'$type': 'social.coves.richtext.facet#image',
+          'index': -1,
+        },
+        'string index': {
+          r'$type': 'social.coves.richtext.facet#image',
+          'index': '0',
+        },
+        'missing index': {r'$type': 'social.coves.richtext.facet#image'},
+      };
+      for (final MapEntry(key: name, value: json) in rejected.entries) {
+        expect(
+          FacetFeature.fromJson(json),
+          isA<UnknownFacetFeature>(),
+          reason: name,
+        );
+      }
+    });
+
     test('new features round-trip through JSON', () {
       final features = <FacetFeature>[
         const MentionFacetFeature(did: 'did:plc:xyz'),

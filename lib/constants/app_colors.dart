@@ -105,6 +105,10 @@ class AppColors {
   /// Loading indicator
   static const loadingIndicator = Color(0xFF484F58);
 
+  /// Gallery page-dot pill: a translucent dark grey that reads against both
+  /// the page background and an image.
+  static const mediaPill = Color(0xE6262626);
+
   /// Community name - teal accent (matches brand)
   static const communityName = teal;
 

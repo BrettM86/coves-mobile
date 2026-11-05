@@ -65,8 +65,10 @@ void main() {
       expect(field.enableSuggestions, isTrue);
     });
 
-    toolbarTest('unfocused: the formatting toolbar hides; @ and image still '
-        'show their banners and Send still submits', (tester) async {
+    toolbarTest('unfocused: the formatting toolbar hides; @ shows its banner, '
+        'image opens the source picker, and Send still submits', (
+      tester,
+    ) async {
       final submissions = await openReply(tester);
       await tester.enterText(find.byType(EditableText), 'Sent unfocused');
       await tester.pump();
@@ -89,11 +91,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(MaterialBanner), findsNothing);
 
+      // Add image asks where the images come from
       await tester.tap(button('Add image'));
-      await tester.pump();
-      expect(find.byType(MaterialBanner), findsOneWidget);
-      await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
+      expect(find.text('Select Image Source'), findsOneWidget);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      expect(find.text('Select Image Source'), findsNothing);
 
       await tester.tap(button('Send comment'));
       await tester.pumpAndSettle();

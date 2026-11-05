@@ -464,4 +464,86 @@ void main() {
       });
     }
   });
+
+  // Chunk 08 B7: a live comment with images and no text reads "Image".
+  // Fields the backend omits are left out of the wire map, not sent as "".
+  group('NotificationUpvoteRow image-only comment previews', () {
+    final rows =
+        <
+          ({
+            String name,
+            Map<String, dynamic> subject,
+            String? shownText,
+            bool showsImage,
+            bool showsPostCard,
+          })
+        >[
+          (
+            name: '(d) comment upvote whose live subject has no preview',
+            subject: commentSubject,
+            shownText: null,
+            showsImage: true,
+            showsPostCard: false,
+          ),
+          (
+            name: '(e) comment upvote whose deleted subject has no preview',
+            subject: {...commentSubject, 'status': 'deleted'},
+            shownText: RemovalCopy.deletedByUser,
+            showsImage: false,
+            showsPostCard: false,
+          ),
+          (
+            name: '(f) post upvote whose subject has no preview',
+            subject: postSubject,
+            shownText: _title,
+            showsImage: false,
+            showsPostCard: true,
+          ),
+          (
+            name: '(g) comment upvote whose subject has a preview',
+            subject: {...commentSubject, 'preview': _commentPreview},
+            shownText: _commentPreview,
+            showsImage: false,
+            showsPostCard: false,
+          ),
+        ];
+
+    for (final row in rows) {
+      testWidgets('B7 ${row.name}', (tester) async {
+        final semantics = tester.ensureSemantics();
+        try {
+          await _pumpRow(
+            tester,
+            upvoteWire(
+              upvoters: [aliceUpvoter],
+              subject: row.subject,
+              rootPost: _plainRoot,
+            ),
+          );
+
+          expect(
+            _rich('Image'),
+            row.showsImage ? findsOneWidget : findsNothing,
+          );
+          expect(
+            find.byType(CompactPostCard),
+            row.showsPostCard ? findsOneWidget : findsNothing,
+          );
+          if (row.shownText case final text?) {
+            expect(_rich(text), findsOneWidget, reason: text);
+          }
+          // A post upvote's announced label must not borrow the comment
+          // "Image" fallback, even though the post card hides it visually.
+          if (row.showsPostCard) {
+            final label = tester
+                .getSemantics(find.byType(NotificationUpvoteRow))
+                .label;
+            expect(label, isNot(contains('Image')), reason: label);
+          }
+        } finally {
+          semantics.dispose();
+        }
+      });
+    }
+  });
 }

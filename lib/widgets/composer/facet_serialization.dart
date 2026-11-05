@@ -20,14 +20,12 @@ class FormattingBudget {
     List<InlineRange> inlineRanges = const [],
     List<BlockRange> blockRanges = const [],
     List<FeatureRange> featureRanges = const [],
-  }) : used = _facetCount(
-         _collectFormatting(
-           text,
-           inlineRanges: inlineRanges,
-           blockRanges: blockRanges,
-           featureRanges: featureRanges,
-         ).featuresByRange,
-       );
+  }) : used = _collectFormatting(
+         text,
+         inlineRanges: inlineRanges,
+         blockRanges: blockRanges,
+         featureRanges: featureRanges,
+       ).facetCount;
 
   /// The serialized facet count, grouped by range and split at 20 features.
   final int used;
@@ -64,8 +62,9 @@ class SerializedFormatting {
   /// identical range and sorted by byte start.
   final List<RichTextFacet> facets;
 
-  /// Inline code and code block ranges in UTF-16 offsets into [content],
-  /// sorted by start, for excluding them from link and mention detection.
+  /// Inline code, code block and image covered-text ranges in UTF-16
+  /// offsets into [content], sorted by start, for excluding them from link
+  /// and mention detection.
   final List<TextRange> codeRanges;
 }
 
@@ -92,13 +91,14 @@ SerializedFormatting serializeFormatting(
   List<BlockRange> blockRanges = const [],
   List<FeatureRange> featureRanges = const [],
 }) {
-  final (:content, :featuresByRange, :codeRanges) = _collectFormatting(
+  final collected = _collectFormatting(
     text,
     inlineRanges: inlineRanges,
     blockRanges: blockRanges,
     featureRanges: featureRanges,
   );
-  final facetCount = _facetCount(featuresByRange);
+  final (:content, :featuresByRange, :imagePlacements, :codeRanges) = collected;
+  final facetCount = collected.facetCount;
   if (facetCount > maxFacetsPerRecord) {
     throw FacetLimitExceededException(facetCount: facetCount);
   }
@@ -117,6 +117,16 @@ SerializedFormatting serializeFormatting(
           ),
           features: chunk,
         ),
+    // A reader takes an image placement only from a facet carrying it
+    // alone, so it never shares a facet with formatting over its range
+    for (final (start, end, feature) in imagePlacements)
+      RichTextFacet(
+        index: ByteSlice(
+          byteStart: offsets.byteOffsetOf(start),
+          byteEnd: offsets.byteOffsetOf(end),
+        ),
+        features: [feature],
+      ),
   ];
   final order = List.generate(unsorted.length, (index) => index)
     ..sort((a, b) {
@@ -150,6 +160,7 @@ SerializedFormatting serializeFormatting(
 ({
   String content,
   Map<(int, int), List<FacetFeature>> featuresByRange,
+  List<(int, int, ImageFacetFeature)> imagePlacements,
   List<TextRange> codeRanges,
 })
 _collectFormatting(
@@ -162,6 +173,7 @@ _collectFormatting(
   final leadingTrim = text.length - text.trimLeft().length;
 
   final featuresByRange = <(int, int), List<FacetFeature>>{};
+  final imagePlacements = <(int, int, ImageFacetFeature)>[];
   final codeRanges = <TextRange>[];
 
   void add(int start, int end, FacetFeature feature, {required bool isCode}) {
@@ -227,12 +239,22 @@ _collectFormatting(
         splitsSurrogatePair(end)) {
       continue;
     }
+    if (range.feature case final ImageFacetFeature image) {
+      if (!imagePlacements.contains((start, end, image))) {
+        imagePlacements.add((start, end, image));
+        // Covered text stands in for the image; links and mentions are not
+        // detected in it
+        codeRanges.add(TextRange(start: start, end: end));
+      }
+      continue;
+    }
     add(start, end, range.feature, isCode: false);
   }
 
   return (
     content: content,
     featuresByRange: featuresByRange,
+    imagePlacements: imagePlacements,
     codeRanges: codeRanges,
   );
 }
@@ -259,8 +281,20 @@ List<FacetFeature> _inUnionOrder(List<FacetFeature> features) {
   return [for (final index in order) features[index]];
 }
 
-/// How many facets [featuresByRange] serializes to: one per range, plus one
-/// for each further run of [_maxFeaturesPerFacet] features on it.
+/// How many facets the collected formatting serializes to: one per range,
+/// plus one for each further run of [_maxFeaturesPerFacet] features on it,
+/// plus one per image placement.
+extension
+    on
+        ({
+          String content,
+          Map<(int, int), List<FacetFeature>> featuresByRange,
+          List<(int, int, ImageFacetFeature)> imagePlacements,
+          List<TextRange> codeRanges,
+        }) {
+  int get facetCount => _facetCount(featuresByRange) + imagePlacements.length;
+}
+
 int _facetCount(Map<(int, int), List<FacetFeature>> featuresByRange) {
   var count = 0;
   for (final features in featuresByRange.values) {
@@ -292,5 +326,6 @@ int _unionOrder(FacetFeature feature) => switch (feature) {
   HeadingFacetFeature() => 7,
   CodeFacetFeature() => 8,
   CodeBlockFacetFeature() => 9,
-  UnknownFacetFeature() => 10,
+  ImageFacetFeature() => 10,
+  UnknownFacetFeature() => 11,
 };

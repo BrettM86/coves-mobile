@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
@@ -14,13 +16,18 @@ import '../services/media_saver.dart';
 import '../utils/app_route_observer.dart';
 import 'icons/lucide_icon_painter.dart';
 import 'icons/lucide_paths.dart';
+import 'media/gif_player.dart';
+import 'media/image_error.dart';
+import 'media/media_page_dots.dart';
+import 'media/play_chip.dart';
 
 /// Fullscreen image viewer with pinch and double-tap zoom.
 ///
-/// Multi-image galleries page horizontally and dismiss with a vertical drag.
-/// A single image follows free-direction drags and dismisses based on vertical
-/// distance. A single tap toggles the controls and the status bar; zooming in
-/// hides them. With a screen reader on, the controls always stay shown.
+/// A gallery pages on a swipe within [_pagingAngle] of horizontal. Any
+/// steeper drag, like any drag on a single image, follows the finger freely
+/// and dismisses based on vertical distance. A single tap toggles the
+/// controls and the status bar; zooming in hides them. With a screen reader
+/// on, the controls always stay shown.
 class ImageViewer extends StatefulWidget {
   const ImageViewer({required this.images, this.initialIndex = 0, super.key})
     : assert(images.length > 0, 'viewer needs at least one image');
@@ -143,9 +150,17 @@ class _ImageViewerState extends State<ImageViewer>
   bool _contactSequenceCanceled = false;
   Offset? _doubleTapPosition;
 
+  // The gallery swipe in progress, driven from [_PagingDragRecognizer], and
+  // the hold its touch put on a settling page.
+  Drag? _pageDrag;
+  ScrollHoldController? _pageHold;
+
   // Set synchronously on tap so a second tap in the same frame, before the
   // button rebuilds, still sees the save in flight.
   bool _saving = false;
+
+  // Whether the current image's alt text panel is open.
+  bool _altTextOpen = false;
 
   @override
   void initState() {
@@ -175,7 +190,11 @@ class _ImageViewerState extends State<ImageViewer>
       _paddingWhenShown = null;
     }
     _screenSize = screenSize;
-    _accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
+    final accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
+    if (accessibleNavigation && !_accessibleNavigation) {
+      _releasePageDrag();
+    }
+    _accessibleNavigation = accessibleNavigation;
     if (_accessibleNavigation) {
       _controlsVisible = true;
     }
@@ -199,6 +218,7 @@ class _ImageViewerState extends State<ImageViewer>
     _transform
       ..removeListener(_onTransformChanged)
       ..dispose();
+    _releasePageDrag();
     _pageController?.dispose();
     super.dispose();
   }
@@ -296,10 +316,20 @@ class _ImageViewerState extends State<ImageViewer>
     );
   }
 
+  /// Lets go of a gallery swipe whose recognizer is about to be removed:
+  /// disposing a recognizer reports neither end nor cancel.
+  void _releasePageDrag() {
+    _pageHold?.cancel();
+    _pageDrag?.cancel();
+  }
+
   void _onTransformChanged() {
     final zoomed = _transform.value.getMaxScaleOnAxis() > 1.01;
     if (zoomed == _zoomed) {
       return;
+    }
+    if (zoomed) {
+      _releasePageDrag();
     }
     if (!_systemUiReleased) {
       SystemChrome.setSystemUIOverlayStyle(
@@ -371,9 +401,7 @@ class _ImageViewerState extends State<ImageViewer>
 
     setState(() {
       _isDragging = true;
-      _dragOffset += widget.images.length == 1
-          ? details.focalPointDelta
-          : Offset(0, details.focalPointDelta.dy);
+      _dragOffset += details.focalPointDelta;
     });
   }
 
@@ -482,27 +510,79 @@ class _ImageViewerState extends State<ImageViewer>
   Widget _buildPage(BuildContext context, int index) {
     final image = widget.images[index];
     final alt = image.alt;
+    final localFile = image.localFile;
+    final cacheManager = ImageCacheScope.of(context);
 
-    Widget rendered = CachedNetworkImage(
-      imageUrl: image.fullsize,
-      fit: BoxFit.contain,
-      fadeInDuration: Duration.zero,
-      fadeOutDuration: Duration.zero,
-      // Show the thumb while the fullsize downloads. It is almost always
-      // already in the cache from the feed or the post body, so the viewer
-      // opens on the picture instead of on a black screen.
-      placeholder: (context, url) => CachedNetworkImage(
-        imageUrl: image.thumb,
-        fit: BoxFit.contain,
-        fadeInDuration: Duration.zero,
-        fadeOutDuration: Duration.zero,
-        errorWidget: (context, url, error) => const SizedBox.shrink(),
-      ),
-      errorWidget: (context, url, error) =>
-          const Icon(Icons.broken_image, color: AppColors.textMuted, size: 48),
-    );
+    var rendered = image.isGif
+        ? SizedBox.expand(
+            // Its still is the thumb (a local GIF's first frame); fullsize
+            // is only fetched to play it. It labels itself with the alt.
+            child: GifPlayer(
+              image: image,
+              fit: BoxFit.contain,
+              playChipStyle: PlayChipStyle.detail,
+              active: widget.images.length == 1 || index == _index,
+              still: localFile != null
+                  ? const SizedBox.shrink()
+                  : CachedNetworkImage(
+                      cacheManager: cacheManager,
+                      imageUrl: image.thumb,
+                      fit: BoxFit.contain,
+                      fadeInDuration: Duration.zero,
+                      fadeOutDuration: Duration.zero,
+                      errorWidget: (context, url, error) => ImageLoadError(
+                        url: url,
+                        error: error,
+                        cacheManager: cacheManager,
+                        fallback: const Icon(
+                          Icons.broken_image,
+                          color: AppColors.textMuted,
+                          size: 48,
+                        ),
+                      ),
+                    ),
+            ),
+          )
+        : localFile != null
+        ? Image.file(
+            localFile,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) => const Icon(
+              Icons.broken_image,
+              color: AppColors.textMuted,
+              size: 48,
+            ),
+          )
+        : CachedNetworkImage(
+            cacheManager: cacheManager,
+            imageUrl: image.fullsize,
+            fit: BoxFit.contain,
+            fadeInDuration: Duration.zero,
+            fadeOutDuration: Duration.zero,
+            // Show the thumb while the fullsize downloads. It is almost
+            // always already in the cache from the feed or the post body, so
+            // the viewer opens on the picture instead of on a black screen.
+            placeholder: (context, url) => CachedNetworkImage(
+              cacheManager: cacheManager,
+              imageUrl: image.thumb,
+              fit: BoxFit.contain,
+              fadeInDuration: Duration.zero,
+              fadeOutDuration: Duration.zero,
+              errorWidget: (context, url, error) => const SizedBox.shrink(),
+            ),
+            errorWidget: (context, url, error) => ImageLoadError(
+              url: url,
+              error: error,
+              cacheManager: cacheManager,
+              fallback: const Icon(
+                Icons.broken_image,
+                color: AppColors.textMuted,
+                size: 48,
+              ),
+            ),
+          );
 
-    if (alt != null && alt.isNotEmpty) {
+    if (!image.isGif && alt != null && alt.isNotEmpty) {
       rendered = Semantics(image: true, label: alt, child: rendered);
     }
 
@@ -548,19 +628,34 @@ class _ImageViewerState extends State<ImageViewer>
     // Fade the backdrop as the image is dragged toward release.
     final opacity = (1.0 - (_dragOffset.dy.abs() / 300)).clamp(0.0, 1.0);
     final content = multi
-        ? PageView.builder(
-            controller: _pageController,
-            // A zoomed page owns horizontal drags; freeze paging so a
-            // pan at the picture's edge doesn't yank to the next image.
-            physics: _zoomed
-                ? const NeverScrollableScrollPhysics()
-                : const PageScrollPhysics(),
-            itemCount: widget.images.length,
-            onPageChanged: (index) {
-              setState(() => _index = index);
-              _transform.value = Matrix4.identity();
-            },
-            itemBuilder: _buildPage,
+        ? RawGestureDetector(
+            // A zoomed page owns horizontal drags; no paging recognizer then,
+            // so a pan at the picture's edge doesn't yank to the next image.
+            // With a screen reader on, the PageView pages itself so its
+            // scroll actions stay available.
+            gestures: _zoomed || _accessibleNavigation
+                ? const {}
+                : _pagingGestures(),
+            child: PageView.builder(
+              controller: _pageController,
+              // Otherwise paging is driven by the recognizer above, which
+              // leaves steeper drags to the dismiss gesture; the physics only
+              // snap to a page.
+              physics: _zoomed
+                  ? const NeverScrollableScrollPhysics()
+                  : _accessibleNavigation
+                  ? const PageScrollPhysics()
+                  : const _DrivenPageScrollPhysics(),
+              itemCount: widget.images.length,
+              onPageChanged: (index) {
+                setState(() {
+                  _index = index;
+                  _altTextOpen = false;
+                });
+                _transform.value = Matrix4.identity();
+              },
+              itemBuilder: _buildPage,
+            ),
           )
         : _buildPage(context, 0);
 
@@ -600,13 +695,86 @@ class _ImageViewerState extends State<ImageViewer>
     );
   }
 
+  Map<Type, GestureRecognizerFactory> _pagingGestures() {
+    // Set up as Scrollable sets up its own drag recognizer, so flings and
+    // devices behave as a stock PageView's do on each platform.
+    final behavior = ScrollConfiguration.of(context);
+    final physics = const _DrivenPageScrollPhysics().applyTo(
+      behavior.getScrollPhysics(context),
+    );
+    return {
+      _PagingDragRecognizer:
+          GestureRecognizerFactoryWithHandlers<_PagingDragRecognizer>(
+            () => _PagingDragRecognizer(
+              debugOwner: this,
+              supportedDevices: behavior.dragDevices,
+            ),
+            (recognizer) {
+              recognizer
+                ..minFlingDistance = physics.minFlingDistance
+                ..minFlingVelocity = physics.minFlingVelocity
+                ..maxFlingVelocity = physics.maxFlingVelocity
+                ..velocityTrackerBuilder = behavior.velocityTrackerBuilder(
+                  context,
+                )
+                ..multitouchDragStrategy = behavior.getMultitouchDragStrategy(
+                  context,
+                )
+                ..supportedDevices = behavior.dragDevices
+                // The device's touch slop, which the dismiss drag doubles for
+                // its own: without it paging waits for the default 18px and
+                // the dismiss drag claims every swipe first on a real phone.
+                ..gestureSettings = MediaQuery.maybeGestureSettingsOf(context)
+                ..onDown = (details) {
+                  // Like Scrollable: a touch stops a page still settling.
+                  _pageHold = _pageController!.position.hold(
+                    () => _pageHold = null,
+                  );
+                }
+                ..onStart = (details) {
+                  _pageDrag = _pageController!.position.drag(
+                    details,
+                    () => _pageDrag = null,
+                  );
+                }
+                ..onUpdate = (details) {
+                  _pageDrag?.update(details);
+                }
+                ..onEnd = (details) {
+                  _pageDrag?.end(details);
+                }
+                ..onCancel = () {
+                  _pageHold?.cancel();
+                  _pageDrag?.cancel();
+                };
+            },
+          ),
+    };
+  }
+
   Widget _buildControls(BuildContext context, bool multi) {
+    final alt = widget.images[_index].alt;
     // The controls sit in the image's held inset, so the status bar going
     // away doesn't move them on top of their slide.
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(padding: _imageInset),
       child: Stack(
         children: [
+          if (alt != null && alt.isNotEmpty)
+            _slideToEdge(
+              direction: 1,
+              child: SafeArea(
+                child: Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Padding(
+                    // Clear of the page dots, which sit centred at the same
+                    // height.
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: _buildAltText(context, alt),
+                  ),
+                ),
+              ),
+            ),
           if (multi)
             _slideToEdge(
               direction: 1,
@@ -615,23 +783,12 @@ class _ImageViewerState extends State<ImageViewer>
                   alignment: Alignment.bottomCenter,
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: 16),
-                    child: Container(
+                    // The dots draw their own pill, so no backdrop here.
+                    child: KeyedSubtree(
                       key: const Key('image-viewer-page-indicator'),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _controlBackdropColor,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${_index + 1}/${widget.images.length}',
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      child: MediaPageDots(
+                        count: widget.images.length,
+                        index: _index,
                       ),
                     ),
                   ),
@@ -687,6 +844,75 @@ class _ImageViewerState extends State<ImageViewer>
     );
   }
 
+  /// The ALT badge, with the full alt text in a scrollable panel above it
+  /// while open.
+  Widget _buildAltText(BuildContext context, String alt) {
+    void toggle() => setState(() => _altTextOpen = !_altTextOpen);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_altTextOpen)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: ConstrainedBox(
+              key: const Key('image-viewer-alt-text'),
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.4,
+              ),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    alt,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        Semantics(
+          key: const Key('image-viewer-alt-badge'),
+          container: true,
+          button: true,
+          expanded: _altTextOpen,
+          label: 'Show alt text',
+          onTap: toggle,
+          excludeSemantics: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: toggle,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4.5),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'ALT',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   /// Moves [child] up to [_controlsHiddenOffset] toward the bottom edge
   /// ([direction] 1) or the top edge (-1) as the controls hide.
   Widget _slideToEdge({required double direction, required Widget child}) {
@@ -702,4 +928,94 @@ class _ImageViewerState extends State<ImageViewer>
       child: child,
     );
   }
+}
+
+/// How far from horizontal, in radians, a gallery swipe may start and still
+/// page (about 30°). Steeper drags go to the dismiss gesture.
+const double _pagingAngle = 0.52;
+
+/// A horizontal drag that only claims gestures starting within
+/// [_pagingAngle] of horizontal, so diagonal drags reach the dismiss gesture.
+class _PagingDragRecognizer extends HorizontalDragGestureRecognizer {
+  _PagingDragRecognizer({super.debugOwner, super.supportedDevices});
+
+  static final double _tanPagingAngle = math.tan(_pagingAngle);
+
+  /// Each pointer's travel since it went down, kept only until the drag is
+  /// accepted: once paging starts, the swipe may bend any way it likes.
+  final Map<int, Offset> _travel = {};
+
+  bool _isSteep(Offset travel) =>
+      travel.dy.abs() > travel.dx.abs() * _tanPagingAngle;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    _travel[event.pointer] = Offset.zero;
+    super.addAllowedPointer(event);
+  }
+
+  @override
+  bool hasSufficientGlobalDistanceToAccept(
+    PointerDeviceKind pointerDeviceKind,
+    double? deviceTouchSlop,
+  ) {
+    if (!super.hasSufficientGlobalDistanceToAccept(
+      pointerDeviceKind,
+      deviceTouchSlop,
+    )) {
+      return false;
+    }
+    return !_isSteep(_travel.values.fold(Offset.zero, (sum, t) => sum + t));
+  }
+
+  @override
+  void rejectGesture(int pointer) {
+    // A finger lost to another gesture no longer counts toward the angle.
+    _travel.remove(pointer);
+    super.rejectGesture(pointer);
+  }
+
+  @override
+  void acceptGesture(int pointer) {
+    _travel.clear();
+    super.acceptGesture(pointer);
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    final travelSoFar = _travel[event.pointer];
+    if (event is PointerMoveEvent && travelSoFar != null) {
+      final travel = travelSoFar + event.delta;
+      _travel[event.pointer] = travel;
+      // Too steep before paging could start: leave it to the dismiss drag.
+      // Rejecting goes through the arena, whose rejectGesture gives the
+      // pointer up with the base class's own bookkeeping.
+      if (_isSteep(travel) &&
+          travel.distance > computeHitSlop(event.kind, gestureSettings)) {
+        _travel.remove(event.pointer);
+        resolvePointer(event.pointer, GestureDisposition.rejected);
+        return;
+      }
+    }
+    super.handleEvent(event);
+  }
+
+  @override
+  void didStopTrackingLastPointer(int pointer) {
+    _travel.clear();
+    super.didStopTrackingLastPointer(pointer);
+  }
+}
+
+/// Page snapping without the PageView's own drag recognizer, which
+/// [_PagingDragRecognizer] replaces.
+class _DrivenPageScrollPhysics extends PageScrollPhysics {
+  const _DrivenPageScrollPhysics({super.parent});
+
+  @override
+  _DrivenPageScrollPhysics applyTo(ScrollPhysics? ancestor) =>
+      _DrivenPageScrollPhysics(parent: buildParent(ancestor));
+
+  @override
+  bool shouldAcceptUserOffset(ScrollMetrics position) => false;
 }

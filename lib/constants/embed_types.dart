@@ -28,4 +28,19 @@ class EmbedTypes {
 
   /// Video as served by the appview (blobs resolved to URLs).
   static const videoView = 'social.coves.embed.video#view';
+
+  /// Image gallery with a link or quote attachment (unhydrated record form:
+  /// carries atproto blob refs).
+  static const imagesWithAttachment = 'social.coves.embed.imagesWithAttachment';
+
+  /// Image gallery with a link or quote attachment as served by the appview
+  /// (blobs resolved to URLs).
+  static const imagesWithAttachmentView =
+      'social.coves.embed.imagesWithAttachment#view';
+
+  /// External link view nested as an `imagesWithAttachment#view`
+  /// attachment. Flattened: the link fields sit on the attachment itself,
+  /// with no nested `external` key.
+  static const externalViewExternal =
+      'social.coves.embed.external#viewExternal';
 }

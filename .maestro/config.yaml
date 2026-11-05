@@ -8,6 +8,8 @@
 # a2_signout_landing.
 # f4_avatar_gallery requires an image in the emulator gallery (see the
 # prerequisite adb push recipe in that flow's header comment).
+# e10_create_image_post requires three images in the emulator gallery (see
+# the prerequisite adb push recipe in that flow's header comment).
 # f5_empty_profile is NOT in the order: it needs an adb-fired deep link
 # first (MainActivity has no VIEW intent filter) — see its header comment.
 # c6_comment_focus_missing and c7_comment_focus_malformed are NOT in the
@@ -24,6 +26,8 @@
 # NOTE (2026-07-19 round 2): flows absent from flowsOrder STILL RUN at the
 # end of a workspace run — f5, g1, c6 and c7 are therefore tagged `standalone` and
 # excluded here. Tag any future precursor-dependent flow the same way.
+# e12_heic_and_large_jpeg_post is tagged `standalone`: it needs a HEIC and a
+# 9000x6000 JPEG as the two newest gallery images (see its header).
 excludeTags:
   - standalone
 executionOrder:
@@ -57,6 +61,7 @@ executionOrder:
     - e7_delete_post_from_profile
     - e8_reply_draft_system_back
     - e9_delete_post_profile_open
+    - e10_create_image_post
     # e10 replies to the NASA fixture with every composer format and reads
     # the record back from mari's repo on the local PDS (port 3001).
     - e10_formatted_comment
@@ -71,6 +76,11 @@ executionOrder:
     - g4_block_unblock
     - h1_video_post
     - h2_rich_text_linkbars
+    # h3 needs mari's hand-seeded !cartography "04 Gallery of eight" post.
+    - h3_feed_gallery_dots
+    # h4 needs mari's hand-seeded "12 Animated GIF" (!geology) and "01 Single
+    # image with alt text" (!cartography) posts.
+    - h4_gif_play_alt_badge
     # Section I seeds notifications for mari from the second local account
     # (scripts/seed_notifications.js); i2 and i5 reuse what i1 seeded.
     - i1_notifications_badge

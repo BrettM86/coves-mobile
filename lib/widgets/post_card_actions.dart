@@ -29,11 +29,16 @@ class PostCardActions extends StatefulWidget {
     required this.post,
     required this.sessionStamp,
     this.showCommentButton = true,
+    this.currentGalleryIndex,
     super.key,
   });
 
   final FeedViewPost post;
   final bool showCommentButton;
+
+  /// The gallery page the card is on, so the comment button opens the post
+  /// on the same image. Null opens it on the first.
+  final int Function()? currentGalleryIndex;
 
   /// The session key [post] was loaded under, from the surface that loaded
   /// it; null for a surface that offers no admin tools, which the gate
@@ -148,6 +153,8 @@ class _PostCardActionsState extends State<PostCardActions> {
                           context,
                           post: post,
                           sessionStamp: widget.sessionStamp,
+                          initialImageIndex:
+                              widget.currentGalleryIndex?.call() ?? 0,
                         );
                       },
                       child: SizedBox(

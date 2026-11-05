@@ -4,6 +4,8 @@
 // /xrpc/social.coves.feed.getTimeline
 // /xrpc/social.coves.feed.getDiscover
 
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 import '../constants/embed_types.dart';
@@ -227,7 +229,10 @@ class PostView {
       deletionReason: json['deletionReason'] as String?,
       stats: PostStats.fromJson(json['stats'] as Map<String, dynamic>),
       embed: json['embed'] != null
-          ? PostEmbed.fromJson(json['embed'] as Map<String, dynamic>)
+          ? PostEmbed.fromJson(
+              json['embed'] as Map<String, dynamic>,
+              recordEmbed: recordEmbedOf(json['record']),
+            )
           : null,
       viewer: json['viewer'] != null
           ? ViewerState.fromJson(json['viewer'] as Map<String, dynamic>)
@@ -508,16 +513,52 @@ sealed class PostEmbed {
 
   /// Parses any embed json. Never throws on map input: anything unrecognized
   /// or malformed degrades to [UnknownPostEmbed].
-  factory PostEmbed.fromJson(Map<String, dynamic> json) {
+  ///
+  /// [recordEmbed] is the raw `embed` of the stored record the view was
+  /// hydrated from. The `images#view` carries no MIME type, so the record's
+  /// blobs are the only place a gallery image is known to be a GIF; see
+  /// [EmbedImage.isGif]. Its shape is never trusted.
+  factory PostEmbed.fromJson(Map<String, dynamic> json, {Object? recordEmbed}) {
     final rawType = json[r'$type'];
     final embedType = rawType is String ? rawType : 'unknown';
+    final record = recordEmbed is Map<String, dynamic> ? recordEmbed : null;
 
     if (embedType == EmbedTypes.imagesView) {
-      final images = _parseEmbedImages(json['images']);
+      final images = _parseEmbedImages(
+        json['images'],
+        recordImages: record?[r'$type'] == EmbedTypes.images
+            ? record!['images']
+            : null,
+      );
       if (images == null) {
         return UnknownPostEmbed(type: embedType, data: json);
       }
       return ImagesPostEmbed(type: embedType, images: images, data: json);
+    }
+
+    if (embedType == EmbedTypes.imagesWithAttachmentView) {
+      // The gallery is a nested `images#view`, not a bare list.
+      final imagesView = json['images'];
+      final recordGallery = record?[r'$type'] == EmbedTypes.imagesWithAttachment
+          ? record!['images']
+          : null;
+      final images = imagesView is Map<String, dynamic>
+          ? _parseEmbedImages(
+              imagesView['images'],
+              recordImages: recordGallery is Map<String, dynamic>
+                  ? recordGallery['images']
+                  : null,
+            )
+          : null;
+      if (images == null) {
+        return UnknownPostEmbed(type: embedType, data: json);
+      }
+      return ImagesWithAttachmentPostEmbed(
+        type: embedType,
+        images: images,
+        attachment: _parseEmbedAttachment(json['attachment']),
+        data: json,
+      );
     }
 
     if (embedType == EmbedTypes.videoView) {
@@ -541,7 +582,9 @@ sealed class PostEmbed {
     }
 
     // Unhydrated record shapes carry blob refs, never renderable URLs.
-    if (embedType == EmbedTypes.images || embedType == EmbedTypes.video) {
+    if (embedType == EmbedTypes.images ||
+        embedType == EmbedTypes.imagesWithAttachment ||
+        embedType == EmbedTypes.video) {
       return UnknownPostEmbed(type: embedType, data: json);
     }
 
@@ -680,6 +723,62 @@ final class ImagesPostEmbed extends PostEmbed {
   final List<EmbedImage> images;
 }
 
+/// A hydrated image gallery with an optional attachment, parsed from an
+/// `imagesWithAttachment#view` whose `images` is a nested `images#view`.
+/// [images] holds the same guarantees as on [ImagesPostEmbed]; [attachment]
+/// is null when the view carried none, or one this client does not
+/// recognize.
+final class ImagesWithAttachmentPostEmbed extends PostEmbed {
+  /// Throws [ArgumentError] when [images] is empty, for the same reason as
+  /// [ImagesPostEmbed].
+  ImagesWithAttachmentPostEmbed({
+    required super.type,
+    required List<EmbedImage> images,
+    this.attachment,
+    required super.data,
+  }) : images = List.unmodifiable(images) {
+    if (images.isEmpty) {
+      throw ArgumentError.value(
+        images,
+        'images',
+        'ImagesWithAttachmentPostEmbed requires at least one image',
+      );
+    }
+  }
+
+  final List<EmbedImage> images;
+  final EmbedAttachment? attachment;
+
+  /// The link, when the attachment is an [ExternalAttachment].
+  @override
+  ExternalEmbed? get external => switch (attachment) {
+    ExternalAttachment(:final external) => external,
+    _ => null,
+  };
+}
+
+/// What an [ImagesWithAttachmentPostEmbed] carries next to its images.
+sealed class EmbedAttachment {
+  const EmbedAttachment();
+}
+
+/// A link attachment, parsed from a flattened `external#viewExternal`.
+final class ExternalAttachment extends EmbedAttachment {
+  const ExternalAttachment(this.external);
+
+  final ExternalEmbed external;
+}
+
+/// A quoted post, Coves or Bluesky, referenced only by its strongRef (nested
+/// under `post` in the `post#view`). The appview does not resolve nested
+/// quotes, so there is nothing to render.
+final class QuoteAttachment extends EmbedAttachment {
+  const QuoteAttachment({required this.uri, required this.cid});
+
+  final String uri;
+  final String cid;
+}
+
 /// A hydrated video with a playable url.
 final class VideoPostEmbed extends PostEmbed {
   const VideoPostEmbed({
@@ -717,7 +816,18 @@ class EmbedImage {
     required this.fullsize,
     this.alt,
     this.aspectRatio,
-  });
+    this.isGif = false,
+  }) : localFile = null;
+
+  /// An image drawn from a local file rather than the network.
+  ///
+  /// Only the optimistic copy of a freshly created post uses this: its blobs
+  /// are not served until the record is indexed. [thumb] and [fullsize] hold
+  /// the file's URI, which keys the image but is never fetched.
+  EmbedImage.local(File file, {this.alt, this.aspectRatio, this.isGif = false})
+    : localFile = file,
+      thumb = file.uri.toString(),
+      fullsize = file.uri.toString();
 
   /// Feed-sized rendering url (800w).
   final String thumb;
@@ -725,11 +835,17 @@ class EmbedImage {
   /// Lightbox-sized rendering url (1600w).
   final String fullsize;
 
+  /// The file to draw instead of fetching [thumb] or [fullsize].
+  final File? localFile;
+
   /// Alt text supplied by the author.
   final String? alt;
 
   /// Intrinsic dimensions, used to reserve layout space before load.
   final EmbedAspectRatio? aspectRatio;
+
+  /// Whether the stored blob is an animated GIF.
+  final bool isGif;
 }
 
 /// Intrinsic dimensions of an embedded image.
@@ -784,7 +900,11 @@ String? parseAltText(Object? raw) {
 /// `fullsize` (e.g. one still carrying a blob ref) or carrying one that is
 /// not an http(s) url. This mirrors the appview's all-or-nothing hydration —
 /// half a gallery is never shown, and one hostile url poisons the rest.
-List<EmbedImage>? _parseEmbedImages(Object? raw) {
+///
+/// [recordImages] is the record's own `images` list, index-aligned with the
+/// view's; it only sets [EmbedImage.isGif]. When it is not a list of the
+/// same length, no image is flagged.
+List<EmbedImage>? _parseEmbedImages(Object? raw, {Object? recordImages}) {
   // The lexicon caps a gallery at 8 and the appview never serves more, so a
   // longer list is a malformed or hostile record rather than something to
   // render partially. Checked before the loop so an absurd list costs a
@@ -793,8 +913,11 @@ List<EmbedImage>? _parseEmbedImages(Object? raw) {
     return null;
   }
 
+  final aligned = recordImages is List && recordImages.length == raw.length
+      ? recordImages
+      : null;
   final images = <EmbedImage>[];
-  for (final entry in raw) {
+  for (final (index, entry) in raw.indexed) {
     if (entry is! Map<String, dynamic>) {
       return null;
     }
@@ -814,11 +937,70 @@ List<EmbedImage>? _parseEmbedImages(Object? raw) {
         fullsize: fullsize,
         alt: parseAltText(entry['alt']),
         aspectRatio: _parseEmbedAspectRatio(entry['aspectRatio']),
+        isGif: aligned != null && _isGifBlob(aligned[index]),
       ),
     );
   }
 
   return images;
+}
+
+/// The raw `embed` of a post or comment record, or null when [record] is
+/// not a map.
+Object? recordEmbedOf(Object? record) =>
+    record is Map<String, dynamic> ? record['embed'] : null;
+
+/// Whether a record image entry (`{image: blob, alt}`) stores an
+/// `image/gif` blob.
+bool _isGifBlob(Object? recordImage) {
+  if (recordImage is! Map<String, dynamic>) {
+    return false;
+  }
+  final blob = recordImage['image'];
+  return blob is Map<String, dynamic> && blob['mimeType'] == 'image/gif';
+}
+
+/// Parses an `imagesWithAttachment#view` attachment, or null when it is
+/// absent, malformed or of a type this client does not render. A bad
+/// attachment never costs the images, so it is dropped rather than rejected.
+///
+/// An `external#viewExternal` is flattened (`uri` at the top level); a
+/// `post#view` nests its strongRef under `post` (`{post: {uri, cid}}`).
+EmbedAttachment? _parseEmbedAttachment(Object? raw) {
+  if (raw is! Map<String, dynamic>) {
+    return null;
+  }
+
+  final type = raw[r'$type'];
+
+  if (type == EmbedTypes.externalViewExternal) {
+    if (raw['uri'] is! String) {
+      return null;
+    }
+    // Same unchecked casts as the external branch of PostEmbed.fromJson.
+    try {
+      return ExternalAttachment(ExternalEmbed.fromJson(raw));
+    } on Object {
+      if (kDebugMode) {
+        debugPrint('PostEmbed: unparseable imagesWithAttachment link');
+      }
+      return null;
+    }
+  }
+
+  if (type == EmbedTypes.postView) {
+    final strongRef = raw['post'];
+    if (strongRef is! Map<String, dynamic>) {
+      return null;
+    }
+    final uri = strongRef['uri'];
+    final cid = strongRef['cid'];
+    return uri is String && cid is String
+        ? QuoteAttachment(uri: uri, cid: cid)
+        : null;
+  }
+
+  return null;
 }
 
 /// Parses an image `aspectRatio`, or null when it is absent or malformed.

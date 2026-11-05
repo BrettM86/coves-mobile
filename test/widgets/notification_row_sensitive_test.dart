@@ -58,6 +58,8 @@ Map<String, dynamic> _replyWire({
   Map<String, dynamic> rootPost = _replyRoot,
   Map<String, dynamic> record = _replyRecord,
   Map<String, dynamic>? subjectLabels,
+  String? subjectPreview,
+  String? subjectStatus,
 }) {
   final wire = replyNotificationWire(
     reason: reason,
@@ -68,6 +70,8 @@ Map<String, dynamic> _replyWire({
   wire['subject'] = {
     'uri': reason == 'commentReply' ? _myCommentUri : _rootUri,
     'cid': 'bafysubject',
+    'preview': ?subjectPreview,
+    'status': ?subjectStatus,
     'labels': ?subjectLabels,
   };
   return wire;
@@ -251,9 +255,13 @@ void main() {
       ),
       (
         'commentReply with only a sensitive subject',
-        _replyWire(reason: 'commentReply', subjectLabels: _nsfw),
-        <String>[],
-        ['Spicy title', 'Spicy reply excerpt'],
+        _replyWire(
+          reason: 'commentReply',
+          subjectLabels: _nsfw,
+          subjectPreview: 'Spicy comment of mine',
+        ),
+        ['Spicy comment of mine'],
+        ['Spicy reply excerpt'],
         true,
       ),
       (
@@ -298,13 +306,15 @@ void main() {
         ['Plain comment preview'],
       ),
       (
-        'commentReply with a sensitive subject and no thumbnail',
+        // A live subject is always quoted, so only a sensitive subject that
+        // is no longer live leaves nothing labelled on screen.
+        'commentReply with a sensitive subject you deleted',
         _replyWire(
           reason: 'commentReply',
-          rootPost: {..._replyRoot}..remove('thumbnail'),
           subjectLabels: _nsfw,
+          subjectStatus: 'deleted',
         ),
-        ['Spicy title', 'Spicy reply excerpt'],
+        ['Spicy reply excerpt', '[Deleted by user]'],
       ),
     ]) {
       testWidgets('B4 $description shows everything without a banner', (

@@ -1,0 +1,78 @@
+# Section E — check 11: the Create Post image strip's alt-text editor.
+# Attach 3 images from the gallery, open the alt editor on image 1, enter
+# alt text, Save, and see the tile report "Alt text set". Never taps Post,
+# so nothing is uploaded or created.
+# Long-press drag reorder is not driven here: Maestro has no hold-then-drag
+# gesture, and `adb shell input draganddrop` holds for less than Flutter's
+# 500 ms delayed-drag timeout. Exercise it after this flow with a held
+# motionevent sequence (1080x2400 emulator, tile 1 to after tile 3):
+#   adb shell "input motionevent DOWN 168 1764; sleep 1; \
+#     for x in 220 300 380 460 540 620 700 760 800; do \
+#     input motionevent MOVE \$x 1764; done; sleep 0.5; \
+#     input motionevent UP 800 1764"
+# Assumes a signed-in session on the local stack.
+# PREREQUISITE: at least three images in the emulator gallery, e.g.
+#   adb push e11_image_1.jpg /sdcard/Pictures/   (and _2, _3)
+#   adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE \
+#     -d file:///sdcard/Pictures/e11_image_1.jpg
+# NOTE: never use hideKeyboard on the compose screen — Maestro implements it
+# as a BACK press, which the shell's dirty-draft guard redirects to Home.
+appId: social.coves.dev
+---
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Create"
+      - extendedWaitUntil:
+          visible: "Create Post"
+          timeout: 15000
+# --- attach 3 images from the gallery ---
+- tapOn:
+    text: "Add image.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Select Image Source"
+    timeout: 15000
+- tapOn: "Choose from Gallery[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Photo taken on .*"
+    timeout: 20000
+- tapOn:
+    text: "Photo taken on .*"
+    index: 0
+- tapOn:
+    text: "Photo taken on .*"
+    index: 1
+- tapOn:
+    text: "Photo taken on .*"
+    index: 2
+# the picker's confirm button reads "Add" or "Done" by picker version
+- tapOn: "(Add|Done).*"
+- extendedWaitUntil:
+    visible: "Image 3 of 3"
+    timeout: 20000
+- assertVisible: "Image 1 of 3"
+- takeScreenshot: build/maestro/e11_strip
+# --- alt editor on image 1 ---
+- tapOn: "Alt text for image 1"
+- extendedWaitUntil:
+    visible: "Describe this image"
+    timeout: 10000
+- inputText: "A red square with the number one"
+- takeScreenshot: build/maestro/e11_alt_editor
+- tapOn: "Save"
+- extendedWaitUntil:
+    visible: "Image 1 of 3. Alt text set"
+    timeout: 10000
+- assertVisible: "Image 2 of 3"
+- takeScreenshot: build/maestro/e11_alt_set

@@ -1,0 +1,81 @@
+# Section H — feed gallery page dots: on a feed card with an eight-image
+# gallery, the page-dot pill (below the image) reads "Image 1 of 8"; a left
+# swipe on the image pages the gallery to "Image 2 of 8"; tapping the image
+# opens the lightbox on that page, whose own dots also read "Image 2 of 8".
+# Assumes a signed-in session as mari (suite order: after a1_login_session).
+# Target post: mari's "04 Gallery of eight" in !cartography, seeded by hand on
+# 2026-10-30 with the other dev-stack image cases (no seed script). It is
+# reached through mari's profile and the community's post search, so the
+# results list holds this one feed card (docs/QA_LOOP.md "Reaching
+# fixtures").
+appId: social.coves.dev
+---
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+# stale-semantics flake guard on the first tap after a launch
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Me"
+      - extendedWaitUntil:
+          visible: "[\\s\\S]*@mari.local.coves.dev[\\s\\S]*"
+          timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "!cartography@.*"
+    direction: DOWN
+    timeout: 90000
+- tapOn:
+    text: "!cartography@.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Search posts"
+    timeout: 15000
+# Search for the fixture. The result title regex includes "04", so it never
+# matches the search field's own text.
+- tapOn: "Search posts"
+- inputText: "Gallery of eight"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: "[\\s\\S]*04 Gallery of eight[\\s\\S]*"
+    timeout: 20000
+# Page dots on the feed card. The dots carry their own semantics label;
+# wrap with [\s\S] in case the card merges it into its text.
+- extendedWaitUntil:
+    visible: "[\\s\\S]*Image 1 of 8[\\s\\S]*"
+    timeout: 15000
+- takeScreenshot: build/maestro/h3_gallery_page_1
+# Swipe on the image itself (the tappable gallery frame), not on the dots.
+- swipe:
+    from:
+      text: "View full image"
+    direction: LEFT
+- waitForAnimationToEnd:
+    timeout: 5000
+- extendedWaitUntil:
+    visible: "[\\s\\S]*Image 2 of 8[\\s\\S]*"
+    timeout: 10000
+- assertNotVisible: "[\\s\\S]*Image 1 of 8[\\s\\S]*"
+- takeScreenshot: build/maestro/h3_gallery_page_2
+# Open the lightbox on the current page. Its controls ("Close", "Save
+# image") prove the viewer is up before reading its dots.
+- tapOn: "View full image"
+- extendedWaitUntil:
+    visible: "Close"
+    timeout: 10000
+- assertVisible: "Save image"
+- assertVisible: "[\\s\\S]*Image 2 of 8[\\s\\S]*"
+- takeScreenshot: build/maestro/h3_lightbox_page_2
+- back
+- extendedWaitUntil:
+    notVisible: "Save image"
+    timeout: 10000
+- assertVisible: "[\\s\\S]*04 Gallery of eight[\\s\\S]*"

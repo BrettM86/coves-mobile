@@ -957,7 +957,7 @@ class _ProfileCommentCard extends StatelessWidget {
       MaterialPageRoute<void>(
         builder: (_) => ReplyScreen(
           editing: comment,
-          onSubmit: (content, facets) async {
+          onSubmit: (content, facets, _) async {
             try {
               await profileProvider.updateComment(
                 comment: comment,

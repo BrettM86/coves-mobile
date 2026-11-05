@@ -6,8 +6,7 @@
 
 import 'package:flutter/foundation.dart';
 
-import '../constants/embed_types.dart';
-import '../utils/url_policy.dart';
+import 'post_embed_input.dart';
 
 /// Response from GET /xrpc/social.coves.community.list
 class CommunitiesResponse {
@@ -210,79 +209,6 @@ class CreatePostResponse {
 
   /// Content identifier (CID) of the created post
   final String cid;
-}
-
-/// External link embed input for creating posts
-class ExternalEmbedInput {
-  /// Creates an [ExternalEmbedInput] with URI validation.
-  ///
-  /// Throws [ArgumentError] if [uri] is empty or not a valid URL.
-  factory ExternalEmbedInput({
-    required String uri,
-    String? title,
-    String? description,
-  }) {
-    // Validate URI is not empty
-    if (uri.isEmpty) {
-      throw ArgumentError.value(uri, 'uri', 'URI cannot be empty');
-    }
-
-    // Validate URI is a well-formed URL
-    if (!isAllowedWebUrl(uri)) {
-      throw ArgumentError.value(
-        uri,
-        'uri',
-        'URI must be a valid HTTP or HTTPS URL',
-      );
-    }
-
-    return ExternalEmbedInput._(
-      uri: uri,
-      title: title,
-      description: description,
-    );
-  }
-
-  const ExternalEmbedInput._({required this.uri, this.title, this.description});
-
-  Map<String, dynamic> toJson() {
-    final external = <String, dynamic>{'uri': uri};
-
-    if (title != null) {
-      external['title'] = title;
-    }
-    if (description != null) {
-      external['description'] = description;
-    }
-
-    // Return proper embed structure expected by backend
-    return {r'$type': EmbedTypes.external, 'external': external};
-  }
-
-  /// URL of the external link
-  final String uri;
-
-  /// Title of the linked content
-  final String? title;
-
-  /// Description of the linked content
-  final String? description;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ExternalEmbedInput &&
-          runtimeType == other.runtimeType &&
-          uri == other.uri &&
-          title == other.title &&
-          description == other.description;
-
-  @override
-  int get hashCode => Object.hash(uri, title, description);
-
-  @override
-  String toString() =>
-      'ExternalEmbedInput(uri: $uri, title: $title, description: $description)';
 }
 
 /// Self-applied content labels

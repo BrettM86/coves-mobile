@@ -1,0 +1,145 @@
+# Section H — GIF tap-to-play and the lightbox ALT badge.
+# Part 1, mari's "12 Animated GIF" in !geology: the feed card shows the still
+# with "Play GIF" (nothing animates before a tap); Play shows "Pause GIF" and
+# Pause returns to "Play GIF"; the detail view also starts on "Play GIF"; the
+# lightbox shows "Play GIF" plus the ALT badge ("Show alt text"), whose panel
+# shows the full alt text. The feed card shows no ALT badge.
+# Part 2, mari's "01 Single image with alt text" in !cartography: the
+# lightbox shows the ALT badge and its panel shows "A single wide test
+# image".
+# Assumes a signed-in session as mari (suite order: after a1_login_session).
+# Both posts were seeded by hand on 2026-10-30 with the other dev-stack image
+# cases and are reached through mari's profile and the community's post
+# search (docs/QA_LOOP.md "Reaching fixtures").
+appId: social.coves.dev
+---
+# Part 1: the GIF
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Me"
+      - extendedWaitUntil:
+          visible: "[\\s\\S]*@mari.local.coves.dev[\\s\\S]*"
+          timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "!geology@.*"
+    direction: DOWN
+    timeout: 90000
+- tapOn:
+    text: "!geology@.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Search posts"
+    timeout: 15000
+- tapOn: "Search posts"
+- inputText: "Animated GIF"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: "[\\s\\S]*12 Animated GIF[\\s\\S]*"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: "Play GIF"
+    timeout: 15000
+- assertNotVisible: "Show alt text"
+- takeScreenshot: build/maestro/h4_feed_gif_still
+- tapOn: "Play GIF"
+- extendedWaitUntil:
+    visible: "Pause GIF"
+    timeout: 15000
+- takeScreenshot: build/maestro/h4_feed_gif_playing
+- tapOn: "Pause GIF"
+- extendedWaitUntil:
+    visible: "Play GIF"
+    timeout: 5000
+# Detail view: still starts on Play GIF
+- tapOn: "[\\s\\S]*12 Animated GIF[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "[\\s\\S]*Feed shows the still first frame[\\s\\S]*"
+    timeout: 15000
+- extendedWaitUntil:
+    visible: "Play GIF"
+    timeout: 15000
+- assertNotVisible: "Show alt text"
+- takeScreenshot: build/maestro/h4_detail_gif_still
+# Lightbox: tap the image away from the centred play chip
+- tapOn:
+    text: "View full image"
+    point: "15%,15%"
+- extendedWaitUntil:
+    visible: "Close"
+    timeout: 10000
+- assertVisible: "Play GIF"
+- assertVisible: "Show alt text"
+- takeScreenshot: build/maestro/h4_viewer_gif_still
+- tapOn: "Show alt text"
+- extendedWaitUntil:
+    visible: "Six frame animation"
+    timeout: 5000
+- takeScreenshot: build/maestro/h4_viewer_alt_panel_gif
+- tapOn: "Play GIF"
+- extendedWaitUntil:
+    visible: "Pause GIF"
+    timeout: 15000
+- takeScreenshot: build/maestro/h4_viewer_gif_playing
+- tapOn: "Close"
+- extendedWaitUntil:
+    notVisible: "Save image"
+    timeout: 10000
+# Part 2: alt text on a still image
+- launchApp:
+    stopApp: true
+- extendedWaitUntil:
+    visible: "Discover feed.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- retry:
+    maxRetries: 2
+    commands:
+      - tapOn: "Me"
+      - extendedWaitUntil:
+          visible: "[\\s\\S]*@mari.local.coves.dev[\\s\\S]*"
+          timeout: 15000
+- scrollUntilVisible:
+    element:
+      text: "!cartography@.*"
+    direction: DOWN
+    timeout: 90000
+- tapOn:
+    text: "!cartography@.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Search posts"
+    timeout: 15000
+- tapOn: "Search posts"
+- inputText: "Single image with alt"
+- pressKey: Enter
+- extendedWaitUntil:
+    visible: "[\\s\\S]*01 Single image with alt text[\\s\\S]*"
+    timeout: 20000
+- assertNotVisible: "Show alt text"
+- tapOn: "View full image"
+- extendedWaitUntil:
+    visible: "Close"
+    timeout: 10000
+- assertVisible: "Show alt text"
+- tapOn: "Show alt text"
+- extendedWaitUntil:
+    visible: "A single wide test image"
+    timeout: 5000
+- takeScreenshot: build/maestro/h4_viewer_alt_panel_still
+- tapOn: "Close"
+- extendedWaitUntil:
+    notVisible: "Save image"
+    timeout: 10000

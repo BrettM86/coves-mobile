@@ -2,8 +2,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/post.dart';
+import 'gif_player.dart';
+import 'image_error.dart';
 import 'media_aspect.dart';
+import 'media_page_dots.dart';
 import 'media_surface.dart';
+import 'play_chip.dart';
 
 /// Which rendering of a hydrated image to fetch: the feed-sized `thumb` or
 /// the lightbox-sized `fullsize`.
@@ -51,10 +55,10 @@ class TappableMedia extends StatelessWidget {
 
 /// The head image of a native gallery, at full block width.
 ///
-/// The feed card renders every images embed this way — one image, plus a
-/// "1/N" badge when the gallery holds more — and the detail view uses it for
-/// a single-image post. [keyPrefix] namespaces the widget keys (`post-` vs
-/// `detail-`).
+/// The feed card and the detail view use it for a single image; the Bluesky
+/// embed card renders its images this way with a "1/N" badge when there are
+/// more. [keyPrefix] namespaces the widget keys (`post-`, `detail-`,
+/// `bluesky-`).
 ///
 /// [images] must be non-empty: this widget renders `images.first`. Callers
 /// get that for free from `ImagesPostEmbed`, whose constructor rejects an
@@ -66,6 +70,7 @@ class NativeImageThumb extends StatelessWidget {
     this.bounds = kFeedRatioBounds,
     this.source = MediaImageSource.thumb,
     this.fill = kFeedMediaFill,
+    this.playChipStyle = PlayChipStyle.feed,
     this.onTap,
     super.key,
   });
@@ -75,6 +80,9 @@ class NativeImageThumb extends StatelessWidget {
   final MediaRatioBounds bounds;
   final MediaImageSource source;
   final MediaFillStyle fill;
+
+  /// The play control's treatment when the image is a GIF.
+  final PlayChipStyle playChipStyle;
   final VoidCallback? onTap;
 
   @override
@@ -102,10 +110,11 @@ class NativeImageThumb extends StatelessWidget {
                 min: bounds.min,
                 max: bounds.max,
               ),
-              child: _NetworkMediaImage(
+              child: _MediaImage(
                 image: image,
                 source: source,
                 fill: fill,
+                playChipStyle: playChipStyle,
               ),
             ),
             if (images.length > 1)
@@ -124,7 +133,8 @@ class NativeImageThumb extends StatelessWidget {
   }
 }
 
-/// A swipeable carousel of fullsize native images with an i/N indicator.
+/// A swipeable carousel of native images with page dots overlaid at the
+/// bottom centre.
 ///
 /// Owns its [PageController] rather than borrowing one, and rewinds when the
 /// embed changes: this State is reused when the same slot renders a
@@ -140,17 +150,33 @@ class NativeImageGallery extends StatefulWidget {
   const NativeImageGallery({
     required this.images,
     required this.keyPrefix,
-    required this.onOpen,
+    this.onOpen,
     this.bounds = kDetailRatioBounds,
     this.fill = kDetailMediaFill,
+    this.source = MediaImageSource.fullsize,
+    this.playChipStyle = PlayChipStyle.feed,
+    this.initialIndex = 0,
+    this.onPageChanged,
     super.key,
   });
 
   final List<EmbedImage> images;
   final String keyPrefix;
 
+  /// The page shown first. Out of range is a caller bug: it asserts in
+  /// debug and shows the first page in release.
+  final int initialIndex;
+
+  /// Called with the new page after each swipe.
+  final ValueChanged<int>? onPageChanged;
+  final MediaImageSource source;
+
+  /// The play control's treatment for the gallery's GIFs.
+  final PlayChipStyle playChipStyle;
+
   /// Called with the page the user is looking at when the gallery is tapped.
-  final void Function(int index) onOpen;
+  /// Null leaves the gallery swipeable but not activatable.
+  final void Function(int index)? onOpen;
 
   final MediaRatioBounds bounds;
   final MediaFillStyle fill;
@@ -160,8 +186,26 @@ class NativeImageGallery extends StatefulWidget {
 }
 
 class _NativeImageGalleryState extends State<NativeImageGallery> {
-  final PageController _controller = PageController();
-  int _currentIndex = 0;
+  @override
+  void initState() {
+    super.initState();
+    assert(
+      // An empty list has its own assert, in build.
+      widget.images.isEmpty ||
+          (widget.initialIndex >= 0 &&
+              widget.initialIndex < widget.images.length),
+      'initialIndex ${widget.initialIndex} is out of range for '
+      '${widget.images.length} images',
+    );
+  }
+
+  late int _currentIndex =
+      widget.initialIndex >= 0 && widget.initialIndex < widget.images.length
+      ? widget.initialIndex
+      : 0;
+  late final PageController _controller = PageController(
+    initialPage: _currentIndex,
+  );
 
   @override
   void didUpdateWidget(NativeImageGallery oldWidget) {
@@ -175,6 +219,9 @@ class _NativeImageGalleryState extends State<NativeImageGallery> {
     if (_controller.hasClients) {
       _controller.jumpToPage(0);
     }
+    // Reported even before layout, when the jump above can't run, so an
+    // owner tracking the page never keeps one the new images lack.
+    widget.onPageChanged?.call(0);
   }
 
   static bool _isSameGallery(List<EmbedImage> a, List<EmbedImage> b) {
@@ -208,75 +255,142 @@ class _NativeImageGalleryState extends State<NativeImageGallery> {
     // Guard against an index left behind by a longer gallery in the frame
     // before didUpdateWidget rewinds.
     final current = _currentIndex < images.length ? _currentIndex : 0;
+    final onOpen = widget.onOpen;
 
-    return TappableMedia(
+    final frame = TappableMedia(
       mediaKey: Key('${widget.keyPrefix}-images-embed'),
       label: 'View full image',
-      onTap: () => widget.onOpen(current),
+      onTap: onOpen == null ? null : () => onOpen(current),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Stack(
-          children: [
-            AspectRatio(
-              // The gallery frame follows the first image; the rest are
-              // contained inside it rather than resizing the carousel.
-              aspectRatio: clampMediaRatio(
-                images.first.aspectRatio,
-                min: widget.bounds.min,
-                max: widget.bounds.max,
-              ),
-              child: PageView.builder(
-                controller: _controller,
-                itemCount: images.length,
-                onPageChanged: (index) {
-                  setState(() => _currentIndex = index);
-                },
-                itemBuilder: (context, index) => _NetworkMediaImage(
-                  image: images[index],
-                  source: MediaImageSource.fullsize,
-                  fill: widget.fill,
-                  fit: BoxFit.contain,
-                ),
-              ),
+        child: AspectRatio(
+          // The gallery frame follows the first image; the rest are
+          // contained inside it rather than resizing the carousel.
+          aspectRatio: clampMediaRatio(
+            images.first.aspectRatio,
+            min: widget.bounds.min,
+            max: widget.bounds.max,
+          ),
+          child: PageView.builder(
+            controller: _controller,
+            itemCount: images.length,
+            onPageChanged: (index) {
+              setState(() => _currentIndex = index);
+              widget.onPageChanged?.call(index);
+            },
+            itemBuilder: (context, index) => _MediaImage(
+              image: images[index],
+              source: widget.source,
+              fill: widget.fill,
+              playChipStyle: widget.playChipStyle,
+              active: index == current,
             ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: MediaBadge(
-                key: Key('${widget.keyPrefix}-images-page-indicator'),
-                label: '${current + 1}/${images.length}',
-              ),
-            ),
-          ],
+          ),
         ),
       ),
+    );
+
+    if (images.length < 2) {
+      return frame;
+    }
+
+    // The dots sit over the bottom of the image so their dark pill reads
+    // against it. They ignore pointers so a tap or swipe on the pill still
+    // reaches the gallery.
+    return Stack(
+      children: [
+        frame,
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 8,
+          child: IgnorePointer(
+            child: Center(
+              child: KeyedSubtree(
+                key: Key('${widget.keyPrefix}-images-page-indicator'),
+                child: MediaPageDots(count: images.length, index: current),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-/// A single hydrated image, carrying its alt text into the semantics tree.
-class _NetworkMediaImage extends StatelessWidget {
-  const _NetworkMediaImage({
+/// A single hydrated image, or the local file of an optimistic post's
+/// image, carrying its alt text into the semantics tree.
+///
+/// A GIF is a [GifPlayer] whatever the [source]: its still is always the
+/// thumb, and fullsize is only fetched to play it.
+class _MediaImage extends StatelessWidget {
+  const _MediaImage({
     required this.image,
     required this.source,
     required this.fill,
-    this.fit = BoxFit.cover,
+    required this.playChipStyle,
+    this.active = true,
   });
 
   final EmbedImage image;
   final MediaImageSource source;
   final MediaFillStyle fill;
-  final BoxFit fit;
+  final PlayChipStyle playChipStyle;
+
+  /// Whole image inside its frame, never cropped: the frame's ratio is
+  /// clamped, so an image outside the bounds gets bars instead.
+  static const BoxFit fit = BoxFit.contain;
+
+  /// Whether this is the gallery page in view; a GIF stops when it is not.
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
     final alt = image.alt;
+    final localFile = image.localFile;
 
-    Widget rendered = CachedNetworkImage(
-      imageUrl: switch (source) {
-        MediaImageSource.thumb => image.thumb,
-        MediaImageSource.fullsize => image.fullsize,
-      },
+    if (image.isGif) {
+      return GifPlayer(
+        image: image,
+        fit: fit,
+        playChipStyle: playChipStyle,
+        active: active,
+        // A local GIF's still is its first frame, decoded by the player;
+        // this fill only covers the decode.
+        still: localFile != null
+            ? MediaFill(iconColor: fill.iconColor, iconSize: fill.iconSize)
+            : _networkImage(context, image.thumb),
+      );
+    }
+
+    var rendered = localFile != null
+        ? Image.file(
+            localFile,
+            width: double.infinity,
+            fit: fit,
+            errorBuilder: (context, error, stackTrace) => MediaFill(
+              icon: Icons.broken_image,
+              iconColor: fill.iconColor,
+              iconSize: fill.iconSize,
+            ),
+          )
+        : _networkImage(context, switch (source) {
+            MediaImageSource.thumb => image.thumb,
+            MediaImageSource.fullsize => image.fullsize,
+          });
+
+    if (alt != null && alt.isNotEmpty) {
+      rendered = Semantics(image: true, label: alt, child: rendered);
+    }
+
+    return rendered;
+  }
+
+  Widget _networkImage(BuildContext context, String url) {
+    final cacheManager = ImageCacheScope.of(context);
+    return CachedNetworkImage(
+      cacheManager: cacheManager,
+      imageUrl: url,
       width: double.infinity,
       fit: fit,
       // Disable fade animation to prevent scroll jitter
@@ -284,17 +398,16 @@ class _NetworkMediaImage extends StatelessWidget {
       fadeOutDuration: Duration.zero,
       placeholder: (context, url) =>
           MediaFill(iconColor: fill.iconColor, iconSize: fill.iconSize),
-      errorWidget: (context, url, error) => MediaFill(
-        icon: Icons.broken_image,
-        iconColor: fill.iconColor,
-        iconSize: fill.iconSize,
+      errorWidget: (context, url, error) => ImageLoadError(
+        url: url,
+        error: error,
+        cacheManager: cacheManager,
+        fallback: MediaFill(
+          icon: Icons.broken_image,
+          iconColor: fill.iconColor,
+          iconSize: fill.iconSize,
+        ),
       ),
     );
-
-    if (alt != null && alt.isNotEmpty) {
-      rendered = Semantics(image: true, label: alt, child: rendered);
-    }
-
-    return rendered;
   }
 }

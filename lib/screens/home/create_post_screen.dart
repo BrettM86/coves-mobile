@@ -1,20 +1,38 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
 import '../../constants/embed_types.dart';
 import '../../models/community.dart';
+import '../../models/image_attachment.dart';
+import '../../models/picked_image.dart';
 import '../../models/post.dart';
+import '../../models/post_embed_input.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/image_attachments_controller.dart';
 import '../../services/coves_api_service.dart';
 import '../../services/mention_resolver.dart';
 import '../../utils/error_messages.dart';
+import '../../utils/image_format.dart';
+import '../../utils/image_picker_utils.dart';
+import '../../utils/image_preparation.dart';
 import '../../utils/rich_text_composer.dart';
 import '../../utils/url_policy.dart';
 import '../../widgets/composer/facet_editing_controller.dart';
 import '../../widgets/composer/facet_serialization.dart';
 import '../../widgets/composer/facet_text_field.dart';
 import '../../widgets/composer/formatting_toolbar.dart';
+import '../../widgets/composer/image_attachment_strip.dart';
+import '../../widgets/composer/preparing_images_tile.dart';
+import '../../widgets/icons/lucide_icon_painter.dart';
+import '../../widgets/icons/lucide_paths.dart';
+import '../../widgets/image_source_picker.dart';
+import '../../widgets/sign_in_again_dialog.dart';
 import '../compose/community_picker_screen.dart';
 import 'post_detail_screen.dart';
 
@@ -41,15 +59,16 @@ const int kContentMaxLength = 10000;
 ///
 /// Features:
 /// - Community selector (required)
-/// - Optional title, URL, and body fields
+/// - Optional title, URL, and body fields, and up to 8 images
 /// - Language dropdown and NSFW toggle
-/// - Form validation (at least one of title/body/URL required)
+/// - Form validation (at least one of title/body/URL/images required)
 /// - Loading states and error handling
 /// - Keyboard handling with scroll support
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({
     this.onNavigateToFeed,
     this.onDirtyChanged,
+    this.imagePreparer,
     super.key,
   });
 
@@ -59,6 +78,9 @@ class CreatePostScreen extends StatefulWidget {
   /// Notifies the shell when the composer gains/loses unsaved input, so the
   /// shell can decide whether system back needs to protect a draft.
   final ValueChanged<bool>? onDirtyChanged;
+
+  /// Prepares picked images; defaults to [ImagePreparer.platform].
+  final ImagePreparer? imagePreparer;
 
   @override
   State<CreatePostScreen> createState() => _CreatePostScreenState();
@@ -84,25 +106,64 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   bool _isNsfw = false;
   bool _isSubmitting = false;
 
+  /// Picked images still being prepared; Add and Post wait for them.
+  int _preparingImageCount = 0;
+
+  /// The attached images; they upload when the post is submitted.
+  late final ImageAttachmentsController _images;
+
+  /// The signed-in account, watched so that uploads made under one account
+  /// are never posted, or continued, under another.
+  late final AuthProvider _authProvider;
+
+  /// The account the attachments' uploads belong to.
+  String? _uploadsDid;
+
+  /// Shared app-wide API client (owned by main.dart). Looked up on first
+  /// use, which is always while mounted (a submit or a tile's Retry), and
+  /// kept so uploads queued behind an await never read an unmounted context.
+  late final CovesApiService _apiService = context.read<CovesApiService>();
+
+  /// Converts and re-encodes picked images before they are attached.
+  late final ImagePreparer _imagePreparer =
+      widget.imagePreparer ?? ImagePreparer.platform();
+
   // Computed state
   bool get _isFormValid {
     return _selectedCommunity != null && _hasUnsavedInput;
   }
 
-  /// True when any text field holds user input (a draft worth protecting).
+  /// Whether Post can be tapped: not while submitting, and not while picked
+  /// images are still being prepared, which a submit would leave behind.
+  bool get _canSubmit =>
+      _isFormValid && !_isSubmitting && _preparingImageCount == 0;
+
+  /// True when any text field holds user input or an image is attached (a
+  /// draft worth protecting).
   ///
   /// Deliberately considers trimmed text only: community, NSFW, and language
   /// selections are cheap to redo and alone are not worth blocking back for.
   bool get _hasUnsavedInput {
     return _titleController.text.trim().isNotEmpty ||
         _bodyController.text.trim().isNotEmpty ||
-        _urlController.text.trim().isNotEmpty;
+        _urlController.text.trim().isNotEmpty ||
+        _images.attachments.isNotEmpty;
   }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _images = ImageAttachmentsController(
+      upload: (bytes, contentType, {onSendProgress}) => _apiService.uploadImage(
+        bytes,
+        contentType,
+        onSendProgress: onSendProgress,
+      ),
+    )..addListener(_onTextChanged);
+    _authProvider = context.read<AuthProvider>()
+      ..addListener(_onAccountChanged);
+    _uploadsDid = _authProvider.did;
     // Listen to text changes to update button state
     _titleController.addListener(_onTextChanged);
     _urlController.addListener(_onTextChanged);
@@ -112,6 +173,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _authProvider.removeListener(_onAccountChanged);
     _titleController.dispose();
     _urlController.dispose();
     _bodyController.dispose();
@@ -119,6 +181,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     _titleFocusNode.dispose();
     _urlFocusNode.dispose();
     _bodyFocusNode.dispose();
+    _images.dispose();
     super.dispose();
   }
 
@@ -155,6 +218,19 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     widget.onDirtyChanged?.call(_hasUnsavedInput);
   }
 
+  /// Discards the uploads of the previous account when the account changes.
+  void _onAccountChanged() {
+    if (_authProvider.did == _uploadsDid) {
+      return;
+    }
+    _uploadsDid = _authProvider.did;
+    _images.forgetUploads();
+  }
+
+  void _showAccountChanged() {
+    _showError('Your account changed while posting, so nothing was posted');
+  }
+
   Future<void> _selectCommunity() async {
     final result = await Navigator.push<CommunityView>(
       context,
@@ -168,8 +244,85 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     }
   }
 
+  /// Asks for a source, then attaches the images picked from it.
+  ///
+  /// Does nothing while a submit is running, and drops images picked once a
+  /// submit has started, since the submit has already taken its uploads.
+  /// Each image is prepared (converted or re-encoded) first, with a
+  /// preparing indicator shown and Add and Post disabled meanwhile; a
+  /// prepared file of a dropped pick is deleted.
+  Future<void> _addImages() async {
+    if (_isSubmitting || _preparingImageCount > 0) {
+      return;
+    }
+    final source = await ImageSourcePicker.show(context);
+    if (source == null || !mounted || _isSubmitting) {
+      return;
+    }
+
+    final ({List<PickedImage> images, int unreadableCount}) picked;
+    try {
+      picked = await ImagePickerUtils.pickPostImages(
+        source,
+        remaining: _images.remaining,
+      );
+    } on PlatformException {
+      _showError(
+        source == ImageSource.camera
+            ? "Couldn't open the camera"
+            : "Couldn't open your photos",
+      );
+      return;
+    }
+    if (!mounted || _isSubmitting) {
+      return;
+    }
+
+    final notices = <String>{
+      if (picked.unreadableCount > 0) unreadablePostImageMessage,
+    };
+    setState(() => _preparingImageCount = picked.images.length);
+    final List<PickedImage>? prepared;
+    try {
+      // A dropped pick, or one cut short by an unexpected error, has its
+      // prepared files deleted.
+      prepared = await _imagePreparer.prepareAll(
+        picked.images,
+        isDropped: () => !mounted || _isSubmitting,
+        onRefused: notices.add,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _preparingImageCount = 0);
+      }
+    }
+    if (prepared == null) {
+      return;
+    }
+    final addNotice = _images.add(prepared);
+    if (addNotice != null) {
+      notices.add(addNotice);
+    }
+    if (notices.isNotEmpty) {
+      _showError(notices.join(' '));
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red[700],
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Future<void> _handleSubmit() async {
-    if (!_isFormValid || _isSubmitting) {
+    if (!_canSubmit) {
       return;
     }
 
@@ -207,8 +360,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
     try {
       final authProvider = context.read<AuthProvider>();
-      // Shared app-wide API client (owned by main.dart)
-      final apiService = context.read<CovesApiService>();
+      final apiService = _apiService;
       // The post is built from the form as it was at submit; edits made while
       // mentions resolve, and a switch of account, must not leak into it
       final submittingDid = authProvider.did;
@@ -219,8 +371,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       final language = _language;
       final isNsfw = _isNsfw;
 
-      // Build embed if URL is provided
-      ExternalEmbedInput? embed;
+      // Build the link embed if a URL is provided
+      ExternalEmbedInput? external;
       final url = _urlController.text.trim();
       if (url.isNotEmpty) {
         // Validate URL
@@ -240,8 +392,36 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           return;
         }
 
-        embed = ExternalEmbedInput(uri: url, title: title);
+        external = ExternalEmbedInput(uri: url, title: title);
       }
+
+      // Upload the images that have no blob yet; a failed tile shows its
+      // error and Retry, and no record is sent
+      var uploadsFailed = false;
+      try {
+        await _images.uploadMissing();
+      } on ImageUploadFailedException {
+        uploadsFailed = true;
+      }
+      // The blobs belong to the account that uploaded them
+      if (authProvider.did != submittingDid) {
+        _images.forgetUploads();
+        _showAccountChanged();
+        return;
+      }
+      if (uploadsFailed) {
+        // Not awaited: the submit ends now, so Post stays enabled behind it
+        if (_images.needsSignInAgain && mounted) {
+          unawaited(showSignInAgainDialog(context, authProvider: authProvider));
+        }
+        return;
+      }
+      // Taken together, so the optimistic images match the embed
+      final attachments = _images.attachments;
+      final embed = buildPostEmbed(
+        images: _images.embedImages,
+        external: external,
+      );
 
       // Build labels if NSFW is enabled
       SelfLabels? labels;
@@ -254,19 +434,11 @@ class _CreatePostScreenState extends State<CreatePostScreen>
         ApiMentionResolver(apiService),
       );
 
-      // The session would now write as another account; keep the form
+      // The session would now write as another account; keep the form, but
+      // not the blobs uploaded under the old one
       if (authProvider.did != submittingDid) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text(
-                'Your account changed while posting, so nothing was posted',
-              ),
-              backgroundColor: Colors.red[700],
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
+        _images.forgetUploads();
+        _showAccountChanged();
         return;
       }
 
@@ -288,14 +460,15 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           authProvider: authProvider,
           community: community,
           title: title,
-          embed: embed,
+          external: external,
+          attachments: attachments,
           content: body.content,
           facets: body.facets,
           isNsfw: isNsfw,
         );
 
-        // Reset form first
-        _resetForm();
+        // Reset form first; the optimistic post takes the image files
+        final ownedImageFiles = _resetForm();
 
         // Navigate to post detail with optimistic data
         await Navigator.push(
@@ -304,6 +477,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
             builder: (context) => PostDetailScreen(
               post: optimisticPost,
               isOptimistic: true,
+              ownedImageFiles: ownedImageFiles,
               sessionStamp: null,
             ),
           ),
@@ -328,7 +502,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     }
   }
 
-  void _resetForm() {
+  /// Clears the form and hands the attachments off; returns the files the
+  /// app owns among them, for the optimistic post to delete.
+  List<File> _resetForm() {
     setState(() {
       _titleController.clear();
       _urlController.clear();
@@ -337,6 +513,12 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       _language = 'en';
       _isNsfw = false;
     });
+    // The optimistic post still draws from these files, so they are only
+    // detached here, never deleted
+    return [
+      for (final attachment in _images.handOff())
+        if (attachment.ownsFile) attachment.file,
+    ];
   }
 
   /// Build optimistic post for immediate display after creation, from the
@@ -346,7 +528,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     required AuthProvider authProvider,
     required CommunityView community,
     required String? title,
-    required ExternalEmbedInput? embed,
+    required ExternalEmbedInput? external,
+    required List<ImageAttachment> attachments,
     required String content,
     required List<RichTextFacet>? facets,
     required bool isNsfw,
@@ -355,15 +538,50 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     final uriParts = response.uri.split('/');
     final rkey = uriParts.isNotEmpty ? uriParts.last : '';
 
-    // Build embed if URL was provided
-    PostEmbed? postEmbed;
-    if (embed != null) {
-      postEmbed = ExternalPostEmbed(
-        type: EmbedTypes.external,
-        external: ExternalEmbed(uri: embed.uri, title: embed.title),
+    final externalEmbed = external == null
+        ? null
+        : ExternalEmbed(uri: external.uri, title: external.title);
+    final externalData = external == null
+        ? null
+        : {
+            r'$type': EmbedTypes.external,
+            'external': {'uri': external.uri, 'title': ?external.title},
+          };
+    // The blobs are not served until the record is indexed, so the images
+    // are drawn from the local files the user picked
+    final images = [
+      for (final attachment in attachments)
+        EmbedImage.local(
+          attachment.file,
+          alt: attachment.trimmedAlt,
+          aspectRatio: attachment.aspectRatio,
+          isGif: attachment.mimeType == ImageFormat.gif.mimeType,
+        ),
+    ];
+
+    final PostEmbed? postEmbed;
+    if (images.isEmpty) {
+      postEmbed = externalEmbed == null
+          ? null
+          : ExternalPostEmbed(
+              type: EmbedTypes.external,
+              external: externalEmbed,
+              data: externalData!,
+            );
+    } else if (externalEmbed == null) {
+      postEmbed = ImagesPostEmbed(
+        type: EmbedTypes.imagesView,
+        images: images,
+        data: const {r'$type': EmbedTypes.imagesView},
+      );
+    } else {
+      postEmbed = ImagesWithAttachmentPostEmbed(
+        type: EmbedTypes.imagesWithAttachmentView,
+        images: images,
+        attachment: ExternalAttachment(externalEmbed),
         data: {
-          r'$type': EmbedTypes.external,
-          'external': {'uri': embed.uri, 'title': ?embed.title},
+          r'$type': EmbedTypes.imagesWithAttachmentView,
+          'attachment': externalData,
         },
       );
     }
@@ -437,9 +655,9 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: TextButton(
-              onPressed: _isFormValid && !_isSubmitting ? _handleSubmit : null,
+              onPressed: _canSubmit ? _handleSubmit : null,
               style: TextButton.styleFrom(
-                backgroundColor: _isFormValid && !_isSubmitting
+                backgroundColor: _canSubmit
                     ? AppColors.primary
                     : AppColors.textSecondary.withValues(alpha: 0.3),
                 foregroundColor: AppColors.textPrimary,
@@ -514,6 +732,19 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
                     // Body field (multiline, formatted from the toolbar)
                     _buildBodyField(),
+
+                    const SizedBox(height: 16),
+
+                    ImageAttachmentStrip(
+                      controller: _images,
+                      onAdd: _addImages,
+                      enabled: !_isSubmitting,
+                    ),
+
+                    if (_preparingImageCount > 0)
+                      PreparingImagesTile(count: _preparingImageCount),
+
+                    _buildAddImageButton(),
 
                     const SizedBox(height: 24),
 
@@ -615,14 +846,55 @@ class _CreatePostScreenState extends State<CreatePostScreen>
     );
   }
 
+  Widget _buildAddImageButton() {
+    final onTap =
+        _images.remaining > 0 && !_isSubmitting && _preparingImageCount == 0
+        ? _addImages
+        : null;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Semantics(
+        key: const Key('create-post-add-image'),
+        button: true,
+        enabled: onTap != null,
+        label: 'Add image…',
+        excludeSemantics: true,
+        onTap: onTap,
+        child: TextButton.icon(
+          onPressed: onTap,
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.textSecondary,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+          ),
+          icon: LucideGlyph(
+            LucidePaths.imagePlus,
+            size: 20,
+            color: onTap != null
+                ? AppColors.textSecondary
+                : AppColors.textMuted,
+          ),
+          label: const Text('Add image', style: TextStyle(fontSize: 16)),
+        ),
+      ),
+    );
+  }
+
   Widget _buildUserInfo(String handle) {
     return Row(
       children: [
         const Icon(Icons.person, color: AppColors.textSecondary, size: 16),
         const SizedBox(width: 8),
-        Text(
-          '@$handle',
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        Flexible(
+          child: Text(
+            '@$handle',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 14,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ],
     );
@@ -696,6 +968,7 @@ class _CreatePostScreenState extends State<CreatePostScreen>
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: _language,
+          isExpanded: true,
           dropdownColor: AppColors.backgroundSecondary,
           style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
           icon: const Icon(
@@ -705,7 +978,11 @@ class _CreatePostScreenState extends State<CreatePostScreen>
           items: languages.entries.map((entry) {
             return DropdownMenuItem<String>(
               value: entry.key,
-              child: Text(entry.value),
+              child: Text(
+                entry.value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             );
           }).toList(),
           onChanged: (value) {

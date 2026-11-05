@@ -804,18 +804,6 @@ void main() {
       expect(find.text(_excerpt), findsOneWidget);
     });
 
-    testWidgets('B5 a reply to your comment without a preview shows the post', (
-      tester,
-    ) async {
-      await _pumpCard(
-        tester,
-        _commentReply(subject: {'uri': _yourCommentUri, 'cid': 'bafymine'}),
-      );
-
-      expect(find.byType(CompactPostCard), findsOneWidget);
-      expect(_inCard(find.text(_title)), findsOneWidget);
-    });
-
     for (final (description, wire) in [
       ('postReply', _row(rootPost: _statusRoot('removedByModerator'))),
       (
@@ -958,6 +946,141 @@ void main() {
           );
         } finally {
           semantics.dispose();
+        }
+      });
+    }
+  });
+
+  // Chunk 08 B7: a live comment with images and no text reads "Image".
+  // Fields the backend omits are left out of the wire map, not sent as "".
+  group('NotificationReplyCard image-only comment previews', () {
+    const commentRecordWithoutExcerpt = <String, dynamic>{
+      'uri': _replyUri,
+      'cid': 'bafyrecord',
+      'createdAt': '2026-10-01T12:00:00.000Z',
+    };
+    const postMentionRecordWithoutExcerpt = <String, dynamic>{
+      'uri': _postMentionUri,
+      'cid': 'bafyrecord',
+      'createdAt': '2026-10-01T12:00:00.000Z',
+    };
+
+    final rows =
+        <
+          ({
+            String name,
+            Map<String, dynamic> wire,
+            List<String> shownTexts,
+            bool showsImage,
+            bool showsPostCard,
+          })
+        >[
+          (
+            name: '(a) commentReply whose live comment subject has no preview',
+            wire: _commentReply(
+              subject: {'uri': _yourCommentUri, 'cid': 'bafymine'},
+            ),
+            shownTexts: [_excerpt],
+            showsImage: true,
+            showsPostCard: false,
+          ),
+          (
+            name: '(b) commentReply whose live comment subject preview is ""',
+            wire: _commentReply(
+              subject: {
+                'uri': _yourCommentUri,
+                'cid': 'bafymine',
+                'preview': '',
+              },
+            ),
+            shownTexts: [_excerpt],
+            showsImage: true,
+            showsPostCard: false,
+          ),
+          (
+            name:
+                '(c) postReply whose triggering comment record has no '
+                'excerpt',
+            wire: _row(
+              rootPost: _cardRoot,
+              record: commentRecordWithoutExcerpt,
+            ),
+            shownTexts: ['Bob'],
+            showsImage: true,
+            showsPostCard: true,
+          ),
+          (
+            name:
+                '(e) commentReply whose deleted comment subject has no '
+                'preview',
+            wire: _commentReply(
+              subject: {
+                'uri': _yourCommentUri,
+                'cid': 'bafymine',
+                'status': 'deleted',
+              },
+            ),
+            shownTexts: [RemovalCopy.deletedByUser, _excerpt],
+            showsImage: false,
+            showsPostCard: false,
+          ),
+          (
+            name: '(e) postReply whose removed comment record has no excerpt',
+            wire: _row(
+              rootPost: _cardRoot,
+              record: _statusRecord('removedByServerAdmin'),
+            ),
+            shownTexts: [RemovalCopy.removedByServerAdmin],
+            showsImage: false,
+            showsPostCard: true,
+          ),
+          (
+            name: '(f) postReply whose post subject has no preview',
+            wire: _row(rootPost: _cardRoot),
+            shownTexts: [_excerpt],
+            showsImage: false,
+            showsPostCard: true,
+          ),
+          (
+            name: '(f) post mention whose post record has no excerpt',
+            wire: _row(
+              reason: 'mention',
+              rootPost: {..._cardRoot, 'uri': _postMentionUri},
+              record: postMentionRecordWithoutExcerpt,
+            ),
+            shownTexts: ['Bob'],
+            showsImage: false,
+            showsPostCard: true,
+          ),
+          (
+            name: '(g) commentReply whose comment subject has a preview',
+            wire: _commentReply(
+              subject: {
+                'uri': _yourCommentUri,
+                'cid': 'bafymine',
+                'preview': _yourComment,
+              },
+            ),
+            shownTexts: [_yourComment, _excerpt],
+            showsImage: false,
+            showsPostCard: false,
+          ),
+        ];
+
+    for (final row in rows) {
+      testWidgets('B7 ${row.name}', (tester) async {
+        await _pumpCard(tester, row.wire);
+
+        expect(
+          find.text('Image'),
+          row.showsImage ? findsOneWidget : findsNothing,
+        );
+        expect(
+          find.byType(CompactPostCard),
+          row.showsPostCard ? findsOneWidget : findsNothing,
+        );
+        for (final text in row.shownTexts) {
+          expect(find.text(text), findsOneWidget, reason: text);
         }
       });
     }

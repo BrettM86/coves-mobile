@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/models/comment.dart';
 import 'package:coves_flutter/models/post.dart';
+import 'package:coves_flutter/models/post_embed_input.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/comments_provider.dart';
@@ -103,7 +104,12 @@ class ReplyScreenHarness {
   Future<void> pushReply(
     WidgetTester tester, {
     required ThreadViewComment comment,
-    Future<void> Function(String content, List<RichTextFacet> facets)? onSubmit,
+    Future<void> Function(
+      String content,
+      List<RichTextFacet> facets,
+      ImagesEmbedInput? embed,
+    )?
+    onSubmit,
   }) async {
     unawaited(
       navigatorKey.currentState!.push(
@@ -111,7 +117,7 @@ class ReplyScreenHarness {
           builder: (_) => ReplyScreen(
             comment: comment,
             commentsProvider: commentsProvider,
-            onSubmit: onSubmit ?? (content, facets) async {},
+            onSubmit: onSubmit ?? (content, facets, embed) async {},
           ),
         ),
       ),
@@ -135,7 +141,7 @@ class ReplyScreenHarness {
           builder: (_) => ReplyScreen(
             editing: comment,
             commentsProvider: withCommentsProvider ? commentsProvider : null,
-            onSubmit: onSubmit,
+            onSubmit: (content, facets, embed) => onSubmit(content, facets),
           ),
         ),
       ),
@@ -154,7 +160,7 @@ class ReplyScreenHarness {
     await pushReply(
       tester,
       comment: createComment(parentUri),
-      onSubmit: (content, facets) async {
+      onSubmit: (content, facets, embed) async {
         submissions.add((content, facets.map(describeFacet).toList()));
       },
     );

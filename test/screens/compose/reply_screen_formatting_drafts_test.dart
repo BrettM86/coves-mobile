@@ -206,7 +206,7 @@ void main() {
       await harness.pushReply(
         tester,
         comment: createComment(_parentUri),
-        onSubmit: (content, facets) => submit.future,
+        onSubmit: (content, facets, embed) => submit.future,
       );
       await typeAndSelect(
         tester,
@@ -247,7 +247,7 @@ void main() {
       await harness.pushReply(
         tester,
         comment: createComment(_parentUri),
-        onSubmit: (content, facets) => submit.future,
+        onSubmit: (content, facets, embed) => submit.future,
       );
       await typeAndSelect(
         tester,

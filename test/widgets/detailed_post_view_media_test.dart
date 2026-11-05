@@ -5,9 +5,15 @@ import 'package:coves_flutter/widgets/bluesky_post_card.dart';
 import 'package:coves_flutter/widgets/detailed_post_view.dart';
 import 'package:coves_flutter/widgets/external_link_bar.dart';
 import 'package:coves_flutter/widgets/fullscreen_video_player.dart';
+import 'package:coves_flutter/widgets/media/gif_codec.dart';
+import 'package:coves_flutter/widgets/media/image_error.dart';
+import 'package:coves_flutter/widgets/media/media_page_dots.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+
+import '../test_helpers/fake_gif_codec.dart';
+import '../test_helpers/fake_image_cache_manager.dart';
 
 const _imagesKey = Key('detail-images-embed');
 const _pageIndicatorKey = Key('detail-images-page-indicator');
@@ -28,6 +34,12 @@ const _videoThumb = 'https://cdn.test/video-thumb.jpg';
 
 /// 16:9 as a width/height double — the fallback ratio when none is given.
 const _defaultRatio = 16 / 9;
+
+/// Page dots showing page [index] (zero-based) of [count].
+Finder _dots(int index, int count) => find.byWidgetPredicate(
+  (widget) =>
+      widget is MediaPageDots && widget.index == index && widget.count == count,
+);
 
 /// H1 clamp bounds for detail-view media, as width/height doubles.
 const _minDetailRatio = 1 / 3;
@@ -78,17 +90,27 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
   }
 
-  Widget harness(FeedViewPost post) {
+  Widget harness(FeedViewPost post, {FakeGifCodecLoader? gifLoader}) {
+    Widget app = MaterialApp(
+      navigatorObservers: [observer],
+      home: Scaffold(
+        body: SingleChildScrollView(child: DetailedPostView(post: post)),
+      ),
+    );
+    if (gifLoader != null) {
+      app = GifCodecScope(
+        loader: gifLoader.load,
+        child: ImageCacheScope(
+          cacheManager: FakeImageCacheManager(),
+          child: app,
+        ),
+      );
+    }
     return MultiProvider(
       providers: [
         Provider<StreamableService>.value(value: StreamableService()),
       ],
-      child: MaterialApp(
-        navigatorObservers: [observer],
-        home: Scaffold(
-          body: SingleChildScrollView(child: DetailedPostView(post: post)),
-        ),
-      ),
+      child: app,
     );
   }
 
@@ -538,7 +560,9 @@ void main() {
       expect(imageUrlsIn(tester, _imagesKey), isNot(contains(_thumb1)));
     });
 
-    testWidgets('shows an i/N indicator starting at 1/3', (tester) async {
+    testWidgets('shows page dots starting on page one of three', (
+      tester,
+    ) async {
       useDetailSurface(tester);
       final post = makePost(embed: imagesEmbed(threeImages()));
 
@@ -546,10 +570,10 @@ void main() {
       await tester.pump();
 
       expect(find.byKey(_pageIndicatorKey), findsOneWidget);
-      expect(inBlock(_pageIndicatorKey, find.text('1/3')), findsOneWidget);
+      expect(inBlock(_pageIndicatorKey, _dots(0, 3)), findsOneWidget);
     });
 
-    testWidgets('indicator advances to 2/3 after a swipe', (tester) async {
+    testWidgets('the dots advance to page two after a swipe', (tester) async {
       useDetailSurface(tester);
       final post = makePost(embed: imagesEmbed(threeImages()));
 
@@ -562,7 +586,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(inBlock(_pageIndicatorKey, find.text('2/3')), findsOneWidget);
+      expect(inBlock(_pageIndicatorKey, _dots(1, 3)), findsOneWidget);
     });
 
     testWidgets('shows no external link bar for a native gallery', (
@@ -759,7 +783,7 @@ void main() {
       await tester.pumpWidget(harness(threeImagePost()));
       await tester.pump();
       await swipeToLastPage(tester);
-      expect(inBlock(_pageIndicatorKey, find.text('3/3')), findsOneWidget);
+      expect(inBlock(_pageIndicatorKey, _dots(2, 3)), findsOneWidget);
 
       // Same widget position and type, so the State is reused — exactly the
       // scroll-to-next-post case where a stale index survives.
@@ -776,7 +800,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(inBlock(_pageIndicatorKey, find.text('1/2')), findsOneWidget);
+      expect(inBlock(_pageIndicatorKey, _dots(0, 2)), findsOneWidget);
 
       final pageView = tester.widget<PageView>(
         inBlock(_imagesKey, find.byType(PageView)),
@@ -1073,7 +1097,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(_viewerIndicatorKey),
-          matching: find.text('2/3'),
+          matching: _dots(1, 3),
         ),
         findsOneWidget,
         reason: 'the indicator must agree with the page the viewer opened on',
@@ -1336,6 +1360,57 @@ void main() {
       expect(find.text('Plain text post'), findsOneWidget);
       expect(find.byKey(_imagesKey), findsNothing);
       expect(find.byKey(_videoKey), findsNothing);
+    });
+  });
+
+  group('B5 a GIF in the detail view', () {
+    late FakeGifFrames frames;
+
+    setUpAll(() async {
+      frames = await FakeGifFrames.create();
+    });
+
+    tearDownAll(() => frames.dispose());
+
+    testWidgets('shows Play GIF over the thumb instead of fullsize; play '
+        'loads fullsize in place and opens no viewer or ALT badge', (
+      tester,
+    ) async {
+      useDetailSurface(tester);
+      const gifFull = 'https://cdn.test/cat-full.gif';
+      final loader = FakeGifCodecLoader(codec: FakeGifCodec(frames));
+      final post = makePost(
+        embed: ImagesPostEmbed(
+          type: 'social.coves.embed.images#view',
+          images: const [
+            EmbedImage(
+              thumb: _thumb1,
+              fullsize: gifFull,
+              alt: 'A cat chasing a laser dot',
+              isGif: true,
+            ),
+          ],
+          data: const {},
+        ),
+      );
+
+      await tester.pumpWidget(harness(post, gifLoader: loader));
+      await tester.pump();
+      observer.reset();
+
+      final playGif = find.bySemanticsLabel('Play GIF');
+      expect(playGif, findsOneWidget);
+      expect(imageUrlsIn(tester, _imagesKey), [_thumb1]);
+      expect(find.byKey(const Key('image-viewer-alt-badge')), findsNothing);
+
+      await tester.tap(playGif);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(loader.requests, [gifFull]);
+      expect(find.byKey(gifFrameKey), findsOneWidget);
+      expect(observer.pushedPages, isEmpty);
+      expect(find.byKey(_imageViewerKey), findsNothing);
     });
   });
 }

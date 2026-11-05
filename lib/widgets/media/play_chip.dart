@@ -8,19 +8,31 @@ import '../../constants/app_colors.dart';
 /// style, not an independent knob.
 enum PlayChipStyle { feed, detail }
 
-/// Circular play affordance overlaying a video poster.
+/// What the chip offers: start playback, or pause it (a playing GIF).
+enum PlayChipGlyph { play, pause }
+
+/// Circular play affordance overlaying a video poster or a GIF still.
 ///
 /// Shows a spinner in place of the glyph while [loading], which is how the
-/// Streamable flow reports that it is resolving a playable URL.
+/// Streamable flow reports that it is resolving a playable URL. [compact]
+/// shrinks the chip for a corner control that must not cover the media,
+/// such as a playing GIF's pause control.
 class PlayChip extends StatelessWidget {
   const PlayChip({
     this.style = PlayChipStyle.feed,
+    this.glyph = PlayChipGlyph.play,
     this.loading = false,
+    this.compact = false,
     super.key,
   });
 
   final PlayChipStyle style;
+  final PlayChipGlyph glyph;
   final bool loading;
+  final bool compact;
+
+  static const double _diameter = 64;
+  static const double _compactDiameter = 36;
 
   Color get _background => switch (style) {
     PlayChipStyle.feed => AppColors.background.withValues(alpha: 0.7),
@@ -32,15 +44,20 @@ class PlayChip extends StatelessWidget {
     PlayChipStyle.detail => AppColors.background,
   };
 
-  IconData get _glyph => switch (style) {
-    PlayChipStyle.feed => Icons.play_arrow,
-    PlayChipStyle.detail => Icons.play_arrow_rounded,
+  IconData get _glyph => switch ((style, glyph)) {
+    (PlayChipStyle.feed, PlayChipGlyph.play) => Icons.play_arrow,
+    (PlayChipStyle.detail, PlayChipGlyph.play) => Icons.play_arrow_rounded,
+    (PlayChipStyle.feed, PlayChipGlyph.pause) => Icons.pause,
+    (PlayChipStyle.detail, PlayChipGlyph.pause) => Icons.pause_rounded,
   };
 
-  double get _glyphSize => switch (style) {
-    PlayChipStyle.feed => 48,
-    PlayChipStyle.detail => 36,
-  };
+  double get _glyphSize {
+    final size = switch (style) {
+      PlayChipStyle.feed => 48.0,
+      PlayChipStyle.detail => 36.0,
+    };
+    return compact ? size * _compactDiameter / _diameter : size;
+  }
 
   Widget get _spinner => switch (style) {
     PlayChipStyle.feed => const CircularProgressIndicator(
@@ -57,9 +74,10 @@ class PlayChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final diameter = compact ? _compactDiameter : _diameter;
     return Container(
-      width: 64,
-      height: 64,
+      width: diameter,
+      height: diameter,
       decoration: BoxDecoration(color: _background, shape: BoxShape.circle),
       child: loading
           ? _spinner
