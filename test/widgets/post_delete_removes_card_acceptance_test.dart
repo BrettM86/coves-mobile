@@ -302,7 +302,7 @@ void main() {
     expect(_postCard(deletedPostUri, within: discoverPage), findsOneWidget);
     expect(_postCard(keptPostUri, within: discoverPage), findsOneWidget);
 
-    await tester.tap(find.text('For You'));
+    await tester.tap(find.text('Subscribed'));
     await tester.pumpAndSettle();
     expect(_postCard(deletedPostUri, within: forYouPage), findsOneWidget);
     expect(_postCard(keptPostUri, within: forYouPage), findsOneWidget);
@@ -320,7 +320,7 @@ void main() {
     expect(_postCard(keptPostUri, within: discoverPage), findsOneWidget);
 
     // The author switches to the other tab: the post is gone there too.
-    await tester.tap(find.text('For You'));
+    await tester.tap(find.text('Subscribed'));
     await tester.pumpAndSettle();
     expect(_postCard(deletedPostUri, within: forYouPage), findsNothing);
     expect(_postCard(keptPostUri, within: forYouPage), findsOneWidget);
@@ -477,7 +477,7 @@ void main() {
         _postCard(deletedPostUri, within: _feedPage(FeedType.discover)),
         findsOneWidget,
       );
-      await tester.tap(find.text('For You'));
+      await tester.tap(find.text('Subscribed'));
       await tester.pumpAndSettle();
       expect(
         _postCard(deletedPostUri, within: _feedPage(FeedType.forYou)),
@@ -499,7 +499,7 @@ void main() {
       expect(_postCard(deletedPostUri, within: discoverPage), findsNothing);
       expect(_postCard(keptPostUri, within: discoverPage), findsOneWidget);
 
-      await tester.tap(find.text('For You'));
+      await tester.tap(find.text('Subscribed'));
       await tester.pumpAndSettle();
       final forYouPage = _feedPage(FeedType.forYou);
       expect(_postCard(deletedPostUri, within: forYouPage), findsNothing);

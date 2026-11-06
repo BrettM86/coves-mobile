@@ -358,7 +358,7 @@ class FeedScreenState extends State<FeedScreen> {
   /// Ensure a feed is loaded (trigger initial load if needed)
   ///
   /// Called when switching to a feed that may not have been loaded yet,
-  /// e.g., when user signs in after app start and taps "For You" tab.
+  /// e.g., when user signs in after app start and taps "Subscribed" tab.
   void _ensureFeedLoaded(FeedType type) {
     final provider = context.read<MultiFeedProvider>();
     final state = provider.getState(type);
@@ -510,7 +510,7 @@ class _FeedTabsWithSlidingUnderline extends StatelessWidget {
   Widget build(BuildContext context) {
     // Calculate opacity for each tab (smooth interpolation, no threshold snap)
     // Discover: fully visible at page 0, faded at page 1
-    // For You: faded at page 0, fully visible at page 1
+    // Subscribed: faded at page 0, fully visible at page 1
     final discoverOpacity = 1.0 - pageValue;
     final forYouOpacity = pageValue;
 
@@ -528,7 +528,7 @@ class _FeedTabsWithSlidingUnderline extends StatelessWidget {
             ),
             const SizedBox(width: _tabSpacing),
             _buildTabLabel(
-              label: 'For You',
+              label: 'Subscribed',
               opacity: forYouOpacity,
               onTap: onForYouTap,
             ),
@@ -583,14 +583,17 @@ class _FeedTabsWithSlidingUnderline extends StatelessWidget {
   Widget _buildSlidingUnderline() {
     // Calculate the horizontal offset for the underline.
     // At pageValue 0, underline is centered under "Discover"
-    // At pageValue 1, underline is centered under "For You"
+    // At pageValue 1, underline is centered under "Subscribed"
     //
-    // The offset calculation accounts for asymmetric tab widths:
-    // - "Discover" is ~58px wide, center at -(58/2 + 24/2) = -41px from Row center
-    // - "For You" is ~50px wide, center at +(50/2 + 24/2) = +37px from Row center
+    // The offset calculation accounts for asymmetric tab widths. With the
+    // Row centered, each label's center sits half of (spacing + the other
+    // label's width) from the Row center:
+    // - "Discover" (~69px): center at -(24 + 91) / 2 = -58px
+    // - "Subscribed" (~91px): center at +(24 + 69) / 2 = +47px
+    // Widths measured on the iOS simulator (SF, 16pt w600).
     // We interpolate between these positions based on pageValue.
-    const discoverOffset = -41.0;
-    const forYouOffset = 42.0;
+    const discoverOffset = -58.0;
+    const forYouOffset = 47.0;
     final offset = discoverOffset + pageValue * (forYouOffset - discoverOffset);
 
     return Transform.translate(

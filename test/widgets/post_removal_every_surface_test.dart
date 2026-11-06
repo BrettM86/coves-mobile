@@ -298,7 +298,7 @@ void main() {
       _card(_survivorUri, within: _home(FeedType.discover)),
       findsOneWidget,
     );
-    await tester.tap(find.text('For You'));
+    await tester.tap(find.text('Subscribed'));
     await tester.pumpAndSettle();
     expect(_card(uri, within: _home(FeedType.forYou)), findsOneWidget);
     expect(_card(_survivorUri, within: _home(FeedType.forYou)), findsOneWidget);
@@ -324,7 +324,7 @@ void main() {
       _card(_survivorUri, within: _home(FeedType.discover)),
       findsOneWidget,
     );
-    await tester.tap(find.text('For You'));
+    await tester.tap(find.text('Subscribed'));
     await tester.pumpAndSettle();
     expect(_card(uri, within: _home(FeedType.forYou)), findsNothing);
     expect(_card(_survivorUri, within: _home(FeedType.forYou)), findsOneWidget);

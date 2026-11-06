@@ -288,7 +288,7 @@ void main() {
       await tester.pumpWidget(createTestWidget());
 
       expect(find.text('Discover'), findsOneWidget);
-      expect(find.text('For You'), findsOneWidget);
+      expect(find.text('Subscribed'), findsOneWidget);
     });
 
     testWidgets('should display only Discover tab when not authenticated', (
@@ -299,7 +299,7 @@ void main() {
       await tester.pumpWidget(createTestWidget());
 
       expect(find.text('Discover'), findsOneWidget);
-      expect(find.text('For You'), findsNothing);
+      expect(find.text('Subscribed'), findsNothing);
     });
 
     testWidgets('should handle pull-to-refresh', (tester) async {
