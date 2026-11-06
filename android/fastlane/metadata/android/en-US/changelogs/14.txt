@@ -1,0 +1,8 @@
+What's new in 1.7.0
+
+• Add images to posts and replies, with alt text, swipeable galleries and a full-screen viewer
+• Format what you write: bold, italic, strikethrough, spoilers, code, quotes and headings
+• Edit your own comments
+• New default avatars for Coves accounts
+• Bluesky posts shared with the same title no longer show it twice
+• Fixes for notifications and the image viewer

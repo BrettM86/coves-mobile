@@ -1,8 +1,8 @@
-What's new in 1.6.0
+What's new in 1.7.0
 
-• Notifications: replies, mentions and likes in one place, with settings for what you get
-• A fresh new app icon
-• Sort a community's Top posts by day, week, month, year or all time
-• Bluesky posts shared with a matching title no longer show the title twice
-• Discover keeps your place when you scroll back
-• Fixes for profile bios, image uploads, sign-in prompts and loading comments
+• Add images to posts and replies, with alt text, swipeable galleries and a full-screen viewer
+• Format what you write: bold, italic, strikethrough, spoilers, code, quotes and headings
+• Edit your own comments
+• New default avatars for Coves accounts
+• Bluesky posts shared with the same title no longer show it twice
+• Fixes for notifications and the image viewer
