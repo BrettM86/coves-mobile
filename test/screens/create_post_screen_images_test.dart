@@ -140,7 +140,6 @@ void main() {
   /// surface with the providers the post detail screen needs.
   Future<void> pumpComposer(
     WidgetTester tester, {
-    ValueChanged<bool>? onDirtyChanged,
     Size physicalSize = const Size(1080, 2400),
   }) async {
     tester.view.physicalSize = physicalSize;
@@ -155,7 +154,6 @@ void main() {
       auth: auth,
       api: api,
       theme: AppTheme.dark,
-      onDirtyChanged: onDirtyChanged,
       imagePreparer: ImagePreparer(
         encoder: encoder,
         temporaryDirectory: () => conversionDirectoryLookup(),
@@ -386,18 +384,31 @@ void main() {
       await pumpFrames(tester);
     }
 
-    testWidgets('a community and only images enable Post and report the '
-        'composer dirty', (tester) async {
-      final dirtyLog = <bool>[];
-      await pumpComposer(tester, onDirtyChanged: dirtyLog.add);
+    testWidgets('a community and only images enable Post', (tester) async {
+      await pumpComposer(tester);
       await selectCommunity(tester);
       expect(tester.widget<TextButton>(_postButton).onPressed, isNull);
 
       await pickFromLibrary(tester, [imageC]);
 
       expect(tester.widget<TextButton>(_postButton).onPressed, isNotNull);
-      expect(dirtyLog, isNotEmpty);
-      expect(dirtyLog.last, isTrue);
+    });
+
+    testWidgets('whitespace-only text keeps Post disabled', (tester) async {
+      await pumpComposer(tester);
+      await selectCommunity(tester);
+
+      await tester.enterText(find.widgetWithText(TextField, 'Title'), '   ');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'What are your thoughts?'),
+        '\n\n  ',
+      );
+      await tester.pump();
+      expect(tester.widget<TextButton>(_postButton).onPressed, isNull);
+
+      await tester.enterText(find.widgetWithText(TextField, 'Title'), 'a');
+      await tester.pump();
+      expect(tester.widget<TextButton>(_postButton).onPressed, isNotNull);
     });
 
     testWidgets('a failed upload blocks the post and shows its error and '

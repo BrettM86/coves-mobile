@@ -25,6 +25,9 @@ class _MainShellScreenState extends State<MainShellScreen> {
   int _selectedIndex = 0;
   final _feedScreenKey = GlobalKey<FeedScreenState>();
 
+  /// Tab index of the home feed in the IndexedStack.
+  static const int _homeTabIndex = 0;
+
   /// Tab index of the Create Post composer in the IndexedStack.
   static const int _createTabIndex = 2;
 
@@ -33,19 +36,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
   /// tabs don't fire their requests at startup, competing with the feed the
   /// user is actually looking at.
   final Set<int> _visitedTabs = {0};
-
-  /// Whether the composer currently holds unsaved input (reported by
-  /// CreatePostScreen). Used to decide if system back must be intercepted.
-  bool _composeHasDraft = false;
-
-  void _onComposeDirtyChanged(bool dirty) {
-    if (dirty == _composeHasDraft) {
-      return;
-    }
-    setState(() {
-      _composeHasDraft = dirty;
-    });
-  }
 
   void _onItemTapped(int index) {
     // If already on feed tab, scroll to top
@@ -62,7 +52,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
   }
 
   void _onNavigateToFeed() {
-    _selectTab(0); // Switch to feed tab
+    _selectTab(_homeTabIndex);
   }
 
   void _selectTab(int index) {
@@ -93,17 +83,14 @@ class _MainShellScreenState extends State<MainShellScreen> {
         _lazyTab(1, const CommunitiesScreen()),
         _lazyTab(
           _createTabIndex,
-          CreatePostScreen(
-            onNavigateToFeed: _onNavigateToFeed,
-            onDirtyChanged: _onComposeDirtyChanged,
-          ),
+          CreatePostScreen(onNavigateToFeed: _onNavigateToFeed),
         ),
         _lazyTab(3, NotificationsScreen(isSelected: _selectedIndex == 3)),
         _lazyTab(4, const ProfileScreen()),
       ],
     );
-    // Guard the magic constant: _createTabIndex couples this children list,
-    // the back-guard in _wrapWithBackGuard, and the "plus" nav item indices.
+    // Guard the magic constant: _createTabIndex couples this children list
+    // and the "plus" nav item indices.
     assert(
       !_visitedTabs.contains(_createTabIndex) ||
           body.children[_createTabIndex] is CreatePostScreen,
@@ -226,20 +213,19 @@ class _MainShellScreenState extends State<MainShellScreen> {
 
   /// Shell-level back handling.
   ///
-  /// Only intercepts system back when the Create tab is active AND the
-  /// composer has unsaved input — in that case back switches to the Home tab
-  /// so the draft stays alive in the IndexedStack instead of the app being
-  /// backgrounded mid-compose. Everywhere else back behaves normally
-  /// (backgrounds the app / pops the route).
+  /// System back on any tab other than Home switches to the Home tab instead
+  /// of leaving the shell. Back on Home behaves normally (backgrounds the app
+  /// or pops the shell route). Routes pushed over the shell sit above this
+  /// PopScope's route, so back pops them first. A composer draft stays alive
+  /// in the IndexedStack when back leaves the Create tab.
+  ///
+  /// Assumes no tab content on the shell route has its own PopScope: a pop
+  /// blocked by one would also switch to Home here.
   Widget _wrapWithBackGuard(Widget child) {
-    final protectDraft = _selectedIndex == _createTabIndex && _composeHasDraft;
     return PopScope(
-      canPop: !protectDraft,
+      canPop: _selectedIndex == _homeTabIndex,
       onPopInvokedWithResult: (didPop, result) {
-        // Re-check the draft-protection condition instead of inferring it
-        // from !didPop alone: a pop blocked by any other PopScope in the
-        // subtree must not yank the user to the Feed tab.
-        if (!didPop && _selectedIndex == _createTabIndex && _composeHasDraft) {
+        if (!didPop && _selectedIndex != _homeTabIndex) {
           _onNavigateToFeed();
         }
       },

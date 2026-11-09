@@ -375,9 +375,9 @@ class _CommunitiesAdminPanelState extends State<CommunitiesAdminPanel> {
 
   @override
   Widget build(BuildContext context) {
-    // NOTE: system back is handled at the shell level (MainShellScreen) and
-    // only intercepted when the Create tab has a draft; here it backgrounds
-    // the app as usual — use the in-app Back arrow to return to the menu.
+    // NOTE: system back is handled at the shell level (MainShellScreen): on
+    // this tab it switches to Home, and the open admin page stays in the
+    // IndexedStack. Use the in-app Back arrow to return to the menu.
     // The pages below are deliberately NOT Navigator routes: real routes
     // would let system back pop them and change that.
     return Scaffold(

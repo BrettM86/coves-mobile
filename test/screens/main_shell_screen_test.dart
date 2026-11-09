@@ -5,6 +5,7 @@ import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/community_subscription_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
+import 'package:coves_flutter/providers/notification_preferences_change_signal.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/home/main_shell_screen.dart';
 import 'package:coves_flutter/services/comment_service.dart';
@@ -18,7 +19,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import '../test_helpers/fake_providers.dart'
-    show unchangingSessionKey, unreadNotificationCountRegistration;
+    show
+        notificationPreferencesRegistration,
+        notificationsListRegistration,
+        unchangingSessionKey,
+        unreadNotificationCountRegistration,
+        viewerAuthorityRegistration;
 
 // Fake AuthProvider for testing (see test/widgets/feed_screen_test.dart).
 // Unauthenticated: FeedScreen shows the Discover empty state and
@@ -137,7 +143,23 @@ void main() {
               dispose: (_, service) => service.dispose(),
             ),
             ChangeNotifierProvider<AuthProvider>.value(value: fakeAuthProvider),
+            // App-level dependencies of the Notifications and Profile tabs
+            ChangeNotifierProvider<NotificationPreferencesChangeSignal>(
+              create: (_) => NotificationPreferencesChangeSignal(),
+            ),
+            viewerAuthorityRegistration(
+              auth: fakeAuthProvider,
+              apiService: apiService,
+            ),
             unreadNotificationCountRegistration(
+              auth: fakeAuthProvider,
+              apiService: apiService,
+            ),
+            notificationsListRegistration(
+              auth: fakeAuthProvider,
+              apiService: apiService,
+            ),
+            notificationPreferencesRegistration(
               auth: fakeAuthProvider,
               apiService: apiService,
             ),
@@ -161,6 +183,7 @@ void main() {
               ),
             ),
             Provider<ProfileCache>.value(value: profileCache),
+            Provider<PostChangeBroadcast>(create: (_) => PostChangeBroadcast()),
           ],
           child: MaterialApp(
             navigatorKey: navigatorKey,
@@ -224,45 +247,10 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('Create tab + dirty composer: back is intercepted and '
-        'lands on Feed tab', (tester) async {
-      await pumpShell(tester);
-
-      await tapNavItem(tester, 'Create');
-      expect(stackIndex(tester), 2);
-      await dirtyComposer(tester);
-
-      await systemBack(tester);
-
-      // Not popped - shell still on screen, draft alive in the IndexedStack
-      expect(find.byType(MainShellScreen), findsOneWidget);
-      expect(find.text('base route'), findsNothing);
-      // ...and the user landed on the Feed tab
-      expect(stackIndex(tester), 0);
-    });
-
-    testWidgets('Create tab + clean composer: back pops normally', (
+    testWidgets('Home tab: back pops normally (exits the shell)', (
       tester,
     ) async {
       await pumpShell(tester);
-
-      await tapNavItem(tester, 'Create');
-      expect(stackIndex(tester), 2);
-
-      await systemBack(tester);
-
-      expect(find.byType(MainShellScreen), findsNothing);
-      expect(find.text('base route'), findsOneWidget);
-    });
-
-    testWidgets('other tab + dirty composer: back pops normally '
-        '(draft protection must not fire off the Create tab)', (tester) async {
-      await pumpShell(tester);
-
-      // Dirty the composer, then switch away from the Create tab
-      await tapNavItem(tester, 'Create');
-      await dirtyComposer(tester);
-      await tapNavItem(tester, 'Home');
       expect(stackIndex(tester), 0);
 
       await systemBack(tester);
@@ -271,22 +259,74 @@ void main() {
       expect(find.text('base route'), findsOneWidget);
     });
 
-    testWidgets('after an intercepted back, a second back (now on Feed, '
-        'clean) pops', (tester) async {
+    for (final (label, index) in [
+      ('Communities', 1),
+      ('Create', 2),
+      ('Notifications', 3),
+      ('Me', 4),
+    ]) {
+      testWidgets('$label tab: back switches to the Home tab, and a second '
+          'back pops', (tester) async {
+        await pumpShell(tester);
+
+        await tapNavItem(tester, label);
+        expect(stackIndex(tester), index);
+
+        await systemBack(tester);
+
+        expect(find.byType(MainShellScreen), findsOneWidget);
+        expect(find.text('base route'), findsNothing);
+        expect(stackIndex(tester), 0);
+
+        await systemBack(tester);
+
+        expect(find.byType(MainShellScreen), findsNothing);
+        expect(find.text('base route'), findsOneWidget);
+      });
+    }
+
+    testWidgets('Create tab + dirty composer: back switches to Home and the '
+        'draft stays alive', (tester) async {
       await pumpShell(tester);
 
       await tapNavItem(tester, 'Create');
       await dirtyComposer(tester);
 
-      // First back: intercepted, lands on Feed
       await systemBack(tester);
+
       expect(find.byType(MainShellScreen), findsOneWidget);
       expect(stackIndex(tester), 0);
 
-      // Second back: nothing to protect anymore, pops
+      await tapNavItem(tester, 'Create');
+      expect(find.text('Unsaved draft'), findsOneWidget);
+    });
+
+    testWidgets('route pushed over a non-Home tab: back pops that route '
+        'first and keeps the tab', (tester) async {
+      await pumpShell(tester);
+
+      await tapNavItem(tester, 'Communities');
+      unawaited(
+        navigatorKey.currentState!.push(
+          MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('pushed route')),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('pushed route'), findsOneWidget);
+
       await systemBack(tester);
-      expect(find.byType(MainShellScreen), findsNothing);
-      expect(find.text('base route'), findsOneWidget);
+
+      expect(find.text('pushed route'), findsNothing);
+      expect(find.byType(MainShellScreen), findsOneWidget);
+      expect(stackIndex(tester), 1);
+
+      await systemBack(tester);
+
+      expect(find.byType(MainShellScreen), findsOneWidget);
+      expect(stackIndex(tester), 0);
     });
   });
 }

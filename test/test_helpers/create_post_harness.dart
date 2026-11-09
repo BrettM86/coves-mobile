@@ -113,7 +113,6 @@ Future<void> pumpWithPostDetailProviders(
   required AuthProvider auth,
   required CovesApiService api,
   ThemeData? theme,
-  ValueChanged<bool>? onDirtyChanged,
   ImagePreparer? imagePreparer,
 }) async {
   await tester.pumpWidget(
@@ -133,10 +132,7 @@ Future<void> pumpWithPostDetailProviders(
       ],
       child: MaterialApp(
         theme: theme,
-        home: CreatePostScreen(
-          onDirtyChanged: onDirtyChanged,
-          imagePreparer: imagePreparer,
-        ),
+        home: CreatePostScreen(imagePreparer: imagePreparer),
       ),
     ),
   );

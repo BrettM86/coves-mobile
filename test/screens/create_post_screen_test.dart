@@ -24,19 +24,13 @@ void main() {
       fakeAuthProvider = FakeAuthProvider();
     });
 
-    Widget createTestWidget({
-      VoidCallback? onNavigateToFeed,
-      ValueChanged<bool>? onDirtyChanged,
-    }) {
+    Widget createTestWidget({VoidCallback? onNavigateToFeed}) {
       return MultiProvider(
         providers: [
           ChangeNotifierProvider<AuthProvider>.value(value: fakeAuthProvider),
         ],
         child: MaterialApp(
-          home: CreatePostScreen(
-            onNavigateToFeed: onNavigateToFeed,
-            onDirtyChanged: onDirtyChanged,
-          ),
+          home: CreatePostScreen(onNavigateToFeed: onNavigateToFeed),
         ),
       );
     }
@@ -212,48 +206,6 @@ void main() {
         find.widgetWithText(TextField, 'URL'),
       );
       expect(urlField.textCapitalization, TextCapitalization.none);
-    });
-
-    testWidgets('reports dirty on first character and clean when cleared', (
-      tester,
-    ) async {
-      final dirtyLog = <bool>[];
-
-      await tester.pumpWidget(createTestWidget(onDirtyChanged: dirtyLog.add));
-      await tester.pumpAndSettle();
-
-      // Untouched form never reports dirty
-      expect(dirtyLog.contains(true), isFalse);
-
-      // First character marks the composer dirty
-      await tester.enterText(find.widgetWithText(TextField, 'Title'), 'a');
-      await tester.pumpAndSettle();
-      expect(dirtyLog.last, isTrue);
-
-      // Clearing the only text marks it clean again
-      await tester.enterText(find.widgetWithText(TextField, 'Title'), '');
-      await tester.pumpAndSettle();
-      expect(dirtyLog.last, isFalse);
-    });
-
-    testWidgets('whitespace-only input never reports dirty', (tester) async {
-      final dirtyLog = <bool>[];
-
-      await tester.pumpWidget(createTestWidget(onDirtyChanged: dirtyLog.add));
-      await tester.pumpAndSettle();
-
-      // Dirty is trimmed-text-only: whitespace is not a draft worth
-      // protecting (and community/NSFW/language selections are deliberately
-      // excluded from dirty tracking entirely)
-      await tester.enterText(find.widgetWithText(TextField, 'Title'), '   ');
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.widgetWithText(TextField, 'What are your thoughts?'),
-        '\n\n  ',
-      );
-      await tester.pumpAndSettle();
-
-      expect(dirtyLog.contains(true), isFalse);
     });
 
     testWidgets('should have character limit on title field', (tester) async {

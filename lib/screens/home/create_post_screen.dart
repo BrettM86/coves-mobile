@@ -67,17 +67,12 @@ const int kContentMaxLength = 10000;
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({
     this.onNavigateToFeed,
-    this.onDirtyChanged,
     this.imagePreparer,
     super.key,
   });
 
   /// Callback to navigate to feed tab (used when in tab navigation)
   final VoidCallback? onNavigateToFeed;
-
-  /// Notifies the shell when the composer gains/loses unsaved input, so the
-  /// shell can decide whether system back needs to protect a draft.
-  final ValueChanged<bool>? onDirtyChanged;
 
   /// Prepares picked images; defaults to [ImagePreparer.platform].
   final ImagePreparer? imagePreparer;
@@ -215,7 +210,6 @@ class _CreatePostScreenState extends State<CreatePostScreen>
   void _onTextChanged() {
     // Force rebuild to update Post button state
     setState(() {});
-    widget.onDirtyChanged?.call(_hasUnsavedInput);
   }
 
   /// Discards the uploads of the previous account when the account changes.
@@ -628,8 +622,8 @@ class _CreatePostScreenState extends State<CreatePostScreen>
 
     // NOTE: no PopScope here. When embedded in MainShellScreen's IndexedStack
     // this widget stays alive on every tab, so a local PopScope would hijack
-    // system back shell-wide. The shell owns back handling and only intercepts
-    // when this tab is active with unsaved input (see onDirtyChanged).
+    // system back shell-wide. The shell owns back handling: back on this tab
+    // switches to Home and the draft stays alive in the IndexedStack.
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
