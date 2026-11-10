@@ -1,8 +1,5 @@
-What's new in 1.7.0
+What's new in 1.7.1
 
-• Add images to posts and replies, with alt text, swipeable galleries and a full-screen viewer
-• Format what you write: bold, italic, strikethrough, spoilers, code, quotes and headings
-• Edit your own comments
-• New default avatars for Coves accounts
-• Bluesky posts shared with the same title no longer show it twice
-• Fixes for notifications and the image viewer
+• The For You feed tab is now called Subscribed
+• Post text is a little larger and easier to read
+• On Android, pressing back from another tab now returns you to the Home feed

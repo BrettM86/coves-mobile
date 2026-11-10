@@ -1,0 +1,5 @@
+What's new in 1.7.1
+
+• The For You feed tab is now called Subscribed
+• Post text is a little larger and easier to read
+• On Android, pressing back from another tab now returns you to the Home feed
