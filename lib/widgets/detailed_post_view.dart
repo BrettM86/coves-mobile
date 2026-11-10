@@ -720,7 +720,7 @@ class _DetailedPostViewState extends State<DetailedPostView> {
         images: layout,
         galleryFirstInLightbox: true,
         style: TextStyle(
-          fontSize: 12.5,
+          fontSize: 13.5,
           fontWeight: FontWeight.w400,
           color: AppColors.textPrimary.withValues(alpha: 0.95),
           height: 1.5,
