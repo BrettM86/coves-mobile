@@ -356,18 +356,21 @@ void main() {
       _place('[two]', 2, text: text),
     ], text: text);
 
+    Finder bodyGlyphs(String glyphs) => find.byWidgetPredicate(
+      (w) =>
+          w is RichText &&
+          w.text.toPlainText(includeSemanticsLabels: false).contains(glyphs),
+    );
+
+    // Hidden "Secret" renders as its placeholder glyphs, never the real text
     Future<void> revealSpoiler(WidgetTester tester) async {
-      final secret = find.byWidgetPredicate(
-        (w) =>
-            w is RichText &&
-            w.text
-                .toPlainText(includeSemanticsLabels: false)
-                .contains('Secret'),
-      );
+      expect(bodyGlyphs('Secret'), findsNothing);
+      final secret = bodyGlyphs('xxxxxx');
       await tester.ensureVisible(secret);
       await tester.pumpAndSettle();
       await tester.tapAt(tester.getTopLeft(secret) + const Offset(4, 4));
       await tester.pumpAndSettle();
+      expect(bodyGlyphs('Secret'), findsOneWidget);
     }
 
     testWidgets('an unrevealed placement is left out of the sequence', (

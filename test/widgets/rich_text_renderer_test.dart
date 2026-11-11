@@ -90,6 +90,23 @@ TextSpan _spanWithText(List<InlineSpan> spans, String text) {
   return spans.whereType<TextSpan>().firstWhere((s) => s.text == text);
 }
 
+/// Helper to find an unrevealed spoiler's TextSpan by its exact [placeholder]
+/// text, asserting the concealed [realText] appears in no content span
+TextSpan _hiddenSpoilerSpan(
+  List<InlineSpan> spans, {
+  required String placeholder,
+  required String realText,
+}) {
+  expect(
+    spans.whereType<TextSpan>().where(
+      (s) => s.text?.contains(realText) ?? false,
+    ),
+    isEmpty,
+    reason: 'unrevealed spoiler text "$realText" must not be in any span',
+  );
+  return _spanWithText(spans, placeholder);
+}
+
 /// Matches the blockquote left-bar container used by the renderer
 bool _hasLeftBar(Widget w) =>
     w is Container &&
@@ -2149,7 +2166,11 @@ void main() {
       var spans = _getContentSpans(
         tester.widget<RichText>(find.byType(RichText)),
       );
-      var span = _spanWithText(spans, 'the trailer');
+      var span = _hiddenSpoilerSpan(
+        spans,
+        placeholder: 'xxx xxxxxxx',
+        realText: 'the trailer',
+      );
 
       // Hidden: redacted, labelled for screen readers
       expect(span.style?.color, Colors.transparent);
@@ -2197,7 +2218,11 @@ void main() {
       final spans = _getContentSpans(
         tester.widget<RichText>(find.byType(RichText)),
       );
-      final span = _spanWithText(spans, 'Bob');
+      final span = _hiddenSpoilerSpan(
+        spans,
+        placeholder: 'xxx',
+        realText: 'Bob',
+      );
       expect(span.semanticsLabel, contains('ending'));
     });
 
@@ -2223,7 +2248,7 @@ void main() {
       var spans = _getContentSpans(
         tester.widget<RichText>(find.byType(RichText)),
       );
-      var span = _spanWithText(spans, 'Bob');
+      var span = _hiddenSpoilerSpan(spans, placeholder: 'xxx', realText: 'Bob');
       (span.recognizer! as TapGestureRecognizer).onTap?.call();
       await tester.pump();
 
@@ -2249,7 +2274,7 @@ void main() {
       );
 
       spans = _getContentSpans(tester.widget<RichText>(find.byType(RichText)));
-      span = _spanWithText(spans, 'Bob');
+      span = _hiddenSpoilerSpan(spans, placeholder: 'xxx', realText: 'Bob');
       expect(span.style?.color, Colors.transparent);
     });
 
@@ -2275,7 +2300,7 @@ void main() {
       var spans = _getContentSpans(
         tester.widget<RichText>(find.byType(RichText)),
       );
-      var span = _spanWithText(spans, 'Bob');
+      var span = _hiddenSpoilerSpan(spans, placeholder: 'xxx', realText: 'Bob');
       (span.recognizer! as TapGestureRecognizer).onTap?.call();
       await tester.pump();
 
@@ -2322,7 +2347,11 @@ void main() {
       );
 
       var spans = _getContentSpans(tester.widget<RichText>(codeRichText));
-      var span = _spanWithText(spans, 'hunter2');
+      var span = _hiddenSpoilerSpan(
+        spans,
+        placeholder: 'xxxxxxx',
+        realText: 'hunter2',
+      );
       expect(span.style?.color, Colors.transparent);
       expect(span.semanticsLabel, contains('Spoiler'));
       expect(span.recognizer, isA<TapGestureRecognizer>());

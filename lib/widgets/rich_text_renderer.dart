@@ -746,12 +746,27 @@ class _RichTextRendererState extends State<RichTextRenderer> {
     );
   }
 
+  /// Replaces every non-whitespace character of [text] with 'x'
+  ///
+  /// Unrevealed spoilers render this placeholder instead of the real text so
+  /// selecting and copying the redacted run can't leak it. Whitespace is kept
+  /// so line wrapping and the redaction box stay close to the real text's.
+  /// Iterates by rune so a surrogate pair becomes one placeholder character.
+  static String _concealed(String text) => String.fromCharCodes(
+    text.runes.map(
+      (rune) =>
+          _whitespace.hasMatch(String.fromCharCode(rune)) ? rune : 0x78, // 'x'
+    ),
+  );
+
+  static final _whitespace = RegExp(r'\s');
+
   /// Splits a code block's raw text into spans, redacting spoiler ranges
   ///
-  /// Spoilers get the same treatment as inline runs (invisible glyphs,
-  /// solid background, screen-reader label, tap to reveal/hide), keyed by
-  /// the spoiler's full char range so reveal state is shared with any
-  /// inline rendering of the same facet.
+  /// Spoilers get the same treatment as inline runs (placeholder glyphs
+  /// drawn invisible, solid background, screen-reader label, tap to
+  /// reveal/hide), keyed by the spoiler's full char range so reveal state
+  /// is shared with any inline rendering of the same facet.
   List<InlineSpan> _codeBlockSpans(
     _ResolvedBlock block,
     List<_ResolvedFacet> inlineFacets,
@@ -813,7 +828,7 @@ class _RichTextRendererState extends State<RichTextRenderer> {
             .reason;
         spans.add(
           TextSpan(
-            text: text.substring(segStart, segEnd),
+            text: _concealed(text.substring(segStart, segEnd)),
             style: const TextStyle(
               color: Colors.transparent,
               backgroundColor: AppColors.backgroundTertiary,
@@ -915,7 +930,7 @@ class _RichTextRendererState extends State<RichTextRenderer> {
     List<_ResolvedFacet> covering,
     bool approximateBlocks,
   ) {
-    final runText = widget.text.substring(runStart, runEnd);
+    var runText = widget.text.substring(runStart, runEnd);
     if (covering.isEmpty) {
       return TextSpan(text: runText);
     }
@@ -1017,7 +1032,9 @@ class _RichTextRendererState extends State<RichTextRenderer> {
         // link launches (and consequently cannot be re-hidden) — deliberate
         onTap ??= () => setState(() => _revealedSpoilers.remove(key));
       } else {
-        // Redacted: glyphs invisible, background solid; tap to reveal
+        // Redacted: placeholder text (the real text must not be selectable
+        // or copyable), glyphs invisible, background solid; tap to reveal
+        runText = _concealed(runText);
         style = style.copyWith(
           color: Colors.transparent,
           backgroundColor: AppColors.backgroundTertiary,

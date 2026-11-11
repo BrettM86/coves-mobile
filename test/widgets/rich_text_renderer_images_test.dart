@@ -179,7 +179,7 @@ void main() {
       final span = _previewText(tester).text;
       expect(
         span.toPlainText(includeSemanticsLabels: false),
-        'Café ☕\n\nThe end is a secret',
+        'Café ☕\n\nThe end is a xxxxxx',
       );
 
       final concealed = <String>[];
@@ -191,7 +191,8 @@ void main() {
         }
         return true;
       });
-      expect(concealed, ['secret']);
+      // The placeholder covers exactly the six characters of "secret"
+      expect(concealed, ['xxxxxx']);
     });
   });
 
@@ -236,18 +237,20 @@ void main() {
       expect(find.byKey(_block0Key), findsNothing);
       expect(_fullsize0(), findsNothing);
 
-      // Tap the concealed first glyph of "Secret". Its semantics label
-      // stands in for the text, so match the glyphs themselves.
-      final secret = find.byWidgetPredicate(
+      // Hidden "Secret" renders as its placeholder glyphs, never the real
+      // text. Its semantics label stands in for the text, so match glyphs.
+      Finder bodyGlyphs(String glyphs) => find.byWidgetPredicate(
         (w) =>
             w is RichText &&
-            w.text
-                .toPlainText(includeSemanticsLabels: false)
-                .contains('Secret'),
+            w.text.toPlainText(includeSemanticsLabels: false).contains(glyphs),
       );
+      expect(bodyGlyphs('Secret'), findsNothing);
+      final secret = bodyGlyphs('xxxxxx');
       await tester.tapAt(tester.getTopLeft(secret) + const Offset(4, 4));
       await tester.pumpAndSettle();
 
+      expect(bodyGlyphs('Secret'), findsOneWidget);
+      expect(bodyGlyphs('xxxxxx'), findsNothing);
       expect(find.byKey(_block0Key), findsOneWidget);
       expect(_fullsize0(), findsOneWidget);
     });

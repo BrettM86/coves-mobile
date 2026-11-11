@@ -857,8 +857,11 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   /// Build context area (post or comment chain)
   Widget _buildContext() {
     // Wrap in RepaintBoundary to isolate from keyboard animation rebuilds
+    // SelectionArea lets the user long-press to copy the text being replied to
     return RepaintBoundary(
-      child: _ContextPreview(post: widget.post, comment: widget.comment),
+      child: SelectionArea(
+        child: _ContextPreview(post: widget.post, comment: widget.comment),
+      ),
     );
   }
 }
