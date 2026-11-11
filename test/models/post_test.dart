@@ -897,4 +897,49 @@ void main() {
       expect(post.title, 'Hello  world');
     });
   });
+
+  group('PostView.fromJson community originSoftware', () {
+    Map<String, dynamic> postJson(Map<String, dynamic> community) {
+      return <String, dynamic>{
+        'uri': 'at://did:plc:test/social.coves.community.post/123',
+        'cid': 'bafypostcid',
+        'rkey': '123',
+        'author': <String, dynamic>{
+          'did': 'did:plc:author',
+          'handle': 'test.user',
+        },
+        'community': community,
+        'createdAt': '2025-01-01T12:00:00Z',
+        'indexedAt': '2025-01-01T12:00:05Z',
+        'stats': <String, dynamic>{
+          'upvotes': 0,
+          'downvotes': 0,
+          'score': 0,
+          'commentCount': 0,
+        },
+      };
+    }
+
+    test('exposes originSoftware served on the post community', () {
+      final post = PostView.fromJson(
+        postJson(<String, dynamic>{
+          'did': 'did:plc:community',
+          'name': 'comicstrips',
+          'origin': 'lemmy.world',
+          'originSoftware': 'lemmy',
+        }),
+      );
+      expect(post.community.originSoftware, 'lemmy');
+    });
+
+    test('leaves originSoftware null when the appview omits it', () {
+      final post = PostView.fromJson(
+        postJson(<String, dynamic>{
+          'did': 'did:plc:community',
+          'name': 'testcove',
+        }),
+      );
+      expect(post.community.originSoftware, null);
+    });
+  });
 }

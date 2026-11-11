@@ -1000,4 +1000,64 @@ void main() {
       });
     });
   });
+
+  group('PostCard community origin software logo', () {
+    FeedViewPost postWithSoftware(String? originSoftware) {
+      return FeedViewPost(
+        post: PostView(
+          uri: 'at://did:example/post/123',
+          cid: 'cid123',
+          rkey: '123',
+          author: AuthorView(did: 'did:plc:author', handle: 'author.test'),
+          community: CommunityRef(
+            did: 'did:plc:community',
+            name: 'comicstrips',
+            origin: 'lemmy.world',
+            originSoftware: originSoftware,
+          ),
+          createdAt: DateTime(2024),
+          indexedAt: DateTime(2024),
+          record: const PostRecord(content: 'Body', title: 'Title'),
+          stats: PostStats(upvotes: 1, downvotes: 0, score: 1, commentCount: 0),
+        ),
+      );
+    }
+
+    // (originSoftware, expected Lemmy label count, expected PieFed label count)
+    const cases = <(String?, int, int)>[
+      ('lemmy', 1, 0),
+      ('piefed', 0, 1),
+      ('PieFed', 0, 1),
+      (null, 0, 0),
+      ('', 0, 0),
+      ('mbin', 0, 0),
+    ];
+
+    for (final (software, lemmyCount, piefedCount) in cases) {
+      testWidgets('originSoftware "$software" shows '
+          '$lemmyCount Lemmy and $piefedCount PieFed logo', (tester) async {
+        await tester.pumpWidget(createTestWidget(postWithSoftware(software)));
+
+        expect(find.bySemanticsLabel('Lemmy'), findsNWidgets(lemmyCount));
+        expect(find.bySemanticsLabel('PieFed'), findsNWidgets(piefedCount));
+      });
+    }
+
+    testWidgets('the Lemmy logo adds no tooltip', (tester) async {
+      await tester.pumpWidget(createTestWidget(postWithSoftware(null)));
+      final baselineTooltips = find.byType(Tooltip).evaluate().length;
+
+      await tester.pumpWidget(createTestWidget(postWithSoftware('lemmy')));
+
+      expect(find.bySemanticsLabel('Lemmy'), findsOneWidget);
+      expect(find.byType(Tooltip), findsNWidgets(baselineTooltips));
+      expect(
+        find.ancestor(
+          of: find.bySemanticsLabel('Lemmy'),
+          matching: find.byType(Tooltip),
+        ),
+        findsNothing,
+      );
+    });
+  });
 }

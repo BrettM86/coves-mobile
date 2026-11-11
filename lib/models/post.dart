@@ -417,6 +417,7 @@ class CommunityRef {
     required this.did,
     required this.name,
     this.origin,
+    this.originSoftware,
     this.handle,
     this.avatar,
     this.viewer,
@@ -428,6 +429,9 @@ class CommunityRef {
       name: json['name'] as String,
       // Cosmetic field: a wrong-typed value must not sink the whole item.
       origin: json['origin'] is String ? json['origin'] as String : null,
+      originSoftware: json['originSoftware'] is String
+          ? json['originSoftware'] as String
+          : null,
       handle: json['handle'] as String?,
       avatar: json['avatar'] as String?,
       viewer: json['viewer'] != null
@@ -443,6 +447,9 @@ class CommunityRef {
   /// Origin instance domain (e.g. `coves.social`, `lemmy.world`).
   /// Optional until the appview ships it; display falls back to [handle].
   final String? origin;
+
+  /// Origin software name (lowercase nodeinfo name, e.g. `lemmy`).
+  final String? originSoftware;
   final String? handle;
   final String? avatar;
 

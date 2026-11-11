@@ -13,6 +13,7 @@ import '../utils/image_layout.dart';
 import '../utils/post_detail_route.dart';
 import 'bluesky_post_card.dart';
 import 'community_avatar.dart';
+import 'community_software_logo.dart';
 import 'external_link_bar.dart';
 import 'image_viewer.dart';
 import 'media/media_aspect.dart';
@@ -299,7 +300,19 @@ class _PostCardContent extends StatelessWidget {
                         TappableCommunity(
                           communityDid: post.post.community.did,
                           padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: _buildCommunityHandle(post.post.community),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: _buildCommunityHandle(
+                                  post.post.community,
+                                ),
+                              ),
+                              CommunitySoftwareLogo(
+                                software: post.post.community.originSoftware,
+                              ),
+                            ],
+                          ),
                         ),
                         // Author handle (tappable for profile navigation)
                         TappableAuthor(
