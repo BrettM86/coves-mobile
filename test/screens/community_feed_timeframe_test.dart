@@ -574,6 +574,11 @@ void main() {
       ),
     );
 
+    // The sort row scrolls away with the header, so bring it back. A jump
+    // rather than a drag, which would overscroll into pull-to-refresh.
+    tester.state<ScrollableState>(feedScrollable).position.jumpTo(0);
+    await pumpFrames(tester);
+
     // Sort: Hot to New, with New's first page held.
     await tester.drag(chipRow, const Offset(200, 0));
     await pumpFrames(tester);

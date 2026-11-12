@@ -24,6 +24,7 @@ import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../test_helpers/community_feed_harness.dart';
 import '../test_helpers/fake_providers.dart';
 import '../test_helpers/test_mocks.dart';
 import '../test_helpers/theme_pump.dart';
@@ -604,5 +605,79 @@ void main() {
         expect(find.text(otherTitle), findsNothing);
       });
     }
+  });
+
+  group('feed sort header scrolling', () {
+    const searchButtonKey = ValueKey<String>('community_feed_search_button');
+    const searchFieldKey = ValueKey<String>('community_feed_search_field');
+
+    Future<void> pumpLongFeed(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      when(mockApiService.getCommunity(community: anyNamed('community')))
+          .thenAnswer((_) async => buildFeedTestCommunity());
+      when(
+        mockApiService.getCommunityFeed(
+          community: anyNamed('community'),
+          sort: anyNamed('sort'),
+          timeframe: anyNamed('timeframe'),
+          limit: anyNamed('limit'),
+          cursor: anyNamed('cursor'),
+        ),
+      ).thenAnswer(
+        (_) async => TimelineResponse(
+          feed: [
+            for (var i = 0; i < 30; i++)
+              buildFeedTestPost(rkey: 'post-$i', title: 'Post $i'),
+          ],
+        ),
+      );
+
+      await pumpCommunityFeedScreen(tester, mockApiService);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> scrollFeedDown(WidgetTester tester) async {
+      final feed = find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable && widget.axisDirection == AxisDirection.down,
+      );
+      await tester.drag(feed.first, const Offset(0, -1500));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the sort chips scroll away with the community header', (
+      tester,
+    ) async {
+      await pumpLongFeed(tester);
+      expect(find.text('Hot').hitTestable(), findsOneWidget);
+
+      await scrollFeedDown(tester);
+
+      expect(find.text('Hot').hitTestable(), findsNothing);
+      expect(find.byKey(searchButtonKey).hitTestable(), findsNothing);
+    });
+
+    testWidgets('an open search field stays on screen while the feed scrolls', (
+      tester,
+    ) async {
+      await pumpLongFeed(tester);
+      await tester.tap(find.byKey(searchButtonKey));
+      await tester.pumpAndSettle();
+      expect(find.byKey(searchFieldKey).hitTestable(), findsOneWidget);
+
+      expect(find.text('Post 0').hitTestable(), findsOneWidget);
+
+      await scrollFeedDown(tester);
+
+      expect(
+        find.text('Post 0').hitTestable(),
+        findsNothing,
+        reason: 'the feed actually scrolled',
+      );
+      expect(find.byKey(searchFieldKey).hitTestable(), findsOneWidget);
+    });
   });
 }

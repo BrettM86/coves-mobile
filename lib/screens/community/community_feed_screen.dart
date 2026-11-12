@@ -635,10 +635,12 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                 ),
               ),
             ),
-            // Feed sort selector - pinned (only shown on Feed tab)
+            // Feed sort selector (only shown on Feed tab). It scrolls away
+            // with the header, except while a search is open: then it pins
+            // so the query field stays in reach over the results.
             if (_selectedTabIndex == 0)
               SliverPersistentHeader(
-                pinned: true,
+                pinned: _isSearching,
                 delegate: _FeedSortDelegate(child: _buildFeedSortHeader()),
               ),
             // Content based on selected tab
@@ -652,8 +654,9 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
     );
   }
 
-  /// The pinned 56px header: sort chips plus a search button, or the search
-  /// field while a search is open. Vertical padding of 8 leaves exactly 40px
+  /// The 56px feed header: sort chips plus a search button, which scroll away
+  /// with the community header, or the search field while a search is open,
+  /// which stays pinned. Vertical padding of 8 leaves exactly 40px
   /// of content, which is what both rows are sized to.
   Widget _buildFeedSortHeader() {
     return Container(
@@ -1377,7 +1380,7 @@ class _CommunityTabBarDelegate extends SliverPersistentHeaderDelegate {
   }
 }
 
-/// Delegate for pinned feed sort header
+/// Delegate for the feed sort header, pinned only while a search is open
 class _FeedSortDelegate extends SliverPersistentHeaderDelegate {
   _FeedSortDelegate({required this.child});
 

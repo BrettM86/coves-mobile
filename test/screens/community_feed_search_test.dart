@@ -697,8 +697,8 @@ void main() {
     expect(find.text('Linux kernel flaw'), findsOneWidget);
   });
 
-  /// The pinned sort header that [finder] sits inside, as a sliver.
-  RenderSliver pinnedHeaderAround(WidgetTester tester, Finder finder) {
+  /// The sort header that [finder] sits inside, as a sliver.
+  RenderSliver sortHeaderAround(WidgetTester tester, Finder finder) {
     final header = find.ancestor(
       of: finder,
       matching: find.byType(SliverPersistentHeader),
@@ -837,7 +837,7 @@ void main() {
     ).called(1);
   });
 
-  testWidgets('the pinned header stays 56px and does not overflow at 320dp, '
+  testWidgets('the sort header stays 56px and does not overflow at 320dp, '
       'open or closed', (tester) async {
     tester.view.physicalSize = const Size(320, 800);
     tester.view.devicePixelRatio = 1.0;
@@ -850,7 +850,7 @@ void main() {
 
     // Closed: the chips row plus the search button.
     expect(
-      pinnedHeaderAround(
+      sortHeaderAround(
         tester,
         find.byKey(searchButtonKey),
       ).geometry!.maxPaintExtent,
@@ -863,7 +863,7 @@ void main() {
 
     // Open: the field plus the close button, in the same 56px.
     expect(
-      pinnedHeaderAround(
+      sortHeaderAround(
         tester,
         find.byKey(searchFieldKey),
       ).geometry!.maxPaintExtent,
