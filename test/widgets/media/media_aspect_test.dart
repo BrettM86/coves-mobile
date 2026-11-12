@@ -10,6 +10,7 @@
 //
 //   typedef MediaRatioBounds = ({double min, double max});
 //   const MediaRatioBounds kFeedRatioBounds = (min: 3 / 4, max: 16 / 9);
+//   const MediaRatioBounds kFeedSingleRatioBounds = (min: 3 / 4, max: 3);
 //   const MediaRatioBounds kDetailRatioBounds = (min: 1 / 3, max: 3);
 //   double clampMediaRatio(
 //     EmbedAspectRatio? ratio, {
@@ -45,6 +46,11 @@ void main() {
     test('the feed clamps to 3:4 .. 16:9', () {
       expect(kFeedRatioBounds.min, 3 / 4);
       expect(kFeedRatioBounds.max, 16 / 9);
+    });
+
+    test('a lone feed image clamps to 3:4 .. 3:1', () {
+      expect(kFeedSingleRatioBounds.min, 3 / 4);
+      expect(kFeedSingleRatioBounds.max, 3);
     });
 
     test('the detail view clamps to 1:3 .. 3:1', () {

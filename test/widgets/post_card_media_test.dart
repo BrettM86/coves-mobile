@@ -32,9 +32,12 @@ const _videoThumb = 'https://cdn.test/video-thumb.jpg';
 
 const _detailMarker = 'DETAIL SCREEN';
 
-/// 16:9 and 3:4 as width/height doubles — the clamp bounds from B1.
+/// 16:9 and 3:4 as width/height doubles — the gallery clamp bounds from B1.
 const _widestRatio = 16 / 9;
 const _tallestRatio = 3 / 4;
+
+/// A lone image's wide cap: 3:1.
+const _widestSingleRatio = 3.0;
 
 /// Records routes pushed onto the root navigator so a tap handler's
 /// `Navigator.push` can be inspected without mounting the pushed page.
@@ -290,15 +293,65 @@ void main() {
       );
     });
 
-    testWidgets('B1 clamps an extremely wide image to 16:9', (tester) async {
+    testWidgets('B1 clamps an extremely wide single image to 3:1', (
+      tester,
+    ) async {
       useMediaSizedSurface(tester);
       final post = makePost(
         embed: imagesEmbed([
           {
             'thumb': _thumb1,
             'fullsize': _full1,
-            // 32:9 == 3.56, far wider than the 16:9 == 1.78 ceiling
-            'aspectRatio': {'width': 32, 'height': 9},
+            // 5:1, a screenshot of one short post, wider than the 3:1 ceiling
+            'aspectRatio': {'width': 1500, 'height': 300},
+          },
+        ]),
+      );
+
+      await tester.pumpWidget(harness(post));
+      await tester.pump();
+
+      expect(
+        renderedAspectRatio(tester, _imagesKey),
+        closeTo(_widestSingleRatio, 0.01),
+      );
+    });
+
+    testWidgets('B1 a 2:1 single image keeps its shape past 16:9', (
+      tester,
+    ) async {
+      useMediaSizedSurface(tester);
+      final post = makePost(
+        embed: imagesEmbed([
+          {
+            'thumb': _thumb1,
+            'fullsize': _full1,
+            'aspectRatio': {'width': 1200, 'height': 600},
+          },
+        ]),
+      );
+
+      await tester.pumpWidget(harness(post));
+      await tester.pump();
+
+      expect(renderedAspectRatio(tester, _imagesKey), closeTo(2.0, 0.01));
+    });
+
+    testWidgets('B2 a gallery with a wide first image clamps to 16:9', (
+      tester,
+    ) async {
+      useMediaSizedSurface(tester);
+      final post = makePost(
+        embed: imagesEmbed([
+          {
+            'thumb': _thumb1,
+            'fullsize': _full1,
+            'aspectRatio': {'width': 1500, 'height': 300},
+          },
+          {
+            'thumb': _thumb2,
+            'fullsize': _full1,
+            'aspectRatio': {'width': 3, 'height': 4},
           },
         ]),
       );
@@ -309,6 +362,7 @@ void main() {
       expect(
         renderedAspectRatio(tester, _imagesKey),
         closeTo(_widestRatio, 0.01),
+        reason: 'the gallery frame follows the first image under the 16:9 cap',
       );
     });
 

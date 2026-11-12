@@ -544,4 +544,43 @@ void main() {
       expect(find.byKey(_imagesKey), findsOneWidget);
     });
   });
+
+  group('PostCard placeholder box matches the revealed box', () {
+    PostEmbed wideEmbed({required int count}) {
+      return PostEmbed.fromJson({
+        r'$type': EmbedTypes.imagesView,
+        'images': [
+          for (var i = 0; i < count; i++)
+            {
+              'thumb': '$_thumb?$i',
+              'fullsize': '$_fullsize?$i',
+              'aspectRatio': {'width': 1500, 'height': 300},
+            },
+        ],
+      });
+    }
+
+    double ratioIn(WidgetTester tester, Key key) {
+      final finder = find.descendant(
+        of: find.byKey(key),
+        matching: find.byType(AspectRatio),
+        matchRoot: true,
+      );
+      return tester.widget<AspectRatio>(finder.first).aspectRatio;
+    }
+
+    for (final (count, expected) in [(1, 3.0), (2, 16 / 9)]) {
+      testWidgets('$count wide image(s): placeholder and reveal at '
+          '${expected.toStringAsFixed(2)}', (tester) async {
+        await pumpCard(tester, makePost(embed: wideEmbed(count: count)));
+
+        expect(ratioIn(tester, _placeholderKey), closeTo(expected, 0.01));
+
+        await tester.tap(find.byKey(_placeholderKey));
+        await tester.pump();
+
+        expect(ratioIn(tester, _imagesKey), closeTo(expected, 0.01));
+      });
+    }
+  });
 }

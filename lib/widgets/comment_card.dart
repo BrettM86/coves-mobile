@@ -362,7 +362,9 @@ class _CommentCardState extends State<CommentCard> {
                             NativeImageGallery(
                               images: images.gallery,
                               keyPrefix: 'comment',
-                              bounds: kFeedRatioBounds,
+                              bounds: images.gallery.length == 1
+                                  ? kFeedSingleRatioBounds
+                                  : kFeedRatioBounds,
                               fill: kFeedMediaFill,
                               source: MediaImageSource.thumb,
                               onOpen: (index) => ImageViewer.open(

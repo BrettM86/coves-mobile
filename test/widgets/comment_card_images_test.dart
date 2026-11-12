@@ -78,6 +78,8 @@ Map<String, dynamic> _rawEmbed(List<EmbedImage> images) => {
         'thumb': image.thumb,
         'fullsize': image.fullsize,
         if (image.alt != null) 'alt': image.alt,
+        if (image.aspectRatio case final ratio?)
+          'aspectRatio': {'width': ratio.width, 'height': ratio.height},
       },
   ],
 };
@@ -263,6 +265,37 @@ void main() {
       expect(find.byKey(_galleryKey), findsOneWidget);
       expect(visibleGalleryUrl(tester), 'https://cdn.test/t1.jpg');
       expect(find.byType(MediaPageDots), findsNothing);
+    });
+
+    group('gallery box shape', () {
+      final wide = EmbedImage(
+        thumb: 'https://cdn.test/wide.jpg',
+        fullsize: 'https://cdn.test/wide-full.jpg',
+        aspectRatio: EmbedAspectRatio(width: 1500, height: 300),
+      );
+
+      double galleryRatio(WidgetTester tester) {
+        final finder = find.descendant(
+          of: find.byKey(_galleryKey),
+          matching: find.byType(AspectRatio),
+          matchRoot: true,
+        );
+        return tester.widget<AspectRatio>(finder.first).aspectRatio;
+      }
+
+      testWidgets('a lone 5:1 image clamps to 3:1', (tester) async {
+        await pumpCard(tester, _comment(images: [wide]));
+
+        expect(galleryRatio(tester), closeTo(3.0, 0.01));
+      });
+
+      testWidgets('a wide first image in a gallery clamps to 16:9', (
+        tester,
+      ) async {
+        await pumpCard(tester, _comment(images: [wide, _sixImages[1]]));
+
+        expect(galleryRatio(tester), closeTo(16 / 9, 0.01));
+      });
     });
 
     testWidgets('B7 an NSFW-labelled comment shows its gallery with no '

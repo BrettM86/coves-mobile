@@ -229,7 +229,7 @@ class _PostCardContent extends StatelessWidget {
     // While concealed the only media shown is the blurred stand-in for a
     // native image embed; every other embed is dropped entirely.
     final media = concealed
-        ? _buildSensitivePlaceholder()
+        ? _buildSensitivePlaceholder(images)
         : _buildMediaEmbed(context, images);
     final showsExternalLinkBar =
         !concealed && post.post.embed?.external != null;
@@ -534,7 +534,7 @@ class _PostCardContent extends StatelessWidget {
   ///
   /// Only native images get one: a video, link or quote block shows nothing
   /// of the post on its own, so concealing it leaves nothing to stand in for.
-  Widget? _buildSensitivePlaceholder() {
+  Widget? _buildSensitivePlaceholder(ImageLayout layout) {
     final images = switch (post.post.embed) {
       ImagesPostEmbed(:final images) => images,
       ImagesWithAttachmentPostEmbed(:final images) => images,
@@ -544,9 +544,14 @@ class _PostCardContent extends StatelessWidget {
       return null;
     }
 
+    // Stands in for the revealed block, which shows only the unplaced images,
+    // so its box matches that block's and the card does not jump on reveal.
+    // With every image placed there is no block; the first image stands in.
     return SensitiveImagePlaceholder(
-      image: images.first,
-      bounds: kFeedRatioBounds,
+      image: layout.gallery.isNotEmpty ? layout.gallery.first : images.first,
+      bounds: layout.gallery.length == 1
+          ? kFeedSingleRatioBounds
+          : kFeedRatioBounds,
       onReveal: onToggleReveal,
     );
   }
@@ -579,6 +584,7 @@ class _PostCardContent extends StatelessWidget {
       return NativeImageThumb(
         images: images,
         keyPrefix: 'post',
+        bounds: kFeedSingleRatioBounds,
         onTap: disableNavigation
             ? null
             : () => ImageViewer.open(context, images),

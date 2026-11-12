@@ -3,13 +3,22 @@ import '../../models/post.dart';
 /// Widest and tallest display ratios (width/height) a media surface accepts.
 typedef MediaRatioBounds = ({double min, double max});
 
-/// The feed card's bounds: 3:4 through 16:9.
+/// The feed card's bounds for a gallery: 3:4 through 16:9.
 ///
 /// Clamping keeps a panorama from becoming a sliver and a tall portrait from
 /// swallowing the viewport. The 3:4 floor lets a standard phone-camera
-/// portrait through uncropped; only taller shots (9:16 screenshots, stories)
-/// get center-cropped.
+/// portrait through at its own shape; taller shots (9:16 screenshots,
+/// stories) are fit inside the 3:4 box with bars at the sides.
 const MediaRatioBounds kFeedRatioBounds = (min: 3 / 4, max: 16 / 9);
+
+/// The feed card's bounds for a lone image: 3:4 through 3:1.
+///
+/// A single wide image (a screenshot of one short post, a banner) owns its
+/// box, so capping it at 16:9 only adds empty bars above and below. The wide
+/// cap matches [kDetailRatioBounds]. A gallery keeps [kFeedRatioBounds]: its
+/// frame follows the first image, and a short frame would shrink every taller
+/// image after it.
+const MediaRatioBounds kFeedSingleRatioBounds = (min: 3 / 4, max: 3);
 
 /// The detail view's bounds: 1:3 through 3:1.
 ///

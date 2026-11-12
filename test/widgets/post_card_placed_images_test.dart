@@ -296,6 +296,78 @@ void main() {
     );
   });
 
+  testWidgets('a concealed post with one unplaced image sizes its placeholder '
+      'like a lone image', (tester) async {
+    final wide = EmbedAspectRatio(width: 1500, height: 300);
+    final embed = ImagesPostEmbed(
+      type: 'social.coves.embed.images#view',
+      images: [
+        for (final image in _images.take(2))
+          EmbedImage(
+            thumb: image.thumb,
+            fullsize: image.fullsize,
+            aspectRatio: wide,
+          ),
+      ],
+      data: const {},
+    );
+    await _pumpCard(
+      tester,
+      _post(embed, [_place('[image 1]', 0)], sensitive: true),
+    );
+
+    expect(
+      tester
+          .widget<AspectRatio>(
+            find
+                .descendant(
+                  of: find.byKey(_placeholderKey),
+                  matching: find.byType(AspectRatio),
+                )
+                .first,
+          )
+          .aspectRatio,
+      closeTo(3.0, 0.001),
+      reason: 'the revealed block shows one image at up to 3:1',
+    );
+  });
+
+  testWidgets('a concealed post whose first image is placed sizes its '
+      'placeholder from the first unplaced image', (tester) async {
+    final embed = ImagesPostEmbed(
+      type: 'social.coves.embed.images#view',
+      images: [
+        _images[0],
+        EmbedImage(
+          thumb: _images[1].thumb,
+          fullsize: _images[1].fullsize,
+          aspectRatio: EmbedAspectRatio(width: 1500, height: 300),
+        ),
+      ],
+      data: const {},
+    );
+    final post = _post(embed, [_place('[image 1]', 0)], sensitive: true);
+    await _pumpCard(tester, post);
+
+    double ratioIn(Key key) => tester
+        .widget<AspectRatio>(
+          find
+              .descendant(
+                of: find.byKey(key),
+                matching: find.byType(AspectRatio),
+              )
+              .first,
+        )
+        .aspectRatio;
+
+    expect(ratioIn(_placeholderKey), closeTo(3.0, 0.001));
+
+    await tester.tap(find.byKey(_placeholderKey));
+    await tester.pump();
+
+    expect(ratioIn(_imagesKey), closeTo(3.0, 0.001));
+  });
+
   testWidgets('every image placed with a link attachment keeps only the link '
       'bar', (tester) async {
     await _pumpCard(tester, _post(_withExternal(), _allPlaced));
