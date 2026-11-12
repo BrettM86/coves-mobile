@@ -1,0 +1,7 @@
+What's new in 1.8.0
+
+• Bring your Bluesky profile over to your Coves profile
+• Communities from Lemmy and PieFed now show their logo, plus a button to open them on their home site (you can hide the logos in Settings > Display)
+• The Hot/New/Top row scrolls away with the community header
+• Wide images fit in the feed better
+• You can select and copy text in the reply preview
