@@ -14,6 +14,7 @@ import 'constants/app_typography.dart';
 import 'models/community.dart';
 import 'providers/auth_provider.dart';
 import 'providers/block_provider.dart';
+import 'providers/bluesky_profile_import_offer_provider.dart';
 import 'providers/community_guidelines_provider.dart';
 import 'providers/community_subscription_provider.dart';
 import 'providers/display_preferences_provider.dart';
@@ -278,6 +279,16 @@ Future<Widget> bootstrapCovesApp() async {
       Provider<ProfileCache>(
         create: (_) => ProfileCache(authProvider),
         dispose: (_, cache) => cache.dispose(),
+      ),
+      // App-wide so the automatic Bluesky import offer is checked once per
+      // signed-in session, whichever screen is showing.
+      ChangeNotifierProvider(
+        create: (context) => BlueskyProfileImportOfferProvider(
+          apiService: apiService,
+          authProvider: authProvider,
+          sessionKeyOf: () => viewerAuthorityProvider.sessionKey,
+          profileCache: context.read<ProfileCache>(),
+        ),
       ),
     ],
     child: const CovesApp(),

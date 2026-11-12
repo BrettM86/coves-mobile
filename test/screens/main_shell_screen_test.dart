@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/bluesky_import_test_helpers.dart';
 import '../test_helpers/fake_providers.dart'
     show
         notificationPreferencesRegistration,
@@ -184,6 +185,10 @@ void main() {
             ),
             Provider<ProfileCache>.value(value: profileCache),
             Provider<PostChangeBroadcast>(create: (_) => PostChangeBroadcast()),
+            blueskyImportOfferRegistration(
+              auth: fakeAuthProvider,
+              apiService: apiService,
+            ),
           ],
           child: MaterialApp(
             navigatorKey: navigatorKey,

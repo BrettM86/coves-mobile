@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../constants/image_upload_limits.dart';
 import '../constants/moderation_constants.dart';
+import '../models/bluesky_profile_import.dart';
 import '../models/comment.dart';
 import '../models/community.dart';
 import '../models/moderation_action.dart';
@@ -977,6 +978,52 @@ class CovesApiService {
         queryParameters: {'actor': actor},
       ),
       parse: (data) => UserProfile.fromJson(_asJsonMap(data)),
+    );
+  }
+
+  /// What the viewer's Bluesky profile can fill in on their Coves profile.
+  Future<BlueskyProfileImport> getBlueskyProfileImport() {
+    return _request(
+      operation: 'fetch Bluesky profile import',
+      send: () => _dio.get('/xrpc/social.coves.actor.getBlueskyProfileImport'),
+      parse: (data) => BlueskyProfileImport.fromJson(_asJsonMap(data)),
+    );
+  }
+
+  /// Copies [fields] from the viewer's Bluesky profile and returns the fields
+  /// the server imported. Server errors keep their XRPC code in
+  /// [ApiException.errorCode], e.g. 'NothingToImport' or 'Conflict'.
+  Future<List<BlueskyProfileField>> importBlueskyProfile(
+    List<BlueskyProfileField> fields,
+  ) {
+    return _request(
+      operation: 'import Bluesky profile',
+      send: () => _dio.post(
+        '/xrpc/social.coves.actor.importBlueskyProfile',
+        data: {
+          'fields': [for (final field in fields) field.wireName],
+        },
+      ),
+      parse: (data) {
+        final imported = _asJsonMap(data)['imported'];
+        if (imported is! List) {
+          throw const FormatException('imported must be a list');
+        }
+        return [
+          for (final name in imported)
+            if (name is String) ?BlueskyProfileField.fromWireName(name),
+        ];
+      },
+    );
+  }
+
+  /// Declines the automatic Bluesky import offer.
+  Future<void> dismissBlueskyProfileImport() {
+    return _request(
+      operation: 'dismiss Bluesky profile import',
+      send: () =>
+          _dio.post('/xrpc/social.coves.actor.dismissBlueskyProfileImport'),
+      parse: (_) {},
     );
   }
 

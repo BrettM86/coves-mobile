@@ -5,8 +5,11 @@ import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
 import '../../constants/app_typography.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/bluesky_profile_import_offer_provider.dart';
 import '../../providers/unread_notification_count_provider.dart';
 import '../../utils/responsive_utils.dart';
+import '../../widgets/bluesky_profile_import_dialog.dart';
 import '../../widgets/icons/app_icons.dart';
 import 'communities_screen.dart';
 import 'create_post_screen.dart';
@@ -36,6 +39,70 @@ class _MainShellScreenState extends State<MainShellScreen> {
   /// tabs don't fire their requests at startup, competing with the feed the
   /// user is actually looking at.
   final Set<int> _visitedTabs = {0};
+
+  late final BlueskyProfileImportOfferProvider _importOfferProvider;
+
+  /// Whether a post-frame callback is already queued to show the offer.
+  bool _isImportOfferScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _importOfferProvider = context.read<BlueskyProfileImportOfferProvider>();
+    _importOfferProvider.addListener(_onImportOfferChanged);
+    _onImportOfferChanged();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Depending on ModalRoute rebuilds this state when a covering route pops,
+    // so an offer held back while the shell was covered is presented then.
+    ModalRoute.of(context);
+    _onImportOfferChanged();
+  }
+
+  bool get _isShellRouteCurrent => ModalRoute.of(context)?.isCurrent ?? true;
+
+  @override
+  void dispose() {
+    _importOfferProvider.removeListener(_onImportOfferChanged);
+    super.dispose();
+  }
+
+  void _onImportOfferChanged() {
+    if (_importOfferProvider.pendingChoices == null ||
+        _isImportOfferScheduled) {
+      return;
+    }
+    _isImportOfferScheduled = true;
+    WidgetsBinding.instance
+      ..addPostFrameCallback((_) => unawaited(_showImportOffer()))
+      ..ensureVisualUpdate();
+  }
+
+  Future<void> _showImportOffer() async {
+    _isImportOfferScheduled = false;
+    final choices = _importOfferProvider.pendingChoices;
+    if (choices == null || !mounted || !_isShellRouteCurrent) {
+      return;
+    }
+    _importOfferProvider.markShown();
+    final messenger = ScaffoldMessenger.of(context);
+    final imported = await showBlueskyProfileImportDialog(
+      context,
+      choices: choices,
+      onImport: _importOfferProvider.importFields,
+      onDecline: _importOfferProvider.decline,
+      handle: context.read<AuthProvider>().handle,
+    );
+    if (imported == null || !mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(content: Text(blueskyImportResultMessage(imported))),
+    );
+  }
 
   void _onItemTapped(int index) {
     // If already on feed tab, scroll to top

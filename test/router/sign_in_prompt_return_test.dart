@@ -16,6 +16,7 @@ import 'package:coves_flutter/screens/home/post_detail_screen.dart';
 import 'package:coves_flutter/services/comments_provider_cache.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:coves_flutter/services/post_change_broadcast.dart';
+import 'package:coves_flutter/services/profile_cache.dart';
 import 'package:coves_flutter/services/viewer_state_hydrator.dart';
 import 'package:coves_flutter/services/vote_service.dart';
 import 'package:coves_flutter/utils/post_detail_route.dart';
@@ -27,6 +28,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/bluesky_import_test_helpers.dart';
 import '../test_helpers/fake_providers.dart';
 import '../test_helpers/sign_in_flow_fakes.dart';
 import '../test_helpers/test_mocks.dart';
@@ -146,6 +148,7 @@ class _RouterHarness {
     // The cold-load loader stamps the post with the viewer's authority.
     when(api.getViewerAuthority()).thenAnswer((_) async => false);
     when(api.getUnreadCount()).thenAnswer((_) async => 0);
+    stubNoBlueskyProfileImport(api);
     provideDummy<PostGetResult>(const PostGetNotFound(_postUri));
     when(api.getPost(any))
         .thenAnswer((_) async => PostGetSuccess(_feedPost().post));
@@ -177,6 +180,11 @@ class _RouterHarness {
         Provider<CommentsProviderCache>.value(value: cache),
         viewerAuthorityRegistration(auth: auth, apiService: api),
         unreadNotificationCountRegistration(auth: auth, apiService: api),
+        Provider<ProfileCache>(
+          create: (_) => ProfileCache(auth),
+          dispose: (_, profileCache) => profileCache.dispose(),
+        ),
+        blueskyImportOfferRegistration(auth: auth, apiService: api),
       ],
       child: MaterialApp.router(theme: AppTheme.dark, routerConfig: router),
     );

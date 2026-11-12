@@ -17,6 +17,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/bluesky_import_test_helpers.dart';
 import '../test_helpers/fake_providers.dart';
 import '../test_helpers/lucide_glyph_finder.dart';
 import '../test_helpers/notifications_screen_harness.dart';
@@ -66,6 +67,7 @@ void main() {
     });
     when(api.getUnreadCount()).thenAnswer((_) async => 0);
     when(api.getViewerAuthority()).thenAnswer((_) async => false);
+    stubNoBlueskyProfileImport(api);
     when(
       api.getDiscover(
         sort: anyNamed('sort'),

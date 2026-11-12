@@ -233,6 +233,12 @@ abstract final class ErrorMessage {
         fallback: 'Could not update profile. Please try again.',
       );
 
+  /// Error message for checking or running a Bluesky profile import
+  static String blueskyImport(Object error) => getErrorMessage(
+    error,
+    fallback: 'Could not import from Bluesky. Please try again.',
+  );
+
   /// Messages for the image error codes a profile update or avatar upload
   /// returns.
   static const _profileImageMessages = <String, String>{

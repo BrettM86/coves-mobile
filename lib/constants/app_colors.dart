@@ -138,6 +138,74 @@ class AppColors {
   static const voteLiked = Color(0xFFFF0033);
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // BLUESKY
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // The Bluesky profile card in the import dialog copies the Bluesky app's
+  // "dim" theme whatever the app theme is.
+
+  /// Bluesky profile card surface (Bluesky dim background).
+  static const blueskyCardBackground = Color(0xFF151D28);
+
+  /// Bluesky profile card outline and its empty banner and avatar.
+  static const blueskyCardBorder = Color(0xFF2C3A4E);
+
+  /// Secondary text on the Bluesky profile card, such as the handle.
+  static const blueskyCardMutedText = Color(0xFFABB8C9);
+
+  /// Bluesky profile card placeholders and hover surface (Bluesky dim).
+  static const blueskyCardHover = Color(0xFF1C2939);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BLUESKY IMPORT: COVES TARGET CARD
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // The hollow Coves card the Bluesky card is dragged onto, and the colours
+  // the Bluesky card blends into on its way there. Tailwind slate (light
+  // theme) and zinc (dark theme), matching the web client.
+
+  /// Coves card surface, light theme (slate-50).
+  static const covesImportSurfaceLight = Color(0xFFF8FAFC);
+
+  /// Coves card dashed outline at rest, light theme (slate-300).
+  static const covesImportOutlineLight = Color(0xFFCBD5E1);
+
+  /// Coves card ink, and its outline while the card is over it, light theme
+  /// (slate-900).
+  static const covesImportInkLight = Color(0xFF0F172A);
+
+  /// Coves card muted text, light theme (slate-600).
+  static const covesImportMutedLight = Color(0xFF475569);
+
+  /// Coves card placeholders, light theme (slate-200).
+  static const covesImportPlaceholderLight = Color(0xFFE2E8F0);
+
+  /// Coves card surface, dark theme (zinc-900).
+  static const covesImportSurfaceDark = Color(0xFF18181B);
+
+  /// Coves card dashed outline at rest, dark theme (zinc-700).
+  static const covesImportOutlineDark = Color(0xFF3F3F46);
+
+  /// Coves card ink, and its outline while the card is over it, dark theme
+  /// (zinc-100).
+  static const covesImportInkDark = Color(0xFFF4F4F5);
+
+  /// Coves card muted text, dark theme (zinc-400).
+  static const covesImportMutedDark = Color(0xFFA1A1AA);
+
+  /// Coves card placeholders, dark theme (zinc-800).
+  static const covesImportPlaceholderDark = Color(0xFF27272A);
+
+  /// Seat burst capsule outline (rose-500).
+  static const seatBurstRose = Color(0xFFF43F5E);
+
+  /// Seat burst dash fill (teal-500).
+  static const seatBurstTeal = Color(0xFF14B8A6);
+
+  /// Seat burst diamond outline (amber-500).
+  static const seatBurstAmber = Color(0xFFF59E0B);
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // AVATAR FALLBACKS
   // ═══════════════════════════════════════════════════════════════════════════
 

@@ -50,6 +50,7 @@ import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
+import '../test_helpers/bluesky_import_test_helpers.dart';
 import '../test_helpers/fake_providers.dart';
 import '../test_helpers/test_mocks.dart';
 
@@ -237,6 +238,7 @@ void main() {
     apiService = MockCovesApiService();
     when(apiService.deletePost(uri: anyNamed('uri'))).thenAnswer((_) async {});
     when(apiService.getViewerAuthority()).thenAnswer((_) async => false);
+    stubNoBlueskyProfileImport(apiService);
     when(apiService.getUnreadCount()).thenAnswer((_) async => 0);
   });
 

@@ -23,6 +23,7 @@ import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
+import 'bluesky_import_test_helpers.dart';
 import 'fake_providers.dart';
 import 'reply_notification_fixture.dart';
 import 'sign_in_flow_fakes.dart';
@@ -69,6 +70,7 @@ class NotificationsShellHarness {
   }) {
     when(api.getUnreadCount()).thenAnswer((_) async => count);
     when(api.getViewerAuthority()).thenAnswer((_) async => false);
+    stubNoBlueskyProfileImport(api);
     when(api.updateNotificationsSeen(seenAt: anyNamed('seenAt')))
         .thenAnswer((call) async {
           seenAt.add(call.namedArguments[#seenAt] as String);
@@ -139,16 +141,24 @@ class NotificationsShellHarness {
   final requestDids = <String?>[];
   final seenAt = <String>[];
 
-  Future<void> mount(WidgetTester tester) async {
+  /// Mounts the shell; [extraProviders] are registered beneath the
+  /// app-level ones, so they can read them.
+  Future<void> mount(
+    WidgetTester tester, {
+    List<SingleChildWidget> extraProviders = const [],
+  }) async {
     await tester.pumpWidget(
       MultiProvider(
-        providers: profileScreenProviders(
-          auth: auth,
-          apiService: api,
-          commentService: MockCommentService(),
-          notificationPreferencesChangeSignal:
-              notificationPreferencesChangeSignal,
-        ),
+        providers: [
+          ...profileScreenProviders(
+            auth: auth,
+            apiService: api,
+            commentService: MockCommentService(),
+            notificationPreferencesChangeSignal:
+                notificationPreferencesChangeSignal,
+          ),
+          ...extraProviders,
+        ],
         child: MaterialApp(theme: AppTheme.dark, home: const MainShellScreen()),
       ),
     );

@@ -3,12 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
+import '../../models/bluesky_profile_import.dart';
 import '../../models/picked_image.dart';
 import '../../models/user_profile.dart';
 import '../../providers/user_profile_provider.dart';
+import '../../providers/viewer_authority_provider.dart';
+import '../../services/api_exceptions.dart';
+import '../../services/coves_api_service.dart';
+import '../../services/own_profile_refresher.dart';
+import '../../services/profile_cache.dart';
 import '../../utils/error_messages.dart';
 import '../../utils/image_crop_utils.dart';
 import '../../utils/image_picker_utils.dart';
+import '../../widgets/bluesky_profile_import_dialog.dart';
 import '../../widgets/image_source_picker.dart';
 import '../../widgets/user_avatar.dart';
 
@@ -48,6 +55,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   // Form state
   bool _isSaving = false;
+  bool _isFetchingBlueskyImport = false;
+
+  /// True from the import check fetch until its dialog closes; Save and
+  /// the import workflow exclude each other.
+  bool _isImportingFromBluesky = false;
 
   @override
   void initState() {
@@ -150,7 +162,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
-    if (_isSaving || !_hasChanges) {
+    if (_isSaving || _isImportingFromBluesky || !_hasChanges) {
       return;
     }
 
@@ -211,6 +223,114 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  Future<void> _importFromBluesky() async {
+    if (_isSaving || _isImportingFromBluesky) {
+      return;
+    }
+    setState(() {
+      _isImportingFromBluesky = true;
+    });
+    try {
+      await _runBlueskyImport();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImportingFromBluesky = false;
+        });
+      }
+    }
+  }
+
+  /// The import check, dialog and import. Dropped when the signed-in
+  /// session changes while it waits.
+  Future<void> _runBlueskyImport() async {
+    final apiService = context.read<CovesApiService>();
+    final profileCache = context.read<ProfileCache>();
+    final viewerAuthority = context.read<ViewerAuthorityProvider>();
+    final sessionKey = viewerAuthority.sessionKey;
+    bool isSameSession() => viewerAuthority.sessionKey == sessionKey;
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final did = widget.profile.did;
+
+    setState(() {
+      _isFetchingBlueskyImport = true;
+    });
+    final BlueskyProfileImport profileImport;
+    try {
+      profileImport = await apiService.getBlueskyProfileImport();
+    } on ApiException catch (e) {
+      if (mounted && isSameSession()) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(ErrorMessage.blueskyImport(e)),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+      return;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFetchingBlueskyImport = false;
+        });
+      }
+    }
+    // The editor may have been closed while the check was pending; its route
+    // is then popping or covered, and no dialog or message should follow.
+    if (!mounted ||
+        !isSameSession() ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+
+    final choices = settingsImportChoices(profileImport);
+    if (choices == null || choices.isEmpty) {
+      final message =
+          profileImport.status == BlueskyProfileImportStatus.noBlueskyProfile
+          ? 'No Bluesky profile found'
+          : blueskyImportResultMessage(const []);
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+
+    final imported = await showBlueskyProfileImportDialog(
+      context,
+      choices: choices,
+      handle: widget.profile.handle,
+      onImport: (fields) async {
+        if (!isSameSession()) {
+          // Not a NothingToImport result: the dialog closes on the session
+          // change, and the isSameSession() check after it returns before
+          // any snackbar, so this empty list is never shown.
+          return const [];
+        }
+        final imported = await apiService.importBlueskyProfile(fields);
+        if (!isSameSession()) {
+          return imported;
+        }
+        try {
+          await refreshOwnProfile(
+            apiService: apiService,
+            cache: profileCache,
+            did: did,
+          );
+        } on Exception {
+          // The import landed; the profile screen catches up on its next
+          // load.
+        }
+        return imported;
+      },
+    );
+    if (imported == null || !mounted || !isSameSession()) {
+      return;
+    }
+    navigator.pop();
+    messenger.showSnackBar(
+      SnackBar(content: Text(blueskyImportResultMessage(imported))),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -225,7 +345,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: (_hasChanges && !_isSaving) ? _saveProfile : null,
+            onPressed: (_hasChanges && !_isSaving && !_isImportingFromBluesky)
+                ? _saveProfile
+                : null,
             child: _isSaving
                 ? const SizedBox(
                     width: 20,
@@ -275,6 +397,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     hint: 'Tell people about yourself',
                     maxLength: kBioMaxLength,
                     maxLines: 4,
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: (_isSaving || _isImportingFromBluesky)
+                        ? null
+                        : _importFromBluesky,
+                    icon: _isFetchingBlueskyImport
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download),
+                    label: const Text('Import from Bluesky'),
                   ),
                 ],
               ),

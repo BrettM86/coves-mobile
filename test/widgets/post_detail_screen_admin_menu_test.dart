@@ -37,6 +37,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/bluesky_import_test_helpers.dart';
 import '../test_helpers/fake_providers.dart';
 import '../test_helpers/pump_helpers.dart';
 import '../test_helpers/test_mocks.dart';
@@ -214,6 +215,7 @@ MockCovesApiService _adminApi({FeedViewPost? feedPost}) {
     ],
   );
   when(api.getViewerAuthority()).thenAnswer((_) async => true);
+  stubNoBlueskyProfileImport(api);
   when(api.getUnreadCount()).thenAnswer((_) async => 0);
   when(
     api.getProfile(actor: anyNamed('actor')),

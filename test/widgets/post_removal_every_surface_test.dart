@@ -25,6 +25,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/bluesky_import_test_helpers.dart';
 import '../test_helpers/fake_providers.dart';
 import '../test_helpers/test_mocks.dart';
 
@@ -130,6 +131,7 @@ class _LoadedSurfaces {
   void stub() {
     when(api.deletePost(uri: _removedUri)).thenAnswer((_) async {});
     when(api.getViewerAuthority()).thenAnswer((_) async => true);
+    stubNoBlueskyProfileImport(api);
     when(api.getUnreadCount()).thenAnswer((_) async => 0);
     when(api.getProfile(actor: _authorDid)).thenAnswer(
       (_) async => UserProfile(did: _authorDid, handle: 'me.coves.test'),

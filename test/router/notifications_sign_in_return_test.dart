@@ -13,6 +13,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
+import '../test_helpers/bluesky_import_test_helpers.dart';
 import '../test_helpers/notifications_shell_harness.dart';
 import '../test_helpers/sign_in_flow_fakes.dart';
 import '../test_helpers/test_mocks.dart';
@@ -23,6 +24,7 @@ class _RouterHarness {
     router = createRouter(auth, eula, guidelines);
     when(api.getViewerAuthority()).thenAnswer((_) async => false);
     when(api.getUnreadCount()).thenAnswer((_) async => 1);
+    stubNoBlueskyProfileImport(api);
     when(api.listNotifications(cursor: anyNamed('cursor'))).thenAnswer(
       (_) async => NotificationPage.fromJson({
         'notifications': <Map<String, dynamic>>[],

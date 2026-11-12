@@ -18,6 +18,8 @@ import 'package:coves_flutter/services/vote_service.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
+import 'bluesky_import_test_helpers.dart';
+
 /// Test doubles for the providers a `PostCard` subtree resolves.
 ///
 /// These deliberately extend the real provider classes rather than
@@ -258,6 +260,10 @@ SingleChildWidget unloadedMultiFeedProvider({
 /// owns and disposes it), otherwise a real one built on [apiService]; see
 /// [viewerAuthorityRegistration]. The home feeds stamp their cards with its
 /// session key, as main.dart does.
+///
+/// The Bluesky import offer provider is registered lazily; a harness that
+/// mounts the shell on a mock API stubs the check with
+/// [stubNoBlueskyProfileImport].
 List<SingleChildWidget> profileScreenProviders({
   required AuthProvider auth,
   required CovesApiService apiService,
@@ -322,5 +328,6 @@ List<SingleChildWidget> profileScreenProviders({
       create: (_) => ProfileCache(auth),
       dispose: (_, cache) => cache.dispose(),
     ),
+    blueskyImportOfferRegistration(auth: auth, apiService: apiService),
   ];
 }
