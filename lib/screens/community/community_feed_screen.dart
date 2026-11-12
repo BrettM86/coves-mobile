@@ -28,6 +28,7 @@ import '../../utils/responsive_utils.dart';
 import '../../utils/web_link_builder.dart';
 import '../../widgets/community_avatar.dart';
 import '../../widgets/community_header.dart';
+import '../../widgets/community_software_logo.dart';
 import '../../widgets/icons/app_icons.dart';
 import '../../widgets/icons/back_icon.dart';
 import '../../widgets/loading_error_states.dart';
@@ -100,6 +101,10 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
   bool _isLoadingCommunity = false;
   String? _communityError;
   bool _communityIsAuthError = false;
+
+  /// Whether the last load failed because the community does not exist,
+  /// as opposed to a connection, server or other failure.
+  bool _communityIsNotFound = false;
 
   // Feed state — items, cursor, loading flags and both error channels live
   // in the shared controller
@@ -257,6 +262,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
       _isLoadingCommunity = true;
       _communityError = null;
       _communityIsAuthError = false;
+      _communityIsNotFound = false;
     });
 
     try {
@@ -297,6 +303,7 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
         setState(() {
           _communityError = ErrorMessage.community(e);
           _communityIsAuthError = isAuthError(e);
+          _communityIsNotFound = e is NotFoundException;
           _isLoadingCommunity = false;
         });
       }
@@ -426,7 +433,9 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
         backgroundColor: AppColors.background,
         appBar: _buildSimpleAppBar(),
         body: FullScreenError(
-          title: 'Community not found',
+          title: _communityIsNotFound
+              ? 'Community not found'
+              : 'Failed to load community',
           message: _communityError!,
           onRetry: _loadCommunity,
           secondaryActionLabel: _communityIsAuthError ? 'Sign In' : null,
@@ -563,14 +572,30 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                                               CrossAxisAlignment.start,
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            Text(
-                                              '!${_community?.name ?? ''}',
-                                              style: const TextStyle(
-                                                fontSize: 17,
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.communityName,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                                            // The name ellipsizes before
+                                            // the logo is squeezed out.
+                                            Row(
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    '!${community?.name ?? ''}',
+                                                    style: const TextStyle(
+                                                      fontSize: 17,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: AppColors
+                                                          .communityName,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                CommunitySoftwareLogo(
+                                                  software:
+                                                      community?.originSoftware,
+                                                ),
+                                              ],
                                             ),
                                             if (_resolveInstance()
                                                 case final instance?)

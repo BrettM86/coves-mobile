@@ -9,6 +9,7 @@ import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/models/post_get_result.dart';
 import 'package:coves_flutter/models/user_profile.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
+import 'package:coves_flutter/providers/display_preferences_provider.dart';
 import 'package:coves_flutter/providers/multi_feed_provider.dart';
 import 'package:coves_flutter/providers/notification_preferences_change_signal.dart';
 import 'package:coves_flutter/providers/unread_notification_count_provider.dart';
@@ -54,6 +55,9 @@ List<SingleChildWidget> routerShellProviders({
     notificationPreferencesChangeSignal: notificationPreferencesChangeSignal,
   ),
   ChangeNotifierProvider<MultiFeedProvider>.value(value: feeds),
+  ChangeNotifierProvider<DisplayPreferencesProvider>(
+    create: (_) => DisplayPreferencesProvider(),
+  ),
 ];
 
 /// Shared shell dependencies; pending pages are completed explicitly by tests.

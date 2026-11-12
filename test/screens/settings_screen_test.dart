@@ -1,12 +1,14 @@
 import 'dart:async';
 
 import 'package:coves_flutter/models/notification_preferences.dart';
+import 'package:coves_flutter/providers/display_preferences_provider.dart';
 import 'package:coves_flutter/screens/settings/settings_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/widgets/icons/lucide_paths.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../test_helpers/lucide_glyph_finder.dart';
 import '../test_helpers/settings_screen_harness.dart';
@@ -721,5 +723,104 @@ void main() {
     } finally {
       await harness.dispose(tester);
     }
+  });
+
+  group('Display: Show software logos', () {
+    Finder logosSwitch() =>
+        find.widgetWithText(SwitchListTile, 'Show software logos');
+
+    bool logosSwitchValue(WidgetTester tester) =>
+        tester.widget<SwitchListTile>(logosSwitch()).value;
+
+    testWidgets('is on by default and a toggle is saved on the device', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      final harness = SettingsHarness();
+      await harness.display.initialize();
+      try {
+        await _pumpLoadedSettings(tester, harness, []);
+
+        expect(find.text('Display'), findsOneWidget);
+        expect(logosSwitch(), findsOneWidget);
+        expect(logosSwitchValue(tester), isTrue);
+        // Display sits above Notifications.
+        expect(
+          tester.getTopLeft(find.text('Display')).dy,
+          lessThan(tester.getTopLeft(find.text('Notifications')).dy),
+        );
+
+        await tester.tap(logosSwitch());
+        await tester.pumpAndSettle();
+
+        expect(logosSwitchValue(tester), isFalse);
+        expect(harness.display.showSoftwareLogos, isFalse);
+        final prefs = await SharedPreferences.getInstance();
+        expect(
+          prefs.getBool(DisplayPreferencesProvider.showSoftwareLogosKey),
+          isFalse,
+        );
+        // A device-local setting sends nothing to the server.
+        expect(harness.sentPuts, isEmpty);
+      } finally {
+        await harness.dispose(tester);
+      }
+    });
+
+    testWidgets('shows a stored off value', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        DisplayPreferencesProvider.showSoftwareLogosKey: false,
+      });
+      final harness = SettingsHarness();
+      await harness.display.initialize();
+      try {
+        await _pumpLoadedSettings(tester, harness, []);
+        expect(logosSwitchValue(tester), isFalse);
+      } finally {
+        await harness.dispose(tester);
+      }
+    });
+
+    testWidgets('signed out on a short screen, the sign-in button scrolls '
+        'into reach without overflow', (tester) async {
+      tester.view.physicalSize = const Size(800, 360);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      SharedPreferences.setMockInitialValues({});
+      final harness = SettingsHarness(signedInDid: null);
+      await harness.display.initialize();
+      try {
+        await harness.pump(tester);
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(logosSwitch(), findsOneWidget);
+        await tester.scrollUntilVisible(find.text('Sign in'), 100);
+        expect(find.text('Sign in').hitTestable(), findsOneWidget);
+      } finally {
+        await harness.dispose(tester);
+      }
+    });
+
+    testWidgets('is available while signed out', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final harness = SettingsHarness(signedInDid: null);
+      await harness.display.initialize();
+      try {
+        await harness.pump(tester);
+        await tester.pumpAndSettle();
+
+        expect(logosSwitch(), findsOneWidget);
+        expect(
+          find.text('Sign in to manage your notification settings'),
+          findsOneWidget,
+        );
+        await tester.tap(logosSwitch());
+        await tester.pumpAndSettle();
+        expect(harness.display.showSoftwareLogos, isFalse);
+      } finally {
+        await harness.dispose(tester);
+      }
+    });
   });
 }

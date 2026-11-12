@@ -198,6 +198,38 @@ void main() {
     });
   });
 
+  group('CommunityView origin software and URL', () {
+    test('exposes originSoftware and originUrl when served', () {
+      final community = CommunityView.fromJson({
+        'did': 'did:plc:community1',
+        'name': 'selfhosted',
+        'origin': 'lemmy.world',
+        'originSoftware': 'lemmy',
+        'originUrl': 'https://lemmy.world/c/selfhosted',
+      });
+      expect(community.originSoftware, 'lemmy');
+      expect(community.originUrl, 'https://lemmy.world/c/selfhosted');
+    });
+
+    test('are null when omitted or not strings', () {
+      final omitted = CommunityView.fromJson({
+        'did': 'did:plc:community1',
+        'name': 'gaming',
+      });
+      expect(omitted.originSoftware, null);
+      expect(omitted.originUrl, null);
+
+      final wrongTyped = CommunityView.fromJson({
+        'did': 'did:plc:community1',
+        'name': 'gaming',
+        'originSoftware': 1,
+        'originUrl': false,
+      });
+      expect(wrongTyped.originSoftware, null);
+      expect(wrongTyped.originUrl, null);
+    });
+  });
+
   group('CommunityViewerState', () {
     test('should parse with all fields', () {
       final json = {'subscribed': true, 'member': true};

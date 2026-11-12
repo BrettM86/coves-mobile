@@ -4,6 +4,7 @@ import 'dart:ui' show Tristate;
 import 'package:coves_flutter/constants/app_theme.dart';
 import 'package:coves_flutter/models/notification_preferences.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
+import 'package:coves_flutter/providers/display_preferences_provider.dart';
 import 'package:coves_flutter/providers/notification_preferences_change_signal.dart';
 import 'package:coves_flutter/providers/unread_notification_count_provider.dart';
 import 'package:coves_flutter/screens/settings/settings_screen.dart';
@@ -36,6 +37,10 @@ class SettingsHarness {
 
   final NotificationPreferencesChangeSignal notificationPreferencesChangeSignal;
   final FakeAuthProvider auth;
+
+  /// Device-local display settings; uninitialized, so on by default until a
+  /// test calls `initialize` against mocked shared_preferences.
+  final display = DisplayPreferencesProvider();
   final api = MockCovesApiService();
   final unreadCount = UnreadCountRefreshSpy();
   final sentPuts = <Map<String, bool>>[];
@@ -102,6 +107,7 @@ class SettingsHarness {
     ChangeNotifierProvider<NotificationPreferencesChangeSignal>.value(
       value: notificationPreferencesChangeSignal,
     ),
+    ChangeNotifierProvider<DisplayPreferencesProvider>.value(value: display),
     viewerAuthorityRegistration(auth: auth, apiService: api),
     notificationPreferencesRegistration(auth: auth, apiService: api),
   ];
@@ -170,6 +176,7 @@ class SettingsHarness {
     _router?.dispose();
     unreadCount.dispose();
     notificationPreferencesChangeSignal.dispose();
+    display.dispose();
     auth.dispose();
   }
 }

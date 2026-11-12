@@ -7,6 +7,7 @@ import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/models/user_profile.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/community_guidelines_provider.dart';
+import 'package:coves_flutter/providers/display_preferences_provider.dart';
 import 'package:coves_flutter/providers/eula_provider.dart';
 import 'package:coves_flutter/providers/notification_preferences_change_signal.dart';
 import 'package:coves_flutter/providers/unread_notification_count_provider.dart';
@@ -178,6 +179,9 @@ void main() {
         providers: [
           Provider<CovesApiService>.value(value: api),
           ChangeNotifierProvider<AuthProvider>.value(value: auth),
+          ChangeNotifierProvider<DisplayPreferencesProvider>(
+            create: (_) => DisplayPreferencesProvider(),
+          ),
           ChangeNotifierProvider<NotificationPreferencesChangeSignal>.value(
             value: signal,
           ),

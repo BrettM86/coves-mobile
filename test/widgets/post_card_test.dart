@@ -4,6 +4,7 @@ import 'package:coves_flutter/config/environment_config.dart';
 import 'package:coves_flutter/constants/app_colors.dart';
 import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
+import 'package:coves_flutter/providers/display_preferences_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/streamable_service.dart';
@@ -19,6 +20,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http_mock_adapter/http_mock_adapter.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../test_helpers/fake_providers.dart';
 import '../test_helpers/test_mocks.dart';
@@ -1042,6 +1044,41 @@ void main() {
         expect(find.bySemanticsLabel('PieFed'), findsNWidgets(piefedCount));
       });
     }
+
+    testWidgets('the logo is hidden when software logos are turned off', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({
+        DisplayPreferencesProvider.showSoftwareLogosKey: false,
+      });
+      final display = DisplayPreferencesProvider();
+      await display.initialize();
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<DisplayPreferencesProvider>.value(
+          value: display,
+          child: createTestWidget(postWithSoftware('lemmy')),
+        ),
+      );
+
+      expect(find.bySemanticsLabel('Lemmy'), findsNothing);
+      expect(find.text('!comicstrips@lemmy.world'), findsOneWidget);
+
+      await display.setShowSoftwareLogos(true);
+      await tester.pump();
+      expect(find.bySemanticsLabel('Lemmy'), findsOneWidget);
+    });
+
+    testWidgets('the post card logo is 15px, smaller than the header logo', (
+      tester,
+    ) async {
+      await tester.pumpWidget(createTestWidget(postWithSoftware('lemmy')));
+
+      expect(
+        tester.getSize(find.bySemanticsLabel('Lemmy')),
+        const Size(15, 15),
+      );
+    });
 
     testWidgets('the Lemmy logo adds no tooltip', (tester) async {
       await tester.pumpWidget(createTestWidget(postWithSoftware(null)));

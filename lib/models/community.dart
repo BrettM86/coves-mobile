@@ -52,6 +52,8 @@ class CommunityView {
     required this.did,
     required this.name,
     this.origin,
+    this.originSoftware,
+    this.originUrl,
     this.handle,
     this.displayName,
     this.description,
@@ -69,6 +71,12 @@ class CommunityView {
       name: json['name'] as String,
       // Cosmetic field: a wrong-typed value must not sink the whole item.
       origin: json['origin'] is String ? json['origin'] as String : null,
+      originSoftware: json['originSoftware'] is String
+          ? json['originSoftware'] as String
+          : null,
+      originUrl: json['originUrl'] is String
+          ? json['originUrl'] as String
+          : null,
       handle: json['handle'] as String?,
       displayName: json['displayName'] as String?,
       description: json['description'] as String?,
@@ -94,6 +102,14 @@ class CommunityView {
   /// Origin instance domain (e.g. `coves.social`, `lemmy.world`).
   /// Optional until the appview ships it; display falls back to [handle].
   final String? origin;
+
+  /// Software of a bridged community's origin (e.g. `lemmy`, `piefed`);
+  /// null for native Coves communities.
+  final String? originSoftware;
+
+  /// The community's page on its origin instance, for bridged communities
+  /// (e.g. `https://lemmy.world/c/selfhosted`).
+  final String? originUrl;
 
   /// Community handle
   final String? handle;

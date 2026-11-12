@@ -10,6 +10,7 @@ import 'package:coves_flutter/models/post.dart';
 import 'package:coves_flutter/providers/auth_provider.dart';
 import 'package:coves_flutter/providers/block_provider.dart';
 import 'package:coves_flutter/providers/community_subscription_provider.dart';
+import 'package:coves_flutter/providers/display_preferences_provider.dart';
 import 'package:coves_flutter/providers/vote_provider.dart';
 import 'package:coves_flutter/screens/community/community_feed_screen.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
@@ -17,9 +18,11 @@ import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:coves_flutter/services/post_change_broadcast.dart';
 import 'package:coves_flutter/services/streamable_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../test_helpers/fake_providers.dart';
 import '../test_helpers/test_mocks.dart';
@@ -58,6 +61,7 @@ void main() {
     PostChangeBroadcast? broadcast,
     FakeAuthProvider? signedIn,
     DateTime Function()? paginationClock,
+    DisplayPreferencesProvider? displayPreferences,
   }) async {
     final auth = signedIn ?? FakeAuthProvider();
     final votes = FakeVoteProvider(auth);
@@ -90,6 +94,10 @@ void main() {
           ),
           viewerAuthorityRegistration(auth: auth, apiService: mockApiService),
           unloadedMultiFeedProvider(auth: auth, apiService: mockApiService),
+          if (displayPreferences != null)
+            ChangeNotifierProvider<DisplayPreferencesProvider>.value(
+              value: displayPreferences,
+            ),
         ],
         child: CommunityFeedScreen(
           identifier: communityDid,
@@ -195,7 +203,7 @@ void main() {
 
     await pumpFeedScreen(tester);
     await tester.pump();
-    expect(find.text('Community not found'), findsOneWidget);
+    expect(find.text('Failed to load community'), findsOneWidget);
 
     firstPage.complete(shortFirstPage());
     await tester.pump();
@@ -395,5 +403,206 @@ void main() {
       find.text('No connection. Please check your internet.'),
       findsNothing,
     );
+  });
+
+  group('collapsed top bar software logo', () {
+    void stubBridgedCommunity({String name = 'science'}) {
+      when(mockApiService.getCommunity(community: anyNamed('community')))
+          .thenAnswer(
+            (_) async => CommunityView(
+              did: communityDid,
+              name: name,
+              origin: 'lemmy.world',
+              originSoftware: 'lemmy',
+            ),
+          );
+      when(
+        mockApiService.getCommunityFeed(
+          community: anyNamed('community'),
+          sort: anyNamed('sort'),
+          timeframe: anyNamed('timeframe'),
+          limit: anyNamed('limit'),
+        ),
+      ).thenAnswer(
+        (_) async => TimelineResponse(
+          feed: [
+            for (var index = 0; index < 20; index++)
+              buildFeedPost(rkey: 'p$index', title: 'Post $index'),
+          ],
+        ),
+      );
+    }
+
+    Future<DisplayPreferencesProvider> displayWith({
+      required bool showSoftwareLogos,
+    }) async {
+      SharedPreferences.setMockInitialValues({
+        DisplayPreferencesProvider.showSoftwareLogosKey: showSoftwareLogos,
+      });
+      final display = DisplayPreferencesProvider();
+      await display.initialize();
+      addTearDown(display.dispose);
+      return display;
+    }
+
+    Future<void> collapse(WidgetTester tester) async {
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
+      await tester.pumpAndSettle();
+    }
+
+    /// Logos drawn inside the collapsed bar, the top toolbar strip.
+    Iterable<Rect> logosInTopBar(WidgetTester tester) {
+      final barBottom =
+          kToolbarHeight +
+          tester.view.padding.top / tester.view.devicePixelRatio;
+      return find
+          .bySemanticsLabel('Lemmy')
+          .evaluate()
+          .map((element) => tester.getRect(find.byWidget(element.widget)))
+          .where((rect) => rect.top >= 0 && rect.bottom <= barBottom + 1);
+    }
+
+    testWidgets('a bridged community shows its logo after the collapsed name', (
+      tester,
+    ) async {
+      stubBridgedCommunity();
+      await pumpFeedScreen(
+        tester,
+        displayPreferences: await displayWith(showSoftwareLogos: true),
+      );
+      await tester.pumpAndSettle();
+      expect(logosInTopBar(tester), isEmpty);
+
+      await collapse(tester);
+
+      final logos = logosInTopBar(tester).toList();
+      expect(logos, hasLength(1));
+      expect(
+        logos.single.left,
+        greaterThanOrEqualTo(tester.getRect(find.text('!science')).right),
+      );
+    });
+
+    testWidgets('a native community has no logo in the collapsed bar', (
+      tester,
+    ) async {
+      stubBridgedCommunity();
+      when(mockApiService.getCommunity(community: anyNamed('community')))
+          .thenAnswer(
+            (_) async => CommunityView(
+              did: communityDid,
+              name: 'science',
+              origin: 'coves.social',
+            ),
+          );
+      await pumpFeedScreen(tester);
+      await tester.pumpAndSettle();
+
+      await collapse(tester);
+
+      expect(find.text('!science'), findsOneWidget);
+      expect(find.bySemanticsLabel('Lemmy'), findsNothing);
+    });
+
+    testWidgets('the collapsed bar logo hides when logos are off', (
+      tester,
+    ) async {
+      stubBridgedCommunity();
+      await pumpFeedScreen(
+        tester,
+        displayPreferences: await displayWith(showSoftwareLogos: false),
+      );
+      await tester.pumpAndSettle();
+
+      await collapse(tester);
+
+      expect(find.text('!science'), findsOneWidget);
+      expect(find.bySemanticsLabel('Lemmy'), findsNothing);
+    });
+
+    testWidgets('a long collapsed name ellipsizes and keeps the logo visible', (
+      tester,
+    ) async {
+      const name = 'averyveryverylongcommunitynamethatcannotfitonscreen';
+      stubBridgedCommunity(name: name);
+      await pumpFeedScreen(
+        tester,
+        displayPreferences: await displayWith(showSoftwareLogos: true),
+      );
+      await tester.pumpAndSettle();
+
+      await collapse(tester);
+
+      final title = tester.renderObject<RenderParagraph>(find.text('!$name'));
+      expect(title.didExceedMaxLines, isTrue);
+      final logos = logosInTopBar(tester).toList();
+      expect(logos, hasLength(1));
+      final screenWidth =
+          tester.view.physicalSize.width / tester.view.devicePixelRatio;
+      expect(logos.single.right, lessThanOrEqualTo(screenWidth));
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('community load error title', () {
+    void stubEmptyFeed() {
+      when(
+        mockApiService.getCommunityFeed(
+          community: anyNamed('community'),
+          sort: anyNamed('sort'),
+          timeframe: anyNamed('timeframe'),
+          limit: anyNamed('limit'),
+        ),
+      ).thenAnswer((_) async => TimelineResponse(feed: []));
+    }
+
+    // (case, thrown error, expected title, expected detail line)
+    final cases = <(String, Exception, String, String)>[
+      (
+        'no connection',
+        NetworkException('Connection refused'),
+        'Failed to load community',
+        'No connection. Please check your internet.',
+      ),
+      (
+        'a server error',
+        ServerException('Internal error', statusCode: 500),
+        'Failed to load community',
+        'Server error. Please try again later.',
+      ),
+      (
+        'an unclassified failure',
+        Exception('boom'),
+        'Failed to load community',
+        'Could not load community. Please try again.',
+      ),
+      (
+        'a 404',
+        NotFoundException('Community not found'),
+        'Community not found',
+        'Content not found. It may have been removed.',
+      ),
+    ];
+
+    for (final (label, error, title, detail) in cases) {
+      testWidgets('$label shows "$title" with its detail and Retry', (
+        tester,
+      ) async {
+        when(mockApiService.getCommunity(community: anyNamed('community')))
+            .thenThrow(error);
+        stubEmptyFeed();
+
+        await pumpFeedScreen(tester);
+        await tester.pumpAndSettle();
+
+        expect(find.text(title), findsOneWidget);
+        expect(find.text(detail), findsOneWidget);
+        expect(find.text('Retry'), findsOneWidget);
+        final otherTitle = title == 'Community not found'
+            ? 'Failed to load community'
+            : 'Community not found';
+        expect(find.text(otherTitle), findsNothing);
+      });
+    }
   });
 }

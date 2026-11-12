@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
+import '../../providers/display_preferences_provider.dart';
 import '../../providers/notification_preferences_provider.dart';
 import '../../services/api_exceptions.dart';
 import '../../utils/error_messages.dart';
@@ -77,19 +78,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
     NotificationPreferencesProvider preferences,
     String label,
     NotificationPreferenceKey key,
-  ) => SwitchListTile(
+  ) => _switchRow(
+    label,
+    value: preferences.valueFor(key),
+    onChanged: (_) => _toggle(preferences, key),
+  );
+
+  Widget _switchRow(
+    String label, {
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) => SwitchListTile(
     title: Text(
       label,
       style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
     ),
-    value: preferences.valueFor(key),
-    onChanged: (_) => _toggle(preferences, key),
+    value: value,
+    onChanged: onChanged,
     contentPadding: const EdgeInsets.symmetric(horizontal: _rowPadding),
     minTileHeight: _rowMinHeight,
     thumbColor: _switchThumbColor,
     trackColor: _switchTrackColor,
     trackOutlineColor: _switchTrackOutlineColor,
   );
+
+  Widget _sectionHeader(String title) => Padding(
+    padding: const EdgeInsets.fromLTRB(
+      _sectionInset + _rowPadding,
+      24,
+      _sectionInset,
+      10,
+    ),
+    child: Text(
+      title,
+      style: const TextStyle(color: AppColors.textMeta, fontSize: 14),
+    ),
+  );
+
+  /// Device-local settings, available signed in or out.
+  List<Widget> _displaySection(DisplayPreferencesProvider display) => [
+    _sectionHeader('Display'),
+    _section([
+      _switchRow(
+        'Show software logos',
+        value: display.showSoftwareLogos,
+        onChanged: display.setShowSoftwareLogos,
+      ),
+    ]),
+  ];
 
   /// A rounded group of rows split by hairlines inset from the leading edge.
   Widget _section(List<Widget> rows) => Padding(
@@ -144,15 +180,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// The Display section above a notifications state (sign-in prompt,
+  /// loading, or load error) that fills the rest of the screen, scrolling
+  /// when the screen is too short for both.
+  Widget _withDisplaySection(
+    DisplayPreferencesProvider display,
+    Widget notificationsBody,
+  ) => CustomScrollView(
+    slivers: [
+      SliverList.list(children: _displaySection(display)),
+      SliverFillRemaining(hasScrollBody: false, child: notificationsBody),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
     final preferences = context.watch<NotificationPreferencesProvider>();
+    final display = context.watch<DisplayPreferencesProvider>();
     final Widget body;
     if (!preferences.isSignedIn) {
-      body = _buildSignedOutPrompt();
+      body = _withDisplaySection(display, _buildSignedOutPrompt());
     } else if (!preferences.isLoaded) {
       final loadError = preferences.loadError;
-      body = loadError != null
+      final notificationsBody = loadError != null
           ? FullScreenError(
               message: ErrorMessage.notificationPreferences(
                 loadError,
@@ -161,22 +211,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onRetry: preferences.retry,
             )
           : const FullScreenLoading();
+      body = _withDisplaySection(display, notificationsBody);
     } else {
       body = ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(
-              _sectionInset + _rowPadding,
-              24,
-              _sectionInset,
-              10,
-            ),
-            child: Text(
-              'Notifications',
-              style: TextStyle(color: AppColors.textMeta, fontSize: 14),
-            ),
-          ),
+          ..._displaySection(display),
+          _sectionHeader('Notifications'),
           _section([
             _switch(
               preferences,

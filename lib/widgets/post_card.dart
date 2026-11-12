@@ -310,6 +310,7 @@ class _PostCardContent extends StatelessWidget {
                               ),
                               CommunitySoftwareLogo(
                                 software: post.post.community.originSoftware,
+                                size: 15,
                               ),
                             ],
                           ),

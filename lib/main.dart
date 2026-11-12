@@ -16,6 +16,7 @@ import 'providers/auth_provider.dart';
 import 'providers/block_provider.dart';
 import 'providers/community_guidelines_provider.dart';
 import 'providers/community_subscription_provider.dart';
+import 'providers/display_preferences_provider.dart';
 import 'providers/eula_provider.dart';
 import 'providers/multi_feed_provider.dart';
 import 'providers/notification_preferences_change_signal.dart';
@@ -101,12 +102,14 @@ Future<void> main() async {
 /// binding rejects. Mirrors the [createRouter] @visibleForTesting pattern.
 @visibleForTesting
 Future<Widget> bootstrapCovesApp() async {
-  // The three startup reads are independent (secure storage for the
-  // session, shared_preferences for the two acceptance flags), so run them
-  // concurrently instead of paying for each one before the first frame.
+  // The startup reads are independent (secure storage for the session,
+  // shared_preferences for the acceptance flags and display settings), so
+  // run them concurrently instead of paying for each one before the first
+  // frame.
   final authProvider = AuthProvider();
   final eulaProvider = EulaProvider();
   final communityGuidelinesProvider = CommunityGuidelinesProvider();
+  final displayPreferencesProvider = DisplayPreferencesProvider();
   await Future.wait([
     _initializeGuarded(authProvider.initialize, phase: 'auth_initialization'),
     // Note: initialize() handles errors internally (fail-closed design)
@@ -114,6 +117,11 @@ Future<Widget> bootstrapCovesApp() async {
     _initializeGuarded(
       communityGuidelinesProvider.initialize,
       phase: 'community_guidelines_initialization',
+    ),
+    // A failed read keeps the defaults.
+    _initializeGuarded(
+      displayPreferencesProvider.initialize,
+      phase: 'display_preferences_initialization',
     ),
   ]);
 
@@ -215,6 +223,7 @@ Future<Widget> bootstrapCovesApp() async {
       ChangeNotifierProvider.value(value: authProvider),
       ChangeNotifierProvider.value(value: eulaProvider),
       ChangeNotifierProvider.value(value: communityGuidelinesProvider),
+      ChangeNotifierProvider.value(value: displayPreferencesProvider),
       ChangeNotifierProvider.value(value: voteProvider),
       // Expose the shared API client so screens/widgets can context.read it
       Provider<CovesApiService>.value(value: apiService),

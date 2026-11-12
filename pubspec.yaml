@@ -70,6 +70,8 @@ dev_dependencies:
   url_launcher_platform_interface: ^2.3.2
   # Tests install a fake SharePlatform; share_plus does not re-export it.
   share_plus_platform_interface: ^7.2.0
+  # Tests install a failing preferences store to exercise save failures.
+  shared_preferences_platform_interface: ^2.4.2
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

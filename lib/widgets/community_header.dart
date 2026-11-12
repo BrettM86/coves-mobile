@@ -4,7 +4,10 @@ import '../constants/app_colors.dart';
 import '../models/community.dart';
 import '../utils/community_handle_utils.dart';
 import '../utils/display_utils.dart';
+import '../utils/url_launcher.dart';
+import '../utils/url_policy.dart';
 import 'community_avatar.dart';
+import 'community_software_logo.dart';
 
 /// Community header widget displaying banner, avatar, and community info
 ///
@@ -12,7 +15,8 @@ import 'community_avatar.dart';
 /// - Full-width generated gradient banner with geometric pattern overlay
 /// - Circular avatar with shadow
 /// - Community name, handle, and description
-/// - Stats row showing subscriber/member counts
+/// - Stats row showing subscriber/member counts, and a "View on `host`"
+///   button for bridged communities
 class CommunityHeader extends StatelessWidget {
   const CommunityHeader({required this.community, super.key});
 
@@ -206,13 +210,25 @@ class CommunityHeader extends StatelessWidget {
                 // Handle
                 if (_handleLabel() case final label?) ...[
                   const SizedBox(height: 2),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: AppColors.teal,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  // The handle ellipsizes before the logo is squeezed out.
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          label,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.teal,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      CommunitySoftwareLogo(
+                        software: community?.originSoftware,
+                      ),
+                    ],
                   ),
                 ],
               ],
@@ -224,7 +240,11 @@ class CommunityHeader extends StatelessWidget {
   }
 
   Widget _buildStatsRow() {
-    return Wrap(
+    final originUrl = community?.originUrl;
+    final originHost = isAllowedWebUrl(originUrl)
+        ? Uri.parse(originUrl!).host
+        : null;
+    final stats = Wrap(
       spacing: 16,
       runSpacing: 8,
       children: [
@@ -233,6 +253,99 @@ class CommunityHeader extends StatelessWidget {
         if (community?.memberCount != null)
           _StatItem(label: 'Members', value: community!.memberCount!),
       ],
+    );
+    if (originHost == null) {
+      return stats;
+    }
+    // The counts take the width they need, leaving the button at least
+    // room for a shortened label and its logo; the button gets the rest,
+    // where a long host ellipsizes.
+    return LayoutBuilder(
+      builder: (context, constraints) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: constraints.maxWidth - _minimumViewOnButtonWidth,
+            ),
+            child: stats,
+          ),
+          Flexible(
+            child: Padding(
+              padding: const EdgeInsets.only(left: 12),
+              child: _ViewOnOriginButton(
+                originUrl: originUrl!,
+                host: originHost,
+                software: community?.originSoftware,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The narrowest the View on button gets beside the counts: a shortened
+/// label, the logo, its padding and the gap before it.
+const double _minimumViewOnButtonWidth = 96;
+
+/// Opens a bridged community's page on its origin instance in the external
+/// browser, labelled with the instance host and its software logo.
+class _ViewOnOriginButton extends StatelessWidget {
+  const _ViewOnOriginButton({
+    required this.originUrl,
+    required this.host,
+    required this.software,
+  });
+
+  /// An http(s) URL with a host, as checked by `isAllowedWebUrl`.
+  final String originUrl;
+  final String host;
+  final String? software;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      link: true,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: () =>
+              UrlLauncher.launchExternalUrl(originUrl, context: context),
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 26),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppColors.textSecondary.withValues(alpha: 0.5),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    'View on $host',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                CommunitySoftwareLogo(software: software, size: 16),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
