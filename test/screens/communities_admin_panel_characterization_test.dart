@@ -24,6 +24,7 @@ import 'package:coves_flutter/models/picked_image.dart';
 import 'package:coves_flutter/screens/home/communities_admin_panel.dart';
 import 'package:coves_flutter/screens/home/community_avatar_upload_page.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
+import 'package:coves_flutter/widgets/community_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
@@ -38,11 +39,13 @@ CommunityView buildCommunity({
   String did = communityDid,
   String name = 'testcove',
   String displayName = 'Test Cove',
+  String? avatar,
 }) {
   return CommunityView(
     did: did,
     name: name,
     displayName: displayName,
+    avatar: avatar,
     handle: '$name.coves.social',
   );
 }
@@ -441,6 +444,35 @@ void main() {
   });
 
   group('avatar upload page state', () {
+    testWidgets(
+      'the selected community\'s large preview loads the full-size avatar',
+      (tester) async {
+        const listAvatar =
+            'https://img.coves.social/img/avatar_small/plain/did:plc:abc/bafkreicid';
+        stubListCommunities([buildCommunity(avatar: listAvatar)]);
+        await pumpPanel(tester);
+
+        await tester.tap(find.text('Change Profile Pic'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Test Cove'));
+        await tester.pumpAndSettle();
+
+        final urls = tester
+            .widgetList<CommunityAvatar>(find.byType(CommunityAvatar))
+            .map((avatar) => (avatar.size, avatar.avatarUrl))
+            .toSet();
+        // The 40px list row keeps the list-size file; the 120px preview of
+        // the selected community asks for the full one.
+        expect(urls, {
+          (40.0, listAvatar),
+          (
+            120.0,
+            'https://img.coves.social/img/avatar/plain/did:plc:abc/bafkreicid',
+          ),
+        });
+      },
+    );
+
     testWidgets('A11 going back to the menu clears the selected community', (
       tester,
     ) async {

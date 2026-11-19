@@ -9,6 +9,7 @@ import '../../models/picked_image.dart';
 import '../../utils/community_handle_utils.dart';
 import '../../utils/image_crop_utils.dart';
 import '../../utils/image_picker_utils.dart';
+import '../../utils/image_proxy_preset.dart';
 import '../../widgets/community_avatar.dart';
 import '../../widgets/image_source_picker.dart';
 
@@ -278,7 +279,7 @@ class _CommunityAvatarUploadPageState extends State<CommunityAvatarUploadPage> {
                 ),
                 child: CommunityAvatar(
                   name: community.name,
-                  avatarUrl: community.avatar,
+                  avatarUrl: fullSizeAvatarUrl(community.avatar),
                   size: 100,
                   fallbackColor: AppColors.backgroundSecondary,
                   fallbackIcon: const Icon(
@@ -434,7 +435,7 @@ class _CommunityAvatarUploadPageState extends State<CommunityAvatarUploadPage> {
               ),
               child: CommunityAvatar(
                 name: community.name,
-                avatarUrl: community.avatar,
+                avatarUrl: fullSizeAvatarUrl(community.avatar),
                 size: 120,
                 fallbackColor: AppColors.backgroundSecondary,
                 fallbackIcon: const Icon(
