@@ -189,5 +189,56 @@ void main() {
       expect(output, isNot(contains('QUERY-MARKER')));
       expect(output, isNot(contains('SECRET-TOKEN-MARKER')));
     });
+
+    for (final row in [
+      (
+        name: 'success',
+        status: 200,
+        body: <String, dynamic>{'reportId': 987654321},
+        responseMarker: '987654321',
+      ),
+      (
+        name: 'error',
+        status: 400,
+        body: <String, dynamic>{
+          'error': 'InvalidRequest',
+          'message': 'REPORT-ERROR-BODY-MARKER',
+        },
+        responseMarker: 'REPORT-ERROR-BODY-MARKER',
+      ),
+    ]) {
+      test('submitReport ${row.name} logs metadata only', () async {
+        const targetUri =
+            'at://did:plc:author/social.coves.community.post/REPORT-TARGET-MARKER';
+        adapter.onPost(
+          '/xrpc/social.coves.admin.submitReport',
+          (server) => server.reply(row.status, row.body),
+          data: Matchers.any,
+        );
+
+        final call = service.submitReport(
+          targetUri: targetUri,
+          reason: 'doxing',
+          explanation: 'REPORT-EXPLANATION-MARKER',
+        );
+        if (row.status == 200) {
+          await call;
+        } else {
+          await expectLater(call, throwsA(isA<ApiException>()));
+        }
+
+        final output = logLines.join('\n');
+        for (final marker in [
+          'REPORT-TARGET-MARKER',
+          'doxing',
+          'REPORT-EXPLANATION-MARKER',
+          row.responseMarker,
+          'SECRET-TOKEN-MARKER',
+        ]) {
+          expect(output, isNot(contains(marker)), reason: marker);
+        }
+        expect(output, contains('POST /xrpc/social.coves.admin.submitReport'));
+      });
+    }
   });
 }

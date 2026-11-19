@@ -9,12 +9,14 @@
 /// endpoints on the strength of this function alone.
 library;
 
-/// Private moderation routes must log only request metadata. listActions is
-/// the public exception; query values never affect the classification.
+/// Private moderation and admin routes must log only request metadata.
+/// listActions is the public exception; query values never affect the
+/// classification.
 bool isPrivateModerationPath(String requestPath) {
   final path = requestPath.split('?').first;
-  return path.contains('social.coves.moderation.') &&
-      path != '/xrpc/social.coves.moderation.listActions';
+  return path.startsWith('/xrpc/social.coves.admin.') ||
+      (path.contains('social.coves.moderation.') &&
+          path != '/xrpc/social.coves.moderation.listActions');
 }
 
 /// Notification responses, requests and errors can contain private account

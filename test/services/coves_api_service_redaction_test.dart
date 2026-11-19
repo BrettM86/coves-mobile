@@ -155,4 +155,19 @@ void main() {
       );
     });
   });
+
+  group('isPrivateModerationPath', () {
+    for (final row in [
+      (path: '/xrpc/social.coves.admin.submitReport', private: true),
+      (path: '/xrpc/social.coves.admin.submitReport?x=1', private: true),
+      (path: '/xrpc/social.coves.admin.listReports', private: true),
+      (path: '/xrpc/social.coves.administration.x', private: false),
+      (path: '/xrpc/social.coves.feed.getTimeline', private: false),
+      (path: '/xrpc/social.coves.moderation.listActions', private: false),
+    ]) {
+      test('${row.path} -> ${row.private}', () {
+        expect(isPrivateModerationPath(row.path), row.private);
+      });
+    }
+  });
 }

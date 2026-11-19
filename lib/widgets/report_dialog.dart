@@ -130,7 +130,10 @@ class _ReportDialogState extends State<ReportDialog> {
       }
     } on ApiException catch (e) {
       if (kDebugMode) {
-        debugPrint('API error submitting report: $e');
+        debugPrint(
+          'API error submitting report: '
+          'status=${e.statusCode} code=${e.errorCode}',
+        );
       }
       if (mounted) {
         setState(() {
