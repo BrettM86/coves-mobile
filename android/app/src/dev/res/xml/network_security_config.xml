@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+        Dev flavor only: allows cleartext HTTP to the local development stack
+        (adb reverse on localhost/127.0.0.1, the emulator host 10.0.2.2, and a
+        LAN host). Overrides src/main/res/xml/network_security_config.xml,
+        which permits no cleartext, so prod builds stay HTTPS-only.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Local development addresses only -->
+        <domain includeSubdomains="true">192.168.1.7</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain> <!-- Android emulator -->
+    </domain-config>
+</network-security-config>
