@@ -34,6 +34,7 @@ import '../../widgets/icons/back_icon.dart';
 import '../../widgets/loading_error_states.dart';
 import '../../widgets/paginated_sliver_list.dart';
 import '../../widgets/post_card.dart';
+import '../../widgets/separated_selection_area.dart';
 import '../../widgets/share_button.dart';
 
 /// Screen displaying a community's feed with header info
@@ -1166,12 +1167,14 @@ class _CommunityFeedScreenState extends State<CommunityFeedScreen> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.border),
                 ),
-                child: Text(
-                  _community!.description!,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    color: AppColors.textPrimary,
-                    height: 1.5,
+                child: SeparatedSelectionArea(
+                  child: Text(
+                    _community!.description!,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      color: AppColors.textPrimary,
+                      height: 1.5,
+                    ),
                   ),
                 ),
               ),

@@ -6,6 +6,7 @@ import '../constants/threading_colors.dart';
 import '../models/comment.dart';
 import '../models/post.dart';
 import 'comment_card.dart';
+import 'separated_selection_area.dart';
 
 /// Comment thread widget for displaying comments and their nested replies
 ///
@@ -260,22 +261,28 @@ class CommentThread extends StatelessWidget {
 
         // Show "Read more replies" link at max depth when there are replies
         if (hasReplies && atMaxDepth && !isCollapsed)
-          _buildContinueThreadLink(context, replyCount),
+          ContentOnlySelectionExclusion(
+            child: _buildContinueThreadLink(context, replyCount),
+          ),
 
         // Show "Load more replies" button if there are more (and not collapsed)
         if (thread.hasMore && !isCollapsed)
-          LoadMoreRepliesButton(
-            depth: depth,
-            isLoading: loadingMoreReplies.contains(thread.comment.uri),
-            onTap: () {
-              if (onLoadMoreReplies != null) {
-                onLoadMoreReplies!(thread);
-              } else {
-                if (kDebugMode) {
-                  debugPrint('Load more replies tapped (no handler provided)');
+          ContentOnlySelectionExclusion(
+            child: LoadMoreRepliesButton(
+              depth: depth,
+              isLoading: loadingMoreReplies.contains(thread.comment.uri),
+              onTap: () {
+                if (onLoadMoreReplies != null) {
+                  onLoadMoreReplies!(thread);
+                } else {
+                  if (kDebugMode) {
+                    debugPrint(
+                      'Load more replies tapped (no handler provided)',
+                    );
+                  }
                 }
-              }
-            },
+              },
+            ),
           ),
       ],
     );

@@ -338,15 +338,16 @@ void main() {
       expect(find.text('Copy link'), findsNothing);
     });
 
-    testWidgets('no parent post signed-out still shows no menu at all', (
+    testWidgets('no parent post signed-out offers only Select text', (
       tester,
     ) async {
       when(mockAuthProvider.isAuthenticated).thenReturn(false);
       when(mockAuthProvider.did).thenReturn(null);
 
       await pumpCard(tester, post: null);
+      await openCommentMenu(tester);
 
-      expect(find.byTooltip('Comment options'), findsNothing);
+      expect(find.text('Select text'), findsOneWidget);
       expect(find.text('Share'), findsNothing);
       expect(find.text('Copy link'), findsNothing);
     });

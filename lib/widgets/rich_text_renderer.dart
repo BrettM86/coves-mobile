@@ -21,6 +21,7 @@ import 'media/image_error.dart';
 import 'media/media_aspect.dart';
 import 'media/media_surface.dart';
 import 'media/play_chip.dart';
+import 'separated_selection_area.dart';
 
 /// A reusable widget for rendering text with rich text facets.
 ///
@@ -245,15 +246,18 @@ class _RichTextRendererState extends State<RichTextRenderer> {
       return children.first;
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < children.length; i++) ...[
-          if (i > 0) const SizedBox(height: 8),
-          children[i],
+    // Puts one newline between the top-level blocks when they are copied.
+    return SeparatedSelectionContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            children[i],
+          ],
         ],
-      ],
+      ),
     );
   }
 
@@ -566,15 +570,17 @@ class _RichTextRendererState extends State<RichTextRenderer> {
 
     var child = children.length == 1
         ? children.first
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < children.length; i++) ...[
-                if (i > 0) const SizedBox(height: 8),
-                children[i],
+        : SeparatedSelectionContainer(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < children.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  children[i],
+                ],
               ],
-            ],
+            ),
           );
 
     // One bar per nesting level, innermost closest to the text
@@ -616,31 +622,41 @@ class _RichTextRendererState extends State<RichTextRenderer> {
         button: true,
         image: true,
         label: alt != null && alt.isNotEmpty ? alt : 'Image',
+        // Claims long-press so an enclosing selection region does not
+        // select nearby text; no semantics, since the press does nothing.
         child: GestureDetector(
-          onTap: () => ImageViewer.open(
-            context,
-            layout.lightboxImages(shown, galleryFirst: galleryFirst),
-            initialIndex:
-                (galleryFirst ? layout.gallery.length : 0) +
-                shown.indexOf(placement),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: AspectRatio(
-              aspectRatio: clampMediaRatio(
-                image.aspectRatio,
-                min: kDetailRatioBounds.min,
-                max: kDetailRatioBounds.max,
-                fallback: 4 / 3,
+          onLongPress: () {},
+          excludeFromSemantics: true,
+          child: GestureDetector(
+            onTap: () => ImageViewer.open(
+              context,
+              layout.lightboxImages(shown, galleryFirst: galleryFirst),
+              initialIndex:
+                  (galleryFirst ? layout.gallery.length : 0) +
+                  shown.indexOf(placement),
+            ),
+            // Every image state (loading, loaded, error text) stays out of
+            // selection and copied text
+            child: SelectionContainer.disabled(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: AspectRatio(
+                  aspectRatio: clampMediaRatio(
+                    image.aspectRatio,
+                    min: kDetailRatioBounds.min,
+                    max: kDetailRatioBounds.max,
+                    fallback: 4 / 3,
+                  ),
+                  child: image.isGif
+                      ? GifPlayer(
+                          image: image,
+                          playChipStyle: PlayChipStyle.detail,
+                          labelsImage: false,
+                          still: _placedImage(cacheManager, image.thumb),
+                        )
+                      : _placedImage(cacheManager, image.fullsize),
+                ),
               ),
-              child: image.isGif
-                  ? GifPlayer(
-                      image: image,
-                      playChipStyle: PlayChipStyle.detail,
-                      labelsImage: false,
-                      still: _placedImage(cacheManager, image.thumb),
-                    )
-                  : _placedImage(cacheManager, image.fullsize),
             ),
           ),
         ),
@@ -721,12 +737,15 @@ class _RichTextRendererState extends State<RichTextRenderer> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (language != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text(
-                language,
-                style: _monospace(
-                  const TextStyle(color: AppColors.textMuted, fontSize: 11),
+            // The label is not part of the code, so it is not copied
+            SelectionContainer.disabled(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  language,
+                  style: _monospace(
+                    const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                  ),
                 ),
               ),
             ),

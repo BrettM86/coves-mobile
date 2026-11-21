@@ -22,6 +22,7 @@ import 'media/native_video_embed.dart';
 import 'media/streamable_video_embed.dart';
 import 'rich_text_renderer.dart';
 import 'sensitive_content.dart';
+import 'separated_selection_area.dart';
 import 'source_link_bar.dart';
 import 'tappable_author.dart';
 import 'user_avatar.dart';
@@ -188,42 +189,69 @@ class _DetailedPostViewState extends State<DetailedPostView> {
         // Author row - compact Reddit-style
         _buildAuthorRow(),
 
-        // Title - prominent but clean
-        if (widget.post.post.title != null && !hidesTitle) ...[
-          const SizedBox(height: 12),
-          _buildTitle(),
-        ],
+        // Title through body is one selectable region; the banner and
+        // media inside it are excluded from selection.
+        SeparatedSelectionArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title - prominent but clean
+              if (widget.post.post.title != null && !hidesTitle) ...[
+                const SizedBox(height: 12),
+                _buildTitle(),
+              ],
 
-        // Reveal control for a self-labelled post, under the title so the
-        // reader sees why the content is missing.
-        if (widget.post.post.isSensitive) ...[
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: SensitiveContentBanner(
-              concealed: _concealed,
-              onToggle: _toggleReveal,
-            ),
+              // Reveal control for a self-labelled post, under the title so the
+              // reader sees why the content is missing.
+              if (widget.post.post.isSensitive) ...[
+                const SizedBox(height: 12),
+                // Claims long-press so the region does not select nearby
+                // text; no semantics, since the press does nothing.
+                GestureDetector(
+                  onLongPress: () {},
+                  behavior: HitTestBehavior.translucent,
+                  excludeFromSemantics: true,
+                  child: SelectionContainer.disabled(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SensitiveContentBanner(
+                        concealed: _concealed,
+                        onToggle: _toggleReveal,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+
+              // Media section - full width, content-first. While concealed
+              // only a native image embed has a stand-in to show, so anything
+              // else would contribute this spacer and an empty section.
+              if ((!_concealed || _nativeImages != null) &&
+                  !allImagesPlaced &&
+                  (widget.post.post.embed?.external != null ||
+                      widget.post.post.embed?.blueskyPost != null ||
+                      _hasNativeMedia)) ...[
+                const SizedBox(height: 12),
+                // Claims long-press so the region does not select nearby
+                // text; no semantics, since the press does nothing.
+                GestureDetector(
+                  onLongPress: () {},
+                  behavior: HitTestBehavior.translucent,
+                  excludeFromSemantics: true,
+                  child: SelectionContainer.disabled(
+                    child: _buildMediaSection(layout),
+                  ),
+                ),
+              ],
+
+              // Post text - clean and readable
+              if (!_concealed && widget.post.post.text.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _buildBodyText(layout),
+              ],
+            ],
           ),
-        ],
-
-        // Media section - full width, content-first. While concealed only a
-        // native image embed has a stand-in to show, so anything else would
-        // contribute this spacer and an empty section.
-        if ((!_concealed || _nativeImages != null) &&
-            !allImagesPlaced &&
-            (widget.post.post.embed?.external != null ||
-                widget.post.post.embed?.blueskyPost != null ||
-                _hasNativeMedia)) ...[
-          const SizedBox(height: 12),
-          _buildMediaSection(layout),
-        ],
-
-        // Post text - clean and readable
-        if (!_concealed && widget.post.post.text.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _buildBodyText(layout),
-        ],
+        ),
 
         // External link bar
         if (!_concealed && widget.post.post.embed?.external != null) ...[

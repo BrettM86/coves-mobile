@@ -1,0 +1,47 @@
+# Section C — comment "Select text": the first comment's "Comment options"
+# menu offers Share, Copy link and Select text; Select text opens a bottom
+# sheet over the thread (the thread's vote buttons are covered), and back
+# closes it.
+# Assumes a signed-in session (suite order: after a1).
+appId: social.coves.dev
+---
+- retry:
+    maxRetries: 2
+    commands:
+      - launchApp:
+          stopApp: true
+      - extendedWaitUntil:
+          visible: "Discover feed.*"
+          timeout: 30000
+- runFlow:
+    file: subflows/open_science_post.yaml
+    env:
+      QUERY: "NASA delays"
+      TITLE: "NASA delays .*Swift telescope.*"
+- extendedWaitUntil:
+    visible: "View [0-9]+ comments?[\\s\\S]*"
+    timeout: 20000
+- tapOn: "View [0-9]+ comments?[\\s\\S]*"
+- extendedWaitUntil:
+    visible: "Comment options"
+    timeout: 15000
+- tapOn:
+    text: "Comment options"
+    index: 0
+- extendedWaitUntil:
+    visible: "Select text"
+    timeout: 5000
+- assertVisible: "Share"
+- assertVisible: "Copy link"
+- takeScreenshot: build/maestro/c9_comment_menu
+- tapOn: "Select text"
+# The modal sheet covers the thread, so its vote buttons leave the tree
+- extendedWaitUntil:
+    notVisible: "Comment options"
+    timeout: 5000
+- assertNotVisible: ".*Upvote comment.*"
+- takeScreenshot: build/maestro/c9_select_text_sheet
+- back
+- extendedWaitUntil:
+    visible: "Comment options"
+    timeout: 5000

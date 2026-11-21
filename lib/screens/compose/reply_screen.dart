@@ -33,6 +33,7 @@ import '../../widgets/composer/image_attachment_strip.dart';
 import '../../widgets/composer/preparing_images_tile.dart';
 import '../../widgets/image_source_picker.dart';
 import '../../widgets/post_card.dart';
+import '../../widgets/separated_selection_area.dart';
 import '../../widgets/sign_in_again_dialog.dart';
 
 /// The padding around the reply text field; its start side also holds the
@@ -857,10 +858,13 @@ class _ReplyScreenState extends State<ReplyScreen> with WidgetsBindingObserver {
   /// Build context area (post or comment chain)
   Widget _buildContext() {
     // Wrap in RepaintBoundary to isolate from keyboard animation rebuilds
-    // SelectionArea lets the user long-press to copy the text being replied to
+    // The selection area lets the user long-press to copy the text being
+    // replied to; the scope keeps authors, timestamps and embeds out of it.
     return RepaintBoundary(
-      child: SelectionArea(
-        child: _ContextPreview(post: widget.post, comment: widget.comment),
+      child: SeparatedSelectionArea(
+        child: ContentOnlySelectionScope(
+          child: _ContextPreview(post: widget.post, comment: widget.comment),
+        ),
       ),
     );
   }

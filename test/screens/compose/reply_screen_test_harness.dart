@@ -12,8 +12,10 @@ import 'package:coves_flutter/screens/compose/reply_screen.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:coves_flutter/widgets/composer/facet_editing_controller.dart';
 import 'package:coves_flutter/widgets/composer/facet_text_field.dart';
+import 'package:coves_flutter/widgets/media/image_error.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
@@ -69,8 +71,12 @@ class ReplyScreenHarness {
     blockProvider.dispose();
   }
 
-  /// Pumps a base route; ReplyScreen is pushed on top so pops are visible
-  Future<void> pumpBase(WidgetTester tester) async {
+  /// Pumps a base route; ReplyScreen is pushed on top so pops are visible.
+  /// A [cacheManager] is scoped over the app with [ImageCacheScope]
+  Future<void> pumpBase(
+    WidgetTester tester, {
+    BaseCacheManager? cacheManager,
+  }) async {
     // Without a mock handler, HapticFeedback.lightImpact() never completes
     // in widget tests
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -84,6 +90,11 @@ class ReplyScreenHarness {
       ),
     );
 
+    final Widget app = MaterialApp(
+      theme: AppTheme.dark,
+      navigatorKey: navigatorKey,
+      home: const Scaffold(body: Text('base route')),
+    );
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -92,11 +103,9 @@ class ReplyScreenHarness {
           ChangeNotifierProvider<BlockProvider>.value(value: blockProvider),
           Provider<CovesApiService>.value(value: mockApiService),
         ],
-        child: MaterialApp(
-          theme: AppTheme.dark,
-          navigatorKey: navigatorKey,
-          home: const Scaffold(body: Text('base route')),
-        ),
+        child: cacheManager == null
+            ? app
+            : ImageCacheScope(cacheManager: cacheManager, child: app),
       ),
     );
   }

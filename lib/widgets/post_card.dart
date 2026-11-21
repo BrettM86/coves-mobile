@@ -24,6 +24,7 @@ import 'media/streamable_video_embed.dart';
 import 'post_card_actions.dart';
 import 'rich_text_renderer.dart';
 import 'sensitive_content.dart';
+import 'separated_selection_area.dart';
 import 'source_link_bar.dart';
 import 'tappable_author.dart';
 import 'tappable_community.dart';
@@ -280,68 +281,70 @@ class _PostCardContent extends StatelessWidget {
           children: [
             // Community and author info
             if (showHeader) ...[
-              Row(
-                children: [
-                  // Community avatar (tappable for community navigation)
-                  TappableCommunity(
-                    communityDid: post.post.community.did,
-                    child: CommunityAvatar(
-                      name: post.post.community.name,
-                      avatarUrl: post.post.community.avatar,
-                      size: 24,
+              ContentOnlySelectionExclusion(
+                child: Row(
+                  children: [
+                    // Community avatar (tappable for community navigation)
+                    TappableCommunity(
+                      communityDid: post.post.community.did,
+                      child: CommunityAvatar(
+                        name: post.post.community.name,
+                        avatarUrl: post.post.community.avatar,
+                        size: 24,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Community handle with styled parts (tappable)
-                        TappableCommunity(
-                          communityDid: post.post.community.did,
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Flexible(
-                                child: _buildCommunityHandle(
-                                  post.post.community,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Community handle with styled parts (tappable)
+                          TappableCommunity(
+                            communityDid: post.post.community.did,
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: _buildCommunityHandle(
+                                    post.post.community,
+                                  ),
                                 ),
-                              ),
-                              CommunitySoftwareLogo(
-                                software: post.post.community.originSoftware,
-                                size: 15,
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Author handle (tappable for profile navigation)
-                        TappableAuthor(
-                          authorDid: post.post.author.did,
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Text(
-                            '@${post.post.author.handle}',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
+                                CommunitySoftwareLogo(
+                                  software: post.post.community.originSoftware,
+                                  size: 15,
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                      ],
+                          // Author handle (tappable for profile navigation)
+                          TappableAuthor(
+                            authorDid: post.post.author.did,
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Text(
+                              '@${post.post.author.handle}',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  // Time ago
-                  Text(
-                    DateTimeUtils.formatTimeAgo(
-                      post.post.createdAt,
-                      currentTime: currentTime,
+                    // Time ago
+                    Text(
+                      DateTimeUtils.formatTimeAgo(
+                        post.post.createdAt,
+                        currentTime: currentTime,
+                      ),
+                      style: TextStyle(
+                        color: AppColors.textPrimary.withValues(alpha: 0.5),
+                        fontSize: 14,
+                      ),
                     ),
-                    style: TextStyle(
-                      color: AppColors.textPrimary.withValues(alpha: 0.5),
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: 8),
             ],
@@ -352,7 +355,10 @@ class _PostCardContent extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Author info (shown in detail view, above title)
-                if (showAuthorFooter) _buildAuthorFooter(context),
+                if (showAuthorFooter)
+                  ContentOnlySelectionExclusion(
+                    child: _buildAuthorFooter(context),
+                  ),
 
                 // Title and text wrapped in InkWell for navigation
                 if (!disableNavigation && (showsTitle || showsText))
@@ -400,27 +406,39 @@ class _PostCardContent extends StatelessWidget {
                 // Reveal control for a self-labelled post, directly under
                 // the title so the reader sees why the content is missing.
                 if (sensitive) ...[
-                  SensitiveContentBanner(
-                    concealed: concealed,
-                    onToggle: onToggleReveal,
+                  ContentOnlySelectionExclusion(
+                    child: SensitiveContentBanner(
+                      concealed: concealed,
+                      onToggle: onToggleReveal,
+                    ),
                   ),
                   const SizedBox(height: 8),
                 ],
 
                 // Native image/video embed
-                if (media != null) ...[media, const SizedBox(height: 8)],
+                if (media != null) ...[
+                  ContentOnlySelectionExclusion(child: media),
+                  const SizedBox(height: 8),
+                ],
 
                 // Embed thumbnail
                 if (showsExternalEmbed) ...[
-                  _buildExternalEmbed(context, post.post.embed!.external!),
+                  ContentOnlySelectionExclusion(
+                    child: _buildExternalEmbed(
+                      context,
+                      post.post.embed!.external!,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                 ],
 
                 // Bluesky post embed
                 if (showsBlueskyEmbed) ...[
-                  BlueskyPostCard(
-                    embed: post.post.embed!.blueskyPost!,
-                    currentTime: currentTime,
+                  ContentOnlySelectionExclusion(
+                    child: BlueskyPostCard(
+                      embed: post.post.embed!.blueskyPost!,
+                      currentTime: currentTime,
+                    ),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -441,7 +459,9 @@ class _PostCardContent extends StatelessWidget {
             // External link (if present)
             if (showsExternalLinkBar) ...[
               const SizedBox(height: 8),
-              ExternalLinkBar(embed: post.post.embed!.external!),
+              ContentOnlySelectionExclusion(
+                child: ExternalLinkBar(embed: post.post.embed!.external!),
+              ),
             ],
 
             // Sources section (for megathreads, shown in detail view)

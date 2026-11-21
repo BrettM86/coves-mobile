@@ -31,6 +31,7 @@ import '../utils/share_link.dart';
 import '../utils/web_link_builder.dart';
 import 'animated_vote_count.dart';
 import 'block_action_helpers.dart';
+import 'comment_text_sheet.dart';
 import 'icons/animated_heart_icon.dart';
 import 'icons/downvote_icon.dart';
 import 'icons/lucide_icon_painter.dart';
@@ -44,6 +45,7 @@ import 'moderation/moderation_action_sheet.dart';
 import 'moderation/moderation_failure_decision.dart';
 import 'report_dialog.dart';
 import 'rich_text_renderer.dart';
+import 'separated_selection_area.dart';
 import 'sign_in_dialog.dart';
 import 'tappable_author.dart';
 import 'user_avatar.dart';
@@ -256,93 +258,96 @@ class _CommentCardState extends State<CommentCard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Author info row
-                        Row(
-                          children: [
-                            // Author avatar and handle (or placeholder for
-                            // deleted). The author == null arm is already
-                            // covered by isTombstoned; spelling it out lets
-                            // Dart promote author to non-null below.
-                            // The author cluster takes the slack the Spacer
-                            // used to hold, so the timestamp still sits hard
-                            // right while the handle now has a bounded width
-                            // to ellipsize into. atProto encourages domain
-                            // handles, and an unbounded one overflowed this
-                            // row on an ordinary phone.
-                            if (author == null || comment.isTombstoned)
-                              // Show deletion reason as placeholder
-                              Expanded(
-                                child: Text(
-                                  RemovalCopy.forComment(
-                                    deletionReason: comment.deletionReason,
-                                    moderation: comment.moderation,
+                        ContentOnlySelectionExclusion(
+                          child: Row(
+                            children: [
+                              // Author avatar and handle (or placeholder for
+                              // deleted). The author == null arm is already
+                              // covered by isTombstoned; spelling it out lets
+                              // Dart promote author to non-null below.
+                              // The author cluster takes the slack the Spacer
+                              // used to hold, so the timestamp still sits hard
+                              // right while the handle now has a bounded width
+                              // to ellipsize into. atProto encourages domain
+                              // handles, and an unbounded one overflowed this
+                              // row on an ordinary phone.
+                              if (author == null || comment.isTombstoned)
+                                // Show deletion reason as placeholder
+                                Expanded(
+                                  child: Text(
+                                    RemovalCopy.forComment(
+                                      deletionReason: comment.deletionReason,
+                                      moderation: comment.moderation,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                      fontSize: 13,
+                                      fontStyle: FontStyle.italic,
+                                    ),
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                )
+                              else
+                                // Show tappable author for active comments
+                                Expanded(
+                                  child: TappableAuthor(
+                                    authorDid: author.did,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        // Author avatar
+                                        _buildAuthorAvatar(author),
+                                        const SizedBox(width: 8),
+                                        // The handle yields, never the avatar
+                                        // or the timestamp - see the note
+                                        // above.
+                                        Flexible(
+                                          child: Text(
+                                            '@${author.handle}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: AppColors.textPrimary
+                                                  .withValues(
+                                                    alpha: isCollapsed
+                                                        ? 0.7
+                                                        : 0.5,
+                                                  ),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              // Keeps an ellipsized handle from butting
+                              // up against the timestamp. Invisible at
+                              // widths where the row was already clean.
+                              const SizedBox(width: 8),
+                              // Show collapsed count OR time ago
+                              if (isCollapsed && collapsedCount > 0)
+                                _buildCollapsedBadge()
+                              else
+                                Text(
+                                  DateTimeUtils.formatTimeAgo(
+                                    comment.createdAt,
+                                    currentTime: currentTime,
+                                  ),
                                   style: TextStyle(
                                     color: AppColors.textPrimary.withValues(
                                       alpha: 0.5,
                                     ),
-                                    fontSize: 13,
-                                    fontStyle: FontStyle.italic,
+                                    fontSize: 12,
                                   ),
                                 ),
-                              )
-                            else
-                              // Show tappable author for active comments
-                              Expanded(
-                                child: TappableAuthor(
-                                  authorDid: author.did,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      // Author avatar
-                                      _buildAuthorAvatar(author),
-                                      const SizedBox(width: 8),
-                                      // The handle yields, never the avatar or
-                                      // the timestamp - see the note above.
-                                      Flexible(
-                                        child: Text(
-                                          '@${author.handle}',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: AppColors.textPrimary
-                                                .withValues(
-                                                  alpha: isCollapsed
-                                                      ? 0.7
-                                                      : 0.5,
-                                                ),
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            // Keeps an ellipsized handle from butting up
-                            // against the timestamp. Invisible at widths where
-                            // the row was already clean.
-                            const SizedBox(width: 8),
-                            // Show collapsed count OR time ago
-                            if (isCollapsed && collapsedCount > 0)
-                              _buildCollapsedBadge()
-                            else
-                              Text(
-                                DateTimeUtils.formatTimeAgo(
-                                  comment.createdAt,
-                                  currentTime: currentTime,
-                                ),
-                                style: TextStyle(
-                                  color: AppColors.textPrimary.withValues(
-                                    alpha: 0.5,
-                                  ),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            if (comment.isTombstoned) _buildPlaceholderMenu(),
-                          ],
+                              if (comment.isTombstoned) _buildPlaceholderMenu(),
+                            ],
+                          ),
                         ),
 
                         // Only show content and actions when expanded (skip
@@ -359,25 +364,30 @@ class _CommentCardState extends State<CommentCard> {
                           // Unplaced images, always after the body; the
                           // lightbox pages unspoilered placed images first
                           if (images.gallery.isNotEmpty) ...[
-                            NativeImageGallery(
-                              images: images.gallery,
-                              keyPrefix: 'comment',
-                              bounds: images.gallery.length == 1
-                                  ? kFeedSingleRatioBounds
-                                  : kFeedRatioBounds,
-                              fill: kFeedMediaFill,
-                              source: MediaImageSource.thumb,
-                              onOpen: (index) => ImageViewer.open(
-                                context,
-                                images.lightboxImages(images.openPlaced),
-                                initialIndex: images.openPlaced.length + index,
+                            ContentOnlySelectionExclusion(
+                              child: NativeImageGallery(
+                                images: images.gallery,
+                                keyPrefix: 'comment',
+                                bounds: images.gallery.length == 1
+                                    ? kFeedSingleRatioBounds
+                                    : kFeedRatioBounds,
+                                fill: kFeedMediaFill,
+                                source: MediaImageSource.thumb,
+                                onOpen: (index) => ImageViewer.open(
+                                  context,
+                                  images.lightboxImages(images.openPlaced),
+                                  initialIndex:
+                                      images.openPlaced.length + index,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 8),
                           ],
 
                           // Action buttons (menu and vote)
-                          _buildActionButtons(context),
+                          ContentOnlySelectionExclusion(
+                            child: _buildActionButtons(context),
+                          ),
                         ],
                       ],
                     ),
@@ -852,8 +862,9 @@ class _CommentCardState extends State<CommentCard> {
   /// Share and copy link need no account — a link is public — but need the
   /// parent post the permalink is built under, so they appear only where the
   /// surface showing the comment has it. The moderation items stay
-  /// signed-in only, and the menu disappears entirely when neither is
-  /// available.
+  /// signed-in only. Select text appears for any comment with a body,
+  /// except in the reply preview, where the body is already selectable. The
+  /// menu disappears entirely when it would hold no item.
   Widget _buildCommentMenu(BuildContext context) {
     final parentPost = widget.parentPost;
 
@@ -879,7 +890,11 @@ class _CommentCardState extends State<CommentCard> {
                 authority: authority,
               ),
         );
-        if (parentPost == null && moderationItems.isEmpty) {
+        // The reply preview already makes the body selectable in place.
+        final showSelectText =
+            comment.content.isNotEmpty &&
+            !ContentOnlySelectionScope.isActive(context);
+        if (parentPost == null && !showSelectText && moderationItems.isEmpty) {
           return const SizedBox.shrink();
         }
 
@@ -907,6 +922,12 @@ class _CommentCardState extends State<CommentCard> {
                 child: const Text('Copy link'),
               ),
             ],
+            if (showSelectText)
+              MenuItemButton(
+                onPressed: () => showCommentTextSheet(context, comment),
+                leadingIcon: const Icon(Icons.text_fields, size: 20),
+                child: const Text('Select text'),
+              ),
             ...moderationItems,
           ],
         );

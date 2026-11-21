@@ -45,9 +45,10 @@ class RecordingLinkSharer implements LinkSharer {
 /// Every surface that has the post loaded must hand it to the comments it
 /// renders, or the card's share actions are unreachable in the app.
 ///
-/// The viewer is signed out throughout: without a parent post the card
-/// renders no 'Comment options' trigger at all, so the trigger's presence is
-/// a direct read-out of whether the post reached the card.
+/// The viewer is signed out throughout, so the menu holds no moderation
+/// items: Share and Copy link in it are a direct read-out of whether the post
+/// reached the card. Without a parent post the menu still shows, holding only
+/// 'Select text'.
 void main() {
   // Literals, never produced by the code under test.
   const postUri =
@@ -218,6 +219,28 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Opens the menu on the card rendering [content], asserts it holds Share
+  /// and Copy link, then closes it so the next card's menu can be read alone.
+  Future<void> expectShareActionsOn(WidgetTester tester, String content) async {
+    await openMenuOn(tester, content);
+
+    expect(
+      find.text('Share'),
+      findsOneWidget,
+      reason: 'the parent post must reach the card rendering "$content"',
+    );
+    expect(
+      find.text('Copy link'),
+      findsOneWidget,
+      reason: 'the parent post must reach the card rendering "$content"',
+    );
+
+    // The trigger toggles its menu closed.
+    await tester.tap(triggerOn(content));
+    await tester.pumpAndSettle();
+    expect(find.text('Select text'), findsNothing);
+  }
+
   group('CommentThread parent post propagation', () {
     ThreadViewComment nestedThread() {
       return ThreadViewComment(
@@ -285,10 +308,9 @@ void main() {
       expect(find.byType(CommentCard), findsNWidgets(3));
       expect(find.byTooltip('Comment options'), findsNWidgets(3));
 
-      await openMenuOn(tester, 'Top level comment');
-
-      expect(find.text('Share'), findsOneWidget);
-      expect(find.text('Copy link'), findsOneWidget);
+      await expectShareActionsOn(tester, 'Top level comment');
+      await expectShareActionsOn(tester, 'Middle reply');
+      await expectShareActionsOn(tester, 'Nested reply');
     });
 
     testWidgets('a nested reply copies its own permalink', (tester) async {
@@ -495,9 +517,9 @@ void main() {
       expect(find.text('Top level comment'), findsOneWidget);
       expect(find.text('Nested reply'), findsOneWidget);
 
-      expect(triggerOn('Ancestor comment'), findsOneWidget);
-      expect(triggerOn('Top level comment'), findsOneWidget);
-      expect(triggerOn('Nested reply'), findsOneWidget);
+      await expectShareActionsOn(tester, 'Ancestor comment');
+      await expectShareActionsOn(tester, 'Top level comment');
+      await expectShareActionsOn(tester, 'Nested reply');
     });
 
     testWidgets('the anchor comment copies its permalink', (tester) async {
@@ -543,9 +565,7 @@ void main() {
       );
     });
 
-    testWidgets('a profile comment offers neither Share nor Copy link', (
-      tester,
-    ) async {
+    testWidgets('a profile comment offers only Select text', (tester) async {
       useTallSurface(tester);
       recordPlatformChannel(tester);
       addTearDown(() async {
@@ -597,7 +617,12 @@ void main() {
       // A profile comment arrives without its post, so no permalink can be
       // built: propagating the post elsewhere must not reach this list.
       expect(find.text('Top level comment'), findsOneWidget);
-      expect(find.byTooltip('Comment options'), findsNothing);
+      final trigger = find.byTooltip('Comment options');
+      expect(trigger, findsOneWidget);
+      await tester.tap(trigger);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Select text'), findsOneWidget);
       expect(find.text('Share'), findsNothing);
       expect(find.text('Copy link'), findsNothing);
     });

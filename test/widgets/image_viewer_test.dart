@@ -154,9 +154,13 @@ Future<void> _openViewer(
     ),
   ],
   List<NavigatorObserver> navigatorObservers = const [],
+  bool fakeImageCache = false,
 }) async {
+  final app = _harness(images: images, navigatorObservers: navigatorObservers);
   await tester.pumpWidget(
-    _harness(images: images, navigatorObservers: navigatorObservers),
+    fakeImageCache
+        ? ImageCacheScope(cacheManager: FakeImageCacheManager(), child: app)
+        : app,
   );
   await tester.tap(find.text('Open image'));
   await tester.pumpAndSettle();
@@ -622,6 +626,46 @@ void main() {
         );
       });
     }
+
+    testWidgets('double tap with the alt text panel open', (tester) async {
+      await _openViewer(
+        tester,
+        fakeImageCache: true,
+        images: const [
+          EmbedImage(
+            thumb: 'https://cdn.test/thumb-1.jpg',
+            fullsize: 'https://cdn.test/fullsize-1.jpg',
+            alt: 'A purple anemone on a grey rock',
+          ),
+          EmbedImage(
+            thumb: 'https://cdn.test/thumb-2.jpg',
+            fullsize: 'https://cdn.test/fullsize-2.jpg',
+          ),
+        ],
+      );
+      await tester.tap(find.byKey(const Key('image-viewer-alt-badge')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('image-viewer-alt-text')), findsOneWidget);
+
+      // The first page's viewer: the one under the screen's centre, which
+      // is clear of the alt panel in the bottom-left corner.
+      final visibleViewer = _interactiveViewer().hitTestable();
+      expect(visibleViewer, findsOneWidget);
+      final controller = tester
+          .widget<InteractiveViewer>(visibleViewer)
+          .transformationController!;
+      final center = tester.getCenter(visibleViewer);
+
+      await _doubleTapAt(tester, center);
+
+      expect(controller.value.getMaxScaleOnAxis(), greaterThan(1.9));
+      _expectControls(
+        tester,
+        [_closeButton(), _saveButton()],
+        shown: false,
+        reason: 'zooming in with the alt panel open hides the controls',
+      );
+    });
   });
 
   group('zooming makes the navigation bar transparent', () {

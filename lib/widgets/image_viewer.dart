@@ -20,6 +20,7 @@ import 'media/gif_player.dart';
 import 'media/image_error.dart';
 import 'media/media_page_dots.dart';
 import 'media/play_chip.dart';
+import 'separated_selection_area.dart';
 
 /// Fullscreen image viewer with pinch and double-tap zoom.
 ///
@@ -866,14 +867,20 @@ class _ImageViewerState extends State<ImageViewer>
                   color: Colors.black.withValues(alpha: 0.8),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    alt,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 14,
-                      height: 1.4,
+                // The scroll view sits inside the selection area so it
+                // registers its selection delegate: dragging a handle to the
+                // panel edge scrolls it, and a handle scrolled out of the
+                // panel is hidden.
+                child: SeparatedSelectionArea(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      alt,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
                     ),
                   ),
                 ),

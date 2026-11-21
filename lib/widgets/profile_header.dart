@@ -9,6 +9,7 @@ import '../models/user_profile.dart';
 import '../utils/date_time_utils.dart';
 import '../utils/display_utils.dart';
 import '../utils/image_decode_size.dart';
+import 'separated_selection_area.dart';
 import 'user_avatar.dart';
 
 /// Collapsing profile header displaying the banner with the avatar and
@@ -395,12 +396,14 @@ class ProfileDetails extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (bio != null && bio.isNotEmpty) ...[
-            Text(
-              bio,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.textPrimary,
-                height: 1.4,
+            SeparatedSelectionArea(
+              child: Text(
+                bio,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                  height: 1.4,
+                ),
               ),
             ),
             const SizedBox(height: 12),
