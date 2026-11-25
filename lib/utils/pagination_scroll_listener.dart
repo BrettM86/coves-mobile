@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 /// How many viewport heights before the end of a list the next page is
@@ -54,6 +56,10 @@ class PaginationScrollListener {
   bool _attached = false;
   DateTime? _lastFiredAt;
 
+  /// The one check scheduled for the end of the throttle window after a
+  /// check landed inside it.
+  Timer? _followUp;
+
   /// Whether the listener is currently observing the controller.
   bool get isAttached => _attached;
 
@@ -75,6 +81,7 @@ class PaginationScrollListener {
     }
     controller.removeListener(_onScroll);
     _attached = false;
+    _cancelFollowUp();
   }
 
   /// Detaches. The borrowed [controller] is left alone.
@@ -89,27 +96,50 @@ class PaginationScrollListener {
   /// `hasMore` and nothing is in flight) to keep filling the viewport.
   /// A detached listener stays silent — detaching means the owner has
   /// stopped paginating.
-  void checkNow() => _maybeFire();
+  ///
+  /// A check inside the throttle window is not dropped: one follow-up check
+  /// runs when the window ends, since a page landing that soon after the
+  /// last trigger would otherwise leave the list stalled with more to load.
+  void checkNow() => _maybeFire(scheduleFollowUp: true);
 
   void _onScroll() => _maybeFire();
 
-  void _maybeFire() {
+  void _maybeFire({bool scheduleFollowUp = false, bool throttled = true}) {
     if (!_attached || !controller.hasClients) {
+      _cancelFollowUp();
       return;
     }
 
     final position = controller.position;
     if (!isNearScrollEnd(position, threshold: threshold)) {
+      _cancelFollowUp();
       return;
     }
 
     final now = _clock();
     final last = _lastFiredAt;
-    if (last != null && now.difference(last) < throttle) {
-      return;
+    if (throttled && last != null) {
+      final elapsed = now.difference(last);
+      if (elapsed < throttle) {
+        if (scheduleFollowUp && _followUp == null) {
+          // The follow-up skips the throttle: it is already timed to the end
+          // of the window, and the clock may not have moved with the timer.
+          _followUp = Timer(throttle - elapsed, () {
+            _followUp = null;
+            _maybeFire(throttled: false);
+          });
+        }
+        return;
+      }
     }
 
+    _cancelFollowUp();
     _lastFiredAt = now;
     onLoadMore();
+  }
+
+  void _cancelFollowUp() {
+    _followUp?.cancel();
+    _followUp = null;
   }
 }

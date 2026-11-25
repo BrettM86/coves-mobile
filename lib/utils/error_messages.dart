@@ -170,6 +170,12 @@ abstract final class ErrorMessage {
     fallback: 'Could not load posts. Please try again.',
   );
 
+  /// Error message for loading a profile's likes tab
+  static String loadProfileLikes(Object error) => _profileLoadMessage(
+    error,
+    fallback: 'Could not load likes. Please try again.',
+  );
+
   /// Error message for loading a profile's comments tab
   static String loadProfileComments(Object error) => _profileLoadMessage(
     error,

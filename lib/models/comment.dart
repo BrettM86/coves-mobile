@@ -391,6 +391,7 @@ class CommentView {
       stats: stats,
       viewer: viewer,
       embed: embed,
+      parsedEmbed: parsedEmbed,
       moderation: moderation,
       deletedAt: deletedAt,
     );

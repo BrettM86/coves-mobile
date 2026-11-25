@@ -4,6 +4,7 @@
 // from the AppView's #view embed on the same CommentView.
 
 import 'package:coves_flutter/models/comment.dart';
+import 'package:coves_flutter/models/post.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Map<String, dynamic> commentViewJson({required Map<String, dynamic> record}) {
@@ -104,5 +105,32 @@ void main() {
     expect(record.embed, isNull);
     expect(record.langs, isNull);
     expect(record.labels, isNull);
+  });
+
+  // Fix round item 1: an edit must not hide the comment's images until a
+  // reload; the parsed #view embed survives withEditedRecord.
+  test('withEditedRecord keeps the parsed image embed', () {
+    final view = CommentView.fromJson(
+      commentViewJson(
+        record: {
+          r'$type': 'social.coves.community.comment',
+          'content': 'Original body',
+        },
+      ),
+    );
+
+    final edited = view.withEditedRecord(
+      record: const CommentRecord(content: 'Edited body'),
+      cid: 'cid-e1-edited',
+    );
+
+    expect(edited.record!.content, 'Edited body');
+    expect(edited.cid, 'cid-e1-edited');
+    final embed = edited.parsedEmbed;
+    expect(embed, isA<ImagesPostEmbed>());
+    final images = (embed! as ImagesPostEmbed).images;
+    expect(images.single.fullsize, 'https://cdn.coves.test/full/bafkreiimage');
+    expect(images.single.thumb, 'https://cdn.coves.test/thumb/bafkreiimage');
+    expect(images.single.alt, 'a cat');
   });
 }

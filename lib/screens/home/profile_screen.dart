@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
 import '../../models/comment.dart';
+import '../../models/liked_item.dart';
 import '../../models/post.dart';
 import '../../models/user_profile.dart';
 import '../../providers/auth_provider.dart';
@@ -90,6 +91,7 @@ class _ProfileView extends StatefulWidget {
 class _ProfileViewState extends State<_ProfileView> {
   int _selectedTabIndex = 0;
   bool _commentsLoadedOnce = false;
+  bool _likesLoadedOnce = false;
 
   final ScrollController _scrollController = ScrollController();
   late final PaginationScrollListener _paginationListener;
@@ -119,15 +121,28 @@ class _ProfileViewState extends State<_ProfileView> {
     super.dispose();
   }
 
+  /// The tab to render and act on. The Likes tab exists only on the own
+  /// profile; while it is hidden (a session change, or a profile that is
+  /// not the viewer's) a stored Likes selection falls back to Posts.
+  int _effectiveTab(UserProfileProvider profileProvider) {
+    if (_selectedTabIndex == 2 && !profileProvider.isOwnProfile) {
+      return 0;
+    }
+    return _selectedTabIndex;
+  }
+
   void _loadMoreForActiveTab() {
     if (!mounted) {
       return;
     }
     final profileProvider = context.read<UserProfileProvider>();
-    if (_selectedTabIndex == 0) {
+    final tab = _effectiveTab(profileProvider);
+    if (tab == 0) {
       profileProvider.loadMorePosts();
-    } else if (_selectedTabIndex == 1) {
+    } else if (tab == 1) {
       profileProvider.loadMoreComments();
+    } else if (tab == 2) {
+      profileProvider.loadMoreLikes();
     }
   }
 
@@ -162,6 +177,12 @@ class _ProfileViewState extends State<_ProfileView> {
   }
 
   void _onTabChanged(int index) {
+    // A Likes selection that fell back to Posts no longer has loaded likes
+    // behind it: the next switch to Likes loads them again.
+    if (_effectiveTab(context.read<UserProfileProvider>()) !=
+        _selectedTabIndex) {
+      _likesLoadedOnce = false;
+    }
     setState(() {
       _selectedTabIndex = index;
     });
@@ -171,11 +192,17 @@ class _ProfileViewState extends State<_ProfileView> {
       _commentsLoadedOnce = true;
       context.read<UserProfileProvider>().loadComments(refresh: true);
     }
+
+    // Lazy load likes when first switching to the Likes tab
+    if (index == 2 && !_likesLoadedOnce) {
+      _likesLoadedOnce = true;
+      context.read<UserProfileProvider>().loadLikes(refresh: true);
+    }
   }
 
   /// Loads the profile, then seeds block state and loads posts (and
-  /// comments, if their tab is selected). Retry reruns this whole load with
-  /// [forceRefresh].
+  /// comments or likes, if their tab is selected). Retry reruns this whole
+  /// load with [forceRefresh].
   Future<void> _loadProfile({bool forceRefresh = false}) async {
     final authProvider = context.read<AuthProvider>();
     final profileProvider = context.read<UserProfileProvider>();
@@ -216,11 +243,16 @@ class _ProfileViewState extends State<_ProfileView> {
       }
 
       // A full load (including Retry after a session reset cleared both
-      // feeds) starts comments over: load them now if their tab is showing,
-      // otherwise lazily on the next switch to it.
-      _commentsLoadedOnce = _selectedTabIndex == 1;
+      // feeds) starts comments and likes over: load them now if their tab
+      // is showing, otherwise lazily on the next switch to it.
+      final tab = _effectiveTab(profileProvider);
+      _commentsLoadedOnce = tab == 1;
       if (_commentsLoadedOnce) {
         unawaited(profileProvider.loadComments(refresh: true));
+      }
+      _likesLoadedOnce = tab == 2;
+      if (_likesLoadedOnce) {
+        unawaited(profileProvider.loadLikes(refresh: true));
       }
 
       await profileProvider.loadPosts(refresh: true);
@@ -362,6 +394,7 @@ class _ProfileViewState extends State<_ProfileView> {
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
     final profileProvider = context.watch<UserProfileProvider>();
+    final activeTab = _effectiveTab(profileProvider);
 
     // If no actor specified and not authenticated, show sign-in prompt
     if (widget.actor == null && !authProvider.isAuthenticated) {
@@ -405,6 +438,17 @@ class _ProfileViewState extends State<_ProfileView> {
 
     final profile = profileProvider.profile;
 
+    final tabBar = Container(
+      color: AppColors.background,
+      child: _ProfileTabBar(
+        selectedIndex: activeTab,
+        showLikes: profileProvider.isOwnProfile,
+        onTabChanged: _onTabChanged,
+        likesFilter: profileProvider.likesFilter,
+        onLikesFilterChanged: profileProvider.setLikesFilter,
+      ),
+    );
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: RefreshIndicator(
@@ -414,11 +458,17 @@ class _ProfileViewState extends State<_ProfileView> {
           final actor = widget.actor ?? authProvider.did;
           if (actor != null) {
             await profileProvider.loadProfile(actor, forceRefresh: true);
-            // Refresh the active tab content
-            if (_selectedTabIndex == 0) {
+            if (!mounted) {
+              return;
+            }
+            // Refresh the active tab content, as of after the profile load.
+            final tab = _effectiveTab(profileProvider);
+            if (tab == 0) {
               await profileProvider.loadPosts(refresh: true);
-            } else if (_selectedTabIndex == 1) {
+            } else if (tab == 1) {
               await profileProvider.loadComments(refresh: true);
+            } else if (tab == 2) {
+              await profileProvider.loadLikes(refresh: true);
             }
           }
         },
@@ -430,7 +480,8 @@ class _ProfileViewState extends State<_ProfileView> {
               backgroundColor: Colors.transparent,
               foregroundColor: AppColors.textPrimary,
               expandedHeight: expandedHeight,
-              pinned: true,
+              // Not pinned: the top bar scrolls away and the tab bar pins
+              // under the status bar instead.
               stretch: true,
               leading: widget.actor != null
                   ? IconButton(
@@ -524,26 +575,37 @@ class _ProfileViewState extends State<_ProfileView> {
             SliverToBoxAdapter(
               child: ProfileDetails(profile: profileProvider.profile),
             ),
-            // Tab bar header
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _ProfileTabBarDelegate(
-                child: Container(
-                  color: AppColors.background,
-                  child: _ProfileTabBar(
-                    selectedIndex: _selectedTabIndex,
-                    onTabChanged: _onTabChanged,
+            // Tab bar header, pinned under the status bar. Over the last
+            // status-bar-inset pixels before it reaches the top, it grows
+            // background-colored space above the strip, so the strip stops
+            // at the inset line and its labels never sit under the status
+            // bar, without adding a gap at rest.
+            SliverLayoutBuilder(
+              builder: (context, constraints) {
+                final statusBarInset = MediaQuery.paddingOf(context).top;
+                final distanceToTop = constraints.scrollOffset > 0
+                    ? 0.0
+                    : constraints.viewportMainAxisExtent -
+                          constraints.remainingPaintExtent;
+                return SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _ProfileTabBarDelegate(
+                    topSpace: (statusBarInset - distanceToTop).clamp(
+                      0.0,
+                      statusBarInset,
+                    ),
+                    child: tabBar,
                   ),
-                ),
-              ),
+                );
+              },
             ),
             // Content based on selected tab
-            if (_selectedTabIndex == 0)
+            if (activeTab == 0)
               _buildPostsList(profileProvider)
-            else if (_selectedTabIndex == 1)
+            else if (activeTab == 1)
               _buildCommentsList(profileProvider)
             else
-              _buildComingSoonPlaceholder('Likes'),
+              _buildLikesList(profileProvider),
           ],
         ),
       ),
@@ -745,30 +807,107 @@ class _ProfileViewState extends State<_ProfileView> {
     );
   }
 
-  Widget _buildComingSoonPlaceholder(String feature) {
-    return SliverFillRemaining(
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              feature == 'Comments'
-                  ? Icons.chat_bubble_outline
-                  : Icons.favorite_outline,
-              size: 48,
-              color: AppColors.textSecondary,
+  static String _likesEmptyText(LikesFilter filter) => switch (filter) {
+    LikesFilter.all => 'No likes yet',
+    LikesFilter.posts => 'No liked posts yet',
+    LikesFilter.comments => 'No liked comments yet',
+  };
+
+  Widget _buildLikesList(UserProfileProvider profileProvider) {
+    final likesState = profileProvider.likesState;
+
+    if (likesState.isLoading && likesState.items.isEmpty) {
+      return const SliverFillRemaining(
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+
+    if (likesState.error != null && likesState.items.isEmpty) {
+      return SliverFillRemaining(
+        child: Center(
+          child: InlineError(
+            message: likesState.error!,
+            onRetry: () => profileProvider.retryLikes(),
+          ),
+        ),
+      );
+    }
+
+    _scheduleViewportFillCheck(
+      isLoading: likesState.isLoading,
+      isLoadingMore: likesState.isLoadingMore,
+      hasMore: likesState.hasMore,
+      loadMoreError: likesState.loadMoreError,
+    );
+
+    // With nothing on screen yet (empty pages whose cursor leads on), the
+    // next page's failure or progress replaces the empty text: the list
+    // footer only shows below loaded rows.
+    if (likesState.items.isEmpty) {
+      final loadMoreError = likesState.loadMoreError;
+      if (loadMoreError != null) {
+        return SliverFillRemaining(
+          child: Center(
+            child: InlineError(
+              message: loadMoreError,
+              onRetry: profileProvider.retryLoadMoreLikes,
             ),
-            const SizedBox(height: 16),
-            Text(
-              '$feature coming soon',
-              style: const TextStyle(
-                fontSize: 16,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
+          ),
+        );
+      }
+      if (likesState.isLoadingMore || likesState.hasMore) {
+        return const SliverFillRemaining(
+          child: Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          ),
+        );
+      }
+    }
+
+    // Same footer/error split as the posts tab.
+    return PaginatedSliverList<LikedItem>(
+      items: likesState.items,
+      isLoadingMore: likesState.isLoadingMore,
+      hasMore: likesState.hasMore,
+      loadMoreError: likesState.loadMoreError,
+      refreshError: likesState.items.isEmpty ? null : likesState.error,
+      onRetryRefresh: () => profileProvider.retryLikes(),
+      onRetryLoadMore: profileProvider.retryLoadMoreLikes,
+      idOf: (item) => item.uri,
+      footerKey: const ValueKey<String>('profile_likes_footer'),
+      emptyWidget: Center(
+        child: Text(
+          _likesEmptyText(profileProvider.likesFilter),
+          style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
         ),
       ),
+      itemBuilder: (context, item, index) {
+        final card = switch (item) {
+          LikedPost(:final feedViewPost) => PostCard(
+            post: feedViewPost,
+            sessionStamp: profileProvider.likesSessionStamp,
+          ),
+          LikedComment(:final comment, :final post) => _ProfileCommentCard(
+            comment: comment,
+            parentPost: post,
+          ),
+        };
+
+        // Constrain width on tablets for better readability
+        if (ResponsiveUtils.isTablet(context)) {
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: ResponsiveUtils.maxContentWidth,
+              ),
+              child: card,
+            ),
+          );
+        }
+        return card;
+      },
     );
   }
 }
@@ -777,16 +916,25 @@ class _ProfileViewState extends State<_ProfileView> {
 class _ProfileTabBar extends StatelessWidget {
   const _ProfileTabBar({
     required this.selectedIndex,
+    required this.showLikes,
     required this.onTabChanged,
+    required this.likesFilter,
+    required this.onLikesFilterChanged,
   });
 
   final int selectedIndex;
+
+  /// Likes are private to their owner, so only the own profile has the tab.
+  final bool showLikes;
   final ValueChanged<int> onTabChanged;
+  final LikesFilter likesFilter;
+  final ValueChanged<LikesFilter> onLikesFilterChanged;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 48,
+      key: const ValueKey('profile_tab_bar'),
+      height: 49, // 48 of content plus the 1px bottom border
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
@@ -808,14 +956,21 @@ class _ProfileTabBar extends StatelessWidget {
               onTap: () => onTabChanged(1),
             ),
           ),
-          Expanded(
-            child: _TabItem(
-              label: 'Likes',
-              icon: Icons.favorite_outline,
-              isSelected: selectedIndex == 2,
-              onTap: () => onTabChanged(2),
+          if (showLikes)
+            Expanded(
+              child: _TabItem(
+                label: 'Likes',
+                lucidePaths: LucidePaths.heart,
+                isSelected: selectedIndex == 2,
+                onTap: () => onTabChanged(2),
+                trailing: selectedIndex == 2
+                    ? _LikesFilterMenu(
+                        selected: likesFilter,
+                        onSelected: onLikesFilterChanged,
+                      )
+                    : null,
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -825,15 +980,23 @@ class _ProfileTabBar extends StatelessWidget {
 class _TabItem extends StatelessWidget {
   const _TabItem({
     required this.label,
-    required this.icon,
+    this.icon,
+    this.lucidePaths,
     required this.isSelected,
     required this.onTap,
+    this.trailing,
   });
 
   final String label;
-  final IconData icon;
+  final IconData? icon;
+
+  /// Lucide glyph drawn instead of [icon], to match the vote heart.
+  final List<String>? lucidePaths;
   final bool isSelected;
   final VoidCallback onTap;
+
+  /// Shown right of the label; it handles its own taps.
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -842,43 +1005,73 @@ class _TabItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Container(
         alignment: Alignment.center,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        // The underline spans the icon and label. A trailing control (the
+        // Likes filter) sits beside them in its own full-height hit area.
+        // The label shrinks and ellipsizes so large text never overflows
+        // the cell, keeping the trailing control at full size.
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 16,
-                  color: isSelected
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
+            Flexible(
+              child: IntrinsicWidth(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (lucidePaths case final paths?)
+                          LucideGlyph(
+                            paths,
+                            size: 16,
+                            color: isSelected
+                                ? AppColors.textPrimary
+                                : AppColors.textSecondary,
+                          )
+                        else
+                          Icon(
+                            icon,
+                            size: 16,
+                            color: isSelected
+                                ? AppColors.textPrimary
+                                : AppColors.textSecondary,
+                          ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            softWrap: false,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isSelected
+                                  ? AppColors.textPrimary
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.primary
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: isSelected
-                        ? FontWeight.bold
-                        : FontWeight.normal,
-                    color: isSelected
-                        ? AppColors.textPrimary
-                        : AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Container(
-              height: 3,
-              width: 50,
-              decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary : Colors.transparent,
-                borderRadius: BorderRadius.circular(2),
               ),
             ),
+            ?trailing,
           ],
         ),
       ),
@@ -886,10 +1079,134 @@ class _TabItem extends StatelessWidget {
   }
 }
 
-/// Delegate for pinned tab bar header
-class _ProfileTabBarDelegate extends SliverPersistentHeaderDelegate {
-  _ProfileTabBarDelegate({required this.child});
+/// The Likes tab's All / Posts / Comments menu; the glyph turns the primary
+/// color while a filter narrows the list.
+///
+/// A MenuAnchor rather than a PopupMenuButton: it has no modal barrier and
+/// closes when the profile scrolls.
+class _LikesFilterMenu extends StatelessWidget {
+  const _LikesFilterMenu({required this.selected, required this.onSelected});
 
+  final LikesFilter selected;
+  final ValueChanged<LikesFilter> onSelected;
+
+  /// The same icons the profile tabs use, so each filter reads at a glance.
+  static Widget _icon(LikesFilter filter) => switch (filter) {
+    LikesFilter.all => const LucideGlyph(
+      LucidePaths.heart,
+      size: 18,
+      color: AppColors.textSecondary,
+    ),
+    LikesFilter.posts => const Icon(
+      Icons.grid_view,
+      size: 18,
+      color: AppColors.textSecondary,
+    ),
+    LikesFilter.comments => const Icon(
+      Icons.chat_bubble_outline,
+      size: 18,
+      color: AppColors.textSecondary,
+    ),
+  };
+
+  static String _label(LikesFilter filter) => switch (filter) {
+    LikesFilter.all => 'All',
+    LikesFilter.posts => 'Posts',
+    LikesFilter.comments => 'Comments',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return MenuAnchor(
+      // The menu's own panel is invisible and the visible card carries a
+      // right margin: MenuAnchor otherwise lays the panel flush against the
+      // screen edge.
+      style: const MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(Colors.transparent),
+        surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+        shadowColor: WidgetStatePropertyAll(Colors.transparent),
+        elevation: WidgetStatePropertyAll(0),
+        padding: WidgetStatePropertyAll(EdgeInsets.zero),
+      ),
+      alignmentOffset: const Offset(0, 4),
+      menuChildren: [
+        Padding(
+          padding: const EdgeInsets.only(right: 16),
+          child: Material(
+            color: AppColors.backgroundSecondary,
+            elevation: 8,
+            borderRadius: BorderRadius.circular(12),
+            clipBehavior: Clip.antiAlias,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final filter in LikesFilter.values)
+                    MenuItemButton(
+                      onPressed: () => onSelected(filter),
+                      leadingIcon: _icon(filter),
+                      trailingIcon: filter == selected
+                          ? const LucideGlyph(
+                              LucidePaths.check,
+                              size: 18,
+                              color: AppColors.primary,
+                            )
+                          : null,
+                      child: Semantics(
+                        selected: filter == selected,
+                        child: Text(
+                          _label(filter),
+                          style: const TextStyle(color: AppColors.textPrimary),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+      builder: (context, controller, _) => Tooltip(
+        message: 'Filter likes',
+        child: Semantics(
+          button: true,
+          // No ink splash: the ripple made the menu feel slow to open.
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () =>
+                controller.isOpen ? controller.close() : controller.open(),
+            // A 48x48 target (accessibility minimum) with the glyph drawn
+            // near the label rather than centred in it.
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Align(
+                alignment: const Alignment(-0.5, -0.2),
+                child: LucideGlyph(
+                  LucidePaths.listFilter,
+                  size: 16,
+                  color: selected == LikesFilter.all
+                      ? AppColors.textSecondary
+                      : AppColors.primary,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Delegate for the pinned tab bar header: the 49px strip (48 of content
+/// plus its 1px bottom border) with [topSpace]
+/// of background-colored space above it.
+class _ProfileTabBarDelegate extends SliverPersistentHeaderDelegate {
+  _ProfileTabBarDelegate({required this.topSpace, required this.child});
+
+  final double topSpace;
   final Widget child;
 
   @override
@@ -898,29 +1215,39 @@ class _ProfileTabBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return child;
+    return ColoredBox(
+      color: AppColors.background,
+      child: Padding(
+        padding: EdgeInsets.only(top: topSpace),
+        child: child,
+      ),
+    );
   }
 
   @override
-  double get maxExtent => 48;
+  double get maxExtent => 49 + topSpace;
 
   @override
-  double get minExtent => 48;
+  double get minExtent => 49 + topSpace;
 
   @override
   bool shouldRebuild(covariant _ProfileTabBarDelegate oldDelegate) {
-    return child != oldDelegate.child;
+    return topSpace != oldDelegate.topSpace || child != oldDelegate.child;
   }
 }
 
-/// A simplified comment card for the profile comments list
+/// A simplified comment card for the profile Comments and Likes lists
 ///
 /// Displays a flat comment without threading since these are shown in
 /// a profile context without parent/child relationships visible.
 class _ProfileCommentCard extends StatelessWidget {
-  const _ProfileCommentCard({required this.comment});
+  const _ProfileCommentCard({required this.comment, this.parentPost});
 
   final CommentView comment;
+
+  /// The comment's root post, when the list has its view (liked comments);
+  /// it gives the card's Share its permalink context.
+  final PostView? parentPost;
 
   @override
   Widget build(BuildContext context) {
@@ -928,6 +1255,9 @@ class _ProfileCommentCard extends StatelessWidget {
 
     return CommentCard(
       comment: comment,
+      parentPost: parentPost,
+      // A profile list has no thread to trace.
+      showThreadLine: false,
       // A profile's comment list offers no admin tools.
       sessionStamp: null,
       onTap: () {

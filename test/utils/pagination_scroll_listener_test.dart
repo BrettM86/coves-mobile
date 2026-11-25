@@ -330,6 +330,32 @@ void main() {
       expect(calls, 2);
     });
 
+    testWidgets('a check inside the throttle window still loads more once '
+        'the window passes', (tester) async {
+      // An empty or short page with a cursor can land within 100 ms of the
+      // previous trigger; dropping that check stalled the list on its
+      // empty state with more to load.
+      await pumpShortList(tester);
+      final listener = buildListener()..attach();
+      addTearDown(listener.dispose);
+
+      listener.checkNow();
+      expect(calls, 1);
+
+      clock.advance(const Duration(milliseconds: 40));
+      listener.checkNow();
+      expect(calls, 1);
+
+      clock.advance(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(calls, 2);
+
+      // One follow-up, not a repeating poll.
+      clock.advance(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(calls, 2);
+    });
+
     testWidgets('does nothing before attach or after detach', (tester) async {
       await pumpShortList(tester);
       final listener = buildListener();

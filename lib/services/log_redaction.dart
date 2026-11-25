@@ -24,6 +24,10 @@ bool isPrivateModerationPath(String requestPath) {
 bool isPrivateNotificationPath(String requestPath) =>
     requestPath.split('?').first.startsWith('/xrpc/social.coves.notification.');
 
+/// Whether [requestPath] reads the signed-in user's private like history.
+bool isPrivateLikesPath(String requestPath) =>
+    requestPath.split('?').first == '/xrpc/social.coves.actor.getLikes';
+
 /// Matches a bearer scheme (case-insensitive) followed by any run of
 /// non-whitespace characters. Greedy on purpose: a charset-based match
 /// would leak the tail of tokens containing characters outside the set.

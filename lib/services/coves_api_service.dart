@@ -8,6 +8,7 @@ import '../constants/moderation_constants.dart';
 import '../models/bluesky_profile_import.dart';
 import '../models/comment.dart';
 import '../models/community.dart';
+import '../models/liked_item.dart';
 import '../models/moderation_action.dart';
 import '../models/moderation_subject_state.dart';
 import '../models/notification.dart';
@@ -23,9 +24,10 @@ import 'coves_http.dart';
 import 'log_redaction.dart';
 import 'retry_interceptor.dart';
 
-/// Preserve Dio's debug logging for public routes while withholding private
-/// moderation and notification headers, query values and bodies, and the
-/// bytes of raw upload bodies.
+/// Preserve Dio's debug logging for public routes while withholding the
+/// headers, query values and bodies of private moderation, notification and
+/// like-history (`social.coves.actor.getLikes`) requests, and the bytes of
+/// raw upload bodies.
 class _ModerationSafeLogInterceptor extends Interceptor {
   _ModerationSafeLogInterceptor()
     : _publicLogger = LogInterceptor(
@@ -38,10 +40,14 @@ class _ModerationSafeLogInterceptor extends Interceptor {
 
   final LogInterceptor _publicLogger;
 
+  static bool _isPrivatePath(String path) =>
+      isPrivateModerationPath(path) ||
+      isPrivateNotificationPath(path) ||
+      isPrivateLikesPath(path);
+
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    if (isPrivateModerationPath(options.path) ||
-        isPrivateNotificationPath(options.path)) {
+    if (_isPrivatePath(options.path)) {
       debugPrint('${options.method} ${options.path.split('?').first}');
       handler.next(options);
     } else if (options.data is List<int>) {
@@ -63,8 +69,7 @@ class _ModerationSafeLogInterceptor extends Interceptor {
     ResponseInterceptorHandler handler,
   ) {
     final options = response.requestOptions;
-    if (isPrivateModerationPath(options.path) ||
-        isPrivateNotificationPath(options.path)) {
+    if (_isPrivatePath(options.path)) {
       debugPrint(
         '${options.method} ${options.path.split('?').first} '
         '${response.statusCode}',
@@ -78,8 +83,7 @@ class _ModerationSafeLogInterceptor extends Interceptor {
   @override
   void onError(DioException error, ErrorInterceptorHandler handler) {
     final options = error.requestOptions;
-    if (isPrivateModerationPath(options.path) ||
-        isPrivateNotificationPath(options.path)) {
+    if (_isPrivatePath(options.path)) {
       debugPrint(
         '${options.method} ${options.path.split('?').first} '
         '${error.response?.statusCode ?? 'no status'}',
@@ -136,8 +140,8 @@ class CovesApiService {
       ),
     );
 
-    // Log private moderation and notification requests without headers,
-    // queries or bodies.
+    // Log private moderation, notification and like-history requests
+    // without headers, queries or bodies.
     // All other routes keep the existing redacted Dio logging.
     if (kDebugMode) {
       _dio.interceptors.add(_ModerationSafeLogInterceptor());
@@ -1066,6 +1070,56 @@ class CovesApiService {
         },
       ),
       parse: (data) => TimelineResponse.fromJson(_asJsonMap(data)),
+    );
+  }
+
+  /// Get the posts and comments the signed-in viewer has liked (upvoted),
+  /// newest like first.
+  ///
+  /// Likes are private: only the actor themself may list them.
+  ///
+  /// Parameters:
+  /// - [actor]: The signed-in user's DID (required)
+  /// - [filter]: Which liked items to list (default: all)
+  /// - [limit]: Number of items per page (default: 15)
+  /// - [cursor]: Pagination cursor from previous response
+  ///
+  /// Throws:
+  /// - `AuthenticationException` if signed out or the session expired
+  /// - `ApiException` (status 403) when [actor] is not the viewer
+  /// - `ApiException` when the page has items but none of them parse
+  /// - `ApiException` for other API errors
+  Future<LikesResponse> getActorLikes({
+    required String actor,
+    LikesFilter filter = LikesFilter.all,
+    int limit = 15,
+    String? cursor,
+  }) {
+    return _request(
+      operation: 'fetch actor likes',
+      redactParseErrorDetail: true,
+      send: () => _dio.get(
+        '/xrpc/social.coves.actor.getLikes',
+        queryParameters: {
+          'actor': actor,
+          // Omitting the filter means all; only narrowing filters are sent.
+          if (filter != LikesFilter.all) 'filter': filter.wireValue,
+          'limit': limit,
+          'cursor': ?cursor,
+        },
+      ),
+      parse: (data) {
+        final json = _asJsonMap(data);
+        final response = LikesResponse.fromJson(json);
+        // Items exist but none parsed (e.g. an older backend without
+        // `$type`): a failed page, not an empty one, or the client would
+        // walk the cursor through nothing to a false "No likes yet".
+        final rawFeed = json['feed'];
+        if (response.feed.isEmpty && rawFeed is List && rawFeed.isNotEmpty) {
+          throw ApiException('No liked item in the page could be read');
+        }
+        return response;
+      },
     );
   }
 

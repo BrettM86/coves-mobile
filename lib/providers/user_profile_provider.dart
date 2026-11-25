@@ -5,6 +5,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../models/comment.dart';
 import '../models/feed_state.dart';
+import '../models/liked_item.dart';
 import '../models/post.dart';
 import '../models/user_profile.dart';
 import '../services/api_exceptions.dart';
@@ -46,7 +47,7 @@ class UserProfileProvider with ChangeNotifier {
              authProvider: authProvider,
              voteProvider: voteProvider,
            ) {
-    // The two feeds are the same cursor-pagination state machine with
+    // The feeds are the same cursor-pagination state machine with
     // different fetchers; the controllers own items/cursor/loading/errors
     // and this provider projects them onto the FeedState / CommentsState
     // the screens already read.
@@ -60,6 +61,20 @@ class UserProfileProvider with ChangeNotifier {
       onUnexpectedError: _reportUnexpected,
       sessionKeyOf: sessionKeyOf,
     )..addListener(_syncPostsState);
+
+    // Liked posts and liked comments in one list, keyed by the liked
+    // record's URI and hydrated like the posts and comments tabs.
+    _likesController = CursorPaginationController<LikedItem>(
+      fetchPage: _fetchLikesPage,
+      onPageLoaded: _hydrateLikedViewerState,
+      errorMapper: ErrorMessage.loadProfileLikes,
+      idOf: (item) => item.uri,
+      // The server drops deleted or blocked posts after paging, so a page
+      // can come back empty with a cursor that still leads to more likes.
+      followCursorPastEmptyPages: true,
+      onUnexpectedError: _reportUnexpected,
+      sessionKeyOf: sessionKeyOf,
+    )..addListener(_syncLikesState);
 
     _commentsController = CursorPaginationController<CommentView>(
       fetchPage: _fetchCommentsPage,
@@ -77,6 +92,7 @@ class UserProfileProvider with ChangeNotifier {
   }
 
   late final CursorPaginationController<FeedViewPost> _postsController;
+  late final CursorPaginationController<LikedItem> _likesController;
   late final CursorPaginationController<CommentView> _commentsController;
 
   /// Everything the pagination controllers swallow: fetch failures the UI
@@ -142,6 +158,13 @@ class UserProfileProvider with ChangeNotifier {
   FeedState _postsState = FeedState.initial();
   DateTime? _postsLastRefreshTime;
 
+  // Likes feed state — a projection of _likesController
+  LikesState _likesState = LikesState.initial();
+  LikesFilter _likesFilter = LikesFilter.all;
+  // Set when a likes load-more failed with InvalidCursor; cleared once a
+  // page-one reload succeeds or the likes list restarts from page one.
+  bool _likesRetryPageOne = false;
+
   // Comments feed state — a projection of _commentsController
   CommentsState _commentsState = CommentsState.initial();
 
@@ -156,6 +179,32 @@ class UserProfileProvider with ChangeNotifier {
   /// tools; null before a page is loaded.
   Object? get postsSessionStamp => _postsController.sessionStamp;
   CommentsState get commentsState => _commentsState;
+
+  /// The posts and comments the profile's owner has liked. Only ever
+  /// loaded on the viewer's own profile: likes are private to their owner.
+  LikesState get likesState => _likesState;
+
+  /// Which liked items the Likes tab lists.
+  LikesFilter get likesFilter => _likesFilter;
+
+  /// Switches the Likes tab to [filter] and reloads it from the first
+  /// page. The old filter's rows are dropped at once, and any page still in
+  /// flight for it is discarded when it lands. No-op unless this is the
+  /// viewer's own profile, or when [filter] is already selected.
+  Future<void> setLikesFilter(LikesFilter filter) async {
+    if (!isOwnProfile || filter == _likesFilter) {
+      return;
+    }
+    _likesFilter = filter;
+    _likesRetryPageOne = false;
+    // The controller notifies, which re-projects _likesState.
+    _likesController.reset();
+    await _likesController.refresh();
+  }
+
+  /// The session key the loaded likes were fetched under, for their admin
+  /// tools; null before a page is loaded.
+  Object? get likesSessionStamp => _likesController.sessionStamp;
 
   /// Check if currently viewing own profile
   bool get isOwnProfile {
@@ -221,7 +270,15 @@ class UserProfileProvider with ChangeNotifier {
 
     _isLoadingProfile = true;
     _profileError = null;
-    _currentProfileDid = actor.startsWith('did:') ? actor : null;
+    // Reloading the profile already shown keeps its known DID, so
+    // isOwnProfile stays stable while a handle-addressed refresh runs.
+    final loadedProfile = _profile;
+    final isReloadOfLoadedProfile =
+        loadedProfile != null &&
+        (loadedProfile.did == actor || loadedProfile.handle == actor);
+    _currentProfileDid = isReloadOfLoadedProfile
+        ? loadedProfile.did
+        : (actor.startsWith('did:') ? actor : null);
     notifyListeners();
 
     final loadGeneration = _profileLoadGeneration;
@@ -397,6 +454,118 @@ class UserProfileProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// Load the posts and comments the viewer has liked. Makes no request
+  /// unless this is the viewer's own profile, since the server lists likes
+  /// only to their owner.
+  ///
+  /// Parameters:
+  /// - [refresh]: Reload from beginning instead of paginating
+  Future<void> loadLikes({bool refresh = false}) async {
+    if (!isOwnProfile) {
+      return;
+    }
+
+    if (refresh) {
+      _likesRetryPageOne = false;
+      await _likesController.refresh();
+    } else {
+      await _likesController.loadMore();
+    }
+  }
+
+  /// Load more likes (pagination). Failures land on
+  /// `likesState.loadMoreError`, never on `likesState.error`.
+  Future<void> loadMoreLikes() => loadLikes();
+
+  /// The likes footer's Retry: clears the pagination error and tries again.
+  /// A cursor the server rejected as InvalidCursor cannot succeed when
+  /// resent, so that case reloads from the first page instead.
+  Future<void> retryLoadMoreLikes() async {
+    if (!isOwnProfile) {
+      return;
+    }
+    final cause = _likesController.loadMoreErrorCause;
+    if (cause is ApiException &&
+        cause.statusCode == 400 &&
+        cause.errorCode == 'InvalidCursor') {
+      _likesRetryPageOne = true;
+    }
+    if (_likesRetryPageOne) {
+      // Resending the rejected cursor cannot succeed; reload page one until
+      // that succeeds.
+      if (await _likesController.replaceFirstPageForLoadMore()) {
+        _likesRetryPageOne = false;
+      }
+      return;
+    }
+    await _likesController.retryLoadMore();
+  }
+
+  /// Retry loading likes after a first-page error.
+  Future<void> retryLikes() async {
+    if (!isOwnProfile) {
+      return;
+    }
+    _likesRetryPageOne = false;
+    await _likesController.retry();
+  }
+
+  Future<CursorPage<LikedItem>> _fetchLikesPage(String? cursor) async {
+    final actor = _currentProfileDid;
+    if (actor == null) {
+      throw ApiException('No profile loaded');
+    }
+
+    final response = await _apiService.getActorLikes(
+      actor: actor,
+      filter: _likesFilter,
+      cursor: cursor,
+    );
+
+    if (kDebugMode) {
+      debugPrint('✅ Likes page loaded: ${response.feed.length} items');
+    }
+
+    return CursorPage<LikedItem>(items: response.feed, cursor: response.cursor);
+  }
+
+  /// Seeds viewer state for each new liked post and liked comment, the
+  /// same way the posts and comments tabs do.
+  ///
+  /// Posts and comments hydrate separately so one failing does not skip
+  /// the other.
+  Future<void> _hydrateLikedViewerState(List<LikedItem> newItems) async {
+    try {
+      _hydrator.hydrateFeed([
+        for (final item in newItems)
+          if (item case LikedPost(:final feedViewPost)) feedViewPost,
+      ]);
+    } on Object catch (e, stackTrace) {
+      _reportUnexpected(e, stackTrace);
+    }
+    try {
+      _hydrator.hydrateComments([
+        for (final item in newItems)
+          if (item case LikedComment(:final comment)) comment,
+      ]);
+    } on Object catch (e, stackTrace) {
+      _reportUnexpected(e, stackTrace);
+    }
+  }
+
+  void _syncLikesState() {
+    _likesState = LikesState(
+      items: _likesController.items,
+      cursor: _likesController.cursor,
+      hasMore: _likesController.hasMore,
+      isLoading: _likesController.isLoading,
+      isLoadingMore: _likesController.isLoadingMore,
+      error: _likesController.error,
+      loadMoreError: _likesController.loadMoreError,
+    );
+    notifyListeners();
+  }
+
   /// Load comments by the current profile's author
   ///
   /// Parameters:
@@ -539,9 +708,10 @@ class UserProfileProvider with ChangeNotifier {
     try {
       await _commentService.deleteComment(uri: commentUri);
 
-      // Remove the comment from local state (the controller notifies, which
-      // re-projects _commentsState)
-      _commentsController.removeWhere((c) => c.uri == commentUri);
+      // Remove the comment from local state (the controllers notify, which
+      // re-projects _commentsState and _likesState)
+      _commentsController.removeById(commentUri);
+      _likesController.removeById(commentUri);
 
       if (kDebugMode) {
         debugPrint('✅ Comment deleted from profile');
@@ -554,8 +724,9 @@ class UserProfileProvider with ChangeNotifier {
     }
   }
 
-  /// Patches the loaded comment [uri] with [record] and [cid], keeping its
-  /// own stats and viewer state; a tombstoned item is left alone. Returns
+  /// Patches the loaded comment [uri], in the comments and in the likes,
+  /// with [record] and [cid], keeping its own stats and viewer state (and a
+  /// liked comment's root post); a tombstoned item is left alone. Returns
   /// the patched view, or null when nothing was patched.
   CommentView? _applyCommentEdit(
     String uri, {
@@ -565,30 +736,62 @@ class UserProfileProvider with ChangeNotifier {
     if (_disposed) {
       return null;
     }
-    final current = _commentsController.items
-        .where((c) => c.uri == uri)
-        .firstOrNull;
-    if (current == null || current.isTombstoned) {
-      return null;
+    CommentView? patched;
+    final current = _loadedComment(uri);
+    if (current != null && !current.isTombstoned) {
+      // The controller notifies, which re-projects _commentsState. The
+      // transform also re-applies to a first page that lands later.
+      _commentsController.replaceItemById(
+        uri,
+        (item) => item.isTombstoned
+            ? item
+            : item.withEditedRecord(record: record, cid: cid),
+      );
+      patched = current.withEditedRecord(record: record, cid: cid);
     }
-    // The controller notifies, which re-projects _commentsState. The
-    // transform also re-applies to a first page that lands later.
-    _commentsController.replaceItemById(
-      uri,
-      (item) => item.isTombstoned
-          ? item
-          : item.withEditedRecord(record: record, cid: cid),
-    );
-    return current.withEditedRecord(record: record, cid: cid);
+    final liked = _loadedLikedComment(uri);
+    if (liked != null && !liked.isTombstoned) {
+      _likesController.replaceItemById(
+        uri,
+        (item) => switch (item) {
+          LikedComment(:final comment, :final post)
+              when !comment.isTombstoned =>
+            LikedComment(
+              comment: comment.withEditedRecord(record: record, cid: cid),
+              post: post,
+            ),
+          _ => item,
+        },
+      );
+      patched ??= liked.withEditedRecord(record: record, cid: cid);
+    }
+    return patched;
+  }
+
+  CommentView? _loadedComment(String uri) =>
+      _commentsController.items.where((c) => c.uri == uri).firstOrNull;
+
+  CommentView? _loadedLikedComment(String uri) {
+    for (final item in _likesController.items) {
+      if (item case LikedComment(:final comment) when comment.uri == uri) {
+        return comment;
+      }
+    }
+    return null;
   }
 
   void _onCommentChanged(CommentView comment) {
     final record = comment.record;
-    final current = _commentsController.items
-        .where((c) => c.uri == comment.uri)
-        .firstOrNull;
+    if (record == null) {
+      return;
+    }
     // Same cid: this provider's own edit, already applied.
-    if (record == null || current == null || current.cid == comment.cid) {
+    final current = _loadedComment(comment.uri);
+    final liked = _loadedLikedComment(comment.uri);
+    final isNewEdit =
+        (current != null && current.cid != comment.cid) ||
+        (liked != null && liked.cid != comment.cid);
+    if (!isNewEdit) {
       return;
     }
     _applyCommentEdit(comment.uri, record: record, cid: comment.cid);
@@ -600,12 +803,22 @@ class UserProfileProvider with ChangeNotifier {
     }
     switch (change) {
       case PostRemoved(:final uri):
-        // The controller notifies, which re-projects _postsState.
+        // The controllers notify, which re-projects the feed states.
         _postsController.removeById(uri);
+        _likesController.removeById(uri);
       case PostReplaced(:final post):
         _postsController.replaceItemById(
           post.uri,
           (feedPost) => feedPost.copyWith(post: post),
+        );
+        _likesController.replaceItemById(
+          post.uri,
+          (item) => switch (item) {
+            LikedPost(:final feedViewPost) => LikedPost(
+              feedViewPost.copyWith(post: post),
+            ),
+            LikedComment() => item,
+          },
         );
     }
   }
@@ -621,13 +834,17 @@ class UserProfileProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Drop both feeds back to their pre-load state, orphaning any in-flight
+  /// Drop every feed back to their pre-load state, orphaning any in-flight
   /// page so it cannot land on the next profile.
   void _resetFeeds() {
     _postsController.reset();
+    _likesController.reset();
+    _likesFilter = LikesFilter.all;
+    _likesRetryPageOne = false;
     _commentsController.reset();
     _postsLastRefreshTime = null;
     _postsState = FeedState.initial();
+    _likesState = LikesState.initial();
     _commentsState = CommentsState.initial();
   }
 
@@ -758,6 +975,7 @@ class UserProfileProvider with ChangeNotifier {
     _authProvider.removeListener(_onAuthChanged);
     _profileCache.removePutListener(_onProfileCached);
     _postsController.dispose();
+    _likesController.dispose();
     _commentsController.dispose();
     super.dispose();
   }

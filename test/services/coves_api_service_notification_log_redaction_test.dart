@@ -84,6 +84,26 @@ void main() {
         '200',
         ['SEEN-REQUEST-MARKER', 'SEEN-RESPONSE-MARKER'],
       ),
+      // A user's like history is private to them, like their notifications.
+      (
+        'likes success',
+        'GET',
+        '/xrpc/social.coves.actor.getLikes',
+        '200',
+        [
+          'LIKED-TITLE-RESPONSE-MARKER',
+          'LIKED-URI-RESPONSE-MARKER',
+          'LIKES-CURSOR-RESPONSE-MARKER',
+          'LIKES-CURSOR-QUERY-MARKER',
+        ],
+      ),
+      (
+        'likes error',
+        'GET',
+        '/xrpc/social.coves.actor.getLikes',
+        '400',
+        ['LIKES-ERROR-MARKER', 'LIKES-CURSOR-ERROR-QUERY-MARKER'],
+      ),
     ]) {
       test('B9 $name logs method, path and status without markers', () async {
         switch (name) {
@@ -149,15 +169,82 @@ void main() {
               data: Matchers.any,
             );
             await dio.post(path, data: {'privateValue': 'SEEN-REQUEST-MARKER'});
+          case 'likes success':
+            adapter.onGet(
+              path,
+              (server) => server.reply(200, {
+                'feed': [
+                  {
+                    r'$type': 'social.coves.actor.getLikes#likedPost',
+                    'post': {
+                      'uri': 'at://did:plc:community1/social.coves.community.post/LIKED-URI-RESPONSE-MARKER',
+                      'cid': 'cid-liked',
+                      'rkey': 'LIKED-URI-RESPONSE-MARKER',
+                      'author': {
+                        'did': 'did:plc:author1',
+                        'handle': 'author.test',
+                      },
+                      'community': {
+                        'did': 'did:plc:community1',
+                        'name': 'testcommunity',
+                      },
+                      'record': {
+                        'title': 'LIKED-TITLE-RESPONSE-MARKER',
+                        'content': 'body',
+                      },
+                      'createdAt': '2025-06-01T12:00:00Z',
+                      'indexedAt': '2025-06-01T12:00:01Z',
+                      'stats': {
+                        'upvotes': 1,
+                        'downvotes': 0,
+                        'score': 1,
+                        'commentCount': 0,
+                      },
+                    },
+                  },
+                ],
+                'cursor': 'LIKES-CURSOR-RESPONSE-MARKER',
+              }),
+              queryParameters: {
+                'actor': 'did:plc:liker',
+                'limit': 15,
+                'cursor': 'LIKES-CURSOR-QUERY-MARKER',
+              },
+            );
+            final likes = await service.getActorLikes(
+              actor: 'did:plc:liker',
+              cursor: 'LIKES-CURSOR-QUERY-MARKER',
+            );
+            expect(likes.feed, hasLength(1));
+          case 'likes error':
+            adapter.onGet(
+              path,
+              (server) => server.reply(400, {
+                'error': 'InvalidCursor',
+                'message': 'LIKES-ERROR-MARKER',
+              }),
+              queryParameters: {
+                'actor': 'did:plc:liker',
+                'limit': 15,
+                'cursor': 'LIKES-CURSOR-ERROR-QUERY-MARKER',
+              },
+            );
+            await expectLater(
+              service.getActorLikes(
+                actor: 'did:plc:liker',
+                cursor: 'LIKES-CURSOR-ERROR-QUERY-MARKER',
+              ),
+              throwsA(isA<ApiException>()),
+            );
         }
 
         final output = logLines.join('\n');
-        expect(output, contains(method));
-        expect(output, contains(path));
-        expect(output, contains(status));
         for (final marker in markers) {
           expect(output, isNot(contains(marker)), reason: marker);
         }
+        expect(output, contains(method));
+        expect(output, contains(path));
+        expect(output, contains(status));
       });
     }
 
@@ -204,6 +291,24 @@ void main() {
         'fetch unread notification count',
         'Expected Map but got String',
       ),
+      (
+        'likes parse error',
+        '/xrpc/social.coves.actor.getLikes',
+        'fetch actor likes',
+        'Expected Map but got String',
+      ),
+      (
+        'likes connection error',
+        '/xrpc/social.coves.actor.getLikes',
+        'fetch actor likes',
+        'L1-CONNECTION-MARKER',
+      ),
+      (
+        'likes refresher error',
+        '/xrpc/social.coves.actor.getLikes',
+        'fetch actor likes',
+        'L2-REFRESH-MARKER',
+      ),
     ]) {
       test('B10 $name omits diagnostic details', () async {
         switch (name) {
@@ -234,6 +339,33 @@ void main() {
             await expectLater(
               service.getUnreadCount(),
               throwsA(isA<ApiException>()),
+            );
+          case 'likes parse error':
+            adapter.onGet(
+              path,
+              (server) => server.reply(200, 'not an object'),
+              queryParameters: {'actor': 'did:plc:liker', 'limit': 15},
+            );
+            await expectLater(
+              service.getActorLikes(actor: 'did:plc:liker'),
+              throwsA(isA<ApiException>()),
+            );
+          case 'likes connection error':
+            dio.httpClientAdapter = _ConnectionErrorAdapter(marker);
+            await expectLater(
+              service.getActorLikes(actor: 'did:plc:liker'),
+              throwsA(isA<NetworkException>()),
+            );
+          case 'likes refresher error':
+            refreshError = marker;
+            adapter.onGet(
+              path,
+              (server) => server.reply(401, {'error': 'Unauthorized'}),
+              queryParameters: {'actor': 'did:plc:liker', 'limit': 15},
+            );
+            await expectLater(
+              service.getActorLikes(actor: 'did:plc:liker'),
+              throwsA(isA<AuthenticationException>()),
             );
         }
 

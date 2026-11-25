@@ -226,9 +226,10 @@ ApiException mapDioException(DioException error, {required String operation}) {
     final privateModeration = isPrivateModerationPath(
       error.requestOptions.path,
     );
-    final privateNotification = isPrivateNotificationPath(
-      error.requestOptions.path,
-    );
+    // Like history is private like notifications and is logged the same way.
+    final privateNotification =
+        isPrivateNotificationPath(error.requestOptions.path) ||
+        isPrivateLikesPath(error.requestOptions.path);
     debugPrint(
       privateNotification
           ? '❌ Failed to $operation: ${error.requestOptions.method} '

@@ -1,4 +1,5 @@
 import 'package:coves_flutter/models/comment.dart';
+import 'package:coves_flutter/models/liked_item.dart';
 import 'package:coves_flutter/services/api_exceptions.dart';
 import 'package:coves_flutter/services/coves_api_service.dart';
 import 'package:dio/dio.dart';
@@ -672,5 +673,219 @@ void main() {
       expect(response.comments[0].comment.viewer, isNotNull);
       expect(response.comments[0].comment.viewer!.vote, 'upvote');
     });
+  });
+
+  group('CovesApiService - getActorLikes', () {
+    const endpoint = '/xrpc/social.coves.actor.getLikes';
+    const actor = 'did:plc:liker';
+
+    late Dio dio;
+    late DioAdapter dioAdapter;
+    late CovesApiService apiService;
+
+    /// The query parameters of every request sent, recorded after the
+    /// service's own interceptors so the adapter can answer by path alone.
+    late List<Map<String, dynamic>> sentQueries;
+
+    setUp(() {
+      dio = Dio(BaseOptions(baseUrl: 'https://api.test.coves.social'));
+      dioAdapter = DioAdapter(dio: dio, matcher: const UrlRequestMatcher());
+      apiService = CovesApiService(
+        sessionKeyOf: () => (did: actor, sessionId: 'session-1'),
+        dio: dio,
+        tokenGetter: () async => 'test-token',
+      );
+      sentQueries = <Map<String, dynamic>>[];
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            sentQueries.add(Map<String, dynamic>.of(options.queryParameters));
+            handler.next(options);
+          },
+        ),
+      );
+    });
+
+    tearDown(() {
+      apiService.dispose();
+    });
+
+    Map<String, dynamic> postViewJson(String rkey) => {
+      'uri': 'at://did:plc:community1/social.coves.community.post/$rkey',
+      'cid': 'cid-$rkey',
+      'rkey': rkey,
+      'author': {'did': 'did:plc:author1', 'handle': 'author.test'},
+      'community': {'did': 'did:plc:community1', 'name': 'testcommunity'},
+      'record': {'title': 'Liked $rkey', 'content': 'body'},
+      'createdAt': '2025-06-01T12:00:00Z',
+      'indexedAt': '2025-06-01T12:00:01Z',
+      'stats': {'upvotes': 1, 'downvotes': 0, 'score': 1, 'commentCount': 0},
+    };
+
+    Map<String, dynamic> feedViewPostJson(String rkey) => {
+      r'$type': 'social.coves.actor.getLikes#likedPost',
+      'post': postViewJson(rkey),
+    };
+
+    Map<String, dynamic> likedCommentJson(String rkey) => {
+      r'$type': 'social.coves.actor.getLikes#likedComment',
+      'comment': {
+        'uri': 'at://did:plc:author1/social.coves.community.comment/$rkey',
+        'cid': 'cid-$rkey',
+        'record': {'content': 'Liked comment $rkey'},
+        'createdAt': '2025-06-01T12:00:00Z',
+        'indexedAt': '2025-06-01T12:00:01Z',
+        'author': {'did': 'did:plc:author1', 'handle': 'author.test'},
+        'post': {
+          'uri': 'at://did:plc:community1/social.coves.community.post/root',
+          'cid': 'cid-root',
+        },
+        'stats': {'upvotes': 1, 'downvotes': 0, 'score': 1},
+      },
+      'post': postViewJson('root'),
+    };
+
+    String describeLike(LikedItem item) => switch (item) {
+      LikedPost(:final feedViewPost) => 'post ${feedViewPost.post.uri}',
+      LikedComment(:final comment, :final post) =>
+        'comment ${comment.uri} on ${post.uri}',
+    };
+
+    const likedCommentEeeOnRoot =
+        'comment at://did:plc:author1/social.coves.community.comment/eee '
+        'on at://did:plc:community1/social.coves.community.post/root';
+
+    // Each row pins the exact request: the default page size, the cursor
+    // only when given, and the filter only when it narrows the list.
+    final rows =
+        <
+          ({
+            String name,
+            LikesFilter filter,
+            String? cursor,
+            Map<String, dynamic> query,
+            Map<String, dynamic> body,
+            List<String> expectedItems,
+            String? expectedCursor,
+          })
+        >[
+          (
+            name: 'first page',
+            filter: LikesFilter.all,
+            cursor: null,
+            query: {'actor': actor, 'limit': 15},
+            body: {
+              'feed': [feedViewPostJson('aaa'), feedViewPostJson('bbb')],
+              'cursor': 'next-1',
+            },
+            expectedItems: [
+              'post at://did:plc:community1/social.coves.community.post/aaa',
+              'post at://did:plc:community1/social.coves.community.post/bbb',
+            ],
+            expectedCursor: 'next-1',
+          ),
+          (
+            name: 'next page',
+            filter: LikesFilter.all,
+            cursor: 'next-1',
+            query: {'actor': actor, 'limit': 15, 'cursor': 'next-1'},
+            body: {
+              'feed': [feedViewPostJson('ccc')],
+            },
+            expectedItems: [
+              'post at://did:plc:community1/social.coves.community.post/ccc',
+            ],
+            expectedCursor: null,
+          ),
+          (
+            name: 'posts filter',
+            filter: LikesFilter.posts,
+            cursor: null,
+            query: {'actor': actor, 'filter': 'posts', 'limit': 15},
+            body: {
+              'feed': [feedViewPostJson('ddd')],
+            },
+            expectedItems: [
+              'post at://did:plc:community1/social.coves.community.post/ddd',
+            ],
+            expectedCursor: null,
+          ),
+          (
+            name: 'comments filter',
+            filter: LikesFilter.comments,
+            cursor: 'next-2',
+            query: {
+              'actor': actor,
+              'filter': 'comments',
+              'limit': 15,
+              'cursor': 'next-2',
+            },
+            body: {
+              'feed': [likedCommentJson('eee')],
+              'cursor': 'next-3',
+            },
+            expectedItems: [likedCommentEeeOnRoot],
+            expectedCursor: 'next-3',
+          ),
+        ];
+
+    for (final row in rows) {
+      test('GETs getLikes and parses the ${row.name}', () async {
+        dioAdapter.onGet(endpoint, (server) => server.reply(200, row.body));
+
+        final response = await apiService.getActorLikes(
+          actor: actor,
+          filter: row.filter,
+          cursor: row.cursor,
+        );
+
+        expect(sentQueries, <Map<String, dynamic>>[row.query]);
+        expect(response.feed.map(describeLike).toList(), row.expectedItems);
+        expect(response.cursor, row.expectedCursor);
+      });
+    }
+
+    // An older backend answers with bare FeedViewPosts (no $type). Every
+    // item is then skipped, and an empty page with a cursor would make the
+    // client walk the whole history page by page showing nothing. A
+    // non-empty feed in which nothing parses is a failed page; a genuinely
+    // empty feed is not.
+    final unparseableRows =
+        <({String name, Map<String, dynamic> body, bool throws})>[
+          (
+            name: 'a non-empty feed in which no item parses',
+            body: {
+              'feed': [
+                {'post': postViewJson('aaa')},
+              ],
+              'cursor': 'c1',
+            },
+            throws: true,
+          ),
+          (
+            name: 'an empty feed',
+            body: {'feed': <Object>[], 'cursor': 'c1'},
+            throws: false,
+          ),
+        ];
+    for (final row in unparseableRows) {
+      test(
+        'getLikes with ${row.name} '
+        '${row.throws ? 'throws ApiException' : 'returns an empty page'}',
+        () async {
+          dioAdapter.onGet(endpoint, (server) => server.reply(200, row.body));
+
+          final call = apiService.getActorLikes(actor: actor);
+
+          if (row.throws) {
+            await expectLater(call, throwsA(isA<ApiException>()));
+          } else {
+            final response = await call;
+            expect(response.feed, isEmpty);
+            expect(response.cursor, 'c1');
+          }
+        },
+      );
+    }
   });
 }

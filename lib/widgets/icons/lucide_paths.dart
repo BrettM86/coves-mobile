@@ -188,6 +188,9 @@ abstract final class LucidePaths {
   /// `x` — clears a filter
   static const List<String> x = ['M18 6 6 18', 'm6 6 12 12'];
 
+  /// `list-filter` — the profile Likes tab's filter menu
+  static const List<String> listFilter = ['M3 6h18', 'M7 12h10', 'M10 18h4'];
+
   /// `gavel` — the moderation log entry on Explore
   static const List<String> gavel = [
     'm14.5 12.5-8 8a2.119 2.119 0 1 1-3-3l8-8',

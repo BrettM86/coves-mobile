@@ -101,9 +101,11 @@ InterceptorsWrapper createAuthInterceptor({
       return handler.next(options);
     },
     onError: (error, handler) async {
-      final privateNotification = isPrivateNotificationPath(
-        error.requestOptions.path,
-      );
+      // Like history is private like notifications and is logged the same
+      // way.
+      final privateNotification =
+          isPrivateNotificationPath(error.requestOptions.path) ||
+          isPrivateLikesPath(error.requestOptions.path);
       final notificationMetadata =
           '${error.requestOptions.method} '
           '${error.requestOptions.path.split('?').first} '

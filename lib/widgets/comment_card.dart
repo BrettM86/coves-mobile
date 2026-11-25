@@ -89,6 +89,7 @@ class CommentCard extends StatefulWidget {
     this.parentPost,
     this.reloadAfterModeration,
     this.votingEnabled = true,
+    this.showThreadLine = true,
     super.key,
   }) : assert(
          sessionStamp == null || reloadAfterModeration != null,
@@ -142,6 +143,11 @@ class CommentCard extends StatefulWidget {
   /// whose vote state [VoteProvider] may not hold for the signed-in account.
   final bool votingEnabled;
 
+  /// Whether the card paints its thread (depth) line. False for a flat
+  /// list outside a thread (the profile Comments and Likes tabs), where
+  /// the card instead lines up with a post card's 16px inset.
+  final bool showThreadLine;
+
   @override
   State<CommentCard> createState() => _CommentCardState();
 }
@@ -178,11 +184,16 @@ class _CommentCardState extends State<CommentCard> {
 
     // All comments get at least 1 threading line (depth + 1)
     final threadingLineCount = depth + 1;
-    // Calculate left padding: (6px per line) + 14px base padding
-    final leftPadding = (threadingLineCount * 6.0) + 14.0;
+    // Calculate left padding: (6px per line) + 14px base padding. Without
+    // threading lines the card lines up with a post card's 16px inset.
+    final leftPadding = widget.showThreadLine
+        ? (threadingLineCount * 6.0) + 14.0
+        : 16.0;
     // Border should start after the threading lines (add 2px to clear
     // the stroke width)
-    final borderLeftOffset = (threadingLineCount * 6.0) + 2.0;
+    final borderLeftOffset = widget.showThreadLine
+        ? (threadingLineCount * 6.0) + 2.0
+        : 0.0;
 
     return Semantics(
       // A placeholder ignores taps, so it is not announced as a button.
@@ -228,11 +239,12 @@ class _CommentCardState extends State<CommentCard> {
               children: [
                 // Threading indicators - vertical lines showing
                 // nesting ancestry
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _CommentDepthPainter(depth: threadingLineCount),
+                if (widget.showThreadLine)
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _CommentDepthPainter(depth: threadingLineCount),
+                    ),
                   ),
-                ),
                 // Bottom border
                 // (starts after threading lines, not overlapping them)
                 Positioned(
@@ -295,6 +307,16 @@ class _CommentCardState extends State<CommentCard> {
                                 Expanded(
                                   child: TappableAuthor(
                                     authorDid: author.did,
+                                    // A flat card's avatar sits on the
+                                    // content edge, like a post card's.
+                                    padding: widget.showThreadLine
+                                        ? const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                            vertical: 2,
+                                          )
+                                        : const EdgeInsets.symmetric(
+                                            vertical: 2,
+                                          ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
@@ -1079,7 +1101,15 @@ class _CommentCardState extends State<CommentCard> {
 
         return Row(
           children: [
-            _buildCommentMenu(context),
+            // A flat card centres its menu in a 48px slot so it lines up
+            // with a post card's first action.
+            if (widget.showThreadLine)
+              _buildCommentMenu(context)
+            else
+              SizedBox(
+                width: 48,
+                child: Center(child: _buildCommentMenu(context)),
+              ),
             const Spacer(),
             Semantics(
               button: true,

@@ -24,3 +24,4 @@ dart fix --apply
 - Session must survive an app restart and token refresh must be automatic.
 - Deep links must work over both HTTPS and the custom scheme.
 - Test on physical devices, not only emulators, for anything touching auth, deep links, or keyboard layout.
+- Menus, popovers and dropdowns must close when the user scrolls. They do so by listening to their `Scrollable` (`MenuAnchor` does this); tap-only dismissal is a recurring UX bug. Known exceptions to fix later: the `PopupMenuButton` in `lib/widgets/comments_header.dart` and the `DropdownButton` in `lib/screens/home/create_post_screen.dart`. Bottom sheets are out of scope for this rule.
